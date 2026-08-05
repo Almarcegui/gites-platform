@@ -1,0 +1,11 @@
+# Relecture obligatoire du propriétaire sur les zones où une erreur coûte cher :
+# une migration jouée ne se rejoue pas, un service externe touche à de l'argent
+# et à des données de voyageurs, une config de déploiement touche à la prod.
+#
+# Le reste du dépôt — site public, back-office, moteurs, tests, doc — se relit
+# entre contributeurs, sans passage obligé.
+
+/migrations/       @jdecartier-glitch
+/src/services/     @jdecartier-glitch
+/wrangler.jsonc    @jdecartier-glitch
+/.github/          @jdecartier-glitch

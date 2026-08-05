@@ -17,7 +17,12 @@ RESEND_FROM="Les Gîtes du Pré Moré <reservation@example.com>"
 # En local : mettre n'importe quelle chaîne, à saisir une fois dans /admin/.
 # En prod : `wrangler secret put ADMIN_TOKEN --env production`, EN PLUS de la
 # règle Cloudflare Access, qui doit couvrir /admin ET /api/admin/*.
-ADMIN_TOKEN=
+# Format : paires « identifiant:motdepasse » séparées par des virgules, une par
+# personne, révocables une par une. NE PAS LAISSER VIDE : un ADMIN_TOKEN absent
+# fait répondre 503 à tout le back-office, sans autre indice de cause.
+# Sur une base neuve il n'existe aucun compte : on entre par ce jeton, puis on
+# crée les vrais comptes dans /admin/#/users.
+ADMIN_TOKEN=dev:dev
 
 # Beds24 API v2 (canal OTA — Airbnb/Booking/Vrbo). Absent = intégration OFF.
 # Obtention : UI Beds24 > SETTINGS > MARKETPLACE > API > invite code,

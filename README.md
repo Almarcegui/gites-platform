@@ -46,7 +46,7 @@ et ça fonctionne. (Vérifié le 2026-07-12, suite identique verte en chemin ASC
 npm install
 npm run db:migrate:local     # crée la base locale + seed Pré Moré
 npm run dev -- --port 8788   # ⚠️ 8787 = surcouche Legal Ops
-npm test                     # 146 tests (moteurs, D1, courses, API, iCal, import, LOT A0)
+npm test                     # 152 tests (moteurs, D1, courses, API, iCal, import, LOT A0)
 npm run typecheck
 ```
 
@@ -54,9 +54,15 @@ npm run typecheck
 - Page publique : http://localhost:8788/book/
 - Sans clé Stripe : le paiement passe par `/book/dev-pay.html` (simulateur local).
 - Secrets locaux : copier `.dev.vars.example` → `.dev.vars`. **`ADMIN_TOKEN` y est
-  désormais obligatoire** (garde fail-closed) — n'importe quelle chaîne fait
-  l'affaire en local, à saisir une fois dans `/admin/` (gardée en localStorage).
-- Phase 2 : `npm run db:seed:moulin` (après avoir complété `seed/seed_moulin_braives.sql`).
+  désormais obligatoire** (garde fail-closed) : format `identifiant:motdepasse`,
+  plusieurs paires séparées par des virgules. Le gabarit livre `dev:dev`, qui
+  suffit en local. Laissé vide, tout `/api/admin/*` répond 503.
+- Première connexion : une base neuve n'a **aucun compte**. On entre par
+  `ADMIN_TOKEN` via `/admin/login.html`, puis on crée les vrais comptes dans
+  `/admin/#/users` (table `admin_users`, migration `0012`). Détail dans
+  `CONTRIBUTING.md` § « Première connexion au back-office ».
+- Le Moulin de Braives est seedé par la migration `0004` — il n'y a pas de
+  script `db:seed:moulin` ni de dossier `seed/`.
 
 ## Arborescence
 
@@ -71,7 +77,7 @@ src/services/          stripe, email (stub), ical (export/parse/sync), cron,
 src/api/               router maison + routes publiques + routes admin
 public/admin/          back-office (11 vues + calendrier tarifs + multi-biens)
 public/book/           landing domaines + réservation 4 étapes + voucher + dev-pay
-test/                  7 fichiers, 99 tests
+test/                  12 fichiers, 152 tests
 ```
 
 ## Nouveautés v2 (2026-07-12 soir — retours Julien)
