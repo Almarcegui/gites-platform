@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex">
+<title>Gestion Gîtes — back-office</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="app">
+  <aside>
+    <h1>⌂ Gestion Gîtes</h1>
+    <div class="sec">Pilotage</div>
+    <nav>
+      <a href="#/startup" data-view="startup">✅ Mise en route</a>
+      <a href="#/dash" data-view="dash">Tableau de bord</a>
+      <a href="#/plan" data-view="plan">Planning</a>
+      <a href="#/resa" data-view="resa">Réservations</a>
+      <a href="#/messages" data-view="messages">Messages</a>
+      <a href="#/stats" data-view="stats">Statistiques</a>
+    </nav>
+    <div class="sec">Configuration</div>
+    <nav>
+      <a href="#/tarifs" data-view="tarifs">Tarifs &amp; saisons</a>
+      <a href="#/promos" data-view="promos">Promotions</a>
+      <a href="#/options" data-view="options">Options</a>
+      <a href="#/clients" data-view="clients">Clients</a>
+      <a href="#/paiements" data-view="paiements">Paiements</a>
+      <a href="#/canaux" data-view="canaux">🔗 Canaux OTA</a>
+      <a href="#/ical" data-view="ical">Synchro iCal</a>
+      <a href="#/users" data-view="users">👥 Utilisateurs</a>
+      <a href="#/params" data-view="params">Paramètres</a>
+    </nav>
+    <div class="sec">Aperçu public</div>
+    <nav>
+      <a id="publicLink" href="/book/" target="_blank" rel="noopener">Page de réservation ↗</a>
+    </nav>
+    <div class="sec">Session</div>
+    <nav>
+      <a href="#" id="logout">🚪 Se déconnecter<span id="whoami" class="small muted"></span></a>
+    </nav>
+  </aside>
+
+  <main>
+    <header class="top">
+      <h2 id="pageTitle">Tableau de bord</h2>
+      <span class="switch">Domaine : <span id="propertySwitch"></span></span>
+    </header>
+    <div id="main"><div class="card">Chargement…</div></div>
+  </main>
+</div>
+
+<div id="modalRoot"></div>
+<div id="toastRoot"></div>
+<script type="module" src="app.js"></script>
+</body>
+</html>

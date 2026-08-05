@@ -1,0 +1,18 @@
+// Build Node (déploiement Infomaniak). Le tsconfig.json racine reste dédié au
+// typecheck et au bundling Cloudflare — on ne le modifie pas, pour que le
+// déploiement Workers reste possible sans divergence de code.
+//
+// src/index.ts est exclu : c'est l'entrée Cloudflare (handlers scheduled/email,
+// import de `cloudflare:email`), remplacée ici par node/server.mjs.
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "outDir": "dist",
+    "declaration": false,
+    "sourceMap": false,
+    "removeComments": false
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["src/index.ts"]
+}

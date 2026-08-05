@@ -1,0 +1,40 @@
+# ── Secrets (globs + exceptions pour les gabarits) ──────────────────────────
+.env
+.env.*
+!.env.example
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+.deploy.vars
+.deploy.vars.*
+!.deploy.vars.example
+.secrets*
+*.pem
+*.key
+*.p12
+*.pfx
+
+# ── Bases et sauvegardes (RGPD — données voyageurs) ─────────────────────────
+# Ne jamais ajouter « *.sql » tout court : cela exclurait migrations/ et ferait
+# disparaître le schéma du dépôt.
+data/
+sauvegardes/
+backups/
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+*.sql.gz
+*.dump
+
+# ── Artefacts et dépendances ───────────────────────────────────────────────
+node_modules/
+.wrangler/
+dist/
+_scratch/
+*.log
+.DS_Store
+
+# ── Notes Obsidian du vault (sans objet pour un contributeur) ───────────────
+00 – Memory.md

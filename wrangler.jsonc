@@ -1,0 +1,89 @@
+// Configuration wrangler — plateforme de gestion des gîtes.
+// ⚠️ AUCUN déploiement (`wrangler deploy`) sans accord explicite de Julien.
+// Le database_id D1 réel sera créé au moment du déploiement (wrangler d1 create gites-platform).
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "gites-platform",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-09-01",
+
+  // Fichiers statiques : back-office (/admin) + page publique de réservation (/book).
+  // run_worker_first : les routes dynamiques passent par le Worker avant les assets.
+  "assets": {
+    "directory": "public",
+    "binding": "ASSETS",
+    "run_worker_first": ["/api/*", "/ical/*", "/"]
+  },
+
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "gites-platform",
+      "database_id": "8ecf7b7c-5f2f-4292-861e-b945aff53042", // base réelle (WEUR), créée le 2026-08-03
+      "migrations_dir": "migrations"
+    }
+  ],
+
+  // Cron 15 min : import iCal (Airbnb Moulin, phase 3) + expiration des holds + rappels de solde.
+  "triggers": {
+    "crons": ["*/15 * * * *"]
+  },
+
+  // ── Intégration email (à activer AU DÉPLOIEMENT, jamais avant — README § email) ──
+  // 1. Cloudflare Email Routing sur le domaine (MX) : adresse
+  //    reservation@lesgitesdupremore.be → action « Send to Worker » → gites-platform.
+  // 2. Le handler email() de src/index.ts fait le reste (stockage, accusé, transfert).
+  // 3. L'accusé de réception (message.reply) ne demande aucun binding ; le transfert
+  //    exige que l'adresse de destination soit vérifiée dans Email Routing.
+  // Aucune section de config nécessaire ici tant que le routage n'est pas activé.
+
+  "vars": {
+    // ⚠️ 8788 en local : le 8787 est occupé par la surcouche Legal Ops (LaunchAgent).
+    "PUBLIC_BASE_URL": "http://localhost:8788",
+    // Les clés sensibles vont dans .dev.vars (local) ou `wrangler secret put` (prod) :
+    // STRIPE_SECRET_KEY (sk_test_… UNIQUEMENT tant que l'entité n'est pas tranchée),
+    // STRIPE_WEBHOOK_SECRET, RESEND_API_KEY, RESEND_FROM, ADMIN_TOKEN.
+    "EMAILS_ENABLED": "false"
+  },
+
+  // Conserve les logs du Worker (sinon rien n'est retenu après coup, et une
+  // exception applicative est introuvable). Une ligne, aucun service tiers.
+  "observability": { "enabled": true },
+
+  // ── Environnement de production ────────────────────────────────────────────
+  // Le bloc racine ci-dessus reste la config LOCALE. Auparavant, le runbook
+  // demandait de modifier PUBLIC_BASE_URL en place au déploiement : tout
+  // `npm run dev` suivant fabriquait alors des liens de paiement, des vouchers
+  // et des URLs iCal pointant sur la PRODUCTION (audit ECC 2026-07-30).
+  // Déploiement : `wrangler deploy --env production`.
+  // ⚠️ `vars` et `d1_databases` ne sont PAS hérités du bloc racine par les
+  //     environnements nommés — ils sont donc répétés ici volontairement.
+  "env": {
+    "production": {
+      // Nom explicite : sans lui, wrangler déploierait « gites-platform-production ».
+      "name": "gites-platform",
+      "vars": {
+        "PUBLIC_BASE_URL": "https://gites-platform.j-decartier.workers.dev", // TEST public 2026-08-03 — à caler sur le domaine retenu (décision D5)
+        "EMAILS_ENABLED": "false",                 // passer à "true" une fois Resend + DKIM vérifiés
+        "BEDS24_WRITE_ENABLED": "true"             // réactivé le 2026-08-03 (demande Julien) — NB : en https, beds24WritesAllowed() autorise de toute façon
+      },
+      "assets": {
+        "directory": "public",
+        "binding": "ASSETS",
+        "run_worker_first": ["/api/*", "/ical/*", "/"]
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "gites-platform",
+          "database_id": "8ecf7b7c-5f2f-4292-861e-b945aff53042", // base réelle (WEUR), créée le 2026-08-03
+          "migrations_dir": "migrations"
+        }
+      ],
+      "triggers": {
+        "crons": ["*/15 * * * *"]
+      },
+      "observability": { "enabled": true }
+    }
+  }
+}

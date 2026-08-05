@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Paiement (simulation) — mode développement</title>
+<link rel="stylesheet" href="book.css">
+</head>
+<body>
+<div class="pub" style="max-width:520px">
+  <div class="brand"><h1>💳 Paiement simulé</h1>
+    <p>MODE DÉVELOPPEMENT — aucune clé Stripe configurée, aucun argent réel.</p></div>
+  <div class="card" id="box">Chargement…</div>
+</div>
+<script>
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+const eur = (c) => (c / 100).toLocaleString("fr-BE", { style: "currency", currency: "EUR" });
+const session = new URLSearchParams(location.search).get("session");
+
+(async () => {
+  const box = document.getElementById("box");
+  try {
+    const res = await fetch(`/api/public/dev-pay/info?session=${encodeURIComponent(session)}`);
+    const info = await res.json();
+    if (!res.ok) throw new Error(info.error || "session inconnue");
+    if (info.status === "succeeded") {
+      box.innerHTML = `<div class="note">Ce paiement a déjà été effectué.</div>`;
+      return;
+    }
+    box.innerHTML = `
+      <table class="quote">
+        <tr><td>Réservation</td><td class="r mono">${esc(info.reference)}</td></tr>
+        <tr><td>Hébergement</td><td class="r">${esc(info.unitName)}</td></tr>
+        <tr class="tot"><td>${info.kind === "deposit" ? "Arrhes" : info.kind === "balance" ? "Solde" : "Montant"}</td><td class="r">${eur(info.amountCents)}</td></tr>
+      </table>
+      <p class="small center" id="holdLine" style="margin-top:10px"></p>
+      <button class="btn big" id="pay" style="margin-top:12px">✅ Simuler un paiement réussi</button>
+      <p class="small muted center" style="margin-top:10px">En production, cette page est remplacée par Stripe Checkout.</p>`;
+    // compte à rebours honnête du hold : temps serveur, décompte local
+    if (info.holdExpiresAt && info.now) {
+      const sqlToMs = (s) => Date.parse(s.replace(" ", "T") + "Z");
+      let left = Math.max(0, sqlToMs(info.holdExpiresAt) - sqlToMs(info.now));
+      const line = document.getElementById("holdLine");
+      const tick = () => {
+        if (left <= 0) {
+          line.textContent = "⏳ Le blocage du créneau a expiré — relancez la réservation depuis le calendrier.";
+          const pay = document.getElementById("pay");
+          if (pay) pay.disabled = true;
+          return;
+        }
+        const m = Math.floor(left / 60000), s = Math.floor((left % 60000) / 1000);
+        line.textContent = `⏳ Votre créneau reste bloqué pour vous encore ${m} min ${String(s).padStart(2, "0")} s`;
+        left -= 1000;
+        setTimeout(tick, 1000);
+      };
+      tick();
+    }
+    document.getElementById("pay").onclick = async () => {
+      document.getElementById("pay").disabled = true;
+      const r = await fetch("/api/public/dev-pay/confirm", {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ session }),
+      });
+      const data = await r.json();
+      if (!r.ok) { box.innerHTML = `<div class="note bad">${esc(data.error)}</div>`; return; }
+      location.href = data.redirect;
+    };
+  } catch (e) {
+    box.innerHTML = `<div class="note bad">${esc(e.message)}</div>`;
+  }
+})();
+</script>
+</body>
+</html>

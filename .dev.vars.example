@@ -1,0 +1,29 @@
+# Copier ce fichier en `.dev.vars` (gitignoré) pour le dev local.
+# TOUTES ces clés sont optionnelles : sans elles, la plateforme tourne en mode stub
+# (paiement simulé, emails uniquement journalisés dans email_log).
+
+# Stripe — MODE TEST UNIQUEMENT (sk_test_…) tant que l'entité juridique n'est pas tranchée.
+STRIPE_SECRET_KEY=
+STRIPE_WEBHOOK_SECRET=
+
+# Resend (emails transactionnels). EMAILS_ENABLED reste "false" sans accord explicite de Julien.
+RESEND_API_KEY=
+RESEND_FROM="Les Gîtes du Pré Moré <reservation@example.com>"
+
+# Jeton de protection de l'API admin — OBLIGATOIRE depuis le LOT A0 (audit ECC
+# du 2026-07-30). La garde est fail-closed : sans ce jeton NI en-tête
+# Cloudflare Access, /api/admin/* refuse tout (503). Avant, un jeton absent
+# ouvrait l'intégralité du back-office à qui atteignait l'URL du Worker.
+# En local : mettre n'importe quelle chaîne, à saisir une fois dans /admin/.
+# En prod : `wrangler secret put ADMIN_TOKEN --env production`, EN PLUS de la
+# règle Cloudflare Access, qui doit couvrir /admin ET /api/admin/*.
+ADMIN_TOKEN=
+
+# Beds24 API v2 (canal OTA — Airbnb/Booking/Vrbo). Absent = intégration OFF.
+# Obtention : UI Beds24 > SETTINGS > MARKETPLACE > API > invite code,
+# puis GET https://api.beds24.com/v2/authentication/setup (header `code`).
+BEDS24_REFRESH_TOKEN=
+# Clé secrète du webhook entrant Beds24 (générer une chaîne aléatoire longue ;
+# la même valeur se colle dans Beds24 au déploiement — URL complète affichée
+# dans le back-office, vue Canaux OTA).
+BEDS24_WEBHOOK_KEY=

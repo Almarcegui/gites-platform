@@ -1,0 +1,30 @@
+{
+  "name": "gites-platform",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Plateforme de gestion locative propriétaire — Les Gîtes du Pré Moré & Le Moulin de Braives",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "build": "tsc -p tsconfig.build.json && node node/fix-esm-imports.mjs",
+    "start": "node node/server.mjs",
+    "serve:local": "PORT=8790 SQLITE_PATH=data/gites-local.db npm run start",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "db:migrate:local": "wrangler d1 migrations apply gites-platform --local",
+    "db:migrate:remote": "wrangler d1 migrations apply gites-platform --remote --env production",
+    "db:export:remote": "wrangler d1 export gites-platform --remote --output",
+    "db:reset:local": "rm -rf .wrangler/state && npm run db:migrate:local"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260728.1",
+    "miniflare": "^4.20250906.0",
+    "typescript": "^5.5.4",
+    "vitest": "~3.2.4",
+    "wrangler": "^4.114.0"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Merci — réservation en cours de confirmation</title>
+<link rel="stylesheet" href="book.css">
+</head>
+<body>
+<div class="pub" style="max-width:560px">
+  <div class="card center" id="box">
+    <div class="big-check">⏳</div>
+    <h3>Confirmation en cours…</h3>
+    <p class="muted small">Nous vérifions votre paiement, cela prend quelques secondes.</p>
+  </div>
+</div>
+<script>
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+const q = new URLSearchParams(location.search);
+const ref = q.get("ref"), email = q.get("email");
+const voucherUrl = `/book/voucher.html?ref=${encodeURIComponent(ref || "")}&email=${encodeURIComponent(email || "")}`;
+
+async function poll(attempt = 0) {
+  const box = document.getElementById("box");
+  if (!ref || !email) {
+    box.innerHTML = `<div class="big-check">✅</div><h3>Paiement reçu</h3>
+      <p class="muted small">Votre confirmation arrive par email.</p>`;
+    return;
+  }
+  try {
+    const res = await fetch(`/api/public/bookings/${encodeURIComponent(ref)}?email=${encodeURIComponent(email)}`);
+    const data = await res.json();
+    if (res.ok && data.booking.status === "confirmed") {
+      box.innerHTML = `<div class="big-check">✅</div>
+        <h3>Réservation confirmée !</h3>
+        <p>Référence <b class="mono">${esc(ref)}</b> — un email de confirmation avec les conditions générales et le contrat de location vous est adressé.</p>
+        <p style="margin-top:14px"><a class="btn" href="${voucherUrl}">Voir mon voucher</a></p>`;
+      return;
+    }
+  } catch { /* on repollera */ }
+  if (attempt < 20) {
+    setTimeout(() => poll(attempt + 1), 1500);
+  } else {
+    box.innerHTML = `<div class="big-check">🕐</div><h3>Paiement en cours de traitement</h3>
+      <p class="muted small">La confirmation peut prendre quelques minutes. Retrouvez votre réservation ici :</p>
+      <p style="margin-top:10px"><a class="btn o" href="${voucherUrl}">Voir ma réservation</a></p>`;
+  }
+}
+poll();
+</script>
+</body>
+</html>

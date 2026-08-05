@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Paiement interrompu</title>
+<link rel="stylesheet" href="book.css">
+</head>
+<body>
+<div class="pub" style="max-width:560px">
+  <div class="card center">
+    <div class="big-check">↩️</div>
+    <h3>Paiement interrompu</h3>
+    <p class="muted small">Aucun montant n'a été débité. Votre créneau reste bloqué pour vous pendant 30 minutes au total —
+    vous pouvez finaliser le paiement depuis votre récapitulatif, ou laisser l'option expirer sans aucune démarche.</p>
+    <p style="margin-top:14px" id="actions"><a class="btn" href="/book/">Revenir au calendrier</a></p>
+  </div>
+</div>
+<script>
+// Si la référence + email sont dans l'URL (mis par le lien d'annulation Stripe),
+// proposer la reprise directe sur le récapitulatif de la réservation.
+const q = new URLSearchParams(location.search);
+const ref = q.get("ref"), email = q.get("email");
+if (ref && email) {
+  document.getElementById("actions").innerHTML =
+    `<a class="btn" href="/book/voucher.html?ref=${encodeURIComponent(ref)}&email=${encodeURIComponent(email)}">Reprendre ma réservation ${ref.replace(/[^A-Za-z0-9-]/g, "")}</a>
+     <a class="btn o" style="margin-left:8px" href="/book/">Revenir au calendrier</a>`;
+}
+</script>
+</body>
+</html>

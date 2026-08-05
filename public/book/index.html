@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex">
+<title>Réservation en direct</title>
+<link rel="stylesheet" href="book.css">
+</head>
+<body>
+<div class="pub">
+  <div class="brand">
+    <a class="back-site" id="backSite" href="/">← Retour au site</a>
+    <h1 id="propName">Réservation</h1>
+    <p id="propSub">Réservation directe — paiement sécurisé, sans création de compte</p>
+  </div>
+
+  <!-- Landing multi-domaines (affichée sans ?property=…) -->
+  <div id="landing" style="display:none"></div>
+
+  <!-- Parcours de réservation -->
+  <div id="flow" style="display:none">
+    <div class="steps" id="steps">
+      <span data-step="1" class="on">1. Dates</span>
+      <span data-step="2">2. Hébergement</span>
+      <span data-step="3">3. Coordonnées</span>
+      <span data-step="4">4. Paiement</span>
+    </div>
+
+    <!-- Étape 1 : calendrier des disponibilités et prix -->
+    <div class="card" id="searchCard">
+      <div class="pcal-head">
+        <button class="pcal-nav" id="calPrev" aria-label="Mois précédent">◀</button>
+        <b id="calLabel">…</b>
+        <button class="pcal-nav" id="calNext" aria-label="Mois suivant">▶</button>
+      </div>
+      <div class="pcal" id="calGrid"></div>
+      <p class="pcal-hint">Choisissez votre jour d'<b>arrivée</b> puis votre jour de <b>départ</b> — les hébergements disponibles s'affichent aussitôt. Prix « à partir de » par nuit.</p>
+      <div class="stay-bar">
+        <div id="staySummary"></div>
+        <div class="pax">
+          <label class="f" for="qAd">Adultes</label>
+          <select id="qAd"></select>
+          <label class="f" for="qCh">Enfants</label>
+          <select id="qCh"></select>
+        </div>
+      </div>
+      <div id="searchMsg"></div>
+    </div>
+
+    <!-- Étape 2 : hébergements disponibles -->
+    <div id="results"></div>
+
+    <!-- Étape 3 : coordonnées (gauche) + récap sticky (droite) -->
+    <div id="bookingPanel"></div>
+
+    <!-- Une question avant de réserver ? (message direct dans la plateforme) -->
+    <details class="card qcard" id="contactCard">
+      <summary>Une question avant de réserver ?</summary>
+      <div class="row" style="margin-top:12px">
+        <div><label class="f">Nom</label><input id="cName"></div>
+        <div><label class="f">Email</label><input id="cEmail" type="email"></div>
+      </div>
+      <div style="margin-top:10px"><label class="f">Message</label><textarea id="cMsg" rows="3" placeholder="Disponibilités, équipements, accès…"></textarea></div>
+      <input id="cWebsite" tabindex="-1" autocomplete="off" style="position:absolute;left:-9999px" aria-hidden="true">
+      <p style="margin-top:10px"><button class="btn o" id="cSend">Envoyer la question</button> <span id="cNote" class="small muted"></span></p>
+    </details>
+  </div>
+
+  <p class="footer-note"><span class="badge-secure">🔒 Paiement sécurisé Stripe</span> · Bancontact, Visa, Mastercard · sans création de compte<br>
+  <span id="contactLine"></span></p>
+</div>
+
+<!-- Barre mobile : total + payer (visible à l'étape 3) -->
+<div class="mobilebar" id="mobileBar" style="display:none">
+  <div class="mb-total"><span class="small muted" id="mbLabel">Total</span><b id="mbAmount">—</b></div>
+  <button class="btn" id="mbPay">Payer et réserver</button>
+</div>
+
+<script type="module" src="book.js"></script>
+</body>
+</html>

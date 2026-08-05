@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex">
+<title>Voucher — votre réservation</title>
+<link rel="stylesheet" href="book.css">
+</head>
+<body>
+<div class="pub" style="max-width:640px">
+  <div id="box"><div class="card muted">Chargement…</div></div>
+</div>
+<script>
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+const eur = (c) => (c / 100).toLocaleString("fr-BE", { style: "currency", currency: "EUR" });
+const dfr = (iso) => iso ? `${iso.slice(8,10)}/${iso.slice(5,7)}/${iso.slice(0,4)}` : "—";
+const q = new URLSearchParams(location.search);
+
+(async () => {
+  const box = document.getElementById("box");
+  const ref = q.get("ref"), email = q.get("email");
+  if (!ref || !email) { box.innerHTML = `<div class="card"><div class="note bad">Lien incomplet — utilisez le lien reçu par email.</div></div>`; return; }
+  const res = await fetch(`/api/public/bookings/${encodeURIComponent(ref)}?email=${encodeURIComponent(email)}`);
+  const data = await res.json();
+  if (!res.ok) { box.innerHTML = `<div class="card"><div class="note bad">Réservation introuvable — vérifiez la référence et l'email.</div></div>`; return; }
+  const b = data.booking;
+  const statusTag = b.status === "confirmed"
+    ? `<span class="tag t-ok">Confirmée</span>`
+    : b.status === "pending" ? `<span class="tag t-warn">Paiement en attente</span>` : `<span class="tag t-bad">Annulée</span>`;
+  const lines = (b.quoteLines || []).map((l) => `<tr><td>${esc(l.label)}</td><td class="r ${l.amountCents < 0 ? "neg" : ""}">${eur(l.amountCents)}</td></tr>`).join("");
+
+  const payBlock = b.status === "pending" && b.holdExpiresAt
+    ? `<div class="card" id="payCard"><h3>Finaliser la réservation</h3>
+        <p class="small muted">Votre créneau est bloqué pour vous — terminez le paiement pour confirmer.</p>
+        <div id="payMsg"></div>
+        <button class="btn big" id="payNow" style="margin-top:8px">💳 Finaliser le paiement sécurisé</button></div>`
+    : "";
+
+  box.innerHTML = `
+    <div class="brand"><h1>${esc(b.propertyName)}</h1><p>Voucher de réservation</p></div>
+    ${payBlock}
+    <div class="card">
+      <table class="quote">
+        <tr><td>Référence</td><td class="r"><b class="mono">${esc(b.reference)}</b> ${statusTag}</td></tr>
+        <tr><td>Hébergement</td><td class="r"><b>${esc(b.unitName)}</b></td></tr>
+        <tr><td>Arrivée</td><td class="r">${dfr(b.checkin)} dès ${esc(data.stay.checkinTime)}</td></tr>
+        <tr><td>Départ</td><td class="r">${dfr(b.checkout)} avant ${esc(data.stay.checkoutTime)}</td></tr>
+        <tr><td>Voyageurs</td><td class="r">${b.adults} adulte${b.adults > 1 ? "s" : ""}${b.children ? ` + ${b.children} enfant${b.children > 1 ? "s" : ""}` : ""}</td></tr>
+      </table>
+    </div>
+    ${lines ? `<div class="card"><h3>Détail du séjour</h3><table class="quote">${lines}
+      <tr class="tot"><td>Total</td><td class="r">${eur(b.totalCents)}</td></tr></table></div>` : ""}
+    <div class="card">
+      <table class="quote">
+        <tr><td>Déjà payé</td><td class="r">${eur(b.paidCents)}</td></tr>
+        <tr><td>Solde restant${b.balanceDueDate ? ` (pour le ${dfr(b.balanceDueDate)})` : ""}</td><td class="r"><b>${eur(b.balanceCents)}</b></td></tr>
+        ${data.stay.cautionCents > 0 ? `<tr><td>Caution (hors total, avant l'arrivée)</td><td class="r">${eur(data.stay.cautionCents)}</td></tr>` : ""}
+      </table>
+      ${data.contact.email || data.contact.phone ? `<p class="small muted" style="margin-top:8px">Contact : ${esc([data.contact.email, data.contact.phone].filter(Boolean).join(" · "))}</p>` : ""}
+    </div>
+    <div class="card"><h3>💬 Échanges avec l'équipe</h3>
+      <p class="small muted">Une question sur votre séjour ? Écrivez-nous ici — la réponse apparaîtra sur cette page${b.status !== "cancelled" ? " (et par email)" : ""}.</p>
+      <div class="thread" id="thread"><span class="muted small">Chargement…</span></div>
+      <textarea id="msgText" rows="3" placeholder="Votre message…"></textarea>
+      <p style="margin-top:8px"><button class="btn" id="msgSend">Envoyer</button> <span id="msgNote" class="small muted"></span></p>
+    </div>
+    <div class="card"><h3>Conditions générales &amp; contrat de location</h3>
+      <div class="cgv-box">${esc(data.cgvText || "Conditions générales à venir.")}</div></div>
+    <p class="footer-note"><a href="javascript:print()">Imprimer / enregistrer en PDF</a></p>`;
+
+  const payBtn = document.getElementById("payNow");
+  if (payBtn) {
+    payBtn.onclick = async () => {
+      payBtn.disabled = true;
+      payBtn.textContent = "Préparation du paiement…";
+      const r = await fetch(`/api/public/bookings/${encodeURIComponent(ref)}/pay`, {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      const d = await r.json();
+      if (r.ok) { location.href = d.checkoutUrl; return; }
+      payBtn.style.display = "none";
+      document.getElementById("payMsg").innerHTML = `<div class="note bad">${esc(d.error || "paiement indisponible")}</div>`;
+    };
+  }
+
+  const threadUrl = `/api/public/bookings/${encodeURIComponent(ref)}/messages?email=${encodeURIComponent(email)}`;
+  const renderThread = (messages) => {
+    const zone = document.getElementById("thread");
+    zone.innerHTML = messages.length
+      ? messages.map((m) => `<div class="bubble ${m.direction === "in" ? "in" : "out"}">
+          <div class="who">${m.direction === "in" ? "Vous" : esc(b.propertyName || "L'équipe")} · ${esc((m.at || "").slice(0, 16))}</div>${esc(m.body)}</div>`).join("")
+      : '<span class="muted small">Pas encore de message — écrivez-nous ci-dessous.</span>';
+    zone.scrollTop = zone.scrollHeight;
+  };
+  try {
+    renderThread((await (await fetch(threadUrl)).json()).messages || []);
+  } catch { renderThread([]); }
+
+  document.getElementById("msgSend").onclick = async () => {
+    const text = document.getElementById("msgText").value.trim();
+    if (text.length < 2) return;
+    const btn = document.getElementById("msgSend");
+    btn.disabled = true;
+    const res = await fetch(`/api/public/bookings/${encodeURIComponent(ref)}/messages`, {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email, message: text }),
+    });
+    const data2 = await res.json();
+    btn.disabled = false;
+    if (res.ok) {
+      document.getElementById("msgText").value = "";
+      document.getElementById("msgNote").textContent = "Message envoyé — nous vous répondons vite.";
+      renderThread(data2.messages || []);
+    } else {
+      document.getElementById("msgNote").textContent = data2.error || "envoi impossible";
+    }
+  };
+})();
+</script>
+</body>
+</html>

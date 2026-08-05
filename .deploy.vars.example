@@ -1,0 +1,13 @@
+# Copier en `.deploy.vars` (gitignoré, jamais commité) et compléter.
+# Ces identifiants ne transitent jamais par la conversation : le script les lit
+# ici, personne d'autre ne les voit.
+
+# --- FTP Infomaniak ---------------------------------------------------------
+FTP_HOST=
+FTP_USER=
+FTP_PASSWORD=
+# Dossier de destination sur le serveur (vide = racine du compte FTP).
+# Chez Infomaniak c'est souvent le nom du site, ex. dev1.mdcdy.be
+FTP_REMOTE_DIR=dev1.mdcdy.be
+# FTPS (chiffré) — ne passer à false que si l'hébergeur ne le supporte pas.
+FTP_TLS=true
