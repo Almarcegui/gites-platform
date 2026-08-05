@@ -11,10 +11,18 @@ from __future__ import annotations
 
 import glob
 import html
+import os
 import sqlite3
 import sys
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
+
+# Base des liens de la page hub. La plateforme est en ligne depuis le 2026-08-03 ;
+# quand le domaine définitif sera tranché, une seule ligne change ici — ou on
+# passe GITES_SITE_BASE dans l'environnement sans toucher au script.
+SITE_BASE = os.environ.get(
+    "GITES_SITE_BASE", "https://gites-platform.j-decartier.workers.dev"
+).rstrip("/")
 
 VAULT = Path.home() / "Documents" / "Claude"
 PLATFORM = VAULT / "🔧 Dev" / "Gites Platform"
@@ -167,8 +175,9 @@ def build_page(data: dict | None) -> str:
 
     body_parts.append(
         '<p class="foot">Instantané généré le ' + esc(stamp) + " — rafraîchi avec le hub (8h05 / 13h05 / 18h10 L-V).<br>"
-        'Back-office complet : plateforme locale (<code>🔧 Dev/Gites Platform</code>, <code>npm run dev -- --port 8788</code>) '
-        "— le déploiement de la plateforme elle-même reste à décider (runbook au README).</p>")
+        'Plateforme en ligne : <code>' + esc(SITE_BASE) + "</code>. "
+        'Code sur GitHub (<code>jdecartier-glitch/gites-platform</code>, dépôt privé) ; '
+        "en local : <code>npm run dev -- --port 8788</code>.</p>")
 
     return f"""<!DOCTYPE html>
 <html lang="fr"><head><meta charset="utf-8">
@@ -206,12 +215,12 @@ code{{background:#EEECE6;border-radius:3px;padding:0 4px;font-size:12px}}
 <h1>⌂ Plateforme Gîtes</h1>
 <p class="sub">Pré Moré &amp; Moulin de Braives — réservations en direct · <a href="/prive/">← privé</a></p>
 <p class="btns">
-  <a class="btn" href="http://localhost:8788/admin/">⚙️ Ouvrir le back-office</a>
-  <a class="btn o" href="http://localhost:8788/">🏡 Site Pré Moré (refonte)</a>
-  <a class="btn o" href="http://localhost:8788/book/">🌐 Réservation (client)</a>
-  <a class="btn o" href="http://localhost:8788/book/?property=moulin-braives">Moulin</a>
+  <a class="btn" href="{SITE_BASE}/admin/">⚙️ Ouvrir le back-office</a>
+  <a class="btn o" href="{SITE_BASE}/">🏡 Site Pré Moré (refonte)</a>
+  <a class="btn o" href="{SITE_BASE}/book/">🌐 Réservation (client)</a>
+  <a class="btn o" href="{SITE_BASE}/book/?property=moulin-braives">Moulin</a>
 </p>
-<p class="mut" style="font-size:11.5px;margin:-6px 0 14px">Liens locaux : la plateforme tourne sur le Mac (port 8788) — accessibles depuis ce Mac uniquement, en attendant la mise en ligne complète (token Cloudflare Workers+D1 à créer).</p>
+<p class="mut" style="font-size:11.5px;margin:-6px 0 14px">Site en ligne depuis le 3 août — ces liens marchent depuis n'importe où, téléphone compris. ⚠️ Les chiffres ci-dessous viennent encore de la base <strong>locale</strong> du Mac, pas de celle en ligne : à lire comme un instantané de développement, pas comme l'état réel des réservations.</p>
 {"".join(body_parts)}
 </div></body></html>"""
 
