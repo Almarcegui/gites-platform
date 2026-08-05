@@ -17,7 +17,10 @@ de Julien.** Le merge sur `main` ne déploie rien automatiquement, et c'est voul
 
 ## Branches
 
-- `main` — toujours verte, toujours déployable. Protégée : on n'y pousse pas en direct.
+- `main` — toujours verte, toujours déployable. **On n'y pousse pas en direct.**
+  Attention : cette règle est tenue à la main. GitHub n'offre la protection de
+  branche sur les dépôts privés qu'à partir des plans payants, donc rien ne
+  l'empêche techniquement — c'est une discipline, pas un verrou.
 - `feat/<sujet-court>` — une fonctionnalité.
 - `fix/<sujet-court>` — une correction.
 - `chore/<sujet-court>` — outillage, dépendances, doc.
