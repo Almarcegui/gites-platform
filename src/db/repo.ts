@@ -972,6 +972,47 @@ export async function updateBookingDatesAtomic(
   return res.meta.changes === 1;
 }
 
+/** Réactive une résa externe annulée (le canal l'a rouverte), sur ses dates ou
+ *  sur de nouvelles, avec le MÊME garde-fou atomique que la création.
+ *  false ⇒ le créneau a été repris entre-temps : on ne force rien, l'appelant
+ *  journalise une alerte. Réactiver au lieu de ré-insérer est ce qui évite la
+ *  violation de l'unicité d'external_uid (issue #18). */
+export async function reactivateBookingAtomic(
+  db: D1Database,
+  id: number,
+  unitId: number,
+  checkin: IsoDate,
+  checkout: IsoDate,
+  now: string = sqlNow(),
+): Promise<boolean> {
+  if (!isIsoDate(checkin) || !isIsoDate(checkout) || checkin >= checkout) {
+    throw new Error(`reactivateBookingAtomic: dates invalides ${checkin} → ${checkout}`);
+  }
+  const res = await db
+    .prepare(
+      `UPDATE bookings
+          SET status = 'confirmed', checkin = ?3, checkout = ?4, hold_expires_at = NULL,
+              cancelled_at = NULL, cancel_reason = NULL, updated_at = ?5
+        WHERE id = ?2
+          AND status = 'cancelled'
+          AND NOT EXISTS (
+            SELECT 1 FROM bookings b
+             WHERE b.id != ?2
+               AND b.checkin < ?4
+               AND b.checkout > ?3
+               AND (b.status = 'confirmed' OR (b.status = 'pending' AND b.hold_expires_at > ?5))
+               AND b.unit_id IN (
+                 SELECT ?1
+                 UNION ALL
+                 SELECT ul.unit_id FROM unit_links ul WHERE ul.blocks_unit_id = ?1
+               )
+          )`,
+    )
+    .bind(unitId, id, checkin, checkout, now)
+    .run();
+  return res.meta.changes === 1;
+}
+
 export async function setPaymentSession(db: D1Database, paymentId: number, sessionId: string): Promise<void> {
   await db.prepare("UPDATE payments SET stripe_session_id = ?2 WHERE id = ?1").bind(paymentId, sessionId).run();
 }
@@ -1274,6 +1315,15 @@ export async function listFeedBookings(db: D1Database, feedId: number): Promise<
     .bind(`feed${feedId}:%`)
     .all();
   return (results as Raw[]).map(mapBooking);
+}
+
+/** Résa portant cet external_uid, ANNULÉES COMPRISES (la contrainte d'unicité
+ *  rend le résultat unique). Les listes de réconciliation ci-dessus filtrent
+ *  les annulées : sans cette recherche, une résa externe rouverte par le canal
+ *  repartait sur une création et cassait l'unicité (issue #18). */
+export async function getBookingByExternalUid(db: D1Database, externalUid: string): Promise<BookingRow | null> {
+  const row = await db.prepare(`${BOOKING_JOIN} WHERE b.external_uid = ?1`).bind(externalUid).first();
+  return row ? mapBooking(row as Raw) : null;
 }
 
 /** Résas rapatriées de Beds24 (canaux OTA) — external_uid 'beds24:<id>'. */

@@ -195,6 +195,62 @@ describe("syncFeed (import complet sur vraie D1)", () => {
     expect((await listBookings(db, {})).length).toBe(0);
   });
 
+  // Issue #18, même défaut côté flux iCal : un événement qui disparaît du flux
+  // (annulé) puis réapparaît repartait sur une création avec le même
+  // external_uid → violation d'unicité → TOUTE la relève du flux échouait.
+  it("événement disparu puis réapparu : réactivation, aucune exception", async () => {
+    const feed = await makeFeed();
+    await syncFeed(db, feed, mockFetch(AIRBNB_ICS), NOW);
+    const withoutFirst = [
+      "BEGIN:VCALENDAR",
+      "BEGIN:VEVENT",
+      "UID:airbnb-HMZZZ999@airbnb.com",
+      "DTSTART;VALUE=DATE:20261101", "DTEND;VALUE=DATE:20261103",
+      "END:VEVENT",
+      "END:VCALENDAR",
+    ].join("\r\n");
+    expect((await syncFeed(db, feed, mockFetch(withoutFirst), NOW)).cancelled).toBe(1);
+
+    const back = await syncFeed(db, feed, mockFetch(AIRBNB_ICS), NOW);
+    expect(back.error).toBeNull();
+    expect(back.conflicts).toEqual([]);
+    expect(back.reactivated).toBe(1);
+    const bookings = await listFeedBookings(db, feed.id);
+    expect(bookings).toHaveLength(2);
+    // pas de doublon : une seule ligne porte cet external_uid
+    const n = await db
+      .prepare("SELECT COUNT(*) AS n FROM bookings WHERE external_uid LIKE '%HMKAXY123%'")
+      .first<{ n: number }>();
+    expect(n?.n).toBe(1);
+  });
+
+  it("réapparition impossible (créneau revendu) → conflit signalé, pas d'exception", async () => {
+    const feed = await makeFeed();
+    await syncFeed(db, feed, mockFetch(AIRBNB_ICS), NOW);
+    const withoutFirst = [
+      "BEGIN:VCALENDAR",
+      "BEGIN:VEVENT",
+      "UID:airbnb-HMZZZ999@airbnb.com",
+      "DTSTART;VALUE=DATE:20261101", "DTEND;VALUE=DATE:20261103",
+      "END:VEVENT",
+      "END:VCALENDAR",
+    ].join("\r\n");
+    await syncFeed(db, feed, mockFetch(withoutFirst), NOW);
+    // le créneau libéré est revendu en direct
+    const direct = await createBookingAtomic(db, {
+      unitId: SCIERIE, checkin: "2026-10-06", checkout: "2026-10-08",
+      adults: 4, children: 0, status: "confirmed", source: "direct", now: NOW,
+    });
+    expect(direct.ok).toBe(true);
+
+    const back = await syncFeed(db, feed, mockFetch(AIRBNB_ICS), NOW);
+    expect(back.error).toBeNull();
+    expect(back.reactivated).toBe(0);
+    expect(back.conflicts).toHaveLength(1);
+    expect(back.conflicts[0]).toContain("réactivation");
+    if (direct.ok) expect((await getBooking(db, direct.id))?.status).toBe("confirmed");
+  });
+
   it("erreur réseau → statut d'erreur sur le flux, aucune résa touchée", async () => {
     const feed = await makeFeed();
     await syncFeed(db, feed, mockFetch(AIRBNB_ICS), NOW);

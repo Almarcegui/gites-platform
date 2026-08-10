@@ -22,7 +22,9 @@ import {
   bookingsInWindow,
   cancelBooking,
   createBookingAtomic,
+  getBookingByExternalUid,
   listBeds24Bookings,
+  reactivateBookingAtomic,
   listLinks,
   listRateRules,
   listSeasons,
@@ -164,8 +166,12 @@ export interface ChannelSyncResult {
   imported: number;
   updated: number;
   cancelled: number;
+  /** Résas annulées côté canal puis rouvertes, réactivées chez nous. */
+  reactivated: number;
   skipped: number;
   conflicts: string[];
+  /** Résas dont le traitement a échoué — le pull continue quand même. */
+  errors: string[];
 }
 
 const ACTIVE_STATUSES = new Set(["new", "confirmed", "request"]);
@@ -188,73 +194,124 @@ export async function applyChannelBookings(
   roomToUnit: Map<number, number>,
   now: Date = new Date(),
 ): Promise<ChannelSyncResult> {
-  const result: ChannelSyncResult = { imported: 0, updated: 0, cancelled: 0, skipped: 0, conflicts: [] };
+  const result: ChannelSyncResult = {
+    imported: 0, updated: 0, cancelled: 0, reactivated: 0, skipped: 0, conflicts: [], errors: [],
+  };
   const nowSql = sqlNow(now);
   const today = todayInZone(now);
   const existing = await listBeds24Bookings(db);
   const byUid = new Map(existing.map((b) => [b.externalUid ?? "", b]));
 
   for (const b of bookings) {
-    const unitId = roomToUnit.get(b.roomId);
-    const extUid = `beds24:${b.id}`;
-    const known = byUid.get(extUid);
-    if (!unitId) {
-      result.skipped += 1;
-      continue;
-    }
-    if (!isIsoDate(b.arrival) || !isIsoDate(b.departure) || b.arrival >= b.departure) {
-      result.skipped += 1;
-      continue;
-    }
-
-    if (!ACTIVE_STATUSES.has(b.status)) {
-      // annulée (ou statut inconnu) côté canal → libérer si pas commencée
-      if (known && known.checkin >= today) {
-        await cancelBooking(db, known.id, `canal:${b.status}`, nowSql);
-        result.cancelled += 1;
-      }
-      continue;
-    }
-
-    if (!known) {
-      if (b.departure <= today) continue; // séjour déjà terminé : rien à créer
-      const lastName = (b.lastName ?? "").trim() || channelLabel(b);
-      const guestId = await upsertGuest(db, {
-        email: (b.email ?? "").trim() || null,
-        firstName: (b.firstName ?? "").trim() || null,
-        lastName,
-        phone: (b.phone ?? "").trim() || null,
+    // Une résa qui casse ne doit JAMAIS emporter le rapatriement des autres :
+    // sinon une seule ligne fautive gelait tout le flux du domaine, à chaque
+    // passage du cron, jusqu'à intervention manuelle (issue #18).
+    try {
+      await applyOneChannelBooking(db, b, roomToUnit, byUid, result, { now, nowSql, today });
+    } catch (e) {
+      result.errors.push(`beds24:${b.id} : ${e instanceof Error ? e.message : String(e)}`);
+      await audit(db, "cron", "beds24.booking.error", `beds24:${b.id}`, {
+        error: e instanceof Error ? e.message : String(e),
+        arrival: b.arrival,
+        departure: b.departure,
       });
-      const created = await createBookingAtomic(db, {
-        unitId,
-        checkin: b.arrival,
-        checkout: b.departure,
-        adults: Math.max(0, Math.floor(b.numAdult ?? 0)),
-        children: Math.max(0, Math.floor(b.numChild ?? 0)),
-        status: "confirmed",
-        source: "ical",
-        channelLabel: channelLabel(b),
-        externalUid: extUid,
-        guestId,
-        totalCents: b.price != null ? Math.round(b.price * 100) : 0,
-        internalNotes: `Résa ${channelLabel(b)} rapatriée de Beds24 (#${b.id})`,
-        now,
-      });
-      if (created.ok) {
-        result.imported += 1;
-      } else {
-        result.conflicts.push(`beds24:${b.id} ${b.arrival}→${b.departure} : créneau déjà pris localement`);
-      }
-    } else if (known.checkin !== b.arrival || known.checkout !== b.departure) {
-      const moved = await updateBookingDatesAtomic(db, known.id, known.unitId, b.arrival, b.departure, nowSql);
-      if (moved) {
-        result.updated += 1;
-      } else {
-        result.conflicts.push(`${known.reference} : déplacement ${b.arrival}→${b.departure} impossible (conflit)`);
-      }
     }
   }
   return result;
+}
+
+/** Traitement d'UNE résa canal. Extrait pour que l'appelant puisse isoler les
+ *  échecs ligne par ligne. */
+async function applyOneChannelBooking(
+  db: D1Database,
+  b: Beds24Booking,
+  roomToUnit: Map<number, number>,
+  byUid: Map<string, { id: number; unitId: number; reference: string; checkin: IsoDate; checkout: IsoDate }>,
+  result: ChannelSyncResult,
+  clock: { now: Date; nowSql: string; today: IsoDate },
+): Promise<void> {
+  const { now, nowSql, today } = clock;
+  const unitId = roomToUnit.get(b.roomId);
+  const extUid = `beds24:${b.id}`;
+  const known = byUid.get(extUid);
+  if (!unitId) {
+    result.skipped += 1;
+    return;
+  }
+  if (!isIsoDate(b.arrival) || !isIsoDate(b.departure) || b.arrival >= b.departure) {
+    result.skipped += 1;
+    return;
+  }
+
+  if (!ACTIVE_STATUSES.has(b.status)) {
+    // annulée (ou statut inconnu) côté canal → libérer si pas commencée
+    if (known && known.checkin >= today) {
+      if (await cancelBooking(db, known.id, `canal:${b.status}`, nowSql)) result.cancelled += 1;
+    }
+    return;
+  }
+
+  if (!known) {
+    if (b.departure <= today) return; // séjour déjà terminé : rien à créer
+
+    // La résa est peut-être connue mais ANNULÉE (rouverte côté canal) : elle
+    // n'apparaît pas dans la liste de réconciliation, et une création
+    // violerait l'unicité de external_uid. On réactive au lieu d'insérer,
+    // après revérification de disponibilité — le créneau a pu être revendu.
+    const archived = await getBookingByExternalUid(db, extUid);
+    if (archived) {
+      const back = await reactivateBookingAtomic(db, archived.id, archived.unitId, b.arrival, b.departure, nowSql);
+      if (back) {
+        result.reactivated += 1;
+      } else {
+        result.conflicts.push(
+          `${archived.reference} : réactivation ${b.arrival}→${b.departure} impossible (créneau repris depuis l'annulation)`,
+        );
+        await audit(db, "cron", "beds24.reactivate.conflict", `booking:${archived.id}`, {
+          externalUid: extUid,
+          reference: archived.reference,
+          arrival: b.arrival,
+          departure: b.departure,
+        });
+      }
+      return;
+    }
+
+    const lastName = (b.lastName ?? "").trim() || channelLabel(b);
+    const guestId = await upsertGuest(db, {
+      email: (b.email ?? "").trim() || null,
+      firstName: (b.firstName ?? "").trim() || null,
+      lastName,
+      phone: (b.phone ?? "").trim() || null,
+    });
+    const created = await createBookingAtomic(db, {
+      unitId,
+      checkin: b.arrival,
+      checkout: b.departure,
+      adults: Math.max(0, Math.floor(b.numAdult ?? 0)),
+      children: Math.max(0, Math.floor(b.numChild ?? 0)),
+      status: "confirmed",
+      source: "ical",
+      channelLabel: channelLabel(b),
+      externalUid: extUid,
+      guestId,
+      totalCents: b.price != null ? Math.round(b.price * 100) : 0,
+      internalNotes: `Résa ${channelLabel(b)} rapatriée de Beds24 (#${b.id})`,
+      now,
+    });
+    if (created.ok) {
+      result.imported += 1;
+    } else {
+      result.conflicts.push(`beds24:${b.id} ${b.arrival}→${b.departure} : créneau déjà pris localement`);
+    }
+  } else if (known.checkin !== b.arrival || known.checkout !== b.departure) {
+    const moved = await updateBookingDatesAtomic(db, known.id, known.unitId, b.arrival, b.departure, nowSql);
+    if (moved) {
+      result.updated += 1;
+    } else {
+      result.conflicts.push(`${known.reference} : déplacement ${b.arrival}→${b.departure} impossible (conflit)`);
+    }
+  }
 }
 
 /** Pull des résas depuis Beds24 (curseur modifiedFrom en settings) + apply. */
@@ -284,7 +341,10 @@ export async function pullBeds24Bookings(
   // curseur : maintenant - 10 min de marge (horloges + latence Beds24)
   const next = new Date(now.getTime() - 10 * 60 * 1000).toISOString().slice(0, 19).replace("T", " ");
   await updateSettings(db, propertyId, { beds24_last_pull: next });
-  if (result.imported || result.updated || result.cancelled || result.conflicts.length) {
+  if (
+    result.imported || result.updated || result.cancelled || result.reactivated ||
+    result.conflicts.length || result.errors.length
+  ) {
     await audit(db, "cron", "beds24.pull", `property:${propertyId}`, result);
   }
   return result;
