@@ -283,3 +283,37 @@ section[id],h2[id],h3[id]{scroll-margin-top:74px}
 .preparer li a b{color:var(--accent)}
 .preparer li .more{display:block;margin-top:6px;font-size:12.5px;font-weight:600;color:var(--gold-ink)}
 .foot-pages{margin-top:16px;padding-top:14px;border-top:1px solid #37452F;display:flex;gap:8px 26px;flex-wrap:wrap;font-size:13px}
+
+/* --- galerie photo des pages de gîtes (issue #32) ---
+   Vignettes en 4/3, comme les fichiers produits par `optimize-images.mjs` :
+   `aspect-ratio` réserve la place avant même que l'image n'arrive, et les
+   `width`/`height` du HTML disent la même chose — aucun décalage possible. */
+.galerie{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:28px}
+@media(max-width:820px){.galerie{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:520px){.galerie{grid-template-columns:1fr}}
+.galerie figure{margin:0}
+.galerie a{display:block;border-radius:10px;overflow:hidden;background:var(--line)}
+.galerie img{display:block;width:100%;height:auto;aspect-ratio:4/3;object-fit:cover;
+  transition:transform .35s ease}
+.galerie a:hover img,.galerie a:focus-visible img{transform:scale(1.04)}
+@media(prefers-reduced-motion:reduce){.galerie img{transition:none}}
+.galerie figcaption{font-size:12.5px;color:var(--muted);margin-top:6px}
+.galerie-note{font-size:12.5px;color:var(--muted);margin-top:16px}
+
+/* Visionneuse : un <dialog> natif, donc rien à styler pour le piège à focus
+   ni pour l'inertie de la page — seulement l'apparence. */
+.visionneuse{border:0;padding:0;background:transparent;max-width:min(1180px,94vw);
+  max-height:94vh;overflow:visible}
+.visionneuse::backdrop{background:rgba(12,18,11,.93)}
+/* `width:auto` et non `100%` : la boîte épouse la photo. Sur un écran bas, une
+   largeur imposée laisserait deux bandes noires de part et d'autre. */
+.visionneuse .v-img{display:block;width:auto;max-width:100%;max-height:76vh;margin:0 auto;
+  border-radius:8px}
+.visionneuse .v-legende{margin:12px 0;font-size:14px;color:#E5E1D8;text-align:center}
+.visionneuse .v-barre{display:flex;gap:10px;justify-content:center;align-items:center}
+.visionneuse button{min-width:44px;min-height:44px;padding:0 16px;cursor:pointer;
+  background:rgba(233,229,218,.10);color:#fff;border:1px solid rgba(233,229,218,.4);
+  border-radius:8px;font:600 15px -apple-system,'Inter',sans-serif}
+.visionneuse button:hover{background:rgba(233,229,218,.22)}
+.visionneuse :focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+

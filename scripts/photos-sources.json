@@ -1,0 +1,181 @@
+{
+  "_lisez_moi": [
+    "Provenance des photos de galerie (issue #32). Les fichiers optimisés vivent dans",
+    "public/img/gites/<gite>/ et sont COMMITÉS ; ce fichier dit d'où ils viennent, ce que",
+    "chacun montre, et dans quel ordre ils s'affichent. Sans lui, personne ne saurait",
+    "régénérer une variante à partir de l'original — scripts/optimize-images.mjs n'est pas",
+    "idempotent sur ses propres sorties.",
+    "",
+    "Régénérer un gîte (les URL sont publiques, ce sont les médiathèques familiales) :",
+    "  jq -r '.gites[\"la-scierie\"].photos[] | \"\\(.source) \\(.fichier)\"' scripts/photos-sources.json \\",
+    "    | while read u f; do curl -sSfL \"$u\" -o \"/tmp/src/$f.jpg\"; done",
+    "  node scripts/optimize-images.mjs --in /tmp/src --out public/img/gites/la-scierie --galerie",
+    "",
+    "Le champ alt est une donnée d'accessibilité, pas une légende : il décrit ce que",
+    "montre l'image pour qui ne la voit pas. La légende (visible) peut être plus courte."
+  ],
+  "gites": {
+    "maison-du-scieur": {
+      "nom": "La Maison du Scieur",
+      "mediatheque": "https://lesgitesdupremore.be",
+      "photos": [
+        {
+          "fichier": "facade",
+          "source": "https://lesgitesdupremore.be/wp-content/uploads/2019/08/maison-facade2.jpg",
+          "alt": "Façade en pierre de La Maison du Scieur, envahie de lierre, porte d'entrée ouverte",
+          "legende": "La façade, côté cour"
+        },
+        {
+          "fichier": "salon",
+          "source": "https://lesgitesdupremore.be/wp-content/uploads/2019/08/maison-salon.jpg",
+          "alt": "Le grand salon de La Maison du Scieur, canapés de cuir et fenêtres donnant sur la forêt",
+          "legende": "Le grand salon"
+        },
+        {
+          "fichier": "salle-a-manger",
+          "source": "https://lesgitesdupremore.be/wp-content/uploads/2019/08/maison-salle-a-manger.jpg",
+          "alt": "La salle à manger de douze places, poêle à bois et banc contre le mur de pierre",
+          "legende": "La salle à manger, douze places"
+        },
+        {
+          "fichier": "cuisine",
+          "source": "https://lesgitesdupremore.be/wp-content/uploads/2019/08/maison-cuisine.jpg",
+          "alt": "La cuisine de La Maison du Scieur, cuisinière de restaurant et table de ferme",
+          "legende": "La cuisinière de restaurant"
+        },
+        {
+          "fichier": "chambre-lits-simples",
+          "source": "https://lesgitesdupremore.be/wp-content/uploads/2019/08/maison-chambre1.jpg",
+          "alt": "Chambre à deux lits simples, rideaux orangés et fenêtre ouverte sur les arbres",
+          "legende": "Une des quatre chambres"
+        },
+        {
+          "fichier": "chambre-lits-superposes",
+          "source": "https://lesgitesdupremore.be/wp-content/uploads/2019/08/maison-chambre2.jpg",
+          "alt": "Chambre équipée de deux lits superposés en bois clair, quatre couchages",
+          "legende": "Chambre à lits superposés"
+        },
+        {
+          "fichier": "mezzanine",
+          "source": "https://lesgitesdupremore.be/wp-content/uploads/2019/08/maison-mezza.jpg",
+          "alt": "La mezzanine sous charpente de bois, matelas au sol et fauteuils en osier",
+          "legende": "La mezzanine"
+        },
+        {
+          "fichier": "douche",
+          "source": "https://lesgitesdupremore.be/wp-content/uploads/2019/08/maison-douche.jpg",
+          "alt": "Salle d'eau carrelée de La Maison du Scieur, douche vitrée et vasque",
+          "legende": "Une des deux douches"
+        }
+      ]
+    },
+    "la-scierie": {
+      "nom": "La Scierie",
+      "mediatheque": "https://lesgitesdupremore.be",
+      "photos": [
+        {
+          "fichier": "facade",
+          "source": "https://lesgitesdupremore.be/wp-content/uploads/2019/08/facade-scierie-bas.jpg",
+          "alt": "Façade en pierre de La Scierie, prolongée d'un auvent à toiture végétalisée",
+          "legende": "La façade, côté ruisseau"
+        },
+        {
+          "fichier": "salon",
+          "source": "https://lesgitesdupremore.be/wp-content/uploads/2019/08/scierie-salon.jpg",
+          "alt": "Le salon de La Scierie, feu ouvert, canapés et escalier de bois vers la mezzanine",
+          "legende": "Le salon et son feu ouvert"
+        },
+        {
+          "fichier": "feu-ouvert",
+          "source": "https://lesgitesdupremore.be/wp-content/uploads/2019/08/scierie-feu-ouvert.jpg",
+          "alt": "Le feu ouvert de La Scierie, entouré de fauteuils de cuir et d'une table basse en bois",
+          "legende": "Se réfugier devant le feu"
+        },
+        {
+          "fichier": "sejour-cuisine",
+          "source": "https://lesgitesdupremore.be/wp-content/uploads/2019/08/scierie-livingroom.jpg",
+          "alt": "Le séjour de La Scierie sous charpente : longue table de bois et cuisine ouverte",
+          "legende": "Séjour et cuisine ouverte"
+        },
+        {
+          "fichier": "chambre",
+          "source": "https://lesgitesdupremore.be/wp-content/uploads/2019/08/scierie-gdechambre.jpg",
+          "alt": "Chambre sous combles de La Scierie, plafond lambrissé et armoire ancienne",
+          "legende": "La grande chambre"
+        },
+        {
+          "fichier": "mezzanine",
+          "source": "https://lesgitesdupremore.be/wp-content/uploads/2019/08/scierie-mezza-lits.jpg",
+          "alt": "La mezzanine de La Scierie, deux lits disposés contre le mur de pierre sèche",
+          "legende": "La mezzanine, contre la pierre"
+        },
+        {
+          "fichier": "salle-de-bains",
+          "source": "https://lesgitesdupremore.be/wp-content/uploads/2019/08/scierie-sdb.jpg",
+          "alt": "La salle de bains de La Scierie, lavabo posé sur un plan de bois et sèche-serviettes",
+          "legende": "La salle de bains"
+        },
+        {
+          "fichier": "terrasse",
+          "source": "https://lesgitesdupremore.be/wp-content/uploads/2019/08/scierie-terrasse.jpg",
+          "alt": "La terrasse en bois de La Scierie, portes-fenêtres ouvertes sur la vallée boisée",
+          "legende": "La terrasse, plein sud"
+        }
+      ]
+    },
+    "le-moulin-de-braives": {
+      "nom": "Le Moulin de Braives",
+      "mediatheque": "https://moulindebraives.be",
+      "photos": [
+        {
+          "fichier": "facade-etang",
+          "source": "https://moulindebraives.be/wp-content/uploads/2021/04/IMG_1205-scaled.jpg",
+          "alt": "Le Moulin de Braives en briques rouges, reflété dans l'étang bordé d'un grand arbre",
+          "legende": "Le moulin et son étang"
+        },
+        {
+          "fichier": "terrasse",
+          "source": "https://moulindebraives.be/wp-content/uploads/2021/04/IMG_1203-scaled.jpg",
+          "alt": "La terrasse du Moulin et son mobilier de jardin, le long de la façade en briques",
+          "legende": "La terrasse et le jardin"
+        },
+        {
+          "fichier": "grande-table",
+          "source": "https://moulindebraives.be/wp-content/uploads/2021/04/IMG_1274-scaled.jpg",
+          "alt": "La grande table de bois du Moulin sous les poutres, entourée de chaises blanches",
+          "legende": "La table des grandes tablées"
+        },
+        {
+          "fichier": "piece-de-vie",
+          "source": "https://moulindebraives.be/wp-content/uploads/2021/04/IMG_1245-scaled.jpg",
+          "alt": "La pièce de vie du Moulin : poteaux de chêne, sol en pierre bleue et escalier ouvert",
+          "legende": "La pièce de vie"
+        },
+        {
+          "fichier": "cuisine",
+          "source": "https://moulindebraives.be/wp-content/uploads/2021/04/IMG_1269-scaled.jpg",
+          "alt": "La cuisine du Moulin et son îlot central en bois, ouverte sur la pièce de vie",
+          "legende": "La cuisine et son îlot"
+        },
+        {
+          "fichier": "salon",
+          "source": "https://moulindebraives.be/wp-content/uploads/2021/04/IMG_1267-scaled.jpg",
+          "alt": "Le salon du Moulin, canapés bleus devant la cheminée, sol en pierre bleue",
+          "legende": "Le salon, côté cheminée"
+        },
+        {
+          "fichier": "chambre",
+          "source": "https://moulindebraives.be/wp-content/uploads/2021/04/IMG_1228-scaled.jpg",
+          "alt": "Chambre du Moulin, lit double devant un mur de briques apparentes sous charpente",
+          "legende": "Une des cinq chambres"
+        },
+        {
+          "fichier": "salle-de-bains",
+          "source": "https://moulindebraives.be/wp-content/uploads/2021/04/IMG_1220-scaled.jpg",
+          "alt": "Salle de bains du Moulin sous les toits, baignoire et large fenêtre de toit",
+          "legende": "Salle de bains privative"
+        }
+      ]
+    }
+  }
+}
