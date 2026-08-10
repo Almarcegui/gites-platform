@@ -452,6 +452,10 @@ export function registerPublicRoutes(router: Router): void {
         checkoutUrl,
         amountDueCents: amountDue,
         holdMinutes: ctx.settings.holdMinutes,
+        // Fin de blocage ET heure serveur : le tunnel décompte sur l'écart des
+        // deux, jamais sur l'horloge du visiteur (issue #16).
+        holdExpiresAt: booking.holdExpiresAt,
+        now: sqlNow(),
       },
       201,
     );

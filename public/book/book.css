@@ -147,3 +147,12 @@ a{color:var(--accent)}
 .domain .bd b{font-size:16px}
 .domain .bd p{font-size:12.5px;color:var(--muted);margin-top:2px}
 .prop .ph{background-position:center;background-size:cover}
+
+/* Décompte du blocage de créneau (issue #16) — bandeau discret, visible tant
+   que l'option court. .sr-only : texte réservé aux lecteurs d'écran. */
+.holdbar{position:sticky;top:0;z-index:20;margin:0 0 12px;padding:10px 14px;border-radius:8px;
+  background:#FDF3D8;border:1px solid #E4C97E;color:#5B4A16;font-size:13.5px;text-align:center}
+.holdbar a{color:inherit;text-decoration:underline}
+.holdbar.expired{background:#FBE4E4;border-color:#E0A5A5;color:#7A2C2C}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;
+  clip:rect(0,0,0,0);white-space:nowrap;border:0}

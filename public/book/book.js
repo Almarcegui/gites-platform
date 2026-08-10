@@ -339,7 +339,7 @@ async function openBookingPanel(unitId) {
       <div class="panel-main">
         ${PROP.options.length ? `<div class="card"><h3>Équipements du séjour</h3>${optionRows}</div>` : ""}
         <div class="card" id="guestCard">
-          <h3>Vos coordonnées</h3>
+          <h3 id="step3Title" tabindex="-1">Vos coordonnées</h3>
           <div class="formgrid">
             <div><label class="f" for="gFirst">Prénom</label><input id="gFirst" autocomplete="given-name"></div>
             <div><label class="f" for="gLast">Nom *</label><input id="gLast" autocomplete="family-name"></div>
@@ -360,7 +360,7 @@ async function openBookingPanel(unitId) {
           <div class="agree"><label class="small"><input type="checkbox" id="gCgv"> J'accepte les <a href="#" id="cgvLink">conditions générales et le contrat de location</a> *</label>
           <div id="cgvBox" class="cgv-box" style="display:none"></div>
           <label class="small optin"><input type="checkbox" id="gOptin"> Tenez-moi au courant des disponibilités et offres par email <span class="muted">(facultatif, désinscription à tout moment)</span></label></div>
-          <div id="bookMsg"></div>
+          <div id="bookMsg" role="alert" aria-live="assertive"></div>
           <button class="btn big" id="bPay" style="margin-top:14px" disabled>Payer et réserver</button>
           <p class="reassure">Votre créneau est bloqué <b id="holdMin">30</b> minutes le temps du paiement.
           Réservation ferme dès paiement — pas de droit de rétractation pour les hébergements datés (art. VI.53, 12° CDE) ;
@@ -372,7 +372,7 @@ async function openBookingPanel(unitId) {
           <b class="sum-unit">${esc(SELECTED.name)}</b>
           <p class="small muted sum-stay">Du ${dfr(SEARCH.checkin)} au ${dfr(SEARCH.checkout)} · ${SEARCH.adults} adulte${SEARCH.adults > 1 ? "s" : ""}${SEARCH.children ? ` + ${SEARCH.children} enfant${SEARCH.children > 1 ? "s" : ""}` : ""}<br>
           Arrivée dès ${esc(PROP.settings.checkinTime)} · départ avant ${esc(PROP.settings.checkoutTime)} · <a href="#" id="editDates">modifier</a></p>
-          <div id="quoteZone" class="small muted">Calcul du devis…</div>
+          <div id="quoteZone" class="small muted" aria-live="polite" aria-atomic="true">Calcul du devis…</div>
         </div>
       </aside>
     </div>`;
@@ -409,6 +409,10 @@ async function openBookingPanel(unitId) {
   $("gCgv").addEventListener("change", payButtonRefresh);
   $("bPay").addEventListener("click", submitBooking);
   $("mbPay").onclick = submitBooking;
+  // Le passage à l'étape 3 est le plus souvent AUTOMATIQUE (auto-sélection du
+  // seul hébergement réservable) : sans déplacement du focus, rien n'indique à
+  // un utilisateur de lecteur d'écran qu'il est arrivé sur le formulaire.
+  $("step3Title").focus({ preventScroll: true });
   $("bookingPanel").scrollIntoView({ behavior: "smooth" });
   await refreshQuote();
 }
@@ -514,6 +518,9 @@ async function submitBooking() {
       marketingOptIn: $("gOptin").checked,
     });
     try { localStorage.removeItem(storeKey()); } catch { /* au pire la reprise re-proposera les dates */ }
+    // Le créneau est bloqué à partir de maintenant : le décompte démarre ici et
+    // reste visible si le visiteur revient sur le tunnel (issue #16).
+    rememberHold(res);
     $("bPay").textContent = "Redirection vers le paiement sécurisé…";
     location.href = res.checkoutUrl;
   } catch (e) {
@@ -528,6 +535,96 @@ async function submitBooking() {
     }
     msg.scrollIntoView({ behavior: "smooth", block: "center" });
   }
+}
+
+// ---------------------------------------------------------------------------
+// Décompte du blocage de créneau
+//
+// Le texte était statique (« bloqué 30 minutes ») : un visiteur qui prend le
+// temps de lire les conditions ne découvrait l'expiration que par un échec de
+// paiement. Le décompte est calé sur l'HEURE SERVEUR (l'horloge du poste peut
+// dériver de plusieurs minutes) et décompté en local, comme la page de
+// simulation dev-pay.html. Il survit au retour depuis la page de paiement.
+// ---------------------------------------------------------------------------
+
+const holdKey = () => `gites-hold:${PROPERTY}`;
+const sqlToMs = (s) => Date.parse(String(s).replace(" ", "T") + "Z");
+let holdTimer = null;
+
+function clearHold() {
+  try { sessionStorage.removeItem(holdKey()); } catch { /* navigation privée */ }
+}
+
+/** Mémorise l'option posée par l'API et lance le décompte. */
+function rememberHold(res) {
+  if (!res?.holdExpiresAt || !res?.now) return;
+  const hold = {
+    reference: res.reference,
+    checkoutUrl: res.checkoutUrl,
+    // converti tout de suite en horloge locale via l'écart au temps serveur
+    expiresAtLocal: Date.now() + Math.max(0, sqlToMs(res.holdExpiresAt) - sqlToMs(res.now)),
+  };
+  try { sessionStorage.setItem(holdKey(), JSON.stringify(hold)); } catch { /* navigation privée */ }
+  startHoldCountdown(hold);
+}
+
+function startHoldCountdown(hold) {
+  const bar = $("holdBanner");
+  if (!bar || !hold?.expiresAtLocal) return;
+  clearTimeout(holdTimer);
+  bar.hidden = false;
+  // Le chiffre qui défile est masqué aux lecteurs d'écran (il serait relu
+  // chaque seconde) ; seuls les seuils utiles sont annoncés, dans la zone
+  // vocale de la même région aria-live.
+  bar.innerHTML = `<span id="holdCount" aria-hidden="true"></span><span id="holdSay" class="sr-only"></span>`;
+  const count = $("holdCount");
+  const say = $("holdSay");
+  let lastSaid = null;
+
+  const announce = (minutes) => {
+    const step = minutes <= 0 ? "fin" : minutes <= 1 ? "1" : minutes <= 5 ? "5" : "debut";
+    if (step === lastSaid) return;
+    lastSaid = step;
+    say.textContent =
+      step === "fin"
+        ? "Le blocage de votre créneau a expiré."
+        : step === "1"
+          ? "Attention, il reste moins d'une minute avant l'expiration du blocage de votre créneau."
+          : step === "5"
+            ? "Il reste moins de cinq minutes avant l'expiration du blocage de votre créneau."
+            : `Votre créneau est bloqué pour vous pendant ${minutes} minutes, le temps du paiement.`;
+  };
+
+  const tick = () => {
+    const left = hold.expiresAtLocal - Date.now();
+    if (left <= 0) {
+      bar.classList.add("expired");
+      count.innerHTML = "⏳ Le blocage de votre créneau a <b>expiré</b> — ces dates sont de nouveau ouvertes à la vente. Relancez une réservation depuis le calendrier.";
+      announce(0);
+      clearHold();
+      return;
+    }
+    const m = Math.floor(left / 60000);
+    const s = Math.floor((left % 60000) / 1000);
+    const resume = hold.checkoutUrl ? ` · <a href="${esc(hold.checkoutUrl)}">reprendre le paiement</a>` : "";
+    bar.classList.remove("expired");
+    count.innerHTML =
+      `⏳ Créneau bloqué pour vous encore <b>${m} min ${String(s).padStart(2, "0")} s</b>` +
+      `${hold.reference ? ` · réservation ${esc(hold.reference)}` : ""}${resume}`;
+    announce(m + 1);
+    holdTimer = setTimeout(tick, 1000);
+  };
+  tick();
+}
+
+/** Reprise après retour depuis la page de paiement (bouton « précédent »). */
+function restoreHold() {
+  try {
+    const hold = JSON.parse(sessionStorage.getItem(holdKey()) ?? "null");
+    if (!hold) return;
+    if (hold.expiresAtLocal > Date.now()) startHoldCountdown(hold);
+    else clearHold();
+  } catch { /* stockage indisponible */ }
 }
 
 // ---------------------------------------------------------------------------
@@ -589,6 +686,7 @@ async function initFlow() {
     }
   });
 
+  restoreHold(); // une option posée juste avant ? on reprend son décompte
   restoreSelection();
   if (selIn && selOut) {
     calMonth = selIn.slice(0, 7);

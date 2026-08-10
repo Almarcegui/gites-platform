@@ -18,6 +18,10 @@
   <!-- Landing multi-domaines (affichée sans ?property=…) -->
   <div id="landing" style="display:none"></div>
 
+  <!-- Décompte du blocage de créneau : visible dès qu'une option est posée,
+       et jusqu'à son expiration (issue #16). -->
+  <div id="holdBanner" class="holdbar" aria-live="polite" aria-atomic="true" hidden></div>
+
   <!-- Parcours de réservation -->
   <div id="flow" style="display:none">
     <div class="steps" id="steps">
@@ -37,7 +41,7 @@
       <div class="pcal" id="calGrid"></div>
       <p class="pcal-hint">Choisissez votre jour d'<b>arrivée</b> puis votre jour de <b>départ</b> — les hébergements disponibles s'affichent aussitôt. Prix « à partir de » par nuit.</p>
       <div class="stay-bar">
-        <div id="staySummary"></div>
+        <div id="staySummary" aria-live="polite" aria-atomic="true"></div>
         <div class="pax">
           <label class="f" for="qAd">Adultes</label>
           <select id="qAd"></select>
@@ -45,11 +49,11 @@
           <select id="qCh"></select>
         </div>
       </div>
-      <div id="searchMsg"></div>
+      <div id="searchMsg" role="alert" aria-live="assertive"></div>
     </div>
 
-    <!-- Étape 2 : hébergements disponibles -->
-    <div id="results"></div>
+    <!-- Étape 2 : hébergements disponibles (mises à jour annoncées) -->
+    <div id="results" aria-live="polite" aria-busy="false"></div>
 
     <!-- Étape 3 : coordonnées (gauche) + récap sticky (droite) -->
     <div id="bookingPanel"></div>
