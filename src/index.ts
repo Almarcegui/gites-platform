@@ -4,6 +4,7 @@ import { apiError, Router } from "./api/router";
 import { registerPublicRoutes } from "./api/public";
 import { registerAdminRoutes } from "./api/admin";
 import { runScheduled } from "./services/cron";
+import { withStandardHeaders } from "./services/http-headers";
 import { buildReplyMime, parseRawEmail, processInboundEmail } from "./services/inbound-email";
 
 const router = new Router();
@@ -13,10 +14,14 @@ registerAdminRoutes(router);
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
+    // Toute sortie du Worker passe par withStandardHeaders : sécurité et cache
+    // sont posés en un seul endroit, y compris sur les erreurs et les fichiers
+    // statiques du binding ASSETS (issue #22).
+    const finish = (response: Response) => withStandardHeaders(response, url);
     // "/" sert le site vitrine (public/index.html) via les assets.
     try {
       const response = await router.handle(request, env, ctx);
-      if (response) return response;
+      if (response) return finish(response);
     } catch (e) {
       console.error("Erreur API:", e instanceof Error ? e.stack : e);
       // Les logs Workers ne sont pas retenus par défaut : sans trace en base,
@@ -32,13 +37,13 @@ export default {
       } catch (logErr) {
         console.error("audit_log indisponible:", logErr);
       }
-      return apiError(500, "erreur interne");
+      return finish(apiError(500, "erreur interne"));
     }
     // Route dynamique inconnue → 404 JSON ; le reste est servi par les assets.
     if (url.pathname.startsWith("/api/") || url.pathname.startsWith("/ical/")) {
-      return apiError(404, "route inconnue");
+      return finish(apiError(404, "route inconnue"));
     }
-    return env.ASSETS.fetch(request);
+    return finish(await env.ASSETS.fetch(request));
   },
 
   async scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
