@@ -17,12 +17,27 @@ import {
 import { beds24Configured } from "./beds24";
 import { purgeExpiredSessions } from "./admin-auth";
 import { pullBeds24Bookings, pushCalendars } from "./beds24-sync";
+import { runDailyDigest } from "./digest";
 import { buildBalanceReminderEmail, queueEmail } from "./email";
+import { CRON_HEARTBEAT_KEY } from "./health";
 import { syncFeed } from "./ical";
+import { setSetting } from "./settings";
 
 export async function runScheduled(env: Env, now: Date = new Date(), fetcher: typeof fetch = fetch): Promise<void> {
   const db = env.DB;
   const nowSql = sqlNow(now);
+
+  // 0. Battement de cœur, EN TÊTE et pas en fin de traitement : il atteste que
+  //    le cron s'est déclenché, pas qu'il est allé au bout. Un import iCal qui
+  //    échoue doit rester un incident visible dans le journal, pas se déguiser
+  //    en « le traitement planifié ne tourne plus » (issue #21).
+  //    Écrit dans app_settings et NON dans audit_log : le cron y verse déjà
+  //    ~96 lignes par jour, ce qui noie les vraies anomalies.
+  try {
+    await setSetting(db, CRON_HEARTBEAT_KEY, nowSql);
+  } catch (e) {
+    await audit(db, "cron", "heartbeat.error", undefined, { error: e instanceof Error ? e.message : String(e) });
+  }
 
   // 1. Holds périmés — enveloppé comme les autres étapes : une panne ici
   //    (verrou D1, erreur SQL) interrompait tout le cron, donc les flux iCal,
@@ -94,5 +109,15 @@ export async function runScheduled(env: Env, now: Date = new Date(), fetcher: ty
         await audit(db, "cron", "beds24.push.error", `property:${p.id}`, { error: e instanceof Error ? e.message : String(e) });
       }
     }
+  }
+
+  // 5. Résumé quotidien au propriétaire (7 h, fuseau de Bruxelles). En DERNIER
+  //    et sous try/catch : le résumé décrit l'état du système, il ne doit pas
+  //    pouvoir empêcher le système de fonctionner. Il se saute tout seul hors
+  //    du créneau et ne part qu'une fois par jour.
+  try {
+    await runDailyDigest(env, now);
+  } catch (e) {
+    await audit(db, "cron", "digest.error", undefined, { error: e instanceof Error ? e.message : String(e) });
   }
 }

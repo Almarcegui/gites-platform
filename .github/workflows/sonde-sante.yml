@@ -1,0 +1,125 @@
+# Sonde externe (issue #21).
+#
+# Elle vit VOLONTAIREMENT en dehors de l'infrastructure surveillée : une alerte
+# hébergée par le service qu'elle surveille se tait précisément le jour où elle
+# devrait parler. GitHub Actions est déjà utilisé par le projet, ne coûte rien
+# sur un dépôt privé à cette fréquence, et notifie par e-mail à l'échec — pas de
+# service tiers supplémentaire à maintenir (l'audit excluait Sentry, OTel,
+# Grafana pour cette raison).
+#
+# ⚠️ Deux points à savoir :
+#   - GitHub n'exécute les workflows planifiés que depuis la branche par défaut :
+#     cette sonde ne démarrera qu'une fois la PR fusionnée dans main ;
+#   - GitHub désactive un workflow planifié après 60 jours sans activité sur le
+#     dépôt. Un commit suffit à le réarmer.
+#
+# Pour recevoir l'alerte : Settings → Notifications → « Actions » → cocher
+# l'envoi d'e-mail sur les workflows en échec.
+
+name: Sonde de santé
+
+on:
+  schedule:
+    # Toutes les 30 minutes. Le traitement planifié passe toutes les 15 minutes :
+    # deux occasions d'écrire son battement de cœur entre deux sondes.
+    - cron: "*/30 * * * *"
+  # Permet de déclencher une alerte de test à la demande (bouton « Run workflow »).
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sonde-sante
+  cancel-in-progress: false
+
+jobs:
+  sonde:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Interroger le contrôle de santé
+        env:
+          URL: https://gites-platform.j-decartier.workers.dev/api/public/health
+          # Le cron tourne toutes les 15 min : 45 min = trois passages manqués.
+          # Assez large pour absorber un retard de planification côté Cloudflare,
+          # assez court pour ne pas découvrir la panne le lendemain.
+          SEUIL_MINUTES: "45"
+        run: |
+          set -uo pipefail
+
+          echo "Sonde → $URL"
+          code=$(curl -sS --max-time 20 --retry 3 --retry-delay 5 --retry-all-errors \
+                      -o reponse.json -w '%{http_code}' "$URL") || curl_ko=$?
+
+          if [ -n "${curl_ko:-}" ]; then
+            echo "::error::Site injoignable — curl a échoué (code $curl_ko). L'application ne répond pas."
+            exit 1
+          fi
+
+          echo "HTTP $code"
+          echo "Corps : $(head -c 400 reponse.json)"
+
+          # Tolérance au 404 : l'endpoint n'existe que depuis cette PR et ne sera
+          # servi qu'après le PROCHAIN déploiement. Tant qu'il n'est pas en ligne,
+          # le Worker répond 404 « route inconnue ». Faire échouer la sonde ici
+          # produirait une alerte par demi-heure sans aucune panne derrière —
+          # le meilleur moyen d'apprendre à ignorer ses propres alertes.
+          if [ "$code" = "404" ]; then
+            echo "::warning::/api/public/health absent (HTTP 404) — normal tant que la version n'est pas déployée. Sonde ignorée."
+            exit 0
+          fi
+
+          if [ "$code" != "200" ]; then
+            echo "::error::Le contrôle de santé répond HTTP $code (attendu 200)."
+            exit 1
+          fi
+
+          # Le verdict est écrit dans un fichier plutôt qu'en `node -e` : les
+          # messages sont en français, donc pleins d'apostrophes, et les
+          # échapper dans une chaîne shell rendrait le tout illisible.
+          cat > sonde.mjs <<'FIN_DU_SCRIPT'
+          import { readFileSync } from "node:fs";
+
+          const seuil = Number(process.env.SEUIL_MINUTES);
+          const echec = (message) => {
+            console.log(`::error::${message}`);
+            process.exit(1);
+          };
+
+          let sante;
+          try {
+            sante = JSON.parse(readFileSync("reponse.json", "utf8"));
+          } catch {
+            echec("Réponse illisible : ce n'est pas du JSON. L'application ne sert pas ce qu'elle devrait.");
+          }
+
+          if (sante.ok !== true) {
+            echec("L'application signale un problème (ok=false) — sa base de données est probablement injoignable.");
+          }
+
+          if (!sante.lastCronAt) {
+            echec(
+              "Le traitement planifié n'a jamais tourné depuis la mise en service. " +
+                "Si le déploiement vient d'avoir lieu, attendre son premier passage (15 min) puis relancer cette sonde.",
+            );
+          }
+
+          const age =
+            sante.cronAgeMinutes ??
+            (Date.now() - Date.parse(sante.lastCronAt.replace(" ", "T") + "Z")) / 60000;
+
+          if (!Number.isFinite(age)) echec(`Date du dernier passage illisible : ${sante.lastCronAt}`);
+
+          if (age > seuil) {
+            echec(
+              `Le traitement planifié ne tourne plus : dernier passage il y a ${Math.round(age)} min ` +
+                `(seuil ${seuil} min, dernier battement ${sante.lastCronAt} UTC). ` +
+                "Les imports de calendriers, l'expiration des options et les rappels de solde sont à l'arrêt.",
+            );
+          }
+
+          console.log(`Tout va bien — dernier passage du traitement planifié il y a ${Math.round(age)} min.`);
+          FIN_DU_SCRIPT
+
+          node sonde.mjs

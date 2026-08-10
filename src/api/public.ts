@@ -36,6 +36,7 @@ import {
 } from "../db/repo";
 import { pullBeds24Bookings, pushCalendars, triggerBeds24Push } from "../services/beds24-sync";
 import { handlePaymentSuccess, quoteFromContext, startCheckout, type QuoteBody } from "../services/booking-flow";
+import { publicHealth } from "../services/health";
 import { buildIcs, exportSpansForUnit } from "../services/ical";
 import { getSetting } from "../services/settings";
 import { stripeEnabled, verifyStripeSignature } from "../services/stripe";
@@ -717,6 +718,14 @@ export function registerPublicRoutes(router: Router): void {
   // petite aide au front public : date du jour (Bruxelles) + mode démo
   router.get("/api/public/today", async (_req, env) =>
     json({ today: todayInZone(), maxAdvanceDays: MAX_ADVANCE_DAYS, demo: !stripeEnabled(env) }));
+
+  // Contrôle de santé pour une sonde EXTERNE (issue #21) : deux champs, une
+  // seule lecture en base, aucune donnée client. 503 si la base est illisible,
+  // pour qu'une sonde qui ne regarde que le code HTTP alerte quand même.
+  router.get("/api/public/health", async (_req, env) => {
+    const health = await publicHealth(env.DB);
+    return json(health, health.ok ? 200 : 503);
+  });
 
   // --- export iCal par unité : /ical/<token>.ics (token secret) ---------------
   router.get("/ical/:token", async (_req, env, p) => {
