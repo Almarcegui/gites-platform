@@ -40,6 +40,7 @@ import { handlePaymentSuccess, quoteFromContext, startCheckout, type QuoteBody }
 import { publicHealth } from "../services/health";
 import { buildIcs, exportSpansForUnit } from "../services/ical";
 import { availabilityHorizon, NON_CUMUL_NOTE, publicPromotions, weekendAvailability } from "../services/offers";
+import { logSearch } from "../services/search-log";
 import { getSetting } from "../services/settings";
 import { stripeEnabled, verifyStripeSignature } from "../services/stripe";
 
@@ -185,7 +186,7 @@ export function registerPublicRoutes(router: Router): void {
   });
 
   // --- recherche de disponibilité -------------------------------------------
-  router.get("/api/public/availability", async (_req, env, _p, url) => {
+  router.get("/api/public/availability", async (_req, env, _p, url, execCtx) => {
     const db = env.DB;
     const today = todayInZone();
     const parsed = parseStay(
@@ -257,6 +258,20 @@ export function registerPublicRoutes(router: Router): void {
         quote,
       });
     }
+    // Journal des recherches (issue #36) : ce que les clients cherchent, et
+    // surtout ce qu'ils ne trouvent pas. Aucune donnée identifiante — dates,
+    // occupants, résultat. Écriture hors du chemin de réponse quand c'est
+    // possible, et jamais bloquante.
+    await logSearch(db, execCtx, {
+      propertyId: property.id,
+      unitId: null, // recherche sur tout le domaine
+      stage: "search",
+      checkin,
+      checkout,
+      adults,
+      children,
+      results: out.filter((u) => u.available && u.fitsCapacity && (u.quote as { ok?: boolean } | null)?.ok === true).length,
+    });
     return json({ property: property.slug, checkin, checkout, adults, children, units: out });
   });
 
@@ -367,7 +382,7 @@ export function registerPublicRoutes(router: Router): void {
   });
 
   // --- devis détaillé --------------------------------------------------------
-  router.post("/api/public/quote", async (req, env) => {
+  router.post("/api/public/quote", async (req, env, _p, _url, execCtx) => {
     const body = await readJson<CreateBookingBody>(req);
     if (!body) return apiError(400, "corps JSON attendu");
     const today = todayInZone();
@@ -381,6 +396,19 @@ export function registerPublicRoutes(router: Router): void {
       return apiError(400, `capacité dépassée (max ${ctx.unit.capacityMax} personnes)`);
     }
     const quote = quoteFromContext(ctx, { ...body, ...parsed.stay }, today);
+    // Deuxième barreau de l'entonnoir : un devis affiché est un pas de plus
+    // qu'une recherche. Un devis non réservable (minimum de nuits, jour
+    // d'arrivée) compte comme infructueux — c'est bien ce que le client a vécu.
+    await logSearch(env.DB, execCtx, {
+      propertyId: ctx.property.id,
+      unitId: ctx.unit.id,
+      stage: "quote",
+      checkin: parsed.stay.checkin,
+      checkout: parsed.stay.checkout,
+      adults: parsed.stay.adults,
+      children: parsed.stay.children,
+      results: quote.ok ? 1 : 0,
+    });
     return json({
       unit: { id: ctx.unit.id, name: ctx.unit.name },
       quote,

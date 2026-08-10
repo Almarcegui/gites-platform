@@ -6,7 +6,14 @@ import { apiError, json, readJson, Router, type Handler } from "./router";
 import { addDays, diffDays, isIsoDate, sqlNow, todayInZone, type IsoDate } from "../core/dates";
 import { isActiveBooking } from "../core/availability";
 import { rateCalendar } from "../core/pricing";
-import { computeYearStats, type StatsBooking } from "../core/stats";
+import {
+  computeFunnel,
+  computeLeadTime,
+  computeYearStats,
+  summarizeSearches,
+  type LeadTimeBooking,
+  type StatsBooking,
+} from "../core/stats";
 import {
   addPayment,
   audit,
@@ -84,6 +91,7 @@ import { queueEmail } from "../services/email";
 import { importElloha } from "../services/elloha-import";
 import { processInboundEmail, type ParsedEmail } from "../services/inbound-email";
 import { syncFeed } from "../services/ical";
+import { countDirectBookings, countSearchStages, listSearchLog } from "../services/search-log";
 
 // --- garde d'authentification -------------------------------------------------
 
@@ -233,6 +241,21 @@ function csvResponse(rows: unknown[][], filename: string): Response {
 async function confirmedYearBookings(db: D1Database, propertyId: number, year: number): Promise<StatsBooking[]> {
   const rows = await bookingsInWindow(db, propertyId, `${year}-01-01`, `${year + 1}-01-01`);
   return rows.filter((b) => b.status === "confirmed").map(toStatsBooking);
+}
+
+/** Réservations confirmées de l'année, avec leur date de prise de réservation —
+ *  base du délai de réservation (issue #36). `created_at` est un horodatage
+ *  complet : on n'en garde que le jour, le délai se compte en jours. */
+async function leadTimeBookings(db: D1Database, propertyId: number, year: number): Promise<LeadTimeBooking[]> {
+  const rows = await bookingsInWindow(db, propertyId, `${year}-01-01`, `${year + 1}-01-01`);
+  return rows
+    .filter((b) => b.status === "confirmed")
+    .map((b) => ({
+      unitId: b.unitId,
+      unitName: b.unitName ?? `Unité ${b.unitId}`,
+      checkin: b.checkin,
+      bookedOn: b.createdAt.slice(0, 10),
+    }));
 }
 
 export function registerAdminRoutes(router: Router): void {
@@ -1118,7 +1141,23 @@ export function registerAdminRoutes(router: Router): void {
       confirmedYearBookings(db, propertyId, year).then((b) => computeYearStats(year, statsUnits, links, b)),
       confirmedYearBookings(db, propertyId, year - 1).then((b) => computeYearStats(year - 1, statsUnits, links, b)),
     ]);
-    return json({ current: cur, previous: prev });
+
+    // Indicateurs de DÉCISION (issue #36) : à quelle avance les gens réservent,
+    // où ils abandonnent, et ce qu'ils cherchent sans le trouver.
+    const [stages, direct, searches] = await Promise.all([
+      countSearchStages(db, { propertyId, year }),
+      countDirectBookings(db, { propertyId, year }),
+      listSearchLog(db, { propertyId, year }),
+    ]);
+    const leadTime = computeLeadTime(year, await leadTimeBookings(db, propertyId, year));
+
+    return json({
+      current: cur,
+      previous: prev,
+      leadTime,
+      funnel: computeFunnel({ ...stages, ...direct }),
+      searches: summarizeSearches(searches),
+    });
   }));
 
   router.get("/api/admin/stats.csv", guard(async (_req, env, _p, url) => {
