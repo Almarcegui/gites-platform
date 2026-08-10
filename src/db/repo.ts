@@ -1234,6 +1234,13 @@ export async function listRateRules(db: D1Database, propertyId: number): Promise
   return (results as Raw[]).map((r) => ({ ...mapRateRule(r), unitName: str(r.unit_name) }));
 }
 
+/** Une règle par son id — sert à retrouver l'unité (donc ses bornes de prix)
+ *  avant d'autoriser une modification tarifaire. */
+export async function getRateRule(db: D1Database, id: number): Promise<RateRule | null> {
+  const row = await db.prepare("SELECT * FROM rate_rules WHERE id = ?1").bind(id).first();
+  return row ? mapRateRule(row as Raw) : null;
+}
+
 export interface RateRuleInput {
   unitId: number;
   seasonId: number | null;
