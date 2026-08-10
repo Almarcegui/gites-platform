@@ -1,8 +1,12 @@
 /* Site vitrine Les Gîtes du Pré Moré — refonte 2026, plateforme intégrée.
    Éditorial sobre : serif pour les titres, vert forêt, crème, photos plein cadre. */
 :root{
-  --bg:#F7F6F3; --ink:#22301F; --muted:#6B7280; --line:#E5E1D8;
+  --bg:#F7F6F3; --ink:#22301F; --muted:#4B5563; --line:#E5E1D8;
   --accent:#2F5D3F; --accent-dark:#22301F; --gold:#E9B44C; --cream:#FBF9F4;
+  /* --gold sur fond clair plafonne à 1,9:1 : inutilisable pour du texte.
+     --gold-ink est sa déclinaison lisible (4,6 à 4,9:1 selon le fond clair).
+     L'or d'origine reste employé sur les fonds sombres, où il donne 7,4:1. */
+  --gold-ink:#A16207;
 }
 *{box-sizing:border-box;margin:0}
 html{scroll-behavior:smooth}
@@ -11,8 +15,20 @@ h1,h2,h3.serif,.serif{font-family:Georgia,'Times New Roman',serif;font-weight:60
 img{max-width:100%}
 a{color:var(--accent)}
 
+/* --- anneau de focus (issue #14) ---
+   L'ancien `outline:2px solid #CBD8CD` donnait 1,47:1 sur blanc : au clavier,
+   on ne voyait pas où on se trouvait. --accent donne 7,0 à 7,6:1 sur les fonds
+   clairs ; sur les surfaces sombres du site il disparaîtrait, d'où le passage
+   à l'or (7,4:1) dans les blocs concernés. Règle globale : tout ce qui prend le
+   focus au clavier porte un anneau, y compris ce qui n'a pas de style propre. */
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:2px}
+nav.top :focus-visible,footer :focus-visible,.hero :focus-visible,.page-hero :focus-visible,
+.autonomie :focus-visible,.domaine-banner :focus-visible,.exp :focus-visible{outline-color:var(--gold)}
+
 .wrap{max-width:1080px;margin:0 auto;padding:0 20px}
-.eyebrow{font:600 11.5px/1 -apple-system,'Inter',sans-serif;text-transform:uppercase;letter-spacing:2px;color:var(--gold)}
+.eyebrow{font:600 11.5px/1 -apple-system,'Inter',sans-serif;text-transform:uppercase;letter-spacing:2px;color:var(--gold-ink)}
+/* fonds sombres : l'or d'origine y est parfaitement lisible */
+.hero .eyebrow,.page-hero .eyebrow,.autonomie .eyebrow,.domaine-banner .eyebrow{color:var(--gold)}
 section{padding:72px 0}
 section h2{font-size:34px;margin:10px 0 14px}
 .lead{font-size:17px;color:#4b5563;max-width:640px}
@@ -171,13 +187,13 @@ nav.top .cta:hover{filter:brightness(1.05);color:#22301F}
 @media(max-width:820px){.contact .cols{grid-template-columns:1fr}}
 .contact label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin:14px 0 4px}
 .contact input,.contact textarea{width:100%;border:1px solid var(--line);border-radius:7px;padding:11px 12px;font:15px inherit;background:#fff}
-.contact input:focus,.contact textarea:focus{outline:2px solid #CBD8CD;border-color:var(--accent)}
+.contact input:focus,.contact textarea:focus{outline:2px solid var(--accent);outline-offset:2px;border-color:var(--accent)}
 .coord{background:#fff;border:1px solid var(--line);border-radius:10px;padding:24px}
 .coord p{margin-bottom:10px;font-size:14.5px}
 .coord .t{font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--muted)}
 
 /* --- footer --- */
-footer{background:var(--accent-dark);color:#8b9282;padding:34px 0;font-size:13px}
+footer{background:var(--accent-dark);color:#A8AF9E;padding:34px 0;font-size:13px}
 footer .wrap{display:flex;gap:12px 30px;flex-wrap:wrap;align-items:center}
 footer a{color:#C9C4B6}
 .note-ok{background:#E6EFE8;color:#2F5D3F;border-radius:8px;padding:10px 14px;font-size:13.5px;margin-top:10px;display:none}
@@ -213,5 +229,5 @@ section[id],h2[id],h3[id]{scroll-margin-top:74px}
 .preparer li a{display:block;height:100%;padding:16px 18px;color:inherit;text-decoration:none}
 .preparer li a:hover{background:var(--cream)}
 .preparer li a b{color:var(--accent)}
-.preparer li .more{display:block;margin-top:6px;font-size:12.5px;font-weight:600;color:#B8860B}
+.preparer li .more{display:block;margin-top:6px;font-size:12.5px;font-weight:600;color:var(--gold-ink)}
 .foot-pages{margin-top:16px;padding-top:14px;border-top:1px solid #37452F;display:flex;gap:8px 26px;flex-wrap:wrap;font-size:13px}
