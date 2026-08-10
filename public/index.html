@@ -9,6 +9,27 @@
      Retirer cette balise robots AU LANCEMENT REEL (issue #1), en meme temps que
      le « Disallow: / » de /robots.txt. Tant qu'elle est la, la page n'est pas indexee. -->
 <meta name="robots" content="noindex">
+<!-- Canonical + apercus de partage (issue #30).
+     ATTENTION : l'URL de base est celle de la production ACTUELLE. Elle est a
+     remplacer partout par le domaine definitif quand il sera tranche (issue #12),
+     ici, dans /sitemap.xml et dans la ligne Sitemap de /robots.txt — les trois
+     doivent toujours dire la meme chose, sinon les moteurs recoivent deux
+     adresses concurrentes pour la meme page. -->
+<link rel="canonical" href="https://gites-platform.j-decartier.workers.dev/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Les Gîtes du Pré Moré">
+<meta property="og:locale" content="fr_BE">
+<meta property="og:url" content="https://gites-platform.j-decartier.workers.dev/">
+<meta property="og:title" content="Les Gîtes du Pré Moré — deux gîtes d'exception en Ardenne belge">
+<meta property="og:description" content="Un moulin fondé en 1674, autonome en énergie, au cœur des forêts ardennaises. Deux gîtes classés PANDA par le WWF, jusqu'à 19 personnes. Réservation en ligne.">
+<meta property="og:image" content="https://gites-platform.j-decartier.workers.dev/img/og-pre-more.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Les deux maisons du Pré Moré, entre les arbres, au bord du ruisseau">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Les Gîtes du Pré Moré — deux gîtes d'exception en Ardenne belge">
+<meta name="twitter:description" content="Un moulin fondé en 1674, autonome en énergie, au cœur des forêts ardennaises. Deux gîtes classés PANDA par le WWF, jusqu'à 19 personnes. Réservation en ligne.">
+<meta name="twitter:image" content="https://gites-platform.j-decartier.workers.dev/img/og-pre-more.jpg">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="alternate icon" href="/favicon.ico" sizes="32x32">
 <link rel="stylesheet" href="site.css">
