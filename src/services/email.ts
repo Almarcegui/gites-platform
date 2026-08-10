@@ -171,6 +171,69 @@ export function buildPaymentLinkEmail(
   };
 }
 
+/** Reçu de paiement (issue #37, volet b) — émis à chaque encaissement, arrhes
+ *  comme solde.
+ *
+ *  Distinct du voucher, et pas redondant avec lui : le voucher est le document
+ *  contractuel de la réservation (conditions générales comprises), envoyé une
+ *  seule fois à la confirmation. Le reçu est un justificatif comptable, émis
+ *  autant de fois qu'il y a d'encaissements — c'est le document qu'un client
+ *  cherche quand il veut prouver ce qu'il a payé, et quand.
+ *
+ *  Les montants viennent de la réservation APRÈS enregistrement du paiement :
+ *  `paidCents` inclut donc l'encaissement décrit ici. */
+export function buildPaymentReceiptEmail(
+  b: BookingRow,
+  property: PropertyRow,
+  payment: { kind: string; amountCents: number; receivedAt?: string | null },
+): { subject: string; bodyText: string } {
+  let quote: Quote | null = null;
+  if (b.quoteJson) {
+    try {
+      quote = JSON.parse(b.quoteJson) as Quote;
+    } catch {
+      quote = null; // le reçu part sans le détail : les montants suffisent à justifier
+    }
+  }
+  const label =
+    payment.kind === "deposit" ? "Arrhes" : payment.kind === "balance" ? "Solde" : payment.kind === "full" ? "Paiement intégral" : "Paiement";
+  const balance = Math.max(0, b.totalCents - b.paidCents);
+  const persons = b.adults + b.children;
+
+  const parts: string[] = [
+    `Bonjour,`,
+    ``,
+    `Nous accusons réception de votre paiement. Ce message vaut justificatif.`,
+    ``,
+    `Référence : ${b.reference}`,
+    `Hébergement : ${b.unitName ?? ""} — ${property.name}`,
+    `Séjour : du ${formatDateFr(b.checkin)} au ${formatDateFr(b.checkout)} — ${persons} personne${persons > 1 ? "s" : ""}`,
+  ];
+  if (payment.receivedAt) parts.push(`Payé le : ${payment.receivedAt}`);
+  parts.push(``, `${label} encaissé${payment.kind === "deposit" ? "es" : ""} : ${formatEur(payment.amountCents)}`);
+
+  if (quote) {
+    parts.push(``, `Détail du séjour :`, quoteLinesText(quote.lines), `  ${"TOTAL".padEnd(52)} ${formatEur(quote.totalCents).padStart(12)}`);
+  } else {
+    parts.push(``, `Total du séjour : ${formatEur(b.totalCents)}`);
+  }
+
+  parts.push(``, `Total déjà réglé : ${formatEur(b.paidCents)}`);
+  if (balance > 0) {
+    parts.push(
+      `Solde restant : ${formatEur(balance)}${b.balanceDueDate ? ` — à régler pour le ${formatDateFr(b.balanceDueDate)}` : ""}`,
+    );
+  } else {
+    parts.push(`Solde restant : aucun — votre séjour est intégralement réglé.`);
+  }
+  parts.push(``, `À bientôt,`, `${property.name}`, property.contactEmail ? `${property.contactEmail}` : ``);
+
+  return {
+    subject: `Reçu de paiement ${formatEur(payment.amountCents)} — réservation ${b.reference} (${property.name})`,
+    bodyText: parts.join("\n"),
+  };
+}
+
 /** Rappel automatique de solde (cron, à l'échéance). */
 export function buildBalanceReminderEmail(b: BookingRow, property: PropertyRow): { subject: string; bodyText: string } {
   const balance = b.totalCents - b.paidCents;
