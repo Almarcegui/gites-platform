@@ -18,11 +18,25 @@ import { beds24Configured } from "./beds24";
 import { purgeExpiredSessions } from "./admin-auth";
 import { pullBeds24Bookings, pushCalendars } from "./beds24-sync";
 import { buildBalanceReminderEmail, queueEmail } from "./email";
+import { CRON_HEARTBEAT_KEY } from "./health";
 import { syncFeed } from "./ical";
+import { setSetting } from "./settings";
 
 export async function runScheduled(env: Env, now: Date = new Date(), fetcher: typeof fetch = fetch): Promise<void> {
   const db = env.DB;
   const nowSql = sqlNow(now);
+
+  // 0. Battement de cœur, EN TÊTE et pas en fin de traitement : il atteste que
+  //    le cron s'est déclenché, pas qu'il est allé au bout. Un import iCal qui
+  //    échoue doit rester un incident visible dans le journal, pas se déguiser
+  //    en « le traitement planifié ne tourne plus » (issue #21).
+  //    Écrit dans app_settings et NON dans audit_log : le cron y verse déjà
+  //    ~96 lignes par jour, ce qui noie les vraies anomalies.
+  try {
+    await setSetting(db, CRON_HEARTBEAT_KEY, nowSql);
+  } catch (e) {
+    await audit(db, "cron", "heartbeat.error", undefined, { error: e instanceof Error ? e.message : String(e) });
+  }
 
   // 1. Holds périmés — enveloppé comme les autres étapes : une panne ici
   //    (verrou D1, erreur SQL) interrompait tout le cron, donc les flux iCal,
