@@ -256,6 +256,11 @@ npx vitest run -t "courses"               # par nom de test
 npm run test:watch                        # surveillance
 ```
 
+> [!important]
+> Le détail — organisation de la suite, piège `vitest-pool-workers`, règles
+> d'écriture d'un test — vit dans **[`test/README.md`](test/README.md)**,
+> c'est-à-dire dans le dossier concerné.
+
 ### Comment la suite est organisée
 
 12 fichiers dans `test/`, deux familles :
@@ -302,6 +307,12 @@ npm run test:watch                        # surveillance
 ---
 
 ## 6. Ajouter une migration de base
+
+> [!important]
+> Cette section est le résumé. Le détail — règle des littéraux, ordre
+> d'application, conventions du schéma, inventaire des migrations — vit dans
+> **[`migrations/README.md`](migrations/README.md)**, c'est-à-dire dans le
+> dossier que tu es sur le point d'ouvrir.
 
 1. Crée `migrations/00NN_nom_en_snake_case.sql` — la numérotation continue la
    série (`0013_…`), l'ordre d'application est l'ordre alphabétique du nom.
@@ -360,8 +371,8 @@ Autres conventions du schéma, à respecter :
 
 > [!note]
 > L'organisation du travail à deux (répartition, labels de zone, issues bloquées
-> par une décision) est décrite dans **`.github/COLLABORATION.md`**. Cette
-> section n'en donne que la mécanique git.
+> par une décision) est décrite dans **[`COLLABORATION.md`](COLLABORATION.md)**,
+> à la racine du dépôt. Cette section n'en donne que la mécanique git.
 
 ### Branches
 

@@ -11,6 +11,7 @@
     "serve:local": "PORT=8790 SQLITE_PATH=data/gites-local.db npm run start",
     "test": "vitest run",
     "test:watch": "vitest",
+    "check:images": "node scripts/check-images.mjs",
     "typecheck": "tsc --noEmit",
     "db:migrate:local": "wrangler d1 migrations apply gites-platform --local",
     "db:migrate:remote": "wrangler d1 migrations apply gites-platform --remote --env production",

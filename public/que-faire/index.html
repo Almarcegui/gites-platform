@@ -5,6 +5,33 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Que faire — Les Gîtes du Pré Moré</title>
 <meta name="description" content="Bain chaud, sauna, four à pain, barque, vélo, pêche sur le domaine — et toutes les excursions à proximité : Redu, Han-sur-Lesse, Rochefort, Euro Space Center…">
+<!-- SITE DE TEST : tarifs placeholders, CGV provisoires, contact faux.
+     Retirer cette balise robots AU LANCEMENT REEL (issue #1), en meme temps que
+     le « Disallow: / » de /robots.txt. Tant qu'elle est la, la page n'est pas indexee. -->
+<meta name="robots" content="noindex">
+<!-- Canonical + apercus de partage (issue #30).
+     ATTENTION : l'URL de base est celle de la production ACTUELLE. Elle est a
+     remplacer partout par le domaine definitif quand il sera tranche (issue #12),
+     ici, dans /sitemap.xml et dans la ligne Sitemap de /robots.txt — les trois
+     doivent toujours dire la meme chose, sinon les moteurs recoivent deux
+     adresses concurrentes pour la meme page. -->
+<link rel="canonical" href="https://gites-platform.j-decartier.workers.dev/que-faire/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Les Gîtes du Pré Moré">
+<meta property="og:locale" content="fr_BE">
+<meta property="og:url" content="https://gites-platform.j-decartier.workers.dev/que-faire/">
+<meta property="og:title" content="Que faire — Les Gîtes du Pré Moré">
+<meta property="og:description" content="Bain chaud, sauna, four à pain, barque, vélo et pêche sur le domaine — et les excursions alentour, de Redu à Han-sur-Lesse.">
+<meta property="og:image" content="https://gites-platform.j-decartier.workers.dev/img/og-pre-more.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Les deux maisons du Pré Moré, entre les arbres, au bord du ruisseau">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Que faire — Les Gîtes du Pré Moré">
+<meta name="twitter:description" content="Bain chaud, sauna, four à pain, barque, vélo et pêche sur le domaine — et les excursions alentour, de Redu à Han-sur-Lesse.">
+<meta name="twitter:image" content="https://gites-platform.j-decartier.workers.dev/img/og-pre-more.jpg">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="alternate icon" href="/favicon.ico" sizes="32x32">
 <link rel="stylesheet" href="../site.css">
 </head>
 <body>
@@ -12,13 +39,24 @@
 <nav class="top">
   <div class="wrap">
     <a class="logo" href="/">Les Gîtes du Pré Moré</a>
-    <a href="/#gites">Les gîtes</a>
-    <a href="/la-propriete/">La propriété</a>
-    <a href="/histoire/">Histoire</a>
-    <a href="/que-faire/">Que faire</a>
-    <a href="/que-manger/">Que manger</a>
-    <a href="/infos-pratiques/">Infos pratiques</a>
-    <a href="/#dispo">Disponibilités</a>
+    <button class="burger" id="navToggle" type="button"
+            aria-expanded="false" aria-controls="navPanel" aria-label="Ouvrir le menu">
+      <span aria-hidden="true"></span>
+    </button>
+    <div class="nav-links" id="navPanel">
+      <a href="/#gites">Les gîtes</a>
+      <a href="/la-propriete/">La propriété</a>
+      <a href="/histoire/">Histoire</a>
+      <a href="/que-faire/">Que faire</a>
+      <a href="/que-manger/">Que manger</a>
+      <a href="/infos-pratiques/">Infos pratiques</a>
+      <a href="/#dispo">Disponibilités</a>
+      <span class="nav-sub-title" aria-hidden="true">Sur le domaine</span>
+      <a class="sub" href="/le-bain-chaud/">Le bain chaud</a>
+      <a class="sub" href="/le-sauna/">Le sauna</a>
+      <a class="sub" href="/le-four-a-pain/">Le four à pain</a>
+      <a class="sub" href="/les-promenades/">Les promenades</a>
+    </div>
     <a class="cta" href="/book/?property=pre-more">Réserver</a>
   </div>
 </nav>
@@ -43,21 +81,21 @@
 
     <h3>Le bain chaud</h3>
     <p>Installez-vous à bord du bain chaud. À toute heure, l'expérience est intense : en journée à deux, au crépuscule en famille, la nuit entre amis, chaque instant se vit différemment.</p>
-    <p><a href="https://lesgitesdupremore.be/le-bain-chaud-exterieur/" target="_blank" rel="noopener">Plus d'infos sur le bain chaud extérieur</a></p>
+    <p><a href="/le-bain-chaud/">Plus d'infos sur le bain chaud extérieur →</a></p>
 
     <h3>Le sauna</h3>
     <p>Profitez de votre moment de détente et de bien-être dans votre sauna à bois, en harmonie avec la nature qui vous entoure !</p>
-    <p><a href="https://lesgitesdupremore.be/le-sauna/" target="_blank" rel="noopener">Plus d'infos sur le sauna</a></p>
+    <p><a href="/le-sauna/">Plus d'infos sur le sauna →</a></p>
 
     <h3>Le four à pain</h3>
     <p>Sur le domaine, vous trouverez un four à pain, l'idéal pour une soirée pizza entre amis mais aussi pour cuire le pain du matin ou bien cuisiner une viande ou un poisson à faible température.</p>
-    <p><a href="https://lesgitesdupremore.be/le-four-a-pain/" target="_blank" rel="noopener">Plus d'infos sur le four à pain</a> · <a href="/que-manger/">Voir aussi : Que manger</a></p>
+    <p><a href="/le-four-a-pain/">Plus d'infos sur le four à pain →</a> · <a href="/que-manger/">Voir aussi : Que manger</a></p>
 
     <h3>La barque sur l'étang</h3>
     <p>Sous votre responsabilité, une barque peut être utilisée. Dans les armoires de la maison, il y a des gilets de sécurité. Après l'avoir utilisée, la remettre à sa place et ne pas boucher la sortie d'eau de l'étang.</p>
 
     <h3>Les promenades</h3>
-    <p>Accédez à la <a href="https://lesgitesdupremore.be/les-promenades/" target="_blank" rel="noopener">page dédiée aux balades</a> !</p>
+    <p>Accédez à la <a href="/les-promenades/">page dédiée aux balades →</a> : la carte des itinéraires, le conseil de promenade facile et les cartes disponibles dans les gîtes.</p>
 
     <h3>Vélo</h3>
     <p>En vélo ordinaire : voir le petit fascicule « Vélo découverte du Luxembourg belge ». Il y a 6 circuits-vélo ici autour qui vous permettront de découvrir la région. Dont :</p>
@@ -198,7 +236,15 @@
     <a href="/que-manger/">Que manger</a>
     <a href="/infos-pratiques/">Ce qu'il faut savoir</a>
   </div>
+  <div class="wrap foot-pages">
+    <span>Sur le domaine :</span>
+    <a href="/le-bain-chaud/">Le bain chaud</a>
+    <a href="/le-sauna/">Le sauna</a>
+    <a href="/le-four-a-pain/">Le four à pain</a>
+    <a href="/les-promenades/">Les promenades</a>
+  </div>
 </footer>
 
+<script src="/nav.js" defer></script>
 </body>
 </html>

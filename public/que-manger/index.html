@@ -5,6 +5,33 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Que manger — Les Gîtes du Pré Moré</title>
 <meta name="description" content="Les bons produits du pays autour des gîtes : boucherie de la ferme, poissons de nos rivières, magasin bio, permaculture — et le four à pain extérieur du domaine.">
+<!-- SITE DE TEST : tarifs placeholders, CGV provisoires, contact faux.
+     Retirer cette balise robots AU LANCEMENT REEL (issue #1), en meme temps que
+     le « Disallow: / » de /robots.txt. Tant qu'elle est la, la page n'est pas indexee. -->
+<meta name="robots" content="noindex">
+<!-- Canonical + apercus de partage (issue #30).
+     ATTENTION : l'URL de base est celle de la production ACTUELLE. Elle est a
+     remplacer partout par le domaine definitif quand il sera tranche (issue #12),
+     ici, dans /sitemap.xml et dans la ligne Sitemap de /robots.txt — les trois
+     doivent toujours dire la meme chose, sinon les moteurs recoivent deux
+     adresses concurrentes pour la meme page. -->
+<link rel="canonical" href="https://gites-platform.j-decartier.workers.dev/que-manger/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Les Gîtes du Pré Moré">
+<meta property="og:locale" content="fr_BE">
+<meta property="og:url" content="https://gites-platform.j-decartier.workers.dev/que-manger/">
+<meta property="og:title" content="Que manger — Les Gîtes du Pré Moré">
+<meta property="og:description" content="Les bons producteurs du pays : boucherie de la ferme, truites de Freux, magasin bio de Redu, permaculture — et le four à pain du domaine.">
+<meta property="og:image" content="https://gites-platform.j-decartier.workers.dev/img/og-pre-more.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Les deux maisons du Pré Moré, entre les arbres, au bord du ruisseau">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Que manger — Les Gîtes du Pré Moré">
+<meta name="twitter:description" content="Les bons producteurs du pays : boucherie de la ferme, truites de Freux, magasin bio de Redu, permaculture — et le four à pain du domaine.">
+<meta name="twitter:image" content="https://gites-platform.j-decartier.workers.dev/img/og-pre-more.jpg">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="alternate icon" href="/favicon.ico" sizes="32x32">
 <link rel="stylesheet" href="../site.css">
 </head>
 <body>
@@ -12,13 +39,24 @@
 <nav class="top">
   <div class="wrap">
     <a class="logo" href="/">Les Gîtes du Pré Moré</a>
-    <a href="/#gites">Les gîtes</a>
-    <a href="/la-propriete/">La propriété</a>
-    <a href="/histoire/">Histoire</a>
-    <a href="/que-faire/">Que faire</a>
-    <a href="/que-manger/">Que manger</a>
-    <a href="/infos-pratiques/">Infos pratiques</a>
-    <a href="/#dispo">Disponibilités</a>
+    <button class="burger" id="navToggle" type="button"
+            aria-expanded="false" aria-controls="navPanel" aria-label="Ouvrir le menu">
+      <span aria-hidden="true"></span>
+    </button>
+    <div class="nav-links" id="navPanel">
+      <a href="/#gites">Les gîtes</a>
+      <a href="/la-propriete/">La propriété</a>
+      <a href="/histoire/">Histoire</a>
+      <a href="/que-faire/">Que faire</a>
+      <a href="/que-manger/">Que manger</a>
+      <a href="/infos-pratiques/">Infos pratiques</a>
+      <a href="/#dispo">Disponibilités</a>
+      <span class="nav-sub-title" aria-hidden="true">Sur le domaine</span>
+      <a class="sub" href="/le-bain-chaud/">Le bain chaud</a>
+      <a class="sub" href="/le-sauna/">Le sauna</a>
+      <a class="sub" href="/le-four-a-pain/">Le four à pain</a>
+      <a class="sub" href="/les-promenades/">Les promenades</a>
+    </div>
     <a class="cta" href="/book/?property=pre-more">Réserver</a>
   </div>
 </nav>
@@ -44,8 +82,7 @@
       <li>
         <b>Poissons de nos rivières</b>
         Freux · 0497 / 73 51 01<br>
-        <a href="https://lesgitesdupremore.be/category/poisson/" target="_blank" rel="noopener">Quelques recettes</a><br>
-        <a href="http://www.latruitedefreux.com/" target="_blank" rel="noopener">www.latruitedefreux.com</a>
+        <a href="http://www.latruitedefreux.com/" target="_blank" rel="noopener">www.latruitedefreux.com</a> — recettes de truite sur leur site
       </li>
       <li>
         <b>Magasin bio : À la source</b>
@@ -73,8 +110,8 @@
     </figure>
     <div class="statement">Pour les pizzas, pains et autres cuissons lentes comme le jambon en croûte.</div>
     <ul>
-      <li><a href="https://lesgitesdupremore.be/2018/04/17/mode-demploi-du-four-a-pain/" target="_blank" rel="noopener">Mode d'emploi du four</a></li>
-      <li><a href="https://lesgitesdupremore.be/category/dans-le-four/" target="_blank" rel="noopener">Quelques recettes à essayer dans le four</a></li>
+      <li><a href="/le-four-a-pain/#chauffe">Le mode d'emploi du four, la chauffe pas à pas →</a></li>
+      <li><a href="/le-four-a-pain/#quoi-cuire">Ce qu'on y cuit : pizzas, pain, viandes en croûte, cuissons lentes →</a></li>
     </ul>
   </div>
 </section>
@@ -93,7 +130,15 @@
     <a href="/que-manger/">Que manger</a>
     <a href="/infos-pratiques/">Ce qu'il faut savoir</a>
   </div>
+  <div class="wrap foot-pages">
+    <span>Sur le domaine :</span>
+    <a href="/le-bain-chaud/">Le bain chaud</a>
+    <a href="/le-sauna/">Le sauna</a>
+    <a href="/le-four-a-pain/">Le four à pain</a>
+    <a href="/les-promenades/">Les promenades</a>
+  </div>
 </footer>
 
+<script src="/nav.js" defer></script>
 </body>
 </html>

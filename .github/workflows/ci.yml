@@ -23,5 +23,9 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      # Garde-fou issue #5 : aucune page d'erreur HTML déguisée en photo dans public/img/
+      - name: Signatures des images
+        run: npm run check:images
+
       - name: Tests
         run: npm test

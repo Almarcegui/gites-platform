@@ -1,9 +1,13 @@
 /* Back-office — design system du wireframe v1 : sobre, dense, utilitaire. */
 :root{
-  --bg:#F7F6F3; --ink:#1F2937; --muted:#6B7280; --line:#E5E1D8;
+  --bg:#F7F6F3; --ink:#1F2937; --muted:#4B5563; --line:#E5E1D8;
   --accent:#2F5D3F; --accent2:#A16207; --ok:#2F5D3F; --warn:#B45309; --bad:#991B1B;
   --card:#FFFFFF; --gold:#E9B44C; --chan:#6D28D9;
 }
+/* Anneau de focus visible partout (issue #14) : l'ancien #CBD8CD donnait
+   1,47:1 sur blanc. Sur la barre latérale sombre, l'or prend le relais. */
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:2px}
+aside :focus-visible{outline-color:var(--gold)}
 *{box-sizing:border-box;margin:0}
 body{font:14px/1.5 -apple-system,'Inter','Segoe UI',sans-serif;background:var(--bg);color:var(--ink)}
 .app{display:grid;grid-template-columns:210px 1fr;min-height:100vh}
@@ -59,7 +63,7 @@ td.r,th.r{text-align:right}
 .btn:disabled{opacity:.5;cursor:default}
 label.f{display:block;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px}
 input,select,textarea{font:13px/1.4 inherit;color:var(--ink);border:1px solid var(--line);border-radius:5px;padding:7px 9px;background:#fff;width:100%}
-input:focus,select:focus,textarea:focus{outline:2px solid #CBD8CD;border-color:var(--accent)}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--accent);outline-offset:2px;border-color:var(--accent)}
 input[type=checkbox]{width:auto}
 .row{display:flex;gap:10px;align-items:end;flex-wrap:wrap}
 .row>div{flex:1;min-width:110px}

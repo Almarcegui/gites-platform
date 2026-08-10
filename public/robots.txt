@@ -1,0 +1,27 @@
+# Les Gîtes du Pré Moré — règles d'exploration des robots
+#
+# ÉTAT ACTUEL : SITE DE TEST — INDEXATION ENTIÈREMENT BLOQUÉE.
+# Le site est publiquement joignable depuis le 03/08/2026, mais les tarifs
+# affichés sont des placeholders, les conditions générales sont un texte
+# provisoire et l'adresse de contact n'est pas la bonne. Laisser Google
+# indexer cet état produirait des résultats de recherche faux, longs et
+# pénibles à faire corriger ensuite.
+#
+# AU LANCEMENT RÉEL : supprimer les deux lignes actives ci-dessous,
+# décommenter le bloc « version définitive », et retirer les balises
+# <meta name="robots" content="noindex"> des 10 pages publiques
+# (elles portent toutes le même commentaire de rappel).
+
+User-agent: *
+Disallow: /
+
+# --- version définitive, à activer au lancement (issue #1) -------------------
+# User-agent: *
+# Allow: /
+# Disallow: /admin/
+# Disallow: /book/
+# Disallow: /ical/
+# Disallow: /api/
+#
+# Sitemap: https://gites-platform.j-decartier.workers.dev/sitemap.xml
+# ⚠️ à remplacer par le domaine définitif quand il sera tranché (issue #12).
