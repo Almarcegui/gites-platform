@@ -612,6 +612,47 @@ export async function bookingsInWindow(
   return (results as Raw[]).map(mapBooking);
 }
 
+export interface DirectBookingPressure {
+  /** Options de paiement encore vivantes (le créneau est gelé pour ce visiteur). */
+  activeHolds: number;
+  /** Réservations directes lancées sur la dernière heure. */
+  lastHour: number;
+}
+
+/** Pression de réservation directe d'une même identité — email OU IP appelante.
+ *
+ *  Le hold est posé AVANT tout paiement : sans plafond, une boucle sur les
+ *  combinaisons hébergement × dates gèle tout le calendrier de vente directe
+ *  (issue #6). L'IP vient de `cgv_ip`, déjà renseignée à chaque réservation
+ *  publique (preuve d'acceptation des CGV) — aucune colonne nouvelle.
+ *
+ *  Les deux critères sont en OU : changer d'email ne suffit pas à repartir de
+ *  zéro, et une IP partagée (NAT, wifi public) ne pénalise pas un visiteur qui
+ *  réserve pour la première fois tant qu'il reste sous le plafond. */
+export async function countDirectBookingPressure(
+  db: D1Database,
+  p: { email: string; ip: string | null; now?: Date },
+): Promise<DirectBookingPressure> {
+  const nowDate = p.now ?? new Date();
+  const now = sqlNow(nowDate);
+  const hourAgo = sqlNow(new Date(nowDate.getTime() - 60 * 60_000));
+  const email = p.email.trim().toLowerCase();
+  const ip = p.ip?.trim() || null;
+  const row = await db
+    .prepare(
+      `SELECT
+         (SELECT COUNT(*) FROM bookings b LEFT JOIN guests g ON g.id = b.guest_id
+           WHERE b.source = 'direct' AND b.status = 'pending' AND b.hold_expires_at > ?1
+             AND (lower(g.email) = ?2 OR (?3 IS NOT NULL AND b.cgv_ip = ?3))) AS active_holds,
+         (SELECT COUNT(*) FROM bookings b LEFT JOIN guests g ON g.id = b.guest_id
+           WHERE b.source = 'direct' AND b.created_at > ?4
+             AND (lower(g.email) = ?2 OR (?3 IS NOT NULL AND b.cgv_ip = ?3))) AS last_hour`,
+    )
+    .bind(now, email, ip, hourAgo)
+    .first<{ active_holds: number; last_hour: number }>();
+  return { activeHolds: num(row?.active_holds ?? 0), lastHour: num(row?.last_hour ?? 0) };
+}
+
 export type ConfirmResult = "confirmed" | "conflict" | "not_pending";
 
 /** Confirme un hold en réservation ferme, avec LE MÊME garde-fou atomique que

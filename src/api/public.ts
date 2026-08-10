@@ -10,6 +10,7 @@ import { rateCalendar, type UnitPricingInfo } from "../core/pricing";
 import {
   audit,
   bookingsInWindow,
+  countDirectBookingPressure,
   createBookingAtomic,
   findPaymentBySession,
   getBooking,
@@ -41,6 +42,16 @@ import { stripeEnabled, verifyStripeSignature } from "../services/stripe";
 
 const MAX_NIGHTS = 60;
 const MAX_ADVANCE_DAYS = 730; // réservation à 2 ans max
+
+// --- anti-abus du formulaire de réservation (issue #6) ----------------------
+// Le blocage de 30 min est posé AVANT tout paiement : sans plafond, un script
+// qui boucle sur les combinaisons hébergement × dates gèle indéfiniment tout
+// le calendrier de vente directe. Deux garde-fous, purement serveur (aucune
+// dépendance externe, rien à configurer), appliqués par email ET par IP :
+/** Options de paiement simultanées tolérées pour une même identité. */
+export const MAX_ACTIVE_HOLDS = 3;
+/** Réservations directes tolérées sur une heure glissante. */
+export const MAX_BOOKINGS_PER_HOUR = 8;
 
 interface StayParams {
   checkin: IsoDate;
@@ -341,6 +352,30 @@ export function registerPublicRoutes(router: Router): void {
     if (lastName.length < 2) return apiError(400, "nom du client requis");
     if (!isEmailish(email)) return apiError(400, "email invalide");
     if (body.cgvAccepted !== true) return apiError(400, "l'acceptation des conditions générales est requise");
+
+    // Anti-abus AVANT toute écriture : ni client créé, ni créneau gelé pour un
+    // appelant qui a déjà saturé son quota. Le refus est journalisé — sans
+    // trace, une attaque de gel de calendrier resterait invisible.
+    // (Turnstile — second volet de l'issue #6 — reste à câbler : il exige une
+    //  paire de clés du compte Cloudflare, cf. PR.)
+    const ip = req.headers.get("cf-connecting-ip");
+    const pressure = await countDirectBookingPressure(db, { email, ip });
+    if (pressure.activeHolds >= MAX_ACTIVE_HOLDS) {
+      await audit(db, "public", "booking.rate_limited", null, { reason: "active_holds", email, ip, ...pressure });
+      return apiError(
+        429,
+        `Vous avez déjà ${pressure.activeHolds} réservations en attente de paiement. Finalisez-en une, ou attendez l'expiration du blocage (30 minutes), avant d'en démarrer une nouvelle.`,
+        { code: "too_many_holds" },
+      );
+    }
+    if (pressure.lastHour >= MAX_BOOKINGS_PER_HOUR) {
+      await audit(db, "public", "booking.rate_limited", null, { reason: "hourly_burst", email, ip, ...pressure });
+      return apiError(
+        429,
+        "Trop de réservations lancées depuis cette connexion sur la dernière heure. Réessayez dans quelques minutes, ou contactez-nous directement : nous réserverons pour vous.",
+        { code: "too_many_bookings" },
+      );
+    }
 
     const ctx = await getQuoteContext(db, Number(body.unitId));
     if (!ctx || !ctx.unit.active || !ctx.property.active) return apiError(404, "hébergement inconnu");
