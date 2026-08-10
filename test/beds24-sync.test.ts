@@ -223,6 +223,9 @@ describe("push temps réel (câblage bout en bout)", () => {
       if (url.includes("api.beds24.com")) {
         beds24Calls.push({ url, method: init?.method ?? "GET" });
         if (url.includes("/authentication/token")) {
+          // Latence délibérée : le push doit être attendu explicitement, jamais
+          // gagné à la course contre la fin du handler (cf. drain ci-dessous).
+          await new Promise((r) => setTimeout(r, 5));
           return new Response(JSON.stringify({ token: "tok_test" }), { status: 200 });
         }
         return new Response(JSON.stringify([{ success: true }]), { status: 200 });
@@ -248,9 +251,24 @@ describe("push temps réel (câblage bout en bout)", () => {
           guest: { firstName: "Push", lastName: "Réel", email: "push.reel@example.com", phone: "+32 470 99 88 77" },
         }),
       });
-      // sans ctx : le trigger await inline → le POST Beds24 doit être parti au retour
-      const res = await router.handle(req, env);
+      // Le push est différé via ctx.waitUntil : en production le runtime
+      // Workers draine ces promesses APRÈS avoir renvoyé la réponse. Sans ctx,
+      // la route lançait le push sans l'attendre et le test pariait sur une
+      // course (≈8 allers-retours D1 + 2 fetch côté push contre ≈4 côté
+      // handler) — perdue sur un runner plus lent, et la promesse survivait à
+      // la restauration de globalThis.fetch. On fournit donc un ctx qui
+      // collecte, et on draine explicitement avant d'affirmer.
+      const deferred: Promise<unknown>[] = [];
+      const ctx = {
+        waitUntil: (p: Promise<unknown>) => { deferred.push(p); },
+        passThroughOnException: () => {},
+      } as unknown as ExecutionContext;
+
+      const res = await router.handle(req, env, ctx);
       expect(res?.status).toBe(201);
+      expect(deferred.length).toBeGreaterThan(0); // le push a bien été programmé
+      await Promise.all(deferred);
+
       const push = beds24Calls.find((c) => c.url.includes("/inventory/rooms/calendar") && c.method === "POST");
       expect(push).toBeTruthy();
     } finally {
