@@ -32,6 +32,9 @@
 <meta name="twitter:image" content="https://gites-platform.j-decartier.workers.dev/img/og-pre-more.jpg">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="alternate icon" href="/favicon.ico" sizes="32x32">
+<link rel="preload" as="image" type="image/webp" href="/img/entre-maisons-640.webp" media="(max-width: 820px)">
+<link rel="preload" as="image" type="image/webp" href="/img/entre-maisons-1280.webp" media="(min-width: 821px) and (max-width: 1499px)">
+<link rel="preload" as="image" type="image/webp" href="/img/entre-maisons-1600.webp" media="(min-width: 1500px)">
 <link rel="stylesheet" href="site.css">
 </head>
 <body>
@@ -93,7 +96,10 @@
         <blockquote>« Fondé en 1674 comme scierie hydraulique par Arnold d'Hoffschmidt, alors surintendant pour le duc d'Aremberg, restauré en 1992 dans un esprit de respect de la nature. »</blockquote>
         <p>Les bois de bardage et de construction proviennent des épicéas qui ont poussé sur le terrain entre 1945 et 1992, quand la scierie était désaffectée. Les deux maisons sont classées gîtes ruraux par la Communauté Française, et gîtes PANDA par le WWF.</p>
       </div>
-      <img src="/img/pont-entree.jpg" alt="Le pont de pierre qui franchit le ruisseau à l'entrée du domaine du Pré Moré, bordé d'arbres" loading="lazy" width="1200" height="900">
+      <picture>
+        <source type="image/webp" srcset="/img/pont-entree-640.webp 640w, /img/pont-entree-1200.webp 1200w" sizes="(max-width: 820px) 100vw, 448px">
+        <img src="/img/pont-entree.jpg" alt="Le pont de pierre qui franchit le ruisseau à l'entrée du domaine du Pré Moré, bordé d'arbres" loading="lazy" width="1200" height="900">
+      </picture>
     </div>
     <div class="stats">
       <div class="stat"><b>1674</b><span>Année de fondation</span></div>
@@ -111,7 +117,7 @@
     <p class="lead">La Maison du Scieur et La Scierie peuvent être louées séparément ou ensemble. Chacune possède sa propre personnalité, sa propre atmosphère.</p>
 
     <div class="gite">
-      <div class="ph" style="background-image:url('/img/vue-berge.jpg')"></div>
+      <div class="ph" data-photo="vue-berge"></div>
       <div class="bd">
         <span class="eyebrow">Jusqu'à 11 personnes</span>
         <h3>La Maison du Scieur</h3>
@@ -128,7 +134,7 @@
     </div>
 
     <div class="gite flip">
-      <div class="ph" style="background-image:url('/img/scierie.jpg')"></div>
+      <div class="ph" data-photo="scierie"></div>
       <div class="bd">
         <span class="eyebrow">Jusqu'à 8 personnes</span>
         <h3>La Scierie</h3>
@@ -164,19 +170,19 @@
     <h2>L'expérience Pré Moré</h2>
     <p class="lead">Éteignez les écrans. Allumez le feu. Plongez dans un territoire de promenade, de chasse et de silence.</p>
     <div class="exp-grid">
-      <div class="exp big" style="background-image:url('/img/terrasse-hot-tub.jpg')">
+      <div class="exp big" data-photo="terrasse-hot-tub">
         <div class="ov">
           <h3>Le bain chaud extérieur</h3>
           <p>Installez-vous à bord du bain chaud chauffé au bois Red Cedar. En journée, au crépuscule ou la nuit sous les étoiles — éteignez les lumières, allumez quelques bougies, laissez-vous envoûter par le crépitement du feu.</p>
         </div>
       </div>
-      <div class="exp" style="background-image:url('/img/jetee.jpg')">
+      <div class="exp" data-photo="jetee">
         <div class="ov"><h3>Promenades & nature</h3><p>Un magnifique territoire de randonnée</p></div>
       </div>
-      <div class="exp" style="background-image:url('/img/scierie-terrasse-haut.jpg')">
+      <div class="exp" data-photo="scierie-terrasse-haut">
         <div class="ov"><h3>Le sauna</h3><p>Détente dans la forêt ardennaise</p></div>
       </div>
-      <div class="exp" style="background-image:url('/img/entre-maisons.jpg')">
+      <div class="exp" data-photo="entre-maisons">
         <div class="ov"><h3>Au bord du ruisseau</h3><p>Pêche, contemplation, quiétude</p></div>
       </div>
     </div>

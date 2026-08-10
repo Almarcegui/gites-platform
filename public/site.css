@@ -83,9 +83,26 @@ nav.top .nav-links a.sub,nav.top .nav-sub-title{display:none}
     color:var(--gold)}
 }
 
+/* --- photos de fond en WebP (issue #17) ---
+   Les images de fond ne peuvent pas porter de `srcset` : c'est la feuille de
+   style qui doit arbitrer, par media query. `image-set()` n'aide pas ici — il
+   choisit sur la DENSITÉ de pixels, jamais sur la largeur de la fenêtre ; on
+   s'en sert uniquement pour dire « ceci est du WebP ».
+   Chaque bloc déclare donc `background-image` DEUX fois : le JPEG d'abord, que
+   tout le monde comprend, puis le WebP. Un navigateur sans `image-set()` juge
+   la seconde déclaration invalide, l'ignore, et garde le JPEG — le repli
+   n'a pas à être écrit, il est déjà là. */
+:root{
+  --voile-hero:linear-gradient(rgba(20,30,18,.45),rgba(20,30,18,.55));
+  --voile-banner:linear-gradient(rgba(34,48,31,.72),rgba(34,48,31,.72));
+}
+
 /* --- hero --- */
 .hero{position:relative;min-height:82vh;display:flex;align-items:center;color:#fff;
-  background:linear-gradient(rgba(20,30,18,.45),rgba(20,30,18,.55)),url('/img/entre-maisons.jpg') center/cover no-repeat}
+  background:var(--voile-hero),url('/img/entre-maisons.jpg') center/cover no-repeat}
+.hero{background-image:var(--voile-hero),image-set(url('/img/entre-maisons-1280.webp') type('image/webp'))}
+@media(max-width:820px){.hero{background-image:var(--voile-hero),image-set(url('/img/entre-maisons-640.webp') type('image/webp'))}}
+@media(min-width:1500px){.hero{background-image:var(--voile-hero),image-set(url('/img/entre-maisons-1600.webp') type('image/webp'))}}
 .hero .wrap{padding-top:40px;padding-bottom:60px}
 .hero h1{font-size:clamp(38px,7vw,64px);line-height:1.08;margin:14px 0 16px;color:#fff}
 .hero p{font-size:19px;max-width:560px;color:#EDEAE0}
@@ -128,7 +145,34 @@ nav.top .nav-links a.sub,nav.top .nav-sub-title{display:none}
 .gite .prix{font-size:15px;margin-bottom:16px}
 .gite .prix b{font-family:Georgia,serif;font-size:22px;color:var(--accent)}
 .domaine-banner{margin-top:28px;border-radius:12px;padding:38px 36px;color:#fff;display:flex;gap:20px;align-items:center;flex-wrap:wrap;
-  background:linear-gradient(rgba(34,48,31,.72),rgba(34,48,31,.72)),url('/img/pont-entree.jpg') center/cover}
+  background:var(--voile-banner),url('/img/pont-entree.jpg') center/cover}
+/* 640 px suffit : le bandeau est noyé sous 72 % de vert, et c'est le fichier que
+   la photo du pont de la section « histoire » a déjà mis en cache. */
+.domaine-banner{background-image:var(--voile-banner),image-set(url('/img/pont-entree-640.webp') type('image/webp'))}
+
+/* Photos de fond des cartes « gîtes » et « expérience ».
+   Déclarées ici et plus en `style=` inline : un attribut de style ne peut ni
+   porter de media query, ni se replier proprement d'un WebP vers un JPEG.
+   Le sélecteur reprend la classe du bloc pour passer devant le raccourci
+   `background:` de la règle qui précède — sans quoi celui-ci remettrait
+   l'image à `none`. */
+.gite .ph[data-photo="vue-berge"]{background-image:url('/img/vue-berge.jpg')}
+.gite .ph[data-photo="vue-berge"]{background-image:image-set(url('/img/vue-berge-640.webp') type('image/webp'))}
+.gite .ph[data-photo="scierie"]{background-image:url('/img/scierie.jpg')}
+.gite .ph[data-photo="scierie"]{background-image:image-set(url('/img/scierie-640.webp') type('image/webp'))}
+
+.exp[data-photo="terrasse-hot-tub"]{background-image:url('/img/terrasse-hot-tub.jpg')}
+.exp[data-photo="jetee"]{background-image:url('/img/jetee.jpg')}
+.exp[data-photo="scierie-terrasse-haut"]{background-image:url('/img/scierie-terrasse-haut.jpg')}
+.exp[data-photo="entre-maisons"]{background-image:url('/img/entre-maisons.jpg')}
+.exp[data-photo="jetee"]{background-image:image-set(url('/img/jetee-640.webp') type('image/webp'))}
+.exp[data-photo="scierie-terrasse-haut"]{background-image:image-set(url('/img/scierie-terrasse-haut-640.webp') type('image/webp'))}
+.exp[data-photo="entre-maisons"]{background-image:image-set(url('/img/entre-maisons-640.webp') type('image/webp'))}
+/* `.exp.big` occupe les trois colonnes (~1040 px) : 640 s'y verrait. */
+.exp.big[data-photo="terrasse-hot-tub"]{background-image:image-set(url('/img/terrasse-hot-tub-1024.webp') type('image/webp'))}
+@media(max-width:820px){
+  .exp.big[data-photo="terrasse-hot-tub"]{background-image:image-set(url('/img/terrasse-hot-tub-640.webp') type('image/webp'))}
+}
 .domaine-banner h3{font-family:Georgia,serif;font-size:24px}
 .domaine-banner p{color:#E5E1D8;max-width:520px}
 .domaine-banner .right{margin-left:auto}
