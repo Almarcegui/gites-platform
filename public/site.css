@@ -83,9 +83,26 @@ nav.top .nav-links a.sub,nav.top .nav-sub-title{display:none}
     color:var(--gold)}
 }
 
+/* --- photos de fond en WebP (issue #17) ---
+   Les images de fond ne peuvent pas porter de `srcset` : c'est la feuille de
+   style qui doit arbitrer, par media query. `image-set()` n'aide pas ici — il
+   choisit sur la DENSITÉ de pixels, jamais sur la largeur de la fenêtre ; on
+   s'en sert uniquement pour dire « ceci est du WebP ».
+   Chaque bloc déclare donc `background-image` DEUX fois : le JPEG d'abord, que
+   tout le monde comprend, puis le WebP. Un navigateur sans `image-set()` juge
+   la seconde déclaration invalide, l'ignore, et garde le JPEG — le repli
+   n'a pas à être écrit, il est déjà là. */
+:root{
+  --voile-hero:linear-gradient(rgba(20,30,18,.45),rgba(20,30,18,.55));
+  --voile-banner:linear-gradient(rgba(34,48,31,.72),rgba(34,48,31,.72));
+}
+
 /* --- hero --- */
 .hero{position:relative;min-height:82vh;display:flex;align-items:center;color:#fff;
-  background:linear-gradient(rgba(20,30,18,.45),rgba(20,30,18,.55)),url('/img/entre-maisons.jpg') center/cover no-repeat}
+  background:var(--voile-hero),url('/img/entre-maisons.jpg') center/cover no-repeat}
+.hero{background-image:var(--voile-hero),image-set(url('/img/entre-maisons-1280.webp') type('image/webp'))}
+@media(max-width:820px){.hero{background-image:var(--voile-hero),image-set(url('/img/entre-maisons-640.webp') type('image/webp'))}}
+@media(min-width:1500px){.hero{background-image:var(--voile-hero),image-set(url('/img/entre-maisons-1600.webp') type('image/webp'))}}
 .hero .wrap{padding-top:40px;padding-bottom:60px}
 .hero h1{font-size:clamp(38px,7vw,64px);line-height:1.08;margin:14px 0 16px;color:#fff}
 .hero p{font-size:19px;max-width:560px;color:#EDEAE0}
@@ -128,7 +145,34 @@ nav.top .nav-links a.sub,nav.top .nav-sub-title{display:none}
 .gite .prix{font-size:15px;margin-bottom:16px}
 .gite .prix b{font-family:Georgia,serif;font-size:22px;color:var(--accent)}
 .domaine-banner{margin-top:28px;border-radius:12px;padding:38px 36px;color:#fff;display:flex;gap:20px;align-items:center;flex-wrap:wrap;
-  background:linear-gradient(rgba(34,48,31,.72),rgba(34,48,31,.72)),url('/img/pont-entree.jpg') center/cover}
+  background:var(--voile-banner),url('/img/pont-entree.jpg') center/cover}
+/* 640 px suffit : le bandeau est noyé sous 72 % de vert, et c'est le fichier que
+   la photo du pont de la section « histoire » a déjà mis en cache. */
+.domaine-banner{background-image:var(--voile-banner),image-set(url('/img/pont-entree-640.webp') type('image/webp'))}
+
+/* Photos de fond des cartes « gîtes » et « expérience ».
+   Déclarées ici et plus en `style=` inline : un attribut de style ne peut ni
+   porter de media query, ni se replier proprement d'un WebP vers un JPEG.
+   Le sélecteur reprend la classe du bloc pour passer devant le raccourci
+   `background:` de la règle qui précède — sans quoi celui-ci remettrait
+   l'image à `none`. */
+.gite .ph[data-photo="vue-berge"]{background-image:url('/img/vue-berge.jpg')}
+.gite .ph[data-photo="vue-berge"]{background-image:image-set(url('/img/vue-berge-640.webp') type('image/webp'))}
+.gite .ph[data-photo="scierie"]{background-image:url('/img/scierie.jpg')}
+.gite .ph[data-photo="scierie"]{background-image:image-set(url('/img/scierie-640.webp') type('image/webp'))}
+
+.exp[data-photo="terrasse-hot-tub"]{background-image:url('/img/terrasse-hot-tub.jpg')}
+.exp[data-photo="jetee"]{background-image:url('/img/jetee.jpg')}
+.exp[data-photo="scierie-terrasse-haut"]{background-image:url('/img/scierie-terrasse-haut.jpg')}
+.exp[data-photo="entre-maisons"]{background-image:url('/img/entre-maisons.jpg')}
+.exp[data-photo="jetee"]{background-image:image-set(url('/img/jetee-640.webp') type('image/webp'))}
+.exp[data-photo="scierie-terrasse-haut"]{background-image:image-set(url('/img/scierie-terrasse-haut-640.webp') type('image/webp'))}
+.exp[data-photo="entre-maisons"]{background-image:image-set(url('/img/entre-maisons-640.webp') type('image/webp'))}
+/* `.exp.big` occupe les trois colonnes (~1040 px) : 640 s'y verrait. */
+.exp.big[data-photo="terrasse-hot-tub"]{background-image:image-set(url('/img/terrasse-hot-tub-1024.webp') type('image/webp'))}
+@media(max-width:820px){
+  .exp.big[data-photo="terrasse-hot-tub"]{background-image:image-set(url('/img/terrasse-hot-tub-640.webp') type('image/webp'))}
+}
 .domaine-banner h3{font-family:Georgia,serif;font-size:24px}
 .domaine-banner p{color:#E5E1D8;max-width:520px}
 .domaine-banner .right{margin-left:auto}
@@ -239,3 +283,61 @@ section[id],h2[id],h3[id]{scroll-margin-top:74px}
 .preparer li a b{color:var(--accent)}
 .preparer li .more{display:block;margin-top:6px;font-size:12.5px;font-weight:600;color:var(--gold-ink)}
 .foot-pages{margin-top:16px;padding-top:14px;border-top:1px solid #37452F;display:flex;gap:8px 26px;flex-wrap:wrap;font-size:13px}
+
+/* --- galerie photo des pages de gîtes (issue #32) ---
+   Vignettes en 4/3, comme les fichiers produits par `optimize-images.mjs` :
+   `aspect-ratio` réserve la place avant même que l'image n'arrive, et les
+   `width`/`height` du HTML disent la même chose — aucun décalage possible. */
+.galerie{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:28px}
+@media(max-width:820px){.galerie{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:520px){.galerie{grid-template-columns:1fr}}
+.galerie figure{margin:0}
+.galerie a{display:block;border-radius:10px;overflow:hidden;background:var(--line)}
+.galerie img{display:block;width:100%;height:auto;aspect-ratio:4/3;object-fit:cover;
+  transition:transform .35s ease}
+.galerie a:hover img,.galerie a:focus-visible img{transform:scale(1.04)}
+@media(prefers-reduced-motion:reduce){.galerie img{transition:none}}
+.galerie figcaption{font-size:12.5px;color:var(--muted);margin-top:6px}
+.galerie-note{font-size:12.5px;color:var(--muted);margin-top:16px}
+
+/* Visionneuse : un <dialog> natif, donc rien à styler pour le piège à focus
+   ni pour l'inertie de la page — seulement l'apparence. */
+.visionneuse{border:0;padding:0;background:transparent;max-width:min(1180px,94vw);
+  max-height:94vh;overflow:visible}
+.visionneuse::backdrop{background:rgba(12,18,11,.93)}
+/* `width:auto` et non `100%` : la boîte épouse la photo. Sur un écran bas, une
+   largeur imposée laisserait deux bandes noires de part et d'autre. */
+.visionneuse .v-img{display:block;width:auto;max-width:100%;max-height:76vh;margin:0 auto;
+  border-radius:8px}
+.visionneuse .v-legende{margin:12px 0;font-size:14px;color:#E5E1D8;text-align:center}
+.visionneuse .v-barre{display:flex;gap:10px;justify-content:center;align-items:center}
+.visionneuse button{min-width:44px;min-height:44px;padding:0 16px;cursor:pointer;
+  background:rgba(233,229,218,.10);color:#fff;border:1px solid rgba(233,229,218,.4);
+  border-radius:8px;font:600 15px -apple-system,'Inter',sans-serif}
+.visionneuse button:hover{background:rgba(233,229,218,.22)}
+.visionneuse :focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+
+/* --- pages de gîtes (issue #33) --- */
+.fil{font-size:12.5px;margin-bottom:14px}
+.fil ol{list-style:none;display:flex;flex-wrap:wrap;gap:6px;margin:0;padding:0}
+.fil li+li::before{content:"›";margin-right:6px;color:#8A9384}
+.page-hero .fil a{color:#C9C4B6}
+.page-hero .fil [aria-current]{color:#fff}
+.gite-chiffres{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:26px}
+@media(max-width:680px){.gite-chiffres{grid-template-columns:repeat(2,1fr)}}
+.gite-chiffres div{background:#fff;border:1px solid var(--line);border-radius:10px;
+  padding:16px;text-align:center}
+.gite-chiffres b{display:block;font-family:Georgia,serif;font-size:24px;color:var(--accent)}
+.gite-chiffres span{font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:1px}
+.equip{display:grid;grid-template-columns:repeat(3,1fr);gap:12px 26px;margin-top:22px;
+  list-style:none;padding:0;font-size:14.5px}
+@media(max-width:820px){.equip{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:520px){.equip{grid-template-columns:1fr}}
+.equip li::before{content:"✓ ";color:var(--accent);font-weight:700}
+.reserver-bloc{background:#fff;border:1px solid var(--line);border-radius:12px;
+  padding:28px 30px;margin-top:24px;display:flex;gap:20px;align-items:center;flex-wrap:wrap}
+.reserver-bloc .prix{font-size:15px;margin:0}
+.reserver-bloc .prix b{font-family:Georgia,serif;font-size:26px;color:var(--accent)}
+.reserver-bloc .btn{margin-left:auto}
+@media(max-width:680px){.reserver-bloc .btn{margin-left:0}}
+.ctas-gite{display:flex;gap:10px;flex-wrap:wrap;margin:0}
