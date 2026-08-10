@@ -60,4 +60,34 @@
     <priority>0.6</priority>
   </url>
 
+  <!-- Sous-pages de « Que faire », rapatriees de l'ancien WordPress (issue #29) -->
+
+  <url>
+    <loc>https://gites-platform.j-decartier.workers.dev/le-bain-chaud/</loc>
+    <lastmod>2026-08-10</lastmod>
+    <changefreq>yearly</changefreq>
+    <priority>0.5</priority>
+  </url>
+
+  <url>
+    <loc>https://gites-platform.j-decartier.workers.dev/le-sauna/</loc>
+    <lastmod>2026-08-10</lastmod>
+    <changefreq>yearly</changefreq>
+    <priority>0.5</priority>
+  </url>
+
+  <url>
+    <loc>https://gites-platform.j-decartier.workers.dev/le-four-a-pain/</loc>
+    <lastmod>2026-08-10</lastmod>
+    <changefreq>yearly</changefreq>
+    <priority>0.5</priority>
+  </url>
+
+  <url>
+    <loc>https://gites-platform.j-decartier.workers.dev/les-promenades/</loc>
+    <lastmod>2026-08-10</lastmod>
+    <changefreq>yearly</changefreq>
+    <priority>0.5</priority>
+  </url>
+
 </urlset>

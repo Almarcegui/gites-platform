@@ -45,6 +45,10 @@ nav.top .cta:hover{filter:brightness(1.05);color:#22301F}
    directs de la barre flex, exactement comme avant l'ajout du menu mobile. */
 .nav-links{display:contents}
 .burger{display:none}
+/* Sous-pages de « Que faire » (bain chaud, sauna, four à pain, promenades) :
+   présentes dans le menu déroulant mobile et dans le pied de page, absentes de
+   la barre horizontale — onze liens n'y tiendraient pas à 1080 px. */
+nav.top .nav-links a.sub,nav.top .nav-sub-title{display:none}
 
 /* --- menu mobile (issue #13) ---
    Sous 820 px, les 7 liens de contenu passaient en display:none sans remplacement :
@@ -73,6 +77,10 @@ nav.top .cta:hover{filter:brightness(1.05);color:#22301F}
   nav.top .nav-links a{display:flex;align-items:center;min-height:44px;padding:4px 2px;font-size:15.5px;
     border-bottom:1px solid rgba(233,229,218,.10)}
   nav.top .nav-links a:last-child{border-bottom:none}
+  nav.top .nav-links a.sub{display:flex;padding-left:14px;font-size:14.5px}
+  nav.top .nav-sub-title{display:block;margin-top:10px;padding:8px 2px 2px;
+    font:600 10.5px/1 -apple-system,'Inter',sans-serif;text-transform:uppercase;letter-spacing:1.6px;
+    color:var(--gold)}
 }
 
 /* --- hero --- */
