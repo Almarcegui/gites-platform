@@ -18,13 +18,19 @@
 <nav class="top">
   <div class="wrap">
     <a class="logo" href="/">Les Gîtes du Pré Moré</a>
-    <a href="/#gites">Les gîtes</a>
-    <a href="/la-propriete/">La propriété</a>
-    <a href="/histoire/">Histoire</a>
-    <a href="/que-faire/">Que faire</a>
-    <a href="/que-manger/">Que manger</a>
-    <a href="/infos-pratiques/">Infos pratiques</a>
-    <a href="/#dispo">Disponibilités</a>
+    <button class="burger" id="navToggle" type="button"
+            aria-expanded="false" aria-controls="navPanel" aria-label="Ouvrir le menu">
+      <span aria-hidden="true"></span>
+    </button>
+    <div class="nav-links" id="navPanel">
+      <a href="/#gites">Les gîtes</a>
+      <a href="/la-propriete/">La propriété</a>
+      <a href="/histoire/">Histoire</a>
+      <a href="/que-faire/">Que faire</a>
+      <a href="/que-manger/">Que manger</a>
+      <a href="/infos-pratiques/">Infos pratiques</a>
+      <a href="/#dispo">Disponibilités</a>
+    </div>
     <a class="cta" href="/book/?property=pre-more">Réserver</a>
   </div>
 </nav>
@@ -106,5 +112,6 @@
   </div>
 </footer>
 
+<script src="/nav.js" defer></script>
 </body>
 </html>

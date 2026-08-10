@@ -25,7 +25,39 @@ nav.top a{color:#C9C4B6;text-decoration:none;font-size:13.5px;white-space:nowrap
 nav.top a:hover{color:#fff}
 nav.top .cta{background:var(--gold);color:#22301F;font-weight:700;border-radius:6px;padding:8px 16px}
 nav.top .cta:hover{filter:brightness(1.05);color:#22301F}
-@media(max-width:820px){nav.top a:not(.cta):not(.logo){display:none}}
+/* Au format large, le conteneur du menu s'efface : ses liens restent des enfants
+   directs de la barre flex, exactement comme avant l'ajout du menu mobile. */
+.nav-links{display:contents}
+.burger{display:none}
+
+/* --- menu mobile (issue #13) ---
+   Sous 820 px, les 7 liens de contenu passaient en display:none sans remplacement :
+   les pages de contenu n'étaient plus atteignables que depuis le pied de page. */
+@media(max-width:820px){
+  nav.top .wrap{gap:12px}
+  .burger{display:inline-flex;align-items:center;justify-content:center;
+    width:44px;height:44px;flex:0 0 44px;order:3;
+    background:transparent;border:1px solid rgba(233,229,218,.35);border-radius:8px;cursor:pointer}
+  .burger span,.burger span::before,.burger span::after{
+    display:block;width:20px;height:2px;background:#E9E5DA;border-radius:2px;content:""}
+  .burger span{position:relative}
+  .burger span::before{position:absolute;top:-6px}
+  .burger span::after{position:absolute;top:6px}
+  .burger[aria-expanded="true"]{background:rgba(233,229,218,.12);border-color:var(--gold)}
+  nav.top .cta{order:2;padding:11px 16px;min-height:44px;display:inline-flex;align-items:center}
+
+  .nav-links{display:none;position:absolute;top:58px;left:0;right:0;
+    flex-direction:column;padding:6px 20px 14px;
+    /* fond entièrement opaque : le contenu de la page ne doit pas transparaître
+       derrière les liens, sous peine de faire chuter leur contraste */
+    background:var(--accent-dark);
+    border-top:1px solid rgba(233,229,218,.18);box-shadow:0 14px 30px rgba(0,0,0,.3);
+    max-height:calc(100vh - 58px);overflow-y:auto}
+  .nav-links[data-open]{display:flex}
+  nav.top .nav-links a{display:flex;align-items:center;min-height:44px;padding:4px 2px;font-size:15.5px;
+    border-bottom:1px solid rgba(233,229,218,.10)}
+  nav.top .nav-links a:last-child{border-bottom:none}
+}
 
 /* --- hero --- */
 .hero{position:relative;min-height:82vh;display:flex;align-items:center;color:#fff;
