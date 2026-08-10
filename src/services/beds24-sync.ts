@@ -29,12 +29,14 @@ import {
   listRateRules,
   listSeasons,
   listUnits,
+  moveBookingAtomic,
   updateBookingDatesAtomic,
   updateSettings,
   upsertGuest,
   type UnitRow,
 } from "../db/repo";
 import { beds24Configured, beds24Fetch } from "./beds24";
+import { getSetting, setSetting } from "./settings";
 
 export interface CalendarSpan {
   from: IsoDate;
@@ -308,6 +310,31 @@ async function applyOneChannelBooking(
     } else {
       result.conflicts.push(`beds24:${b.id} ${b.arrival}→${b.departure} : créneau déjà pris localement`);
     }
+  } else if (known.unitId !== unitId) {
+    // CHANGEMENT DE LOGEMENT (issue #19). La comparaison ne portait que sur les
+    // dates : une résa basculée d'une maison à l'autre côté canal restait chez
+    // nous sur l'ancienne. Résultat, DEUX calendriers faux — l'ancien bloqué
+    // pour rien, le nouveau toujours en vente alors qu'il est occupé — sans le
+    // moindre signalement. On le traite comme un déplacement, avec la même
+    // vérification atomique de disponibilité, sur le logement de destination.
+    const relocated = await moveBookingAtomic(db, known.id, unitId, b.arrival, b.departure, nowSql);
+    if (relocated) {
+      result.relocated += 1;
+      await audit(db, "cron", "beds24.booking.relocated", `booking:${known.id}`, {
+        externalUid: extUid, reference: known.reference,
+        fromUnitId: known.unitId, toUnitId: unitId,
+        arrival: b.arrival, departure: b.departure,
+      });
+    } else {
+      result.conflicts.push(
+        `${known.reference} : changement de logement (${known.unitId} → ${unitId}) ${b.arrival}→${b.departure} impossible (créneau occupé à destination)`,
+      );
+      await audit(db, "cron", "beds24.relocate.conflict", `booking:${known.id}`, {
+        externalUid: extUid, reference: known.reference,
+        fromUnitId: known.unitId, toUnitId: unitId,
+        arrival: b.arrival, departure: b.departure,
+      });
+    }
   } else if (known.checkin !== b.arrival || known.checkout !== b.departure) {
     const moved = await updateBookingDatesAtomic(db, known.id, known.unitId, b.arrival, b.departure, nowSql);
     if (moved) {
@@ -315,6 +342,68 @@ async function applyOneChannelBooking(
     } else {
       result.conflicts.push(`${known.reference} : déplacement ${b.arrival}→${b.departure} impossible (conflit)`);
     }
+  }
+}
+
+/** État du curseur bloqué, en `app_settings` (aucune migration — issue #19). */
+export function cursorBlockedKey(propertyId: number): string {
+  return `beds24_cursor_blocked:${propertyId}`;
+}
+
+/** Au-delà de ce délai, un curseur bloqué est débloqué de force : un conflit
+ *  qui demande un arbitrage humain (double vente réelle) peut durer des
+ *  semaines, et chaque pull re-téléchargerait une fenêtre toujours plus large.
+ *  Le rapatriement complet quotidien reste le filet qui couvre l'horizon. */
+export const MAX_CURSOR_HOLD_DAYS = 3;
+
+/** N'avance le curseur QUE si le lot est passé sans conflit ni erreur.
+ *
+ *  Avant (issue #19), `updateSettings` s'exécutait inconditionnellement : une
+ *  résa refusée pour conflit sortait de la fenêtre `modifiedFrom` au pull
+ *  suivant et n'était donc PLUS JAMAIS réessayée — l'écart devenait définitif.
+ *  Le curseur retenu fait re-passer le même lot à chaque tick, jusqu'à ce que
+ *  le conflit se résolve (annulation côté canal, arbitrage manuel). */
+async function advanceCursorIfClean(
+  db: D1Database,
+  propertyId: number,
+  next: string,
+  result: ChannelSyncResult,
+  now: Date,
+): Promise<void> {
+  const key = cursorBlockedKey(propertyId);
+  const raw = await getSetting(db, key);
+  const held = raw ? (JSON.parse(raw) as { since?: string }) : null;
+  const clean = result.conflicts.length === 0 && result.errors.length === 0;
+
+  if (clean) {
+    await updateSettings(db, propertyId, { beds24_last_pull: next });
+    if (held) {
+      await setSetting(db, key, "");
+      await audit(db, "cron", "beds24.cursor.resumed", `property:${propertyId}`, { heldSince: held.since ?? null });
+    }
+    return;
+  }
+
+  const sinceSql = held?.since ?? sqlNow(now);
+  const heldMs = now.getTime() - Date.parse(sinceSql.replace(" ", "T") + "Z");
+  const expired = Number.isFinite(heldMs) && heldMs > MAX_CURSOR_HOLD_DAYS * 86_400_000;
+
+  if (expired) {
+    await updateSettings(db, propertyId, { beds24_last_pull: next });
+    await setSetting(db, key, "");
+    await audit(db, "cron", "beds24.cursor.forced", `property:${propertyId}`, {
+      heldSince: sinceSql, conflicts: result.conflicts.slice(0, 5), errors: result.errors.slice(0, 5),
+    });
+    return;
+  }
+
+  await setSetting(db, key, JSON.stringify({ since: sinceSql, conflicts: result.conflicts.slice(0, 5) }));
+  if (!held) {
+    // Journalisé au BASCULEMENT seulement : le cron passe 96 fois par jour, un
+    // signalement par passage noierait le journal au lieu de l'alimenter.
+    await audit(db, "cron", "beds24.cursor.held", `property:${propertyId}`, {
+      since: sinceSql, conflicts: result.conflicts.slice(0, 5), errors: result.errors.slice(0, 5),
+    });
   }
 }
 
@@ -344,7 +433,7 @@ export async function pullBeds24Bookings(
   const result = await applyChannelBookings(db, res.data ?? [], roomToUnit, now);
   // curseur : maintenant - 10 min de marge (horloges + latence Beds24)
   const next = new Date(now.getTime() - 10 * 60 * 1000).toISOString().slice(0, 19).replace("T", " ");
-  await updateSettings(db, propertyId, { beds24_last_pull: next });
+  await advanceCursorIfClean(db, propertyId, next, result, now);
   if (
     result.imported || result.updated || result.cancelled || result.reactivated ||
     result.conflicts.length || result.errors.length
