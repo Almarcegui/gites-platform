@@ -1,6 +1,10 @@
 // Moteur de tarification — pur, déterministe, sans I/O.
 //
 // Empilement des règles (plan v1 § 5) :
+//   0. Surcharge du jour (rate_overrides, migration 0014) : un prix posé sur
+//      une date précise est un PRIX FINAL ABSOLU — ni supplément week-end ni
+//      majoration fériés ne s'y ajoutent (spec UX du 10/08 § 3). Sans cette
+//      règle, saisir 200 € sur le 21 juillet facturerait 230 €.
 //   1. Saison de chaque nuit (priorité la plus haute gagne ; nuit hors saison
 //      ou saison sans règle → tarif de base, season_id NULL).
 //   2. Type de nuit : semaine / weekend (nuits de vendredi et samedi) ;
@@ -41,6 +45,27 @@ export interface RateRule {
   holidayPct: number;
   minNights: number;
   checkinDays: number[] | null; // jours d'arrivée autorisés, 0=dim … 6=sam
+}
+
+/** Surcharge posée sur UN jour et UNE unité (table rate_overrides).
+ *  `priceCents` null = pas de surcharge de prix (la saison s'applique) ;
+ *  `minNights` null = pas de surcharge de minimum de nuits. */
+export interface RateOverride {
+  unitId: number;
+  date: IsoDate;
+  priceCents: number | null;
+  minNights: number | null;
+}
+
+/** Provenance d'une valeur tarifaire — sert à colorer la cellule du calendrier
+ *  (spec UX § 2 : trois provenances, pas deux). */
+export type RateSource = "override" | "saison" | "base";
+
+/** Index (unité, jour) → surcharge, pour une résolution en O(1) par nuit. */
+export function indexOverrides(list: readonly RateOverride[]): Map<string, RateOverride> {
+  const m = new Map<string, RateOverride>();
+  for (const o of list) m.set(`${o.unitId}|${o.date}`, o);
+  return m;
 }
 
 export interface Promotion {
@@ -96,6 +121,8 @@ export interface QuoteRequest {
   today: IsoDate; // date de réservation (Europe/Brussels)
   seasons: Season[];
   rateRules: RateRule[]; // règles de l'unité ET de ses composantes
+  /** surcharges par jour de l'unité ET de ses composantes, sur le séjour */
+  rateOverrides?: readonly RateOverride[];
   promotions: Promotion[];
   promoCode?: string | null;
   optionsSelected: { option: OptionDef; qty: number }[];
@@ -150,36 +177,74 @@ function ruleFor(unitId: number, seasonId: number | null, rules: RateRule[]): Ra
 }
 
 interface NightResolution {
-  rule: RateRule;
+  /** règle de fond retenue — null quand seule une surcharge couvre la nuit */
+  rule: RateRule | null;
   /** saison affichée (null si la nuit retombe sur le tarif de base) */
   season: Season | null;
   weekend: boolean;
   baseCents: number;
   surchargeCents: number;
+  /** d'où vient le prix effectif */
+  source: RateSource;
+  /** minimum de nuits effectif — ne s'applique qu'à la NUIT D'ARRIVÉE (§ 4) */
+  minNights: number;
+  minNightsSource: "override" | "regle";
+  checkinDays: number[] | null;
+  /** prix qu'aurait la nuit SANS surcharge, majoration comprise — alimente le
+   *  « Sans cette valeur : 184 € » de l'éditeur. Null si aucune règle de fond. */
+  fallbackCents: number | null;
 }
 
-/** Résout le tarif d'UNE nuit pour UNE unité physique : saison prioritaire →
- *  règle de saison, sinon tarif de base ; prix semaine/weekend ; majoration
- *  férié/pont éventuelle. Null si aucune règle ne couvre la nuit. */
+/** Résout le tarif d'UNE nuit pour UNE unité physique.
+ *
+ *  Priorité : surcharge du jour > règle de saison > tarif de base.
+ *  Une surcharge de prix est ABSOLUE : elle remplace le prix semaine/weekend
+ *  ET annule la majoration fériés (spec UX § 3).
+ *  Null si ni règle ni surcharge ne couvre la nuit. */
 function resolveNight(
   unitId: number,
   night: IsoDate,
   seasons: Season[],
   rules: RateRule[],
   ratedDays: Set<IsoDate>,
+  overrides: Map<string, RateOverride>,
 ): NightResolution | null {
   const season = seasonForNight(night, seasons);
   const seasonRule = season ? ruleFor(unitId, season.id, rules) : null;
   const rule = seasonRule ?? ruleFor(unitId, null, rules);
-  if (!rule) return null;
+  const override = overrides.get(`${unitId}|${night}`) ?? null;
+  const overridePrice = override?.priceCents ?? null;
+  if (!rule && overridePrice == null) return null;
+
   const dow = dayOfWeek(night);
   const weekend = dow === 5 || dow === 6; // nuits de vendredi et de samedi
-  const baseCents = weekend ? rule.priceWeekendCents : rule.priceWeekCents;
-  const surchargeCents =
-    rule.holidayPct > 0 && isHolidayRatedNight(night, ratedDays)
-      ? Math.round((baseCents * rule.holidayPct) / 100)
-      : 0;
-  return { rule, season: seasonRule ? season : null, weekend, baseCents, surchargeCents };
+
+  // Prix de fond (saison ou tarif de base), majoration fériés comprise.
+  let fallbackCents: number | null = null;
+  let fallbackSurcharge = 0;
+  if (rule) {
+    const raw = weekend ? rule.priceWeekendCents : rule.priceWeekCents;
+    fallbackSurcharge =
+      rule.holidayPct > 0 && isHolidayRatedNight(night, ratedDays)
+        ? Math.round((raw * rule.holidayPct) / 100)
+        : 0;
+    fallbackCents = raw + fallbackSurcharge;
+  }
+
+  const overridden = overridePrice != null;
+  const minNightsOverridden = override?.minNights != null;
+  return {
+    rule,
+    season: seasonRule ? season : null,
+    weekend,
+    baseCents: overridden ? overridePrice : (fallbackCents ?? 0) - fallbackSurcharge,
+    surchargeCents: overridden ? 0 : fallbackSurcharge,
+    source: overridden ? "override" : seasonRule ? "saison" : "base",
+    minNights: minNightsOverridden ? override!.minNights! : (rule?.minNights ?? 1),
+    minNightsSource: minNightsOverridden ? "override" : "regle",
+    checkinDays: rule?.checkinDays ?? null,
+    fallbackCents,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -188,13 +253,27 @@ function resolveNight(
 
 export interface DayRate {
   date: IsoDate;
-  /** prix de la nuit (majoration férié comprise) — null si aucune règle */
+  /** prix effectif de la nuit (majoration férié comprise, sauf sous surcharge
+   *  où le prix posé est absolu) — null si aucun tarif ne couvre le jour */
   priceCents: number | null;
+  /** provenance du prix effectif : la cellule se colore avec (spec UX § 2).
+   *  Null quand aucun tarif ne couvre le jour. */
+  source: RateSource | null;
   seasonId: number | null;
   seasonName: string | null;
   minNights: number | null;
+  /** provenance du minimum de nuits, indépendante de celle du prix : une
+   *  surcharge peut ne porter QUE le minimum de nuits. */
+  minNightsSource: "override" | "regle" | null;
   weekend: boolean;
+  /** vrai si une majoration fériés a effectivement été appliquée — donc
+   *  toujours faux sous une surcharge de prix, qui l'annule (§ 3) */
   holidayRated: boolean;
+  /** prix qu'aurait le jour SANS surcharge — « Sans cette valeur : 184 € » */
+  fallbackPriceCents: number | null;
+  /** valeurs brutes de la surcharge, pour préremplir l'éditeur */
+  overridePriceCents: number | null;
+  overrideMinNights: number | null;
 }
 
 /** Tarif jour par jour d'une unité sur [from, toExclusive) — pour les
@@ -205,42 +284,64 @@ export function rateCalendar(
   toExclusive: IsoDate,
   seasons: Season[],
   rateRules: RateRule[],
+  rateOverrides: readonly RateOverride[] = [],
 ): DayRate[] {
   const ratedDays = holidayRatedDays(yearsSpanned(from, toExclusive));
+  const overrides = indexOverrides(rateOverrides);
   const isSum = unit.compositePricing === "sum" && unit.components.length > 0;
   const partIds = isSum ? unit.components.map((c) => c.id) : [unit.id];
   const days: DayRate[] = [];
   for (let d = from; d < toExclusive; d = addDays(d, 1)) {
     let price = 0;
+    let fallback: number | null = 0;
     let covered = true;
     let minNights = 1;
     let seasonName: string | null = null;
     let seasonId: number | null = null;
     let weekend = false;
     let holidayRated = false;
+    let overridden = false;
+    let seasonPriced = false;
+    let minNightsOverridden = false;
+    let overridePriceCents: number | null = null;
+    let overrideMinNights: number | null = null;
     for (const pid of partIds) {
-      const r = resolveNight(pid, d, seasons, rateRules, ratedDays);
+      const r = resolveNight(pid, d, seasons, rateRules, ratedDays, overrides);
       if (!r) {
         covered = false;
         break;
       }
       price += r.baseCents + r.surchargeCents;
-      minNights = Math.max(minNights, r.rule.minNights);
+      fallback = fallback == null || r.fallbackCents == null ? null : fallback + r.fallbackCents;
+      minNights = Math.max(minNights, r.minNights);
       if (r.season) {
         seasonName = r.season.name;
         seasonId = r.season.id;
       }
       weekend = r.weekend;
       holidayRated = holidayRated || r.surchargeCents > 0;
+      overridden = overridden || r.source === "override";
+      seasonPriced = seasonPriced || r.source === "saison";
+      minNightsOverridden = minNightsOverridden || r.minNightsSource === "override";
+      const raw = overrides.get(`${pid}|${d}`);
+      if (raw && !isSum) {
+        overridePriceCents = raw.priceCents;
+        overrideMinNights = raw.minNights;
+      }
     }
     days.push({
       date: d,
       priceCents: covered ? price : null,
+      source: !covered ? null : overridden ? "override" : seasonPriced ? "saison" : "base",
       seasonId,
       seasonName,
       minNights: covered ? minNights : null,
+      minNightsSource: !covered ? null : minNightsOverridden ? "override" : "regle",
       weekend,
       holidayRated,
+      fallbackPriceCents: covered ? fallback : null,
+      overridePriceCents,
+      overrideMinNights,
     });
   }
   return days;
@@ -251,7 +352,9 @@ interface UnitBreakdown {
   baseCents: number;
   holidaySurchargeCents: number;
   holidayNights: number;
-  arrivalRule: RateRule | null;
+  /** minimum de nuits de la NUIT D'ARRIVÉE (surcharge du jour prioritaire) */
+  arrivalMinNights: number;
+  arrivalCheckinDays: number[] | null;
   missingRate: boolean;
 }
 
@@ -264,22 +367,30 @@ function breakdownForUnit(
   seasons: Season[],
   rules: RateRule[],
   ratedDays: Set<IsoDate>,
+  overrides: Map<string, RateOverride>,
 ): UnitBreakdown {
   interface Group { seasonLabel: string; weekend: boolean; count: number; amountCents: number }
   const groups = new Map<string, Group>();
   let surcharge = 0;
   let holidayNights = 0;
-  let arrivalRule: RateRule | null = null;
+  let arrivalMinNights = 1;
+  let arrivalCheckinDays: number[] | null = null;
   let missingRate = false;
 
   nights.forEach((night, idx) => {
-    const r = resolveNight(unitId, night, seasons, rules, ratedDays);
+    const r = resolveNight(unitId, night, seasons, rules, ratedDays, overrides);
     if (!r) {
       missingRate = true;
       return;
     }
-    if (idx === 0) arrivalRule = r.rule;
-    const seasonLabel = r.season ? r.season.name : "tarif de base";
+    if (idx === 0) {
+      arrivalMinNights = r.minNights;
+      arrivalCheckinDays = r.checkinDays;
+    }
+    // Une nuit surchargée sort du groupe de sa saison : son prix ne vient plus
+    // d'elle, et le devis doit le dire au client comme au téléphone.
+    const seasonLabel =
+      r.source === "override" ? "prix fixé à la main" : r.season ? r.season.name : "tarif de base";
     const key = `${seasonLabel}|${r.weekend ? "we" : "wk"}`;
     const g = groups.get(key) ?? { seasonLabel, weekend: r.weekend, count: 0, amountCents: 0 };
     g.count += 1;
@@ -304,7 +415,8 @@ function breakdownForUnit(
     baseCents: lines.reduce((s, l) => s + l.amountCents, 0),
     holidaySurchargeCents: surcharge,
     holidayNights,
-    arrivalRule,
+    arrivalMinNights,
+    arrivalCheckinDays,
     missingRate,
   };
 }
@@ -355,8 +467,9 @@ export function computeQuote(req: QuoteRequest): Quote {
   // --- hébergement : unité simple, ou somme des composantes (mode 'sum')
   const isSum = req.unit.compositePricing === "sum" && req.unit.components.length > 0;
   const parts = isSum ? req.unit.components : [{ id: req.unit.id, name: req.unit.name }];
+  const overrides = indexOverrides(req.rateOverrides ?? []);
   const breakdowns = parts.map((p) =>
-    breakdownForUnit(p.id, p.name, isSum, nightsList, req.seasons, req.rateRules, ratedDays),
+    breakdownForUnit(p.id, p.name, isSum, nightsList, req.seasons, req.rateRules, ratedDays, overrides),
   );
 
   if (breakdowns.some((b) => b.missingRate)) errors.push("no_rate");
@@ -375,10 +488,10 @@ export function computeQuote(req: QuoteRequest): Quote {
 
   // --- min. nuits & jour d'arrivée (règle de la nuit d'arrivée ; composite
   //     'sum' : la plus exigeante des composantes)
-  const minNights = Math.max(1, ...breakdowns.map((b) => b.arrivalRule?.minNights ?? 1));
+  const minNights = Math.max(1, ...breakdowns.map((b) => b.arrivalMinNights));
   if (nights < minNights) errors.push("min_nights");
   for (const b of breakdowns) {
-    const days = b.arrivalRule?.checkinDays;
+    const days = b.arrivalCheckinDays;
     if (days && days.length > 0 && !days.includes(dayOfWeek(req.checkin))) {
       errors.push("checkin_day");
       break;
