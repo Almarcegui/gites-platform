@@ -7,6 +7,39 @@ en remplacement d'elloha (~857 €/an).
 Contexte, décisions et roadmap : `🏠 Privé/Plateforme Gestion Gîtes/`
 (00 – Memory + Plan v1 + Wireframe v1).
 
+## Démarrer quand on arrive sur le projet
+
+Le parcours d'installation complet est dans **[`CONTRIBUTING.md`](CONTRIBUTING.md)**.
+Ce qui suit, ce sont les **trois pièges** qui font perdre des heures parce qu'ils
+ne se devinent pas — chacun est documenté en détail à l'endroit où on le
+rencontre.
+
+| Le piège | Le symptôme | Où c'est expliqué |
+|---|---|---|
+| **Un `;` ou un `--` dans un littéral SQL casse la migration** — le découpage des fichiers est volontairement naïf, et il est implémenté deux fois | La suite de tests tombe entièrement, avec un message qui ne pointe pas vers la vraie cause. **Déjà arrivé deux fois** | [`migrations/README.md`](migrations/README.md) |
+| **`vitest-pool-workers` est inutilisable** — il casse sous les chemins contenant un emoji, et le dossier de travail en contient un | `ERR_RUNTIME_FAILURE — No such module "node:vm"`. Les tests passent par **Miniflare en direct** (`test/helpers/`) — ne « réparez » pas la config | [`test/README.md`](test/README.md) |
+| **`ADMIN_TOKEN` est obligatoire même en local** depuis que la garde admin est *fail-closed* | Toutes les routes `/api/admin/*` répondent **503** et le back-office affiche une page vide déroutante | [`CONTRIBUTING.md`](CONTRIBUTING.md) § 1 et § 10 |
+
+Le minimum pour démarrer :
+
+```bash
+npm install
+cp .dev.vars.example .dev.vars   # puis y renseigner ADMIN_TOKEN (ex. dev:dev)
+npm run db:migrate:local         # ⚠️ à refaire après chaque git pull
+npm run dev -- --port 8788       # ⚠️ jamais 8787, occupé par un autre service
+npm test && npm run typecheck    # doivent être verts avant toute PR
+```
+
+Deux repères pour lire le code :
+
+- **La source de vérité, c'est le SQL**, pas le code applicatif. Le schéma vit
+  dans `migrations/`, et le code s'y conforme.
+- **Les tests sont le filet.** `createTestDb()` rejoue toutes les migrations sur
+  une base neuve à chaque exécution : ce qui casse le schéma se voit tout de suite.
+
+Architecture du code : [`ARCHITECTURE.md`](ARCHITECTURE.md).
+Organisation du travail à deux : [`.github/COLLABORATION.md`](.github/COLLABORATION.md).
+
 ## Le cœur : le moteur de disponibilité lié
 
 Le point où tous les concurrents sauf Beds24 échouent : les deux maisons du
