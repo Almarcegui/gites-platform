@@ -371,8 +371,8 @@ Autres conventions du schéma, à respecter :
 
 > [!note]
 > L'organisation du travail à deux (répartition, labels de zone, issues bloquées
-> par une décision) est décrite dans **`.github/COLLABORATION.md`**. Cette
-> section n'en donne que la mécanique git.
+> par une décision) est décrite dans **[`COLLABORATION.md`](COLLABORATION.md)**,
+> à la racine du dépôt. Cette section n'en donne que la mécanique git.
 
 ### Branches
 

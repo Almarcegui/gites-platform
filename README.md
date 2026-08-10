@@ -38,7 +38,7 @@ Deux repères pour lire le code :
   une base neuve à chaque exécution : ce qui casse le schéma se voit tout de suite.
 
 Architecture du code : [`ARCHITECTURE.md`](ARCHITECTURE.md).
-Organisation du travail à deux : [`.github/COLLABORATION.md`](.github/COLLABORATION.md).
+Organisation du travail à deux : [`COLLABORATION.md`](COLLABORATION.md).
 
 ## Le cœur : le moteur de disponibilité lié
 
