@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Plan du site — Les Gîtes du Pré Moré (issue #1).
+
+  SQUELETTE : ce fichier ne servira vraiment qu'au lancement, avec le domaine
+  définitif (issue #12). Aujourd'hui deux choses le neutralisent, volontairement :
+    . public/robots.txt interdit toute exploration (site de test) ;
+    . les pages publiques portent <meta name="robots" content="noindex">.
+  Un plan de site n'est de toute façon lu que si l'exploration est autorisee.
+
+  AU LANCEMENT : remplacer partout le domaine ci-dessous par le domaine reel,
+  puis rafraichir les <lastmod>. Les URLs doivent rester identiques a celles des
+  balises <link rel="canonical"> des pages (issue #30) - sinon les moteurs
+  recoivent deux adresses concurrentes pour la meme page.
+
+  Sont volontairement ABSENTS : le tunnel de reservation (/book/), le
+  back-office (/admin/), les flux iCal (/ical/) et l'API (/api/).
+-->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+
+  <url>
+    <loc>https://gites-platform.j-decartier.workers.dev/</loc>
+    <lastmod>2026-08-10</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+  </url>
+
+  <url>
+    <loc>https://gites-platform.j-decartier.workers.dev/la-propriete/</loc>
+    <lastmod>2026-08-10</lastmod>
+    <changefreq>yearly</changefreq>
+    <priority>0.7</priority>
+  </url>
+
+  <url>
+    <loc>https://gites-platform.j-decartier.workers.dev/histoire/</loc>
+    <lastmod>2026-08-10</lastmod>
+    <changefreq>yearly</changefreq>
+    <priority>0.7</priority>
+  </url>
+
+  <url>
+    <loc>https://gites-platform.j-decartier.workers.dev/que-faire/</loc>
+    <lastmod>2026-08-10</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+
+  <url>
+    <loc>https://gites-platform.j-decartier.workers.dev/que-manger/</loc>
+    <lastmod>2026-08-10</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+
+  <url>
+    <loc>https://gites-platform.j-decartier.workers.dev/infos-pratiques/</loc>
+    <lastmod>2026-08-10</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+
+</urlset>
