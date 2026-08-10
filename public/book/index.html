@@ -31,6 +31,16 @@
       <span data-step="4">4. Paiement</span>
     </div>
 
+    <!-- Remises actives et disponibilité CALCULÉE (issue #35).
+         Uniquement du factuel : les remises viennent du moteur de devis, le
+         chiffre de disponibilité est recompté à chaque chargement sur les
+         vraies réservations et porte toujours son dénominateur. Aucune
+         formulation d'urgence, aucun compte à rebours. -->
+    <section id="offersCard" class="card offers" hidden aria-labelledby="offersTitle">
+      <h3 id="offersTitle">Remises et disponibilité</h3>
+      <div id="offersBody"></div>
+    </section>
+
     <!-- Étape 1 : calendrier des disponibilités et prix -->
     <div class="card" id="searchCard">
       <div class="pcal-head">
