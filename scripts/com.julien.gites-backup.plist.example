@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  GABARIT — sauvegarde hebdomadaire de la base de production (issue #7).
+
+  Ce fichier n'est PAS actif : c'est un modèle. L'installation est une action
+  manuelle du propriétaire (elle engage sa machine et son compte Cloudflare) —
+  la procédure est dans le README, section « Sauvegardes ».
+
+  À adapter avant usage :
+    - CHEMIN_DU_PROJET  → chemin réel du dépôt sur le Mac
+    - PATH              → doit contenir le dossier de node/npx. launchd ne lit
+                          ni .zshrc ni .bash_profile : sans cette ligne, le
+                          script échoue sur « npx introuvable ».
+                          Le vérifier avec : dirname "$(command -v npx)"
+
+  Déclenchement : tous les dimanches à 8 h. Si le Mac est éteint à cette
+  heure-là, launchd lance la tâche au réveil suivant.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.julien.gites-backup</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>CHEMIN_DU_PROJET/scripts/backup-d1.sh</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>CHEMIN_DU_PROJET</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+  </dict>
+
+  <!-- Dimanche (0) à 8 h 00. -->
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Weekday</key>
+    <integer>0</integer>
+    <key>Hour</key>
+    <integer>8</integer>
+    <key>Minute</key>
+    <integer>0</integer>
+  </dict>
+
+  <!-- Rattrape la sauvegarde si le Mac était éteint dimanche matin. -->
+  <key>RunAtLoad</key>
+  <false/>
+
+  <!-- Sorties dans le dossier des sauvegardes, à côté du journal du script :
+       sans cela, une tâche launchd qui échoue le fait en silence. -->
+  <key>StandardOutPath</key>
+  <string>CHEMIN_DU_PROJET/sauvegardes/launchd.log</string>
+  <key>StandardErrorPath</key>
+  <string>CHEMIN_DU_PROJET/sauvegardes/launchd-erreurs.log</string>
+</dict>
+</plist>

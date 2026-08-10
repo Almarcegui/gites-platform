@@ -320,30 +320,90 @@ liens de paiement et des URLs iCal pointant sur la production.
    `*.workers.dev` par défaut, qui contourne les règles du domaine custom.
 8. Brancher les boutons « Réserver » du site WordPress Pré Moré vers `/book/`.
 
-### Sauvegarde et restauration (à mettre en place AU déploiement)
+### Sauvegardes
 
 Les migrations ne sont **pas** une sauvegarde : les rejouer reconstruit un
 système vide, jamais les réservations. D1 Time Travel couvre « j'ai fait une
 bêtise mardi » et rien d'autre (ni perte de compte, ni corruption découverte
 tardivement).
 
+#### Sauvegarder
+
 ```bash
-npm run db:export:remote -- "sauvegardes/$(date +%F)-gites-platform.sql"
+scripts/backup-d1.sh          # export daté + rotation des 8 dernières
 ```
 
-- Cadence : **hebdomadaire**, par un LaunchAgent du vault (cf. projet
-  « LaunchAgents Tâches planifiées »). Le dump pèse quelques centaines de Ko.
-- ⚠️ **Le dump ne doit jamais être versionné.** Il contient les données
-  personnelles des voyageurs (noms, emails, téléphones, montants) et le dépôt est
-  partagé. `sauvegardes/`, `backups/`, `*.sql.gz` et `*.dump` sont exclus par le
-  `.gitignore` — ne pas les forcer avec `git add -f`. Les copies indépendantes de
-  Cloudflare sont Time Machine et le disque local, pas git.
-- **Tester la restauration une fois** : créer une base jetable, importer le
-  dump, lancer `npm test` dessus. Une procédure jamais exécutée n'est pas une
-  procédure.
-- Restauration : `wrangler d1 create gites-restore` puis
-  `wrangler d1 execute gites-restore --remote --file <dump>.sql`, vérifier les
-  compteurs (`bookings`, `payments`, `guests`), puis basculer le `database_id`.
+Le script ne fait que **lire** la production. Il écrit
+`sauvegardes/AAAA-MM-JJ-gites-platform.sql`, journalise dans
+`sauvegardes/journal-sauvegardes.log`, et refuse un export vide ou sans schéma —
+un export tronqué qui inspire confiance est pire que pas de sauvegarde du tout.
+Nombre de copies conservées : `SAUVEGARDES_A_GARDER=12 scripts/backup-d1.sh`.
+
+⚠️ **Le dump ne doit jamais être versionné.** Il contient les données
+personnelles des voyageurs (noms, e-mails, téléphones, montants) et le dépôt est
+partagé. `sauvegardes/`, `backups/`, `*.sql.gz` et `*.dump` sont exclus par le
+`.gitignore` — ne pas les forcer avec `git add -f`. Les copies indépendantes de
+Cloudflare sont Time Machine et le disque local, pas git.
+
+#### Automatiser (une fois, sur le Mac du propriétaire)
+
+`scripts/com.julien.gites-backup.plist.example` est un **gabarit** : il déclenche
+le script tous les dimanches à 8 h. Installation :
+
+```bash
+sed "s|CHEMIN_DU_PROJET|$PWD|g" scripts/com.julien.gites-backup.plist.example \
+  > ~/Library/LaunchAgents/com.julien.gites-backup.plist
+launchctl load ~/Library/LaunchAgents/com.julien.gites-backup.plist
+launchctl start com.julien.gites-backup     # vérifier tout de suite
+```
+
+Ajuster `PATH` dans le plist s'il ne contient pas le dossier de `npx`
+(`dirname "$(command -v npx)"`) : launchd ne lit ni `.zshrc` ni `.bash_profile`.
+
+#### Restaurer
+
+Restauration vers une base **jetable** d'abord, jamais directement sur la
+production :
+
+```bash
+wrangler d1 create gites-restore
+wrangler d1 execute gites-restore --remote --file sauvegardes/<date>-gites-platform.sql
+```
+
+Vérifier les compteurs avant de basculer le `database_id` de `wrangler.jsonc` :
+
+```sql
+SELECT (SELECT COUNT(*) FROM properties)  AS domaines,
+       (SELECT COUNT(*) FROM units)       AS hebergements,
+       (SELECT COUNT(*) FROM bookings)    AS reservations,
+       (SELECT COUNT(*) FROM guests)      AS clients,
+       (SELECT COUNT(*) FROM payments)    AS paiements,
+       (SELECT COUNT(*) FROM admin_users) AS comptes;
+```
+
+> D1 refuse un `UNION ALL` de plus de quelques termes
+> (`too many terms in compound SELECT`) : d'où les sous-requêtes.
+
+#### Restauration réellement testée — 10/08/2026
+
+Une procédure jamais exécutée n'est pas une procédure. Le dump de production du
+**10/08/2026** (140 Ko, 1 029 lignes, 20 tables) a été réimporté dans une base
+jetable, sur les deux moteurs, avec des compteurs identiques au dump :
+
+| Table | Restauré |
+|---|---|
+| `properties` | 2 (Les Gîtes du Pré Moré, Le Moulin de Braives) |
+| `units` | 4 (Maison du Scieur, Scierie, Domaine entier, Le Moulin) |
+| `admin_users` | 3 |
+| `rate_rules` | 7 |
+| `messages` | 3 |
+| `app_settings` | 2 |
+| `audit_log` | 664 |
+| `bookings` / `guests` / `payments` | 0 — la production n'a pas encore de réservation réelle |
+
+Ce test porte donc sur les données de référence et les comptes du back-office ;
+il **ne prouve pas encore** la restauration de réservations réelles. À refaire
+après les premières réservations, et à noter ici.
 
 ## Déploiement Infomaniak (Node + SQLite) — dev1.mdcdy.be
 
