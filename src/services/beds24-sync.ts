@@ -168,6 +168,10 @@ export interface ChannelSyncResult {
   cancelled: number;
   /** Résas annulées côté canal puis rouvertes, réactivées chez nous. */
   reactivated: number;
+  /** Résas déplacées vers un AUTRE logement côté canal (issue #19) — comptées
+   *  à part des simples changements de dates, l'écart étant plus grave : deux
+   *  calendriers faux au lieu d'un. */
+  relocated: number;
   skipped: number;
   conflicts: string[];
   /** Résas dont le traitement a échoué — le pull continue quand même. */
@@ -195,7 +199,7 @@ export async function applyChannelBookings(
   now: Date = new Date(),
 ): Promise<ChannelSyncResult> {
   const result: ChannelSyncResult = {
-    imported: 0, updated: 0, cancelled: 0, reactivated: 0, skipped: 0, conflicts: [], errors: [],
+    imported: 0, updated: 0, cancelled: 0, reactivated: 0, relocated: 0, skipped: 0, conflicts: [], errors: [],
   };
   const nowSql = sqlNow(now);
   const today = todayInZone(now);
