@@ -31,6 +31,12 @@ export interface ImportRowResult {
   status: "importé" | "ok_simulé" | "conflit" | "déjà_importé" | "erreur";
   reference?: string;
   message?: string;
+  // Dates et montants relus, ligne par ligne : c'est ce qui rend visible un
+  // écart de format AVANT l'import réel (issue #28).
+  checkin?: IsoDate;
+  checkout?: IsoDate;
+  totalCents?: number;
+  paidCents?: number;
 }
 
 export interface ImportResult {
@@ -120,12 +126,73 @@ export function parseFlexibleDate(raw: string): IsoDate | null {
   return null;
 }
 
-/** '1 234,56' / '1234.56' / '890' → centimes (null si illisible). */
+/** '1 234,56' / '1.234,56' / '1,234.56' / '1234.56' / '890 €' → centimes.
+ *  null si illisible — JAMAIS 0 par défaut : un import qui refuse une ligne est
+ *  réparable, un import silencieusement faux ne l'est pas (issue #28).
+ *
+ *  Règle de désambiguïsation quand un seul séparateur est présent : un groupe
+ *  final de 3 chiffres est un groupe de MILLIERS ('1.234' = 1234 €), sauf si la
+ *  partie entière commence par 0 ('0.500' = 0,50 €) — aucune monnaie n'a trois
+ *  décimales. Deux séparateurs différents : le dernier est le décimal. */
 export function parseFlexibleMoney(raw: string): number | null {
-  const s = raw.trim().replace(/\s|€/g, "").replace(",", ".");
+  const s = raw.replace(/[\s  ]|€|EUR/gi, "").trim();
   if (s === "") return null;
-  const n = Number(s);
+  if (!/^-?\d+([.,]\d+)*$/.test(s)) return null;
+
+  // Un groupe de milliers fait TOUJOURS 3 chiffres : c'est ce qui distingue
+  // '1.234.567' (milliers) de '12,50,30' (illisible → refus).
+  const wellGrouped = (groups: string[]): boolean => groups.slice(1).every((g) => g.length === 3);
+
+  const lastComma = s.lastIndexOf(",");
+  const lastDot = s.lastIndexOf(".");
+  let normalized: string;
+  if (lastComma >= 0 && lastDot >= 0) {
+    const dec = Math.max(lastComma, lastDot);
+    const head = s.slice(0, dec);
+    if (!wellGrouped(head.split(/[.,]/))) return null;
+    normalized = `${head.replace(/[.,]/g, "")}.${s.slice(dec + 1)}`;
+  } else if (lastComma >= 0 || lastDot >= 0) {
+    const parts = s.split(lastComma >= 0 ? "," : ".");
+    const tail = parts[parts.length - 1]!;
+    if (parts.length > 2) {
+      if (!wellGrouped(parts)) return null;
+      normalized = parts.join("");
+    } else {
+      // séparateur unique : 3 chiffres après = milliers ('1.234'), sauf partie
+      // entière commençant par 0 ('0.500' = 0,50 €)
+      const thousands = tail.length === 3 && !/^-?0/.test(parts[0]!);
+      normalized = thousands ? parts.join("") : `${parts[0]}.${tail}`;
+    }
+  } else {
+    normalized = s;
+  }
+  const n = Number(normalized);
   return Number.isFinite(n) ? Math.round(n * 100) : null;
+}
+
+/** Montant en euros pour les messages de simulation : '540,00 €'. Format figé
+ *  (pas de toLocaleString) — le tableau doit être comparable d'un run à l'autre. */
+function eur(cents: number): string {
+  return `${(cents / 100).toFixed(2).replace(".", ",")} €`;
+}
+
+/** '2026-10-15' → '15/10/2026' (lecture humaine du tableau de simulation). */
+function frDate(iso: string): string {
+  return `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`;
+}
+
+/** Lit une colonne monétaire. `required` : une valeur absente ou nulle est un
+ *  refus (le total), sinon l'absence vaut 0 (l'acompte). */
+function readMoney(raw: string, required: boolean): { ok: true; cents: number } | { ok: false; reason: string } {
+  const trimmed = raw.trim();
+  if (trimmed === "") {
+    return required ? { ok: false, reason: "montant total absent" } : { ok: true, cents: 0 };
+  }
+  const cents = parseFlexibleMoney(trimmed);
+  if (cents === null) return { ok: false, reason: `montant illisible : « ${trimmed} »` };
+  if (cents < 0) return { ok: false, reason: `montant négatif : « ${trimmed} »` };
+  if (required && cents === 0) return { ok: false, reason: `montant total à 0 € : « ${trimmed} »` };
+  return { ok: true, cents };
 }
 
 // --- import -----------------------------------------------------------------
@@ -203,8 +270,25 @@ export async function importElloha(
     }
     const ref = get(r, "ref");
     const externalUid = ref ? `elloha:${ref}` : null;
-    const totalCents = parseFlexibleMoney(get(r, "total")) ?? 0;
-    const paidCents = parseFlexibleMoney(get(r, "paid")) ?? 0;
+
+    // Les montants sont la raison d'être de l'import (facturation, solde dû) :
+    // une ligne dont le total est illisible, absent ou nul part en ERREUR au
+    // lieu de s'importer à 0 € avec le statut « importé » (issue #28).
+    const total = readMoney(get(r, "total"), true);
+    if (!total.ok) {
+      result.rows.push({ line, status: "erreur", checkin, checkout, message: `${total.reason} — ligne refusée` });
+      result.errors++;
+      continue;
+    }
+    const paid = readMoney(get(r, "paid"), false);
+    if (!paid.ok) {
+      result.rows.push({ line, status: "erreur", checkin, checkout, message: `acompte : ${paid.reason} — ligne refusée` });
+      result.errors++;
+      continue;
+    }
+    const totalCents = total.cents;
+    const paidCents = paid.cents;
+    const money = `total ${eur(totalCents)}${paidCents > 0 ? ` · payé ${eur(paidCents)}` : ""}`;
     const adults = Math.max(1, Math.floor(Number(get(r, "adults")) || 1));
     const children = Math.max(0, Math.floor(Number(get(r, "children")) || 0));
 
@@ -224,11 +308,17 @@ export async function importElloha(
         (s) => blockers.has(s.unitId) && isActiveBooking(s, nowSql) && rangesOverlap(s.checkin, s.checkout, checkin, checkout),
       );
       if (clash) {
-        result.rows.push({ line, status: "conflit", message: `créneau ${checkin} → ${checkout} déjà occupé (${unit.name})` });
+        result.rows.push({
+          line, status: "conflit", checkin, checkout, totalCents, paidCents,
+          message: `${unit.name} · ${frDate(checkin)} → ${frDate(checkout)} · ${money} — créneau déjà occupé`,
+        });
         result.conflicts++;
       } else {
         existingSpans.push({ unitId: unit.id, checkin, checkout, status: "confirmed" });
-        result.rows.push({ line, status: "ok_simulé", message: `${unit.name} · ${checkin} → ${checkout} · ${lastName}` });
+        result.rows.push({
+          line, status: "ok_simulé", checkin, checkout, totalCents, paidCents,
+          message: `${unit.name} · ${frDate(checkin)} → ${frDate(checkout)} · ${lastName} · ${money}`,
+        });
         result.imported++;
       }
       continue;
@@ -259,7 +349,10 @@ export async function importElloha(
         now,
       });
       if (!created.ok) {
-        result.rows.push({ line, status: "conflit", message: `créneau ${checkin} → ${checkout} déjà occupé (${unit.name})` });
+        result.rows.push({
+          line, status: "conflit", checkin, checkout, totalCents, paidCents,
+          message: `${unit.name} · ${frDate(checkin)} → ${frDate(checkout)} · ${money} — créneau déjà occupé`,
+        });
         result.conflicts++;
         continue;
       }
@@ -274,7 +367,11 @@ export async function importElloha(
           receivedAt: nowSql,
         });
       }
-      result.rows.push({ line, status: "importé", reference: created.reference });
+      result.rows.push({
+        line, status: "importé", reference: created.reference,
+        checkin, checkout, totalCents, paidCents,
+        message: `${unit.name} · ${frDate(checkin)} → ${frDate(checkout)} · ${money}`,
+      });
       result.imported++;
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);

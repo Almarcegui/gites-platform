@@ -45,6 +45,24 @@ describe("parsing", () => {
     expect(parseFlexibleMoney("540.00")).toBe(54000);
     expect(parseFlexibleMoney("abc")).toBeNull();
   });
+
+  // Issue #28 : '1.234,56' (point de milliers, courant dans les exports
+  // européens) renvoyait null → la ligne s'importait à 0 € en se déclarant
+  // réussie. Les quatre notations doivent donner le même montant.
+  it("les quatre notations de montant donnent le même résultat", () => {
+    expect(parseFlexibleMoney("1234.56")).toBe(123456);
+    expect(parseFlexibleMoney("1 234,56")).toBe(123456);
+    expect(parseFlexibleMoney("1.234,56")).toBe(123456);
+    expect(parseFlexibleMoney("1,234.56")).toBe(123456);
+    // et les cas voisins restent justes
+    expect(parseFlexibleMoney("1.234")).toBe(123400);   // milliers sans centimes
+    expect(parseFlexibleMoney("0,50")).toBe(50);
+    expect(parseFlexibleMoney("0.500")).toBe(50);       // 0,50 € — pas 500 €
+    expect(parseFlexibleMoney("1 234 567,89")).toBe(123456789);
+    expect(parseFlexibleMoney("890 €")).toBe(89000);
+    expect(parseFlexibleMoney("12,50,30")).toBeNull();  // illisible → refus
+    expect(parseFlexibleMoney("")).toBeNull();
+  });
 });
 
 describe("dry-run", () => {
@@ -62,6 +80,62 @@ describe("dry-run", () => {
     const result = await importElloha(db, 1, bad, true, NOW);
     expect(result.errors).toBe(2);
     expect(result.rows[0]?.message).toContain("unité inconnue");
+  });
+});
+
+// Issue #28 — un import silencieusement faux n'est pas réparable : une ligne
+// dont le montant est illisible ou nul doit passer en erreur, jamais s'importer
+// à 0 € en se déclarant réussie.
+describe("montants : refus au lieu du zéro silencieux (#28)", () => {
+  const withTotal = (total: string, ref = "ELL-2001") =>
+    ["unite;arrivee;depart;nom;total;paye;reference", `La Scierie;15/12/2026;18/12/2026;Testeur;${total};0;${ref}`].join("\n");
+
+  it("un montant illisible met la ligne en erreur (et non à 0 €)", async () => {
+    const result = await importElloha(db, 1, withTotal("mille deux cents"), false, NOW);
+    expect(result.imported).toBe(0);
+    expect(result.errors).toBe(1);
+    expect(result.rows[0]?.status).toBe("erreur");
+    expect(result.rows[0]?.message).toMatch(/montant/i);
+    expect(await listBookings(db, {})).toHaveLength(0); // rien d'importé à 0 €
+  });
+
+  it("un total à 0 € est refusé, en simulation comme à l'import", async () => {
+    for (const dry of [true, false]) {
+      const result = await importElloha(db, 1, withTotal("0", "ELL-2002"), dry, NOW);
+      expect(result.imported).toBe(0);
+      expect(result.errors).toBe(1);
+      expect(result.rows[0]?.message).toMatch(/0\s*€|montant/i);
+    }
+    expect(await listBookings(db, {})).toHaveLength(0);
+  });
+
+  it("une colonne total absente n'importe plus des réservations muettes", async () => {
+    const noTotal = "unite;arrivee;depart;nom;reference\nLa Scierie;15/12/2026;18/12/2026;Testeur;ELL-2003";
+    const result = await importElloha(db, 1, noTotal, true, NOW);
+    expect(result.imported).toBe(0);
+    expect(result.errors).toBe(1);
+  });
+
+  it("un acompte illisible est refusé aussi (paiement perdu en silence)", async () => {
+    const csv = "unite;arrivee;depart;nom;total;paye;reference\nLa Scierie;15/12/2026;18/12/2026;Testeur;540,00;cent€;ELL-2004";
+    const result = await importElloha(db, 1, csv, false, NOW);
+    expect(result.errors).toBe(1);
+    expect(result.rows[0]?.message).toMatch(/acompte|payé|montant/i);
+  });
+
+  it("la simulation affiche dates ET montants de chaque ligne", async () => {
+    const result = await importElloha(db, 1, CSV, true, NOW);
+    expect(result.imported).toBe(3);
+    const first = result.rows[0];
+    // structuré, pour que l'écran d'import puisse comparer sans re-parser
+    expect(first).toMatchObject({
+      checkin: "2026-10-15", checkout: "2026-10-18", totalCents: 54000, paidCents: 16200,
+    });
+    // et lisible tel quel dans le tableau de simulation
+    expect(first?.message).toContain("15/10/2026");
+    expect(first?.message).toContain("18/10/2026");
+    expect(first?.message).toContain("540,00 €");
+    expect(first?.message).toContain("162,00 €");
   });
 });
 

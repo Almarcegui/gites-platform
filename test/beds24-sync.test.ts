@@ -129,6 +129,86 @@ describe("applyChannelBookings (synchro entrante)", () => {
   });
 });
 
+// Issue #18 — une résa canal annulée puis RÉACTIVÉE repartait sur une création
+// avec le même external_uid : violation d'unicité → exception → tout le
+// rapatriement du domaine échouait, à chaque passage, indéfiniment.
+describe("réactivation d'une résa canal annulée (#18)", () => {
+  const ROOM_TO_UNIT = new Map([[711713, 1], [711714, 2]]);
+  const FROM = addDays(todayInZone(), 400);
+  const resa = (over: Record<string, unknown> = {}) => ({
+    id: 900101, roomId: 711713, status: "confirmed",
+    arrival: FROM, departure: addDays(FROM, 3),
+    numAdult: 2, numChild: 0, lastName: "Reactivé", email: "reactive@example.com",
+    price: 300, channel: "booking",
+    ...over,
+  });
+
+  it("créée → annulée → réactivée : aucune exception, la résa est de nouveau active", async () => {
+    expect(await applyChannelBookings(t.db, [resa()], ROOM_TO_UNIT)).toMatchObject({ imported: 1 });
+    expect(await applyChannelBookings(t.db, [resa({ status: "cancelled" })], ROOM_TO_UNIT)).toMatchObject({ cancelled: 1 });
+
+    const r = await applyChannelBookings(t.db, [resa()], ROOM_TO_UNIT);
+    expect(r.conflicts).toEqual([]);
+    expect(r.errors).toEqual([]);
+    expect(r.reactivated).toBe(1);
+
+    const row = await t.db
+      .prepare("SELECT status, checkin, cancelled_at, cancel_reason FROM bookings WHERE external_uid = 'beds24:900101'")
+      .first<Record<string, unknown>>();
+    expect(row).toMatchObject({ status: "confirmed", checkin: FROM, cancelled_at: null, cancel_reason: null });
+    // et surtout : une seule ligne, pas de doublon créé
+    const n = await t.db
+      .prepare("SELECT COUNT(*) AS n FROM bookings WHERE external_uid = 'beds24:900101'")
+      .first<{ n: number }>();
+    expect(n?.n).toBe(1);
+  });
+
+  it("réactivation impossible (créneau repris entre-temps) → alerte, pas d'exception", async () => {
+    // on annule de nouveau, puis on vend le créneau en direct
+    await applyChannelBookings(t.db, [resa({ status: "cancelled" })], ROOM_TO_UNIT);
+    const local = await createBookingAtomic(t.db, {
+      unitId: 1, checkin: FROM, checkout: addDays(FROM, 2), adults: 2, children: 0,
+      status: "confirmed", source: "direct", totalCents: 40000, depositCents: 0, balanceDueDate: null,
+    });
+    expect(local.ok).toBe(true);
+
+    const r = await applyChannelBookings(t.db, [resa()], ROOM_TO_UNIT);
+    expect(r.reactivated).toBe(0);
+    expect(r.conflicts.length).toBe(1);
+    expect(r.conflicts[0]).toContain("réactivation");
+    const row = await t.db
+      .prepare("SELECT status FROM bookings WHERE external_uid = 'beds24:900101'")
+      .first<{ status: string }>();
+    expect(row?.status).toBe("cancelled"); // rien n'a été forcé
+    // l'alerte est journalisée (visible dans le journal d'audit)
+    const alert = await t.db
+      .prepare("SELECT COUNT(*) AS n FROM audit_log WHERE action = 'beds24.reactivate.conflict'")
+      .first<{ n: number }>();
+    expect(alert?.n).toBeGreaterThan(0);
+  });
+
+  it("une réservation en erreur n'interrompt pas le traitement des suivantes", async () => {
+    const start = addDays(todayInZone(), 430);
+    // room 711715 mappée sur une unité inexistante → l'INSERT lève
+    const map = new Map([...ROOM_TO_UNIT, [711715, 4242]]);
+    const r = await applyChannelBookings(
+      t.db,
+      [
+        resa({ id: 900201, roomId: 711715, arrival: start, departure: addDays(start, 2) }),
+        resa({ id: 900202, roomId: 711714, arrival: start, departure: addDays(start, 2) }),
+      ],
+      map,
+    );
+    expect(r.errors.length).toBe(1);
+    expect(r.errors[0]).toContain("beds24:900201");
+    expect(r.imported).toBe(1); // la suivante est bien passée
+    const row = await t.db
+      .prepare("SELECT status FROM bookings WHERE external_uid = 'beds24:900202'")
+      .first<{ status: string }>();
+    expect(row?.status).toBe("confirmed");
+  });
+});
+
 describe("push temps réel (câblage bout en bout)", () => {
   it("une résa publique déclenche un POST /inventory/rooms/calendar vers Beds24", async () => {
     const { Router } = await import("../src/api/router");
@@ -143,6 +223,9 @@ describe("push temps réel (câblage bout en bout)", () => {
       if (url.includes("api.beds24.com")) {
         beds24Calls.push({ url, method: init?.method ?? "GET" });
         if (url.includes("/authentication/token")) {
+          // Latence délibérée : le push doit être attendu explicitement, jamais
+          // gagné à la course contre la fin du handler (cf. drain ci-dessous).
+          await new Promise((r) => setTimeout(r, 5));
           return new Response(JSON.stringify({ token: "tok_test" }), { status: 200 });
         }
         return new Response(JSON.stringify([{ success: true }]), { status: 200 });
@@ -168,9 +251,24 @@ describe("push temps réel (câblage bout en bout)", () => {
           guest: { firstName: "Push", lastName: "Réel", email: "push.reel@example.com", phone: "+32 470 99 88 77" },
         }),
       });
-      // sans ctx : le trigger await inline → le POST Beds24 doit être parti au retour
-      const res = await router.handle(req, env);
+      // Le push est différé via ctx.waitUntil : en production le runtime
+      // Workers draine ces promesses APRÈS avoir renvoyé la réponse. Sans ctx,
+      // la route lançait le push sans l'attendre et le test pariait sur une
+      // course (≈8 allers-retours D1 + 2 fetch côté push contre ≈4 côté
+      // handler) — perdue sur un runner plus lent, et la promesse survivait à
+      // la restauration de globalThis.fetch. On fournit donc un ctx qui
+      // collecte, et on draine explicitement avant d'affirmer.
+      const deferred: Promise<unknown>[] = [];
+      const ctx = {
+        waitUntil: (p: Promise<unknown>) => { deferred.push(p); },
+        passThroughOnException: () => {},
+      } as unknown as ExecutionContext;
+
+      const res = await router.handle(req, env, ctx);
       expect(res?.status).toBe(201);
+      expect(deferred.length).toBeGreaterThan(0); // le push a bien été programmé
+      await Promise.all(deferred);
+
       const push = beds24Calls.find((c) => c.url.includes("/inventory/rooms/calendar") && c.method === "POST");
       expect(push).toBeTruthy();
     } finally {

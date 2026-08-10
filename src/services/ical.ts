@@ -9,8 +9,10 @@ import {
   bookingsInWindow,
   cancelBooking,
   createBookingAtomic,
+  getBookingByExternalUid,
   listFeedBookings,
   listLinks,
+  reactivateBookingAtomic,
   setFeedStatus,
   updateBookingDatesAtomic,
   type FeedRow,
@@ -145,6 +147,8 @@ export interface SyncResult {
   imported: number;
   updated: number;
   cancelled: number;
+  /** Événements disparus du flux puis réapparus (annulation levée côté canal). */
+  reactivated: number;
   conflicts: string[];
   error: string | null;
   /** VEVENT annoncés par le flux mais illisibles (date/UID manquants). */
@@ -160,7 +164,7 @@ export async function syncFeed(
   now: Date = new Date(),
 ): Promise<SyncResult> {
   const result: SyncResult = {
-    feedId: feed.id, imported: 0, updated: 0, cancelled: 0, conflicts: [], error: null,
+    feedId: feed.id, imported: 0, updated: 0, cancelled: 0, reactivated: 0, conflicts: [], error: null,
     malformed: 0, suspicious: false,
   };
   const today = todayInZone(now);
@@ -214,6 +218,27 @@ export async function syncFeed(
     seenUids.add(extUid);
     const known = byUid.get(extUid);
     if (!known) {
+      // L'événement est peut-être connu mais ANNULÉ (disparu du flux puis
+      // réapparu) : listFeedBookings filtre les annulées, et une création
+      // violerait l'unicité de external_uid — l'exception faisait échouer
+      // TOUTE la relève du flux, à chaque passage (issue #18). On réactive
+      // après revérification de disponibilité : le créneau a pu être revendu.
+      const archived = await getBookingByExternalUid(db, extUid);
+      if (archived) {
+        const back = await reactivateBookingAtomic(db, archived.id, archived.unitId, ev.dtstart, ev.dtend, nowSql);
+        if (back) {
+          result.reactivated += 1;
+        } else {
+          result.conflicts.push(
+            `${archived.reference} : réactivation ${ev.dtstart}→${ev.dtend} impossible (créneau repris depuis l'annulation)`,
+          );
+          await audit(db, "cron", "ical.reactivate.conflict", `booking:${archived.id}`, {
+            feedId: feed.id, externalUid: extUid, reference: archived.reference,
+            dtstart: ev.dtstart, dtend: ev.dtend,
+          });
+        }
+        continue;
+      }
       const created = await createBookingAtomic(db, {
         unitId: feed.unitId,
         checkin: ev.dtstart,
@@ -259,7 +284,7 @@ export async function syncFeed(
         ? `⚠️ ${result.malformed} événement(s) illisible(s) dans le flux`
         : "ok";
   await setFeedStatus(db, feed.id, statusMsg, nowSql);
-  if (result.imported || result.updated || result.cancelled || result.conflicts.length) {
+  if (result.imported || result.updated || result.cancelled || result.reactivated || result.conflicts.length) {
     await audit(db, "cron", "ical.sync", `feed:${feed.id}`, result);
   }
   return result;
