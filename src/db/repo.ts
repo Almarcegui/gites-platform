@@ -9,7 +9,7 @@
 
 import { isIsoDate, sqlNow, todayInZone, type IsoDate } from "../core/dates";
 import type { UnitLink } from "../core/availability";
-import type { OptionDef, Promotion, RateRule, Season, UnitPricingInfo } from "../core/pricing";
+import type { OptionDef, Promotion, RateOverride, RateRule, Season, UnitPricingInfo } from "../core/pricing";
 
 type Raw = Record<string, unknown>;
 const num = (v: unknown): number => Number(v ?? 0);
@@ -76,6 +76,9 @@ export interface UnitRow {
   cleaningFeeCents: number;
   photoUrl: string | null;
   beds24RoomId: number | null;
+  /** garde-fous de prix par nuit (issue #31) — null = aucune borne configurée */
+  priceMinCents: number | null;
+  priceMaxCents: number | null;
 }
 
 function mapUnit(r: Raw): UnitRow {
@@ -88,6 +91,8 @@ function mapUnit(r: Raw): UnitRow {
     active: num(r.active) === 1, sortOrder: num(r.sort_order), icalToken: str(r.ical_token),
     cleaningFeeCents: num(r.cleaning_fee_cents), photoUrl: strOrNull(r.photo_url),
     beds24RoomId: r.beds24_room_id == null ? null : num(r.beds24_room_id),
+    priceMinCents: numOrNull(r.price_min_cents),
+    priceMaxCents: numOrNull(r.price_max_cents),
   };
 }
 
@@ -113,9 +118,15 @@ export async function updateUnit(
   db: D1Database,
   unitId: number,
   fields: Partial<
-    Pick<UnitRow, "name" | "description" | "capacityBase" | "capacityMax" | "active" | "compositePricing" | "cleaningFeeCents" | "photoUrl">
+    Pick<
+      UnitRow,
+      | "name" | "description" | "capacityBase" | "capacityMax" | "active" | "compositePricing"
+      | "cleaningFeeCents" | "photoUrl" | "priceMinCents" | "priceMaxCents"
+    >
   >,
 ): Promise<void> {
+  // Les garde-fous de prix se RETIRENT (retour à null) autant qu'ils se posent :
+  // COALESCE ne suffit pas, d'où le drapeau « clé fournie » de ?10 et ?12.
   await db
     .prepare(
       `UPDATE units SET
@@ -126,7 +137,9 @@ export async function updateUnit(
          active = COALESCE(?6, active),
          composite_pricing = COALESCE(?7, composite_pricing),
          cleaning_fee_cents = COALESCE(?8, cleaning_fee_cents),
-         photo_url = COALESCE(?9, photo_url)
+         photo_url = COALESCE(?9, photo_url),
+         price_min_cents = CASE WHEN ?10 = 1 THEN ?11 ELSE price_min_cents END,
+         price_max_cents = CASE WHEN ?12 = 1 THEN ?13 ELSE price_max_cents END
        WHERE id = ?1`,
     )
     .bind(
@@ -139,6 +152,10 @@ export async function updateUnit(
       fields.compositePricing ?? null,
       fields.cleaningFeeCents ?? null,
       fields.photoUrl ?? null,
+      fields.priceMinCents === undefined ? 0 : 1,
+      fields.priceMinCents ?? null,
+      fields.priceMaxCents === undefined ? 0 : 1,
+      fields.priceMaxCents ?? null,
     )
     .run();
 }
@@ -324,12 +341,25 @@ export interface QuoteContext {
   pricingUnit: UnitPricingInfo;
   seasons: Season[];
   rateRules: RateRule[];
+  /** surcharges par jour de l'unité et de ses composantes, sur la fenêtre
+   *  demandée (toutes, si aucune fenêtre n'est passée) */
+  rateOverrides: RateOverride[];
   promotions: Promotion[];
   options: (OptionDef & { active: boolean })[];
   settings: PropertySettings;
 }
 
-export async function getQuoteContext(db: D1Database, unitId: number): Promise<QuoteContext | null> {
+/** Contexte complet de tarification d'une unité.
+ *
+ *  `window` borne le chargement des surcharges à la période utile (le séjour
+ *  pour un devis, la plage affichée pour un calendrier). Sans fenêtre, TOUTES
+ *  les surcharges de l'unité sont chargées — pratique pour les tests, à éviter
+ *  sur un chemin chaud. */
+export async function getQuoteContext(
+  db: D1Database,
+  unitId: number,
+  window?: { from: IsoDate; toExclusive: IsoDate },
+): Promise<QuoteContext | null> {
   const unit = await getUnit(db, unitId);
   if (!unit) return null;
   const property = await getProperty(db, unit.propertyId);
@@ -358,12 +388,16 @@ export async function getQuoteContext(db: D1Database, unitId: number): Promise<Q
     .bind(...unitIds)
     .all();
 
-  const [{ results: seasonRows }, { results: promoRows }, { results: optionRows }, settings] = await Promise.all([
-    db.prepare("SELECT * FROM seasons WHERE property_id = ?1").bind(unit.propertyId).all(),
-    db.prepare("SELECT * FROM promotions WHERE property_id = ?1").bind(unit.propertyId).all(),
-    db.prepare("SELECT * FROM options WHERE property_id = ?1 AND active = 1 ORDER BY sort_order, id").bind(unit.propertyId).all(),
-    getSettings(db, unit.propertyId),
-  ]);
+  const [{ results: seasonRows }, { results: promoRows }, { results: optionRows }, settings, rateOverrides] =
+    await Promise.all([
+      db.prepare("SELECT * FROM seasons WHERE property_id = ?1").bind(unit.propertyId).all(),
+      db.prepare("SELECT * FROM promotions WHERE property_id = ?1").bind(unit.propertyId).all(),
+      db.prepare("SELECT * FROM options WHERE property_id = ?1 AND active = 1 ORDER BY sort_order, id").bind(unit.propertyId).all(),
+      getSettings(db, unit.propertyId),
+      window
+        ? listRateOverrides(db, unitIds, window.from, window.toExclusive)
+        : listRateOverrides(db, unitIds, "0000-01-01", "9999-12-31"),
+    ]);
 
   return {
     property,
@@ -377,6 +411,7 @@ export async function getQuoteContext(db: D1Database, unitId: number): Promise<Q
     },
     seasons: (seasonRows as Raw[]).map(mapSeason),
     rateRules: (ruleRows as Raw[]).map(mapRateRule),
+    rateOverrides,
     promotions: (promoRows as Raw[]).map(mapPromotion),
     options: (optionRows as Raw[]).map(mapOption),
     settings,
@@ -1243,6 +1278,141 @@ export async function updateRateRule(db: D1Database, id: number, r: Partial<Rate
 
 export async function deleteRateRule(db: D1Database, id: number): Promise<void> {
   await db.prepare("DELETE FROM rate_rules WHERE id = ?1").bind(id).run();
+}
+
+// ---------------------------------------------------------------------------
+// Surcharges par jour (rate_overrides — migration 0014, issue #23)
+// ---------------------------------------------------------------------------
+
+function mapRateOverride(r: Raw): RateOverride {
+  return {
+    unitId: num(r.unit_id),
+    date: str(r.date),
+    priceCents: numOrNull(r.price_cents),
+    minNights: numOrNull(r.min_nights),
+  };
+}
+
+/** Surcharges de plusieurs unités sur [from, toExclusive). */
+export async function listRateOverrides(
+  db: D1Database,
+  unitIds: number[],
+  from: IsoDate,
+  toExclusive: IsoDate,
+): Promise<RateOverride[]> {
+  if (unitIds.length === 0) return [];
+  const ids = [...new Set(unitIds)];
+  const placeholders = ids.map((_, i) => `?${i + 3}`).join(", ");
+  const { results } = await db
+    .prepare(
+      `SELECT * FROM rate_overrides
+        WHERE date >= ?1 AND date < ?2 AND unit_id IN (${placeholders})
+        ORDER BY unit_id, date`,
+    )
+    .bind(from, toExclusive, ...ids)
+    .all();
+  return (results as Raw[]).map(mapRateOverride);
+}
+
+/** Surcharges de toutes les unités d'un domaine sur [from, toExclusive) —
+ *  une seule requête pour la vue année et pour le push vers Beds24. */
+export async function listRateOverridesForProperty(
+  db: D1Database,
+  propertyId: number,
+  from: IsoDate,
+  toExclusive: IsoDate,
+): Promise<RateOverride[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT o.* FROM rate_overrides o JOIN units u ON u.id = o.unit_id
+        WHERE u.property_id = ?1 AND o.date >= ?2 AND o.date < ?3
+        ORDER BY o.unit_id, o.date`,
+    )
+    .bind(propertyId, from, toExclusive)
+    .all();
+  return (results as Raw[]).map(mapRateOverride);
+}
+
+/** Patch d'une surcharge : `undefined` laisse la valeur en place, `null` la
+ *  retire. Une ligne dont les deux valeurs finissent à null est SUPPRIMÉE —
+ *  retirer un prix fait revenir la saison, jamais un 0 fantôme. */
+export interface RateOverridePatch {
+  priceCents?: number | null;
+  minNights?: number | null;
+}
+
+export interface RateOverrideWriteResult {
+  /** jours effectivement porteurs d'une surcharge après l'écriture */
+  written: number;
+  /** jours dont la surcharge a disparu (retour à la saison) */
+  cleared: number;
+}
+
+/** Applique un patch de surcharge sur une liste de jours d'UNE unité.
+ *  Écriture par jour, en un seul batch : D1 sérialise, l'ensemble part groupé. */
+export async function setRateOverrides(
+  db: D1Database,
+  unitId: number,
+  dates: IsoDate[],
+  patch: RateOverridePatch,
+): Promise<RateOverrideWriteResult> {
+  const days = [...new Set(dates)].sort();
+  if (days.length === 0) return { written: 0, cleared: 0 };
+
+  // État courant, pour distinguer « laisser en place » de « retirer ».
+  const placeholders = days.map((_, i) => `?${i + 2}`).join(", ");
+  const { results } = await db
+    .prepare(`SELECT * FROM rate_overrides WHERE unit_id = ?1 AND date IN (${placeholders})`)
+    .bind(unitId, ...days)
+    .all();
+  const current = new Map<string, RateOverride>();
+  for (const row of results as Raw[]) {
+    const o = mapRateOverride(row);
+    current.set(o.date, o);
+  }
+
+  const stmts: D1PreparedStatement[] = [];
+  let written = 0;
+  let cleared = 0;
+  for (const date of days) {
+    const existing = current.get(date) ?? null;
+    const price = patch.priceCents === undefined ? (existing?.priceCents ?? null) : patch.priceCents;
+    const minNights = patch.minNights === undefined ? (existing?.minNights ?? null) : patch.minNights;
+    if (price == null && minNights == null) {
+      if (existing) {
+        stmts.push(db.prepare("DELETE FROM rate_overrides WHERE unit_id = ?1 AND date = ?2").bind(unitId, date));
+        cleared += 1;
+      }
+      continue;
+    }
+    stmts.push(
+      db
+        .prepare(
+          `INSERT INTO rate_overrides (unit_id, date, price_cents, min_nights)
+           VALUES (?1, ?2, ?3, ?4)
+           ON CONFLICT (unit_id, date) DO UPDATE SET
+             price_cents = excluded.price_cents,
+             min_nights = excluded.min_nights,
+             updated_at = datetime('now')`,
+        )
+        .bind(unitId, date, price, minNights),
+    );
+    written += 1;
+  }
+  if (stmts.length > 0) await db.batch(stmts);
+  return { written, cleared };
+}
+
+/** Retire toute surcharge sur une liste de jours — retour au tarif de saison. */
+export async function deleteRateOverrides(db: D1Database, unitId: number, dates: IsoDate[]): Promise<number> {
+  const days = [...new Set(dates)];
+  if (days.length === 0) return 0;
+  const placeholders = days.map((_, i) => `?${i + 2}`).join(", ");
+  const res = await db
+    .prepare(`DELETE FROM rate_overrides WHERE unit_id = ?1 AND date IN (${placeholders})`)
+    .bind(unitId, ...days)
+    .run();
+  return res.meta.changes ?? 0;
 }
 
 export async function listPromotions(db: D1Database, propertyId: number): Promise<Promotion[]> {
