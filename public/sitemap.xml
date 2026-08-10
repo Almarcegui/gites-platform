@@ -60,6 +60,31 @@
     <priority>0.6</priority>
   </url>
 
+
+  <!-- Une page par hébergement (issue #33) : ce sont commercialement des
+       produits distincts, ils doivent pouvoir se positionner séparément. -->
+
+  <url>
+    <loc>https://gites-platform.j-decartier.workers.dev/la-maison-du-scieur/</loc>
+    <lastmod>2026-08-10</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.9</priority>
+  </url>
+
+  <url>
+    <loc>https://gites-platform.j-decartier.workers.dev/la-scierie/</loc>
+    <lastmod>2026-08-10</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.9</priority>
+  </url>
+
+  <url>
+    <loc>https://gites-platform.j-decartier.workers.dev/le-moulin-de-braives/</loc>
+    <lastmod>2026-08-10</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.9</priority>
+  </url>
+
   <!-- Sous-pages de « Que faire », rapatriees de l'ancien WordPress (issue #29) -->
 
   <url>
