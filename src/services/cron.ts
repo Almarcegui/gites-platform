@@ -21,6 +21,7 @@ import { runDailyDigest } from "./digest";
 import { buildBalanceReminderEmail, queueEmail } from "./email";
 import { CRON_HEARTBEAT_KEY } from "./health";
 import { syncFeed } from "./ical";
+import { runDailyReconcile } from "./reconcile";
 import { setSetting } from "./settings";
 
 export async function runScheduled(env: Env, now: Date = new Date(), fetcher: typeof fetch = fetch): Promise<void> {
@@ -109,6 +110,16 @@ export async function runScheduled(env: Env, now: Date = new Date(), fetcher: ty
         await audit(db, "cron", "beds24.push.error", `property:${p.id}`, { error: e instanceof Error ? e.message : String(e) });
       }
     }
+  }
+
+  // 4 bis. Rapatriement COMPLET des canaux externes, une fois par jour au tick
+  //    du matin (issue #19) : le pull incrémental ci-dessus ne voit ni les
+  //    modifications antérieures à son curseur, ni ce qui a disparu de la
+  //    source. La fonction se saute toute seule hors créneau et hors jour.
+  try {
+    await runDailyReconcile(env, now);
+  } catch (e) {
+    await audit(db, "cron", "beds24.reconcile.error", undefined, { error: e instanceof Error ? e.message : String(e) });
   }
 
   // 5. Résumé quotidien au propriétaire (7 h, fuseau de Bruxelles). En DERNIER

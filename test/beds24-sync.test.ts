@@ -209,6 +209,151 @@ describe("réactivation d'une résa canal annulée (#18)", () => {
   });
 });
 
+// Issue #19 — la comparaison ne portait que sur les DATES : une résa déplacée
+// d'une maison à l'autre côté canal restait chez nous sur l'ancienne, et les
+// DEUX calendriers devenaient faux sans le moindre signalement.
+describe("changement de logement côté canal (#19)", () => {
+  const ROOM_TO_UNIT = new Map([[711713, 1], [711714, 2]]);
+  const FROM = addDays(todayInZone(), 250);
+  const resa = (over: Record<string, unknown> = {}) => ({
+    id: 900301, roomId: 711713, status: "confirmed",
+    arrival: FROM, departure: addDays(FROM, 3),
+    numAdult: 3, numChild: 0, lastName: "Déplacé", email: "deplace@example.com",
+    price: 400, channel: "booking",
+    ...over,
+  });
+
+  it("la résa suit le logement, et les DEUX calendriers sont corrects ensuite", async () => {
+    expect(await applyChannelBookings(t.db, [resa()], ROOM_TO_UNIT)).toMatchObject({ imported: 1 });
+
+    // le canal la bascule sur l'autre maison, mêmes dates
+    const r = await applyChannelBookings(t.db, [resa({ roomId: 711714 })], ROOM_TO_UNIT);
+    expect(r).toMatchObject({ relocated: 1, imported: 0, updated: 0, conflicts: [] });
+
+    const row = await t.db
+      .prepare("SELECT unit_id, checkin, checkout FROM bookings WHERE external_uid = 'beds24:900301'")
+      .first<Record<string, unknown>>();
+    expect(row).toMatchObject({ unit_id: 2, checkin: FROM, checkout: addDays(FROM, 3) });
+
+    // Le cœur du bug : l'ANCIEN logement doit être rouvert à la vente et le
+    // NOUVEAU fermé. Vérifié sur ce qu'on pousse réellement aux canaux.
+    const rooms = await buildCalendarPush(t.db, 1, FROM, 3);
+    const dayOf = (roomId: number) => {
+      const room = rooms.find((x) => x.roomId === roomId)!;
+      const span = room.calendar.find((s) => s.from <= FROM && s.to >= FROM)!;
+      return span.numAvail;
+    };
+    expect(dayOf(711713)).toBe(1); // La Maison du Scieur : libérée
+    expect(dayOf(711714)).toBe(0); // La Scierie : occupée
+
+    // rejouer le même état ne bouge plus rien
+    const again = await applyChannelBookings(t.db, [resa({ roomId: 711714 })], ROOM_TO_UNIT);
+    expect(again).toMatchObject({ relocated: 0, updated: 0, imported: 0 });
+  });
+
+  it("destination déjà occupée → aucun déplacement forcé, conflit signalé", async () => {
+    const start = addDays(todayInZone(), 260);
+    // résa canal sur le Scieur…
+    expect(await applyChannelBookings(t.db, [resa({ id: 900302, arrival: start, departure: addDays(start, 3) })], ROOM_TO_UNIT))
+      .toMatchObject({ imported: 1 });
+    // …et une résa directe qui occupe déjà La Scierie sur ces dates
+    const direct = await createBookingAtomic(t.db, {
+      unitId: 2, checkin: start, checkout: addDays(start, 3), adults: 2, children: 0,
+      status: "confirmed", source: "direct", totalCents: 40000, depositCents: 0, balanceDueDate: null,
+    });
+    expect(direct.ok).toBe(true);
+
+    const r = await applyChannelBookings(
+      t.db,
+      [resa({ id: 900302, roomId: 711714, arrival: start, departure: addDays(start, 3) })],
+      ROOM_TO_UNIT,
+    );
+    expect(r.relocated).toBe(0);
+    expect(r.conflicts.length).toBe(1);
+    expect(r.conflicts[0]).toContain("changement de logement");
+    const row = await t.db
+      .prepare("SELECT unit_id FROM bookings WHERE external_uid = 'beds24:900302'")
+      .first<{ unit_id: number }>();
+    expect(row?.unit_id).toBe(1); // rien n'a été forcé
+  });
+});
+
+// Issue #19 — `updateSettings(beds24_last_pull)` s'exécutait inconditionnellement :
+// une résa refusée pour conflit sortait de la fenêtre `modifiedFrom` au pull
+// suivant et n'était PLUS JAMAIS réessayée. L'écart devenait définitif.
+describe("curseur de pull retenu tant qu'un conflit n'est pas résolu (#19)", () => {
+  const CURSEUR_INITIAL = "2026-01-01 00:00:00";
+  const readCursor = async () =>
+    (await t.db
+      .prepare("SELECT value FROM settings WHERE property_id = 1 AND key = 'beds24_last_pull'")
+      .first<{ value: string }>())?.value ?? null;
+
+  /** Stub réseau Beds24 : jeton + liste de réservations au choix. */
+  function stubBeds24(bookings: unknown[]): () => void {
+    const real = globalThis.fetch;
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input instanceof Request ? input.url : input);
+      if (url.includes("api.beds24.com")) {
+        if (url.includes("/authentication/token")) return new Response(JSON.stringify({ token: "tok" }), { status: 200 });
+        return new Response(JSON.stringify({ data: bookings }), { status: 200 });
+      }
+      return real(input as RequestInfo, init);
+    }) as typeof fetch;
+    return () => { globalThis.fetch = real; };
+  }
+
+  const env = () => ({ DB: t.db, BEDS24_REFRESH_TOKEN: "refresh_test" }) as Env;
+
+  it("conflit → le curseur reste en place ; lot propre → il avance et le blocage se lève", async () => {
+    const { pullBeds24Bookings, cursorBlockedKey } = await import("../src/services/beds24-sync");
+    const { updateSettings } = await import("../src/db/repo");
+    const { getSetting } = await import("../src/services/settings");
+    const now = new Date();
+    const start = addDays(todayInZone(), 270);
+
+    // le créneau est déjà vendu en direct sur La Scierie
+    const direct = await createBookingAtomic(t.db, {
+      unitId: 2, checkin: start, checkout: addDays(start, 4), adults: 2, children: 0,
+      status: "confirmed", source: "direct", totalCents: 50000, depositCents: 0, balanceDueDate: null,
+    });
+    expect(direct.ok).toBe(true);
+
+    await updateSettings(t.db, 1, { beds24_last_pull: CURSEUR_INITIAL });
+    const conflictual = [{
+      id: 900401, roomId: 711714, status: "confirmed",
+      arrival: start, departure: addDays(start, 2), numAdult: 2, lastName: "Conflit", channel: "airbnb",
+    }];
+
+    let restore = stubBeds24(conflictual);
+    try {
+      const r = await pullBeds24Bookings(t.db, env(), 1, 344555, now);
+      expect(r.conflicts.length).toBe(1);
+      // LE point de l'issue : le curseur n'a pas bougé → la résa repassera.
+      expect(await readCursor()).toBe(CURSEUR_INITIAL);
+      expect(await getSetting(t.db, cursorBlockedKey(1))).toContain("since");
+    } finally {
+      restore();
+    }
+
+    // le canal annule la résa litigieuse : plus de conflit, le lot passe
+    restore = stubBeds24([{ ...conflictual[0], status: "cancelled" }]);
+    try {
+      const r = await pullBeds24Bookings(t.db, env(), 1, 344555, now);
+      expect(r.conflicts).toEqual([]);
+      expect(await readCursor()).not.toBe(CURSEUR_INITIAL);
+      expect(await getSetting(t.db, cursorBlockedKey(1))).toBe("");
+    } finally {
+      restore();
+    }
+
+    // le blocage levé est tracé, et la retenue l'avait été à son déclenchement
+    const held = await t.db
+      .prepare("SELECT COUNT(*) AS n FROM audit_log WHERE action IN ('beds24.cursor.held', 'beds24.cursor.resumed')")
+      .first<{ n: number }>();
+    expect(held?.n).toBe(2);
+  });
+});
+
 describe("push temps réel (câblage bout en bout)", () => {
   it("une résa publique déclenche un POST /inventory/rooms/calendar vers Beds24", async () => {
     const { Router } = await import("../src/api/router");

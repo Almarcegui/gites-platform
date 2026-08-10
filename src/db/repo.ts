@@ -1013,6 +1013,82 @@ export async function updateBookingDatesAtomic(
   return res.meta.changes === 1;
 }
 
+/** Déplace une résa vers un AUTRE logement (et éventuellement d'autres dates),
+ *  avec le MÊME garde-fou atomique que la création — la disponibilité est
+ *  vérifiée sur le logement de DESTINATION, liaisons comprises.
+ *
+ *  Sans cette opération, une réservation déplacée d'une maison à l'autre côté
+ *  canal restait chez nous sur l'ancienne : les deux calendriers devenaient
+ *  faux d'un coup (l'ancien bloqué à tort, le nouveau vendu deux fois) et rien
+ *  ne le signalait, la comparaison ne portant que sur les dates (issue #19).
+ *
+ *  false ⇒ le créneau de destination est déjà pris : on ne force RIEN, la résa
+ *  reste où elle est et l'appelant remonte une alerte. */
+export async function moveBookingAtomic(
+  db: D1Database,
+  id: number,
+  toUnitId: number,
+  checkin: IsoDate,
+  checkout: IsoDate,
+  now: string = sqlNow(),
+): Promise<boolean> {
+  if (!isIsoDate(checkin) || !isIsoDate(checkout) || checkin >= checkout) {
+    throw new Error(`moveBookingAtomic: dates invalides ${checkin} → ${checkout}`);
+  }
+  const res = await db
+    .prepare(
+      `UPDATE bookings SET unit_id = ?1, checkin = ?3, checkout = ?4, updated_at = ?5
+        WHERE id = ?2
+          AND NOT EXISTS (
+            SELECT 1 FROM bookings b
+             WHERE b.id != ?2
+               AND b.checkin < ?4
+               AND b.checkout > ?3
+               AND (b.status = 'confirmed' OR (b.status = 'pending' AND b.hold_expires_at > ?5))
+               AND b.unit_id IN (
+                 SELECT ?1
+                 UNION ALL
+                 SELECT ul.unit_id FROM unit_links ul WHERE ul.blocks_unit_id = ?1
+               )
+          )`,
+    )
+    .bind(toUnitId, id, checkin, checkout, now)
+    .run();
+  return res.meta.changes === 1;
+}
+
+/** Réservations ACTIVES qui occupent un créneau sur un logement (liaisons
+ *  comprises) — la même condition que le garde-fou d'insertion, mais en
+ *  lecture. Sert à nommer le coupable quand une synchronisation échoue :
+ *  « conflit » est inexploitable, « conflit avec la résa directe MDS-2026-014 »
+ *  se tranche. */
+export async function blockingBookings(
+  db: D1Database,
+  unitId: number,
+  checkin: IsoDate,
+  checkout: IsoDate,
+  now: string = sqlNow(),
+  excludeId?: number,
+): Promise<BookingRow[]> {
+  const { results } = await db
+    .prepare(
+      `${BOOKING_JOIN}
+        WHERE b.id != ?5
+          AND b.checkin < ?3
+          AND b.checkout > ?2
+          AND (b.status = 'confirmed' OR (b.status = 'pending' AND b.hold_expires_at > ?4))
+          AND b.unit_id IN (
+            SELECT ?1
+            UNION ALL
+            SELECT ul.unit_id FROM unit_links ul WHERE ul.blocks_unit_id = ?1
+          )
+        ORDER BY b.checkin`,
+    )
+    .bind(unitId, checkin, checkout, now, excludeId ?? -1)
+    .all();
+  return (results as Raw[]).map(mapBooking);
+}
+
 /** Réactive une résa externe annulée (le canal l'a rouverte), sur ses dates ou
  *  sur de nouvelles, avec le MÊME garde-fou atomique que la création.
  *  false ⇒ le créneau a été repris entre-temps : on ne force rien, l'appelant
@@ -1668,6 +1744,13 @@ export interface HealthSignals {
   /** Dernier rapatriement Beds24 réussi — figé = calendriers OTA à la dérive. */
   beds24LastPull: string | null;
   beds24StaleHours: number | null;
+  /** Dernier rapatriement COMPLET quotidien (réconciliation, issue #19), au
+   *  format 'AAAA-MM-JJ' de Bruxelles. Facultatifs : la carte « Santé » sait
+   *  vivre sans, et le repli neutre du back-office reste valide. */
+  reconcileLastRun?: string | null;
+  /** Écarts du dernier rapatriement complet qui demandent un arbitrage humain
+   *  (conflit avec une résa directe, source injoignable, garde de sanité). */
+  reconcileAlerts?: string[];
 }
 
 export async function healthSignals(db: D1Database, propertyId: number, now: Date = new Date()): Promise<HealthSignals> {
@@ -1708,7 +1791,32 @@ export async function healthSignals(db: D1Database, propertyId: number, now: Dat
   const lastPull = pull?.value ?? null;
   const staleHours = lastPull ? (now.getTime() - Date.parse(lastPull.replace(" ", "T") + "Z")) / 3_600_000 : null;
 
+  // Rapatriement complet quotidien (issue #19) : la date du dernier passage et
+  // les écarts qu'il n'a pas pu résoudre seul. Lecture défensive — la carte
+  // « Santé » ne doit pas tomber parce qu'un compte-rendu est illisible.
+  let reconcileLastRun: string | null = null;
+  let reconcileAlerts: string[] = [];
+  try {
+    const run = await db
+      .prepare("SELECT value FROM app_settings WHERE key = 'reconcile_last_run'")
+      .first<{ value: string }>();
+    reconcileLastRun = run?.value ?? null;
+    const report = await db
+      .prepare("SELECT value FROM app_settings WHERE key = ?1")
+      .bind(`reconcile_last_report:${propertyId}`)
+      .first<{ value: string }>();
+    if (report?.value) {
+      const parsed = JSON.parse(report.value) as { alerts?: unknown };
+      if (Array.isArray(parsed.alerts)) reconcileAlerts = parsed.alerts.map((a) => String(a));
+    }
+  } catch {
+    reconcileLastRun = null;
+    reconcileAlerts = [];
+  }
+
   return {
+    reconcileLastRun,
+    reconcileAlerts,
     orphanPayments: (orphans.results as Raw[]).map((r) => ({
       bookingId: num(r.booking_id),
       reference: str(r.reference),
