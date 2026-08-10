@@ -17,6 +17,7 @@ import {
 import { beds24Configured } from "./beds24";
 import { purgeExpiredSessions } from "./admin-auth";
 import { pullBeds24Bookings, pushCalendars } from "./beds24-sync";
+import { runDailyDigest } from "./digest";
 import { buildBalanceReminderEmail, queueEmail } from "./email";
 import { CRON_HEARTBEAT_KEY } from "./health";
 import { syncFeed } from "./ical";
@@ -108,5 +109,15 @@ export async function runScheduled(env: Env, now: Date = new Date(), fetcher: ty
         await audit(db, "cron", "beds24.push.error", `property:${p.id}`, { error: e instanceof Error ? e.message : String(e) });
       }
     }
+  }
+
+  // 5. Résumé quotidien au propriétaire (7 h, fuseau de Bruxelles). En DERNIER
+  //    et sous try/catch : le résumé décrit l'état du système, il ne doit pas
+  //    pouvoir empêcher le système de fonctionner. Il se saute tout seul hors
+  //    du créneau et ne part qu'une fois par jour.
+  try {
+    await runDailyDigest(env, now);
+  } catch (e) {
+    await audit(db, "cron", "digest.error", undefined, { error: e instanceof Error ? e.message : String(e) });
   }
 }
