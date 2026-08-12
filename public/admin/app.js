@@ -2,6 +2,7 @@
 // app.js : socle (état, client API, helpers UI, routeur) + vues de pilotage.
 // Les vues de configuration vivent dans config.js.
 
+import { registerCalendarView } from "./calendar.js";
 import { registerConfigViews } from "./config.js";
 
 // ---------------------------------------------------------------------------
@@ -14,10 +15,12 @@ export const state = {
   token: localStorage.getItem("gp_token") || "",
   session: localStorage.getItem("gp_session") || "",
   user: localStorage.getItem("gp_user") || "",
-  planMonth: null, // 'YYYY-MM'
+  // Un seul mois pour les trois couches du calendrier : passer d'Occupation à
+  // Prix ne doit plus changer de mois sous les pieds (spec UX, variante B).
+  calMonth: null, // 'YYYY-MM'
+  calYear: null,
   statsYear: null,
   tarifUnit: null,
-  tarifMonth: null,
 };
 
 /** Les vues qui exigent un domaine précis retombent sur le premier. */
@@ -114,6 +117,30 @@ export function toast(message, isError = false) {
   el.textContent = message;
   document.getElementById("toastRoot").appendChild(el);
   setTimeout(() => el.remove(), isError ? 6000 : 3500);
+  return el;
+}
+
+/** Message avec une action de rattrapage — « peindre » 60 jours de prix doit
+ *  pouvoir se dépeindre en un clic (spec UX § 7). L'action reste offerte
+ *  `seconds` secondes, puis le message s'efface comme les autres. */
+export function toastUndo(message, label, onUndo, seconds = 10) {
+  const el = document.createElement("div");
+  el.className = "toast";
+  el.innerHTML = `<span></span> <button type="button" class="undo"></button>`;
+  el.querySelector("span").textContent = message;
+  const btn = el.querySelector("button");
+  btn.textContent = label;
+  btn.onclick = async () => {
+    btn.disabled = true;
+    try {
+      await onUndo();
+    } finally {
+      el.remove();
+    }
+  };
+  document.getElementById("toastRoot").appendChild(el);
+  setTimeout(() => el.remove(), seconds * 1000);
+  return el;
 }
 
 // --- modales : une seule fonction, donc une seule correction d'accessibilité --
@@ -243,16 +270,101 @@ export function registerView(name, title, render) {
   VIEWS[name] = { title, render };
 }
 
+/** Navigation « variante B » (#25) : cinq entrées, trois compteurs, un
+ *  deuxième niveau contextuel. Le tri est celui de la fréquence d'usage
+ *  réelle, pas celui de la nature technique de l'écran — « Clients » et
+ *  « Paiements » quittent la Configuration pour rejoindre Ventes. */
+const NAV = [
+  { id: "aujourdhui", label: "Aujourd'hui", badge: "today", items: [{ route: "dash", label: "Aujourd'hui" }] },
+  {
+    id: "calendrier",
+    label: "Calendrier",
+    items: [
+      { route: "cal", label: "Occupation" },
+      { route: "cal/prix", label: "Prix" },
+      { route: "cal/annee", label: "Année" },
+    ],
+  },
+  {
+    id: "ventes",
+    label: "Ventes",
+    badge: "sales",
+    items: [
+      { route: "resa", label: "Réservations" },
+      { route: "clients", label: "Clients" },
+      { route: "paiements", label: "Paiements" },
+      { route: "stats", label: "Statistiques" },
+    ],
+  },
+  { id: "messages", label: "Messages", badge: "messages", items: [{ route: "messages", label: "Messages" }] },
+  {
+    id: "reglages",
+    label: "Réglages",
+    items: [
+      { route: "promos", label: "Remises" },
+      { route: "options", label: "Options" },
+      { route: "canaux", label: "Plateformes" },
+      { route: "ical", label: "Synchro iCal" },
+      { route: "users", label: "Comptes" },
+      { route: "params", label: "Domaine" },
+      { route: "startup", label: "Mise en route" },
+    ],
+  },
+];
+
+/** Adresses historiques : « Planning » et « Tarifs & saisons » sont devenus
+ *  deux couches du calendrier unifié. Les favoris continuent de marcher —
+ *  ils atterrissent sur la couche correspondante, jamais sur une vue morte. */
+const ALIASES = { plan: "cal", tarifs: "cal/prix" };
+
+const badges = { today: 0, sales: 0, messages: 0 };
+
 const $main = () => document.getElementById("main");
 
+export function setPageTitle(title) {
+  document.getElementById("pageTitle").textContent = title;
+}
+
+function renderNav(route) {
+  const group = NAV.find((g) => g.items.some((i) => i.route === route)) || NAV[0];
+  const nav1 = document.getElementById("nav1");
+  nav1.innerHTML = NAV.map((g) => {
+    const n = g.badge ? badges[g.badge] : 0;
+    return `<a href="#/${g.items[0].route}" class="${g.id === group.id ? "on" : ""}"${g.id === group.id ? ' aria-current="page"' : ""}>${esc(g.label)}${
+      n > 0 ? ` <b class="badge" aria-label="${n} à traiter">${n}</b>` : ""
+    }</a>`;
+  }).join("");
+
+  const nav2 = document.getElementById("nav2");
+  if (group.items.length < 2) {
+    nav2.innerHTML = "";
+    nav2.hidden = true;
+    return;
+  }
+  nav2.hidden = false;
+  nav2.innerHTML =
+    `<span class="lvl2-label">${esc(group.label)} ›</span>` +
+    group.items
+      .map(
+        (i) =>
+          `<a href="#/${i.route}" class="${i.route === route ? "on" : ""}"${i.route === route ? ' aria-current="page"' : ""}>${esc(i.label)}</a>`,
+      )
+      .join("");
+}
+
 async function navigate() {
-  const name = (location.hash.replace(/^#\//, "") || "dash").split("?")[0];
+  const raw = (location.hash.replace(/^#\//, "") || "dash").split("?")[0];
+  if (ALIASES[raw]) {
+    location.replace(`#/${ALIASES[raw]}`); // relance navigate() via hashchange
+    return;
+  }
+  const [name, sub = ""] = raw.split("/");
   const view = VIEWS[name] || VIEWS.dash;
-  document.querySelectorAll("aside nav a[data-view]").forEach((a) => a.classList.toggle("on", a.dataset.view === name));
-  document.getElementById("pageTitle").textContent = view.title;
+  renderNav(VIEWS[name] ? raw : "dash");
+  setPageTitle(view.title);
   $main().innerHTML = `<div class="card muted">Chargement…</div>`;
   try {
-    await view.render($main());
+    await view.render($main(), sub);
   } catch (e) {
     $main().innerHTML = `<div class="note bad">Erreur : ${esc(e.message)}</div>`;
   }
@@ -270,11 +382,36 @@ function renderPropertySwitch() {
       localStorage.setItem("gp_property", String(state.propertyId));
       state.tarifUnit = null;
       renderPropertySwitch();
+      refreshBadges();
       navigate();
     }),
   );
   const prop = state.properties.find((p) => p.id === state.propertyId);
   document.getElementById("publicLink").href = prop ? `/book/?property=${encodeURIComponent(prop.slug)}` : "/book/";
+}
+
+/** Compteurs des trois entrées à pastille (#25) : ce qui attend une action.
+ *  Silencieux en cas d'échec — un compteur absent ne doit jamais empêcher
+ *  d'ouvrir une vue. */
+export async function refreshBadges() {
+  const targets = state.propertyId === 0 ? state.properties : state.properties.filter((p) => p.id === state.propertyId);
+  const next = { today: 0, sales: 0, messages: 0 };
+  try {
+    const all = await Promise.all(targets.map((p) => api(`/api/admin/overview?property=${p.id}`)));
+    for (const d of all) {
+      const a = d.alerts || {};
+      const h = d.health || {};
+      next.today +=
+        (a.overdueBalances?.length || 0) + (a.feedAlerts?.length || 0) +
+        (h.orphanPayments?.length || 0) + (h.failedEmails?.length || 0) + (h.beds24Stale ? 1 : 0);
+      next.sales += (a.activeHolds?.length || 0) + (d.kpis?.balanceDueCount || 0);
+      next.messages += a.newEmails || 0;
+    }
+  } catch {
+    return; // compteurs indisponibles : la navigation reste utilisable
+  }
+  Object.assign(badges, next);
+  renderNav((location.hash.replace(/^#\//, "") || "dash").split("?")[0]);
 }
 
 // ---------------------------------------------------------------------------
@@ -512,20 +649,21 @@ async function renderDashAll(root) {
     c.addEventListener("click", () => {
       state.propertyId = Number(c.dataset.goto);
       localStorage.setItem("gp_property", String(state.propertyId));
-      location.hash = "#/plan";
+      location.hash = "#/cal";
       location.reload();
     }),
   );
 }
 
 // ---------------------------------------------------------------------------
-// VUE — Planning
+// Couche « Occupation » du calendrier (ex-vue Planning, #25)
 // ---------------------------------------------------------------------------
 
-registerView("plan", "Planning", async (root) => {
-  if (!state.planMonth) state.planMonth = todayIso().slice(0, 7);
-  const monthStart = state.planMonth + "-01";
-  const [y, m] = state.planMonth.split("-").map(Number);
+/** Grille des réservations du mois, une ligne par bien. Le mois et sa
+ *  navigation appartiennent maintenant au calendrier unifié : cette fonction
+ *  ne rend que le corps de la couche. */
+export async function renderOccupation(root, monthStart) {
+  const [y, m] = monthStart.split("-").map(Number);
   const nbDays = new Date(Date.UTC(y, m, 0)).getUTCDate();
   const nextMonth = addDaysIso(monthStart, nbDays);
   const today = todayIso();
@@ -538,7 +676,6 @@ registerView("plan", "Planning", async (root) => {
       data: await api(`/api/admin/planning?property=${p.id}&from=${monthStart}&to=${nextMonth}`),
     })),
   );
-  const monthLabel = new Date(monthStart + "T12:00:00Z").toLocaleDateString("fr-BE", { month: "long", year: "numeric" });
 
   // en-tête des jours
   let header = "<div></div>";
@@ -603,26 +740,15 @@ registerView("plan", "Planning", async (root) => {
   root.innerHTML = `
     <div class="note">Les lignes combinées (🔗, ex. <b>Domaine entier</b>) sont calculées : elles se bloquent dès qu'un bien lié est réservé, et réciproquement. Aucune action manuelle.</div>
     <div class="card">
-      <div class="row mb">
-        <div class="n"><button class="btn o sm" id="prevM">◀</button> <b>${esc(monthLabel)}</b> <button class="btn o sm" id="nextM">▶</button>
-        <button class="btn o sm" id="todayM">aujourd'hui</button></div>
-        <div class="right n"><button class="btn sm" id="newSale">+ Nouvelle vente (tél.)</button></div>
-      </div>
+      <div class="row mb"><div class="right n"><button class="btn sm" id="newSale">+ Nouvelle vente (tél.)</button></div></div>
       ${grids}
       <div class="legend">Libre <i style="background:#EFF3EC"></i> Réservé <i style="background:var(--accent)"></i>
         Résa combinée <i style="background:var(--accent2)"></i> Option en cours <i style="background:repeating-linear-gradient(45deg,var(--accent),var(--accent) 4px,#4a7a5c 4px,#4a7a5c 8px)"></i>
         Canal externe (iCal) <i style="background:var(--chan)"></i> Bloqué par liaison <i class="blk" style="border:1px solid #ccc"></i></div>
     </div>`;
 
-  root.querySelector("#prevM").onclick = () => { state.planMonth = addDaysIso(monthStart, -1).slice(0, 7); navigateSame(); };
-  root.querySelector("#nextM").onclick = () => { state.planMonth = nextMonth.slice(0, 7); navigateSame(); };
-  root.querySelector("#todayM").onclick = () => { state.planMonth = todayIso().slice(0, 7); navigateSame(); };
   root.querySelector("#newSale").onclick = () => openNewSale();
   root.querySelectorAll("[data-booking]").forEach((el) => el.addEventListener("click", () => openBooking(Number(el.dataset.booking))));
-});
-
-function navigateSame() {
-  navigate();
 }
 
 // ---------------------------------------------------------------------------
@@ -1219,6 +1345,7 @@ registerView("stats", "Statistiques", async (root) => {
 // Boot
 // ---------------------------------------------------------------------------
 
+registerCalendarView();
 registerConfigViews();
 
 window.addEventListener("hashchange", navigate);
@@ -1249,4 +1376,5 @@ if (state.user) {
     return;
   }
   navigate();
+  refreshBadges();
 })();
