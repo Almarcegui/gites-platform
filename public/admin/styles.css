@@ -16,7 +16,10 @@ body{font:14px/1.5 -apple-system,'Inter','Segoe UI',sans-serif;background:var(--
 /* --- navigation variante B : 5 entrées, un 2e niveau contextuel (#25) --- */
 header.nav{background:#22301F;color:#E9E5DA;display:flex;align-items:center;gap:18px;padding:0 16px;flex-wrap:wrap;position:sticky;top:0;z-index:30}
 header.nav .brand{color:#fff;text-decoration:none;font-size:14.5px;font-weight:600;letter-spacing:.3px;padding:12px 0;white-space:nowrap}
-.lvl1{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;flex:1;min-width:0}
+/* Base large : quand le sélecteur de domaine et les liens de session ne
+   tiennent plus sur la ligne, ce sont EUX qui passent dessous — les cinq
+   entrées ne se font jamais rogner. */
+.lvl1{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;flex:1 1 480px;min-width:0}
 .lvl1::-webkit-scrollbar{display:none}
 .lvl1 a{color:#C9C4B6;text-decoration:none;font-size:14px;padding:13px 14px 11px;border-bottom:3px solid transparent;white-space:nowrap;cursor:pointer}
 .lvl1 a:hover{color:#fff}
@@ -25,7 +28,7 @@ header.nav .brand{color:#fff;text-decoration:none;font-size:14.5px;font-weight:6
 .navend{display:flex;align-items:center;gap:14px;flex-wrap:wrap;font-size:12.5px;padding:6px 0}
 .navend a{color:#C9C4B6;text-decoration:none;cursor:pointer;white-space:nowrap}
 .navend a:hover{color:#fff}
-.lvl2{display:flex;align-items:center;gap:4px;background:#fff;border-bottom:1px solid var(--line);padding:0 16px;overflow-x:auto;scrollbar-width:none;position:sticky;top:47px;z-index:20}
+.lvl2{display:flex;align-items:center;gap:4px;background:#fff;border-bottom:1px solid var(--line);padding:0 16px;overflow-x:auto;scrollbar-width:none}
 .lvl2::-webkit-scrollbar{display:none}
 .lvl2[hidden]{display:none}
 .lvl2-label{font-size:11.5px;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);margin-right:8px;white-space:nowrap}

@@ -329,6 +329,9 @@ async function renderPrix(body, root) {
       toast("Jour passé : le tarif n'est plus modifiable.", true);
       return;
     }
+    // Une plage qui commence avant aujourd'hui est ramenée à aujourd'hui :
+    // le titre de la saisie affiche la plage réellement traitée.
+    if (from < today) from = today;
     const days = cal.days.filter((d) => d.date >= from && d.date <= to);
     const anchorCell = dayCells.find((c) => c.dataset.date === from);
     renderEditor({
