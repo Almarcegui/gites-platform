@@ -427,7 +427,7 @@ export function registerConfigViews() {
           </div>`;
           })
           .join("")}
-        <p class="small muted" style="margin-top:8px">« Prix combiné » d'un bien 🔗 : somme des biens liés (défaut, TODO_PRIX_COMBINE) ou tarif propre (règles dans Tarifs &amp; saisons). Les frais de ménage s'ajoutent automatiquement au devis ; pour un combiné en mode somme, ils cumulent ceux des biens liés.</p>
+        <p class="small muted" style="margin-top:8px">« Prix combiné » d'un bien 🔗 : somme des biens liés (défaut, TODO_PRIX_COMBINE) ou tarif propre (règles dans Calendrier › Prix). Les frais de ménage s'ajoutent automatiquement au devis ; pour un combiné en mode somme, ils cumulent ceux des biens liés.</p>
       </div>
       <div class="card"><h3>+ Ajouter un hébergement (maison C, nouveau gîte…)</h3>
         <div class="row">
@@ -605,7 +605,7 @@ export function registerConfigViews() {
             ${data.channelBookings.map((b) => `<tr><td class="mono">${esc(b.reference)}</td><td>${esc(b.channelLabel ?? "—")}</td>
               <td>${esc(b.unitName ?? "")}</td><td>${dshort(b.checkin)} → ${dshort(b.checkout)}</td>
               <td>${esc(b.guestName ?? "")}</td><td class="r">${eur(b.totalCents)}</td></tr>`).join("")}</table>`
-          : `<p class="muted">Aucune pour l'instant — elles apparaîtront ici (et dans Planning / Réservations) dès que les annonces seront reliées.</p>`}
+          : `<p class="muted">Aucune pour l'instant — elles apparaîtront ici (et dans Calendrier › Occupation et Ventes › Réservations) dès que les annonces seront reliées.</p>`}
       </div>
 
       <div class="card"><h3>Journal de synchronisation</h3>
