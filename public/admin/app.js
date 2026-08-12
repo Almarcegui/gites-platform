@@ -325,6 +325,8 @@ export function setPageTitle(title) {
   document.getElementById("pageTitle").textContent = title;
 }
 
+/** Dessine les deux niveaux et renvoie l'entrée courante — son libellé sert
+ *  aussi de titre de page, pour que le menu et l'écran disent le même mot. */
 function renderNav(route) {
   const group = NAV.find((g) => g.items.some((i) => i.route === route)) || NAV[0];
   const nav1 = document.getElementById("nav1");
@@ -335,11 +337,12 @@ function renderNav(route) {
     }</a>`;
   }).join("");
 
+  const current = group.items.find((i) => i.route === route) || group.items[0];
   const nav2 = document.getElementById("nav2");
   if (group.items.length < 2) {
     nav2.innerHTML = "";
     nav2.hidden = true;
-    return;
+    return current;
   }
   nav2.hidden = false;
   nav2.innerHTML =
@@ -350,6 +353,7 @@ function renderNav(route) {
           `<a href="#/${i.route}" class="${i.route === route ? "on" : ""}"${i.route === route ? ' aria-current="page"' : ""}>${esc(i.label)}</a>`,
       )
       .join("");
+  return current;
 }
 
 async function navigate() {
@@ -360,8 +364,8 @@ async function navigate() {
   }
   const [name, sub = ""] = raw.split("/");
   const view = VIEWS[name] || VIEWS.dash;
-  renderNav(VIEWS[name] ? raw : "dash");
-  setPageTitle(view.title);
+  const entry = renderNav(VIEWS[name] ? raw : "dash");
+  setPageTitle(entry?.label || view.title);
   $main().innerHTML = `<div class="card muted">Chargement…</div>`;
   try {
     await view.render($main(), sub);

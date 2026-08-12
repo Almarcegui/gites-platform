@@ -13,7 +13,7 @@
 
 import {
   addDaysIso, api, currentPropertyId, dfr, diffDaysIso, esc, eur, eurInput, focusableIn,
-  isWeekendDay, openModal, registerView, renderOccupation, setPageTitle, state, toCents,
+  openModal, registerView, renderOccupation, setPageTitle, state, toCents,
   toast, toastUndo, todayIso,
 } from "./app.js";
 
@@ -136,11 +136,13 @@ async function renderPrix(body, root) {
   for (let i = 0; i < firstDow; i++) cells.push(`<div class="rc-day off" aria-hidden="true"></div>`);
   for (const d of cal.days) {
     const past = d.date < today;
+    // Provenance : couleur ET mot. Sur téléphone la cellule fait 44 px de
+    // large, d'où une version courte du libellé — jamais sa disparition.
     const src =
-      d.priceCents == null ? { cls: "no", label: "pas de tarif" }
-      : d.source === "override" ? { cls: "ov", label: "fixé à la main" }
-      : d.source === "saison" ? { cls: "sa", label: d.seasonName || "saison" }
-      : { cls: "ba", label: "tarif de base" };
+      d.priceCents == null ? { cls: "no", label: "pas de tarif", short: "aucun" }
+      : d.source === "override" ? { cls: "ov", label: "fixé à la main", short: "fixé" }
+      : d.source === "saison" ? { cls: "sa", label: d.seasonName || "saison", short: "saison" }
+      : { cls: "ba", label: "tarif de base", short: "base" };
     const title = [
       dfrLong(d.date),
       d.priceCents == null ? "aucun tarif ne couvre ce jour" : `${eur(d.priceCents)} · ${src.label}`,
@@ -156,7 +158,7 @@ async function renderPrix(body, root) {
       ${d.holidayRated ? `<span class="hol" title="majoration fériés">férié</span>` : ""}
       <b>${d.priceCents == null ? "—" : euroShort(d.priceCents)}</b>
       <span class="mn">${d.minNights ? "min " + d.minNights + " n" : "&nbsp;"}</span>
-      <span class="src ${src.cls}">${esc(src.label)}</span>
+      <span class="src ${src.cls}"><span class="lgl">${esc(src.label)}</span><span class="shrt">${esc(src.short)}</span></span>
     </div>`);
   }
   const rows = [];
@@ -618,7 +620,11 @@ function renderEditor({ holder, anchorCell, unit, cal, days, from, to, markups, 
     try {
       const res = await api("/api/admin/rate-overrides", { method: "PATCH", body });
       const n = res.days;
-      const msg = `Prix appliqué sur ${n} jour${n > 1 ? "s" : ""}`;
+      const quoi =
+        body.priceCents != null && body.minNights != null ? "Prix et minimum de nuits appliqués"
+        : body.priceCents != null ? "Prix appliqué"
+        : "Minimum de nuits appliqué";
+      const msg = `${quoi} sur ${n} jour${n > 1 ? "s" : ""}`;
       close();
       if (n > 1 && body.priceCents != null) {
         // Peindre une plage doit pouvoir se dépeindre (spec UX § 7).
@@ -942,17 +948,20 @@ async function renderYear(body) {
     api(`/api/admin/planning?property=${pid}&from=${from}&to=${to}`),
   ]);
 
-  // Quatre niveaux de prix, calés sur les prix réels de l'année plutôt que
-  // sur des paliers arbitraires : la « peinture » doit parler de ce domaine.
-  const all = cal.units.flatMap((u) => u.days.map((d) => d.priceCents)).filter((c) => c != null).sort((a, b) => a - b);
-  const q = (p) => (all.length === 0 ? 0 : all[Math.min(all.length - 1, Math.floor(all.length * p))]);
-  const cuts = [q(0.25), q(0.5), q(0.75)];
-  const level = (c) => (c < cuts[0] ? 0 : c < cuts[1] ? 1 : c < cuts[2] ? 2 : 3);
-
   const grids = cal.units
     .map((entry) => {
       const u = entry.unit;
       const sold = soldNights(planning, u.id);
+      // Niveaux calés sur les prix réels DE CE BIEN : un « Domaine entier » à
+      // 520 € écraserait sinon l'échelle des deux maisons. On répartit sur les
+      // prix DISTINCTS — un tarif qui couvre les trois quarts de l'année
+      // fabriquerait sinon des paliers vides (« 180 € à 180 € »).
+      const distinct = [...new Set(entry.days.map((d) => d.priceCents).filter((c) => c != null))].sort((a, b) => a - b);
+      const cuts = distinct.length > 4 ? [1, 2, 3].map((i) => distinct[Math.floor((distinct.length * i) / 4)]) : [];
+      const level = (c) =>
+        cuts.length === 0
+          ? Math.max(0, distinct.indexOf(c))
+          : c < cuts[0] ? 0 : c < cuts[1] ? 1 : c < cuts[2] ? 2 : 3;
       const byDate = new Map(entry.days.map((d) => [d.date, d]));
       let rows = "";
       for (let m = 1; m <= 12; m++) {
@@ -971,7 +980,6 @@ async function renderYear(body) {
             d?.source === "override" ? "ov" : "",
             (d?.minNights ?? 0) >= 3 ? "mn3" : "",
             iso === today ? "today" : "",
-            isWeekendDay(iso) ? "we" : "",
           ].filter(Boolean).join(" ");
           const title = [
             dfrLong(iso),
@@ -984,6 +992,15 @@ async function renderYear(body) {
         rows += `<div role="row" class="yrow"><div role="rowheader" class="ym">${MONTHS_SHORT[m - 1]}</div>${cellsHtml}</div>`;
       }
       const missing = entry.days.filter((d) => d.priceCents == null).length;
+      const scale =
+        distinct.length === 0
+          ? `<span class="muted">Aucun tarif défini sur ${year}.</span>`
+          : cuts.length === 0
+            ? distinct.map((c, i) => `<span><i class="lg lv${i}"></i>${euroShort(c)}</span>`).join("")
+            : `<span><i class="lg lv0"></i>moins de ${euroShort(cuts[0])}</span>
+               <span><i class="lg lv1"></i>de ${euroShort(cuts[0])} à ${euroShort(cuts[1])}</span>
+               <span><i class="lg lv2"></i>de ${euroShort(cuts[1])} à ${euroShort(cuts[2])}</span>
+               <span><i class="lg lv3"></i>${euroShort(cuts[2])} et plus</span>`;
       return `<div class="card mb">
         <h3>${esc(u.name)}${u.editable === false ? ` <span class="tag t-mut">lecture seule (somme des maisons)</span>` : ""}</h3>
         ${missing > 0 ? `<div class="note bad" style="margin-bottom:10px">${missing} jour${missing > 1 ? "s" : ""} sans tarif en ${year} — ces nuits sont invendables.</div>` : ""}
@@ -991,6 +1008,7 @@ async function renderYear(body) {
           <div role="row" class="yrow"><div class="ym"></div>${Array.from({ length: 31 }, (_, i) => `<div role="columnheader" class="yh">${i + 1}</div>`).join("")}</div>
           ${rows}
         </div></div>
+        <div class="rc-legend">${scale}</div>
       </div>`;
     })
     .join("");
@@ -999,14 +1017,11 @@ async function renderYear(body) {
     <p class="small muted mb">Une case par nuit, colorée par niveau de prix. Survole (ou tabule) une case pour lire le détail ; clique-la pour la modifier — la saisie du mois s'ouvre sur ce jour.</p>
     ${grids || `<div class="note">Aucun bien actif sur ce domaine.</div>`}
     <div class="card">
-      <h3>Légende</h3>
+      <h3>Légende commune</h3>
+      <p class="small muted mb">Les quatre niveaux de couleur sont propres à chaque bien : ils se lisent sous sa grille.</p>
       <div class="rc-legend">
-        <span><i class="lg lv0"></i>jusqu'à ${euroShort(cuts[0])}</span>
-        <span><i class="lg lv1"></i>${euroShort(cuts[0])} à ${euroShort(cuts[1])}</span>
-        <span><i class="lg lv2"></i>${euroShort(cuts[1])} à ${euroShort(cuts[2])}</span>
-        <span><i class="lg lv3"></i>${euroShort(cuts[2])} et plus</span>
-        <span><i class="lg no"></i>pas de tarif</span>
-        <span><i class="lg soldy"></i>nuit vendue</span>
+        <span><i class="lg no"></i>pas de tarif — invendable</span>
+        <span><i class="lg soldy"></i>nuit déjà vendue</span>
         <span><i class="lg ovy"></i>prix fixé à la main</span>
         <span><i class="lg mn3y"></i>3 nuits minimum ou plus</span>
       </div>
