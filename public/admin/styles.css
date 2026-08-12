@@ -96,7 +96,11 @@ input[type=checkbox]{width:auto}
 .bars b{position:absolute;top:-16px;left:0;right:0;text-align:center;font-size:9.5px;color:var(--muted);font-weight:600}
 
 /* --- modales --- */
+/* Page figée derrière la boîte : sans ça, la molette fait défiler le contenu
+   du dessous pendant que le focus est piégé dans la modale (issue #15). */
+body.modal-open{overflow:hidden}
 .modal-bg{position:fixed;inset:0;background:rgba(31,41,55,.45);display:flex;align-items:flex-start;justify-content:center;padding:5vh 16px;z-index:50;overflow-y:auto}
+.modal:focus{outline:none}
 .modal{background:#fff;border-radius:8px;max-width:760px;width:100%;padding:20px 22px;box-shadow:0 18px 50px rgba(0,0,0,.25)}
 .modal h2{font-size:16px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center}
 .modal h2 .x{cursor:pointer;color:var(--muted);font-size:20px;line-height:1;background:none;border:none}

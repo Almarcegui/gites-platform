@@ -116,15 +116,99 @@ export function toast(message, isError = false) {
   setTimeout(() => el.remove(), isError ? 6000 : 3500);
 }
 
+// --- modales : une seule fonction, donc une seule correction d'accessibilité --
+
+/** Éléments qu'on peut atteindre au clavier, dans l'ordre du document. */
+const FOCUSABLE =
+  'a[href], button:not([disabled]), input:not([disabled]):not([type=hidden]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+export function focusableIn(root) {
+  return [...root.querySelectorAll(FOCUSABLE)].filter((el) => el.offsetParent !== null || el === document.activeElement);
+}
+
+let modalSeq = 0;
+let modalDepth = 0;
+
+/** Boîte de dialogue modale — accessible par construction (issue #15).
+ *  Les 8 modales du back-office passent par ici : `role="dialog"`,
+ *  `aria-modal`, `aria-labelledby` sur le titre, focus déplacé à l'ouverture
+ *  puis piégé, Échap pour fermer, focus rendu au déclencheur, page figée
+ *  derrière. `bg.remove()` est réécrit pour que les fermetures déjà écrites
+ *  aux quatre coins du back-office déclenchent le même nettoyage. */
 export function openModal(html) {
+  const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   const bg = document.createElement("div");
   bg.className = "modal-bg";
-  bg.innerHTML = `<div class="modal">${html}</div>`;
+  bg.innerHTML = `<div class="modal" role="dialog" aria-modal="true" tabindex="-1">${html}</div>`;
+  const box = bg.querySelector(".modal");
+
+  // Le titre nomme la boîte. Le libellé est isolé du bouton « × » pour que le
+  // nom accessible soit « Réf — La Scierie », pas « Réf — La Scierie Fermer ».
+  const h = box.querySelector("h2");
+  if (h) {
+    const id = `modalTitle${++modalSeq}`;
+    const label = document.createElement("span");
+    label.id = id;
+    for (const node of [...h.childNodes]) {
+      if (node.nodeType === 1 && node.classList.contains("x")) continue;
+      label.appendChild(node);
+    }
+    h.insertBefore(label, h.firstChild);
+    box.setAttribute("aria-labelledby", id);
+  }
+  const closeBtn = box.querySelector(".x");
+  if (closeBtn) {
+    closeBtn.setAttribute("type", "button");
+    closeBtn.setAttribute("aria-label", "Fermer");
+  }
+
+  const close = () => {
+    if (!bg.isConnected) return;
+    Element.prototype.remove.call(bg);
+    modalDepth = Math.max(0, modalDepth - 1);
+    if (modalDepth === 0) document.body.classList.remove("modal-open");
+    // Le focus revient d'où il venait, sinon il retombe sur <body> et le
+    // parcours au clavier repart du haut de la page.
+    if (opener && opener.isConnected) opener.focus();
+  };
+  bg.remove = close;
+
   bg.addEventListener("click", (e) => {
-    if (e.target === bg) bg.remove();
+    if (e.target === bg) close();
   });
-  bg.querySelector(".x")?.addEventListener("click", () => bg.remove());
+  closeBtn?.addEventListener("click", close);
+  bg.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      e.stopPropagation();
+      close();
+      return;
+    }
+    if (e.key !== "Tab") return;
+    // Piège de tabulation : la liste est recalculée à chaque fois, le contenu
+    // des modales change en cours de route (zone de paiement, résultats…).
+    const items = focusableIn(box);
+    if (items.length === 0) {
+      e.preventDefault();
+      box.focus();
+      return;
+    }
+    const first = items[0];
+    const last = items[items.length - 1];
+    if (e.shiftKey && (document.activeElement === first || !box.contains(document.activeElement))) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault();
+      first.focus();
+    }
+  });
+
   document.getElementById("modalRoot").appendChild(bg);
+  modalDepth += 1;
+  document.body.classList.add("modal-open");
+  // Le premier champ utile plutôt que la croix de fermeture : la boîte s'ouvre
+  // pour être remplie, pas pour être refermée.
+  const target = box.querySelector("[autofocus]") || focusableIn(box).find((el) => el !== closeBtn) || closeBtn || box;
+  target.focus();
   return bg;
 }
 
