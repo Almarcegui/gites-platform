@@ -22,6 +22,7 @@ import { buildBalanceReminderEmail, queueEmail } from "./email";
 import { CRON_HEARTBEAT_KEY } from "./health";
 import { syncFeed } from "./ical";
 import { runDailyReconcile } from "./reconcile";
+import { runAbandonedReminders } from "./relance";
 import { setSetting } from "./settings";
 
 export async function runScheduled(env: Env, now: Date = new Date(), fetcher: typeof fetch = fetch): Promise<void> {
@@ -89,6 +90,19 @@ export async function runScheduled(env: Env, now: Date = new Date(), fetcher: ty
       kind: "balance_reminder",
     });
     await audit(db, "cron", "email.balance_reminder", `booking:${b.id}`);
+  }
+
+  // 3 bis. Relance des réservations abandonnées (issue #37) — uniquement les
+  //    clients ayant explicitement consenti, une seule fois par séjour, et
+  //    seulement si le créneau est encore libre. Sous try/catch : une relance
+  //    commerciale ne doit jamais empêcher le reste du traitement planifié.
+  try {
+    const relances = await runAbandonedReminders(env, now);
+    if (relances.sent > 0) {
+      await audit(db, "cron", "abandon.reminders", undefined, relances);
+    }
+  } catch (e) {
+    await audit(db, "cron", "abandon.error", undefined, { error: e instanceof Error ? e.message : String(e) });
   }
 
   // 4. Beds24 (inactif sans BEDS24_REFRESH_TOKEN) : d'abord rapatrier les résas

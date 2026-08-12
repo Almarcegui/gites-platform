@@ -982,6 +982,94 @@ export async function openThread(messageId) {
 // VUE — Statistiques
 // ---------------------------------------------------------------------------
 
+/** Cartes de DÉCISION (issue #36) : délai de réservation, entonnoir de
+ *  conversion, recherches sans réponse. Sobres et sans graphique superflu — ce
+ *  sont trois chiffres à lire, pas un tableau de bord à contempler.
+ *
+ *  Une distinction porte tout le reste : « — » signifie « pas de donnée »,
+ *  jamais « zéro ». Afficher 0 % là où le journal est encore vide ferait
+ *  chercher une panne de conversion là où il n'y a qu'une mesure qui démarre. */
+function decisionCards(data, year) {
+  const lt = data.leadTime;
+  const funnel = data.funnel;
+  const searches = data.searches;
+  if (!lt || !funnel || !searches) return "";
+
+  const pct = (v) => (v == null ? `<span class="muted">—</span>` : `${String(v).replace(".", ",")} %`);
+  const jours = (v) => `${String(v).replace(".", ",")} j`;
+
+  const leadMonths = lt.byMonth.filter((m) => m.count > 0);
+  const leadRows = leadMonths.length
+    ? leadMonths
+        .map(
+          (m) => `<tr><td>${esc(m.label)}</td><td class="r">${m.count}</td>
+            <td class="r">${jours(m.avgDays)}</td><td class="r">${jours(m.medianDays)}</td></tr>`,
+        )
+        .join("")
+    : `<tr><td colspan="4" class="muted">Aucune réservation confirmée en ${year}.</td></tr>`;
+  const leadUnits = lt.byUnit
+    .map((u) => `<tr><td>${esc(u.label)}</td><td class="r">${u.count}</td><td class="r">${jours(u.medianDays)}</td></tr>`)
+    .join("");
+
+  const maxStep = Math.max(1, ...funnel.steps.map((s) => s.count));
+  const funnelRows = funnel.steps
+    .map(
+      (s) => `<tr${s.key === funnel.biggestDropKey ? ' class="drop"' : ""}>
+        <td>${esc(s.label)}${s.key === funnel.biggestDropKey ? ' <span class="tag t-warn">plus forte perte</span>' : ""}</td>
+        <td class="r">${s.count}</td>
+        <td class="r">${pct(s.fromPreviousPct)}</td>
+        <td><span class="fbar" style="width:${Math.round((s.count / maxStep) * 100)}%"></span></td></tr>`,
+    )
+    .join("");
+
+  const emptyRows = searches.topEmpty.length
+    ? searches.topEmpty
+        .map(
+          (g) => `<tr><td>${dfr(g.checkin)} → ${dfr(g.checkout)}</td><td class="r">${g.nights} n</td>
+            <td class="r">${g.maxPersons} p.</td><td class="r"><b>${g.count}</b></td></tr>`,
+        )
+        .join("")
+    : `<tr><td colspan="4" class="muted">Aucune recherche restée sans réponse.</td></tr>`;
+
+  return `
+    <div class="grid c2" style="margin-top:14px">
+      <div class="card"><h3>Délai de réservation ${year}</h3>
+        <div class="row mb">
+          <div class="n"><span class="muted small">Moyenne</span> <b>${lt.count ? jours(lt.avgDays) : "—"}</b></div>
+          <div class="n"><span class="muted small">Médiane</span> <b>${lt.count ? jours(lt.medianDays) : "—"}</b></div>
+          <div class="n muted small">${lt.count} réservation${lt.count > 1 ? "s" : ""}</div>
+        </div>
+        <table><tr><th>Mois d'arrivée</th><th class="r">Résas</th><th class="r">Moyenne</th><th class="r">Médiane</th></tr>
+          ${leadRows}</table>
+        ${leadUnits ? `<table style="margin-top:10px"><tr><th>Hébergement</th><th class="r">Résas</th><th class="r">Médiane</th></tr>${leadUnits}</table>` : ""}
+        <p class="small muted" style="margin-top:8px">Écart entre la date de réservation et la date d'arrivée.
+        La médiane compte autant que la moyenne : une seule réservation posée deux ans à l'avance suffit à tirer la moyenne.
+        Les délais négatifs (résas importées) sont exclus.</p>
+      </div>
+
+      <div class="card"><h3>Entonnoir de conversion ${year}</h3>
+        <table><tr><th>Étape</th><th class="r">Volume</th><th class="r">Passage</th><th></th></tr>
+          ${funnelRows}</table>
+        <p class="small muted" style="margin-top:8px">Recherche → réservation confirmée :
+          <b>${pct(funnel.overallPct)}</b>.
+          Seules les réservations directes comptent : une résa venue d'un canal OTA n'a jamais traversé le tunnel.
+          « — » signifie « pas encore de donnée », pas « zéro ».</p>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:14px"><h3>Ce que les clients cherchent sans le trouver</h3>
+      <div class="row mb">
+        <div class="n"><span class="muted small">Recherches</span> <b>${searches.total}</b></div>
+        <div class="n"><span class="muted small">Sans réponse</span> <b>${searches.empty}</b></div>
+        <div class="n"><span class="muted small">Part</span> <b>${String(searches.emptyPct).replace(".", ",")} %</b></div>
+      </div>
+      <table><tr><th>Dates demandées</th><th class="r">Nuits</th><th class="r">Personnes</th><th class="r">Demandes</th></tr>
+        ${emptyRows}</table>
+      <p class="small muted" style="margin-top:8px">Journal anonyme : dates, nombre de personnes, résultat.
+      Aucune donnée identifiante n'est enregistrée — ni adresse IP, ni e-mail, ni identifiant de session.</p>
+    </div>`;
+}
+
 registerView("stats", "Statistiques", async (root) => {
   if (!state.statsYear) state.statsYear = Number(todayIso().slice(0, 4));
   const year = state.statsYear;
@@ -1034,7 +1122,8 @@ registerView("stats", "Statistiques", async (root) => {
           <td class="r"><b>${cur.soldNights}</b></td><td class="r"><b>${eur(cur.revenueCents)}</b></td></tr></table>
         <p class="small muted" style="margin-top:8px">Occupation = nuits occupées des maisons physiques (une résa « Domaine entier » occupe ses deux maisons). ADR = revenus / nuits vendues.</p>
       </div>
-    </div>`;
+    </div>
+    ${decisionCards(data, year)}`;
 
   root.querySelector("#prevY").onclick = () => { state.statsYear = year - 1; navigate(); };
   root.querySelector("#nextY").onclick = () => { state.statsYear = year + 1; navigate(); };

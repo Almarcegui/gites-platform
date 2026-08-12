@@ -133,6 +133,53 @@ async function renderLanding() {
 }
 
 // ---------------------------------------------------------------------------
+// Remises actives et disponibilité factuelle (issue #35)
+//
+// Les remises existent en base depuis le début et ne se découvraient qu'au
+// devis — trop tard pour jouer leur rôle. Elles sont désormais annoncées, et
+// le prix barré n'apparaît QUE lorsque le moteur applique réellement une
+// remise (`quote.discountCents > 0`) : le prix de référence est toujours
+// `total + remise`, jamais un montant fabriqué.
+//
+// Côté disponibilité : la phrase vient du serveur, qui la recalcule sur les
+// vraies réservations à chaque chargement. Elle porte toujours son
+// dénominateur (« 3 week-ends libres sur 9 ») — pas de fausse rareté, pas de
+// compte à rebours, rien qui ne se vérifie pas contre le calendrier ci-dessous.
+// ---------------------------------------------------------------------------
+
+/** Prix de référence barré + économie, ou chaîne vide si aucune remise. */
+function strikeThrough(totalCents, discountCents) {
+  if (!(discountCents > 0)) return "";
+  return `<span class="was">${eur(totalCents + discountCents)}</span>`;
+}
+
+async function renderOffers() {
+  const card = $("offersCard");
+  const body = $("offersBody");
+  if (!card || !body) return;
+  let data;
+  try {
+    data = await api(`/api/public/offers?property=${encodeURIComponent(PROPERTY)}`);
+  } catch {
+    return; // l'encart est un plus : son échec ne doit pas gêner la réservation
+  }
+  const promos = data.promotions ?? [];
+  const avail = data.availability;
+  if (promos.length === 0 && !avail?.sentence) return;
+
+  const list = promos.length
+    ? `<ul>${promos.map((p) => `<li>${esc(p.label)}</li>`).join("")}</ul>` +
+      (data.nonCumulNote ? `<p class="cumul">${esc(data.nonCumulNote)}</p>` : "")
+    : "";
+  const availability = avail?.sentence
+    ? `<p class="avail">${esc(avail.sentence)}
+        <span class="src">Calculé à l'instant sur les réservations réelles — vérifiable dans le calendrier ci-dessous.</span></p>`
+    : "";
+  body.innerHTML = list + availability;
+  card.hidden = false;
+}
+
+// ---------------------------------------------------------------------------
 // Étape 1 — calendrier des disponibilités et prix
 // ---------------------------------------------------------------------------
 
@@ -275,8 +322,9 @@ async function search() {
         <div class="ph" ${photo}>${u.photoUrl ? "" : "photo"}</div>
         <div class="info"><b>${esc(u.name)}</b> · ${capacity}<br>
           <span class="muted small">${esc(u.description ?? "")}</span></div>
-        <div class="price"><b>${eur(u.quote.totalCents)}</b><br>
-          <span class="per">${nights} nuit${nights > 1 ? "s" : ""}, ménage et taxes compris</span><br>
+        <div class="price">${strikeThrough(u.quote.totalCents, u.quote.discountCents)}<b>${eur(u.quote.totalCents)}</b><br>
+          <span class="per">${nights} nuit${nights > 1 ? "s" : ""}, ménage et taxes compris</span>
+          ${u.quote.autoDiscountApplied ? `<br><span class="savings">${esc(u.quote.autoDiscountApplied)} déduite</span>` : ""}<br>
           <button class="btn" style="margin-top:6px" data-select="${u.unitId}">Réserver</button></div>
       </div>`;
     }
@@ -467,7 +515,8 @@ async function refreshQuote() {
         ? `Arrhes de <b>${eur(quote.depositCents)}</b> à la réservation, solde de ${eur(quote.balanceCents)} pour le ${dfr(quote.balanceDueDate)}`
         : `Paiement de la totalité à la réservation`;
     zone.innerHTML = `
-      <table class="quote">${rows}<tr class="tot"><td>Total</td><td class="r">${eur(quote.totalCents)}</td></tr></table>
+      <table class="quote">${rows}<tr class="tot"><td>Total</td>
+        <td class="r">${strikeThrough(quote.totalCents, quote.discountCents)}${eur(quote.totalCents)}</td></tr></table>
       <p class="small muted" style="margin-top:8px">${depositLine}${quote.cautionCents > 0 ? ` · Caution : ${eur(quote.cautionCents)} (hors total, demandée avant l'arrivée)` : ""}</p>
       ${quote.warnings.includes("promo_invalid") ? `<div class="note bad">Code promo invalide ou expiré — devis calculé sans le code.</div>` : ""}`;
     payButtonRefresh();
@@ -686,6 +735,7 @@ async function initFlow() {
     }
   });
 
+  renderOffers(); // remises actives + disponibilité factuelle (sans bloquer)
   restoreHold(); // une option posée juste avant ? on reprend son décompte
   restoreSelection();
   if (selIn && selOut) {

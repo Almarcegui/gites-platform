@@ -17,7 +17,7 @@ import {
   type BookingRow,
   type QuoteContext,
 } from "../db/repo";
-import { buildVoucherEmail, queueEmail } from "./email";
+import { buildPaymentReceiptEmail, buildVoucherEmail, queueEmail } from "./email";
 import { createCheckoutSession } from "./stripe";
 
 export interface QuoteBody {
@@ -118,6 +118,16 @@ export async function handlePaymentSuccess(
   const booking = await getBooking(db, payment.bookingId);
   if (!booking) return { handled: true, bookingId: payment.bookingId };
 
+  // Reçu de paiement (issue #37) — à CHAQUE encaissement, arrhes comme solde.
+  // Posé ici, avant l'aiguillage sur le statut, pour qu'il parte aussi quand la
+  // confirmation échoue (créneau repris pendant le paiement) : l'argent a bien
+  // été encaissé, le client a droit à son justificatif même quand la suite
+  // tourne mal. Aucun dédoublonnage par `kind` : une réservation reçoit
+  // légitimement plusieurs reçus. C'est la sortie anticipée sur
+  // `payment.status === 'succeeded'`, en tête de cette fonction, qui garantit
+  // qu'un même paiement n'en produit jamais deux.
+  await sendPaymentReceipt(db, env, booking, payment.kind, payment.amountCents);
+
   if (booking.status === "pending") {
     const outcome = await confirmBookingAtomic(db, booking.id);
     if (outcome === "confirmed") {
@@ -169,6 +179,40 @@ export async function handlePaymentSuccess(
     });
   }
   return { handled: true, bookingId: booking.id, reference: booking.reference };
+}
+
+/** Journalise (ou envoie, si activé) le reçu d'un encaissement.
+ *
+ *  Comme le voucher, il ne doit JAMAIS faire échouer le webhook : au retry,
+ *  Stripe retomberait sur un paiement déjà 'succeeded' et sortirait sans rien
+ *  refaire — on perdrait la confirmation pour un simple justificatif. */
+async function sendPaymentReceipt(
+  db: D1Database,
+  env: Env,
+  booking: BookingRow,
+  kind: string,
+  amountCents: number,
+): Promise<void> {
+  try {
+    if (!booking.guestEmail || booking.propertyId == null) return;
+    const property = await getProperty(db, booking.propertyId);
+    if (!property) return;
+    // Relecture : `paid_cents` vient d'être recalculé par l'enregistrement du
+    // paiement. Sans elle, le reçu annoncerait un solde d'avant l'encaissement.
+    const fresh = (await getBooking(db, booking.id)) ?? booking;
+    const email = buildPaymentReceiptEmail(fresh, property, { kind, amountCents, receivedAt: sqlNow() });
+    await queueEmail(db, env, {
+      bookingId: booking.id,
+      to: booking.guestEmail,
+      subject: email.subject,
+      bodyText: email.bodyText,
+      kind: "payment_receipt",
+    });
+  } catch (e) {
+    await audit(db, "stripe", "receipt.error", `booking:${booking.id}`, {
+      error: e instanceof Error ? e.message : String(e),
+    });
+  }
 }
 
 /** Génère et journalise (ou envoie, si activé) le voucher de confirmation. */

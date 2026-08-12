@@ -6,6 +6,7 @@ import { registerAdminRoutes } from "./api/admin";
 import { runScheduled } from "./services/cron";
 import { withStandardHeaders } from "./services/http-headers";
 import { buildReplyMime, parseRawEmail, processInboundEmail } from "./services/inbound-email";
+import { wpRedirect } from "./services/redirects";
 
 const router = new Router();
 registerPublicRoutes(router);
@@ -18,6 +19,11 @@ export default {
     // sont posés en un seul endroit, y compris sur les erreurs et les fichiers
     // statiques du binding ASSETS (issue #22).
     const finish = (response: Response) => withStandardHeaders(response, url);
+    // Anciennes adresses WordPress (issue #38) : AVANT tout le reste, pour
+    // qu'une ancienne URL ne consomme ni la base ni les assets. Inactif tant
+    // que le Worker ne répond pas sur le domaine définitif — cf. redirects.ts.
+    const legacy = wpRedirect(url);
+    if (legacy) return finish(legacy);
     // "/" sert le site vitrine (public/index.html) via les assets.
     try {
       const response = await router.handle(request, env, ctx);

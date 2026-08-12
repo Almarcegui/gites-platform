@@ -25,6 +25,7 @@ import {
   listOptionsAdmin,
   listProperties,
   listPayments,
+  listPromotions,
   listRateRules,
   listSeasons,
   listUnits,
@@ -38,6 +39,8 @@ import { pullBeds24Bookings, pushCalendars, triggerBeds24Push } from "../service
 import { handlePaymentSuccess, quoteFromContext, startCheckout, type QuoteBody } from "../services/booking-flow";
 import { publicHealth } from "../services/health";
 import { buildIcs, exportSpansForUnit } from "../services/ical";
+import { availabilityHorizon, NON_CUMUL_NOTE, publicPromotions, weekendAvailability } from "../services/offers";
+import { logSearch } from "../services/search-log";
 import { getSetting } from "../services/settings";
 import { stripeEnabled, verifyStripeSignature } from "../services/stripe";
 
@@ -183,7 +186,7 @@ export function registerPublicRoutes(router: Router): void {
   });
 
   // --- recherche de disponibilité -------------------------------------------
-  router.get("/api/public/availability", async (_req, env, _p, url) => {
+  router.get("/api/public/availability", async (_req, env, _p, url, execCtx) => {
     const db = env.DB;
     const today = todayInZone();
     const parsed = parseStay(
@@ -232,6 +235,11 @@ export function registerPublicRoutes(router: Router): void {
             minNights: q.minNights,
             totalCents: q.totalCents,
             depositCents: q.depositCents,
+            // Remise déjà appliquée par le moteur : sans ces deux champs, la
+            // carte de résultat affichait un prix remisé SANS le dire, et la
+            // remise ne se découvrait qu'au devis (issue #35).
+            discountCents: q.discountCents,
+            autoDiscountApplied: q.autoDiscountApplied,
           };
         }
       }
@@ -250,6 +258,20 @@ export function registerPublicRoutes(router: Router): void {
         quote,
       });
     }
+    // Journal des recherches (issue #36) : ce que les clients cherchent, et
+    // surtout ce qu'ils ne trouvent pas. Aucune donnée identifiante — dates,
+    // occupants, résultat. Écriture hors du chemin de réponse quand c'est
+    // possible, et jamais bloquante.
+    await logSearch(db, execCtx, {
+      propertyId: property.id,
+      unitId: null, // recherche sur tout le domaine
+      stage: "search",
+      checkin,
+      checkout,
+      adults,
+      children,
+      results: out.filter((u) => u.available && u.fitsCapacity && (u.quote as { ok?: boolean } | null)?.ok === true).length,
+    });
     return json({ property: property.slug, checkin, checkout, adults, children, units: out });
   });
 
@@ -314,8 +336,53 @@ export function registerPublicRoutes(router: Router): void {
     return json({ property: property.slug, month, from, today, units: out });
   });
 
+  // --- offres visibles : remises actives + disponibilité factuelle (#35) -----
+  //     Les remises existaient en base et ne se découvraient qu'au devis, donc
+  //     trop tard pour jouer leur rôle. L'information de disponibilité est
+  //     CALCULÉE à chaque appel sur les vraies réservations : elle se vérifie à
+  //     la main contre le calendrier public, et ne dit jamais rien de plus que
+  //     ce que ce calendrier montre.
+  router.get("/api/public/offers", async (_req, env, _p, url) => {
+    const db = env.DB;
+    const property = await getProperty(db, url.searchParams.get("property") ?? "");
+    if (!property || !property.active) return apiError(404, "domaine inconnu");
+    const today = todayInZone();
+    const horizon = availabilityHorizon(today);
+
+    const [promotions, units, links, bookings] = await Promise.all([
+      listPromotions(db, property.id),
+      listUnits(db, property.id),
+      listLinks(db, property.id),
+      bookingsInWindow(db, property.id, today, horizon),
+    ]);
+
+    const offers = publicPromotions(promotions, today);
+    const availability = weekendAvailability({
+      today,
+      unitIds: units.filter((u) => u.active).map((u) => u.id),
+      links,
+      bookings: bookings.map((b) => ({
+        unitId: b.unitId,
+        checkin: b.checkin,
+        checkout: b.checkout,
+        status: b.status,
+        holdExpiresAt: b.holdExpiresAt,
+      })),
+      now: sqlNow(),
+    });
+
+    return json({
+      property: property.slug,
+      today,
+      promotions: offers,
+      // Le non-cumul n'est une information utile que s'il y a de quoi cumuler.
+      nonCumulNote: offers.length > 1 ? NON_CUMUL_NOTE : null,
+      availability,
+    });
+  });
+
   // --- devis détaillé --------------------------------------------------------
-  router.post("/api/public/quote", async (req, env) => {
+  router.post("/api/public/quote", async (req, env, _p, _url, execCtx) => {
     const body = await readJson<CreateBookingBody>(req);
     if (!body) return apiError(400, "corps JSON attendu");
     const today = todayInZone();
@@ -329,6 +396,19 @@ export function registerPublicRoutes(router: Router): void {
       return apiError(400, `capacité dépassée (max ${ctx.unit.capacityMax} personnes)`);
     }
     const quote = quoteFromContext(ctx, { ...body, ...parsed.stay }, today);
+    // Deuxième barreau de l'entonnoir : un devis affiché est un pas de plus
+    // qu'une recherche. Un devis non réservable (minimum de nuits, jour
+    // d'arrivée) compte comme infructueux — c'est bien ce que le client a vécu.
+    await logSearch(env.DB, execCtx, {
+      propertyId: ctx.property.id,
+      unitId: ctx.unit.id,
+      stage: "quote",
+      checkin: parsed.stay.checkin,
+      checkout: parsed.stay.checkout,
+      adults: parsed.stay.adults,
+      children: parsed.stay.children,
+      results: quote.ok ? 1 : 0,
+    });
     return json({
       unit: { id: ctx.unit.id, name: ctx.unit.name },
       quote,

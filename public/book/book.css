@@ -159,3 +159,23 @@ a{color:var(--accent)}
 .holdbar.expired{background:#FBE4E4;border-color:#E0A5A5;color:#7A2C2C}
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;
   clip:rect(0,0,0,0);white-space:nowrap;border:0}
+
+/* --- remises actives et disponibilité factuelle (issue #35) ---------------
+   Volontairement discret : même carte que le reste, pas de couleur d'alerte,
+   pas de pastille clignotante. C'est de l'information, pas une incitation. */
+.offers ul{list-style:none;margin:0 0 8px;padding:0}
+.offers li{padding:5px 0 5px 20px;position:relative;font-size:14px;border-bottom:1px solid #F0EDE5}
+.offers li:last-child{border-bottom:none}
+.offers li::before{content:"–";position:absolute;left:4px;color:var(--accent);font-weight:700}
+.offers .cumul{font-size:12.5px;color:var(--muted);margin-bottom:8px}
+.offers .avail{font-size:13.5px;color:var(--ink);background:#F4F6F4;border-left:3px solid var(--accent);
+  border-radius:0 5px 5px 0;padding:8px 12px}
+.offers .avail .src{display:block;font-size:11.5px;color:var(--muted);margin-top:3px}
+
+/* Prix de référence barré : il n'apparaît QUE si une remise est réellement
+   appliquée par le moteur, et vaut toujours total + remise. Un prix barré
+   fabriqué serait une pratique commerciale trompeuse. */
+.was{text-decoration:line-through;color:var(--muted);font-weight:400;margin-right:6px}
+.prop .price .was{font-size:14px;display:inline-block}
+.quote .tot .was{font-size:13px}
+.savings{color:var(--ok);font-weight:600;font-size:12.5px}
