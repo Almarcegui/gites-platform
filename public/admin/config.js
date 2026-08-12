@@ -1,9 +1,11 @@
-// Back-office — vues de configuration (tarifs, promotions, options, clients,
-// paiements, synchro iCal, paramètres).
+// Back-office — vues de configuration (promotions, options, clients,
+// paiements, canaux, synchro iCal, comptes, paramètres).
+// Les tarifs vivent désormais dans calendar.js, couche « Prix » du
+// calendrier unifié (#24 #25).
 
 import {
-  addDaysIso, api, copyText, currentPropertyId, dfr, dshort, esc, eur, eurInput, openBooking, openModal,
-  registerView, state, toCents, toast, todayIso,
+  api, copyText, currentPropertyId, dfr, dshort, esc, eur, eurInput, openBooking, openModal,
+  registerView, toCents, toast,
 } from "./app.js";
 
 const MODE_FR = {
@@ -15,259 +17,6 @@ const MODE_FR = {
 };
 
 export function registerConfigViews() {
-  // -------------------------------------------------------------------------
-  // Tarifs & saisons — calendrier par bien (modèle elloha)
-  // -------------------------------------------------------------------------
-  registerView("tarifs", "Tarifs & saisons", async (root) => {
-    const pid = currentPropertyId();
-    const [{ units }, { seasons }, { rules }] = await Promise.all([
-      api(`/api/admin/units?property=${pid}`),
-      api(`/api/admin/seasons?property=${pid}`),
-      api(`/api/admin/rate-rules?property=${pid}`),
-    ]);
-    const sellable = units.filter((u) => u.active);
-    if (!state.tarifUnit || !sellable.some((u) => u.id === state.tarifUnit)) state.tarifUnit = sellable[0]?.id ?? null;
-    if (!state.tarifMonth) state.tarifMonth = todayIso().slice(0, 7);
-    if (!state.tarifUnit) {
-      root.innerHTML = `<div class="note">Aucun bien actif sur ce domaine.</div>`;
-      return;
-    }
-    const unit = sellable.find((u) => u.id === state.tarifUnit);
-    const isSum = unit.isComposite && unit.compositePricing === "sum";
-
-    const monthStart = state.tarifMonth + "-01";
-    const [yy, mm] = state.tarifMonth.split("-").map(Number);
-    const nbDays = new Date(Date.UTC(yy, mm, 0)).getUTCDate();
-    const nextMonth = addDaysIso(monthStart, nbDays);
-    const cal = await api(`/api/admin/rate-calendar?unit=${unit.id}&from=${monthStart}&to=${nextMonth}`);
-    const monthLabel = new Date(monthStart + "T12:00:00Z").toLocaleDateString("fr-BE", { month: "long", year: "numeric" });
-
-    const PALETTE = ["#EAF3EC", "#FBF0DE", "#EFE7FA", "#E7F0FA", "#FBE9E7", "#F2EFD9"];
-    const seasonColor = (id) =>
-      id == null ? "#fff" : PALETTE[Math.max(0, seasons.findIndex((s) => s.id === id)) % PALETTE.length];
-
-    const firstDow = (new Date(monthStart + "T12:00:00Z").getUTCDay() + 6) % 7; // 0 = lundi
-    const cells = [];
-    for (let i = 0; i < firstDow; i++) cells.push(`<div class="rc-day off"></div>`);
-    const today = todayIso();
-    for (const d of cal.days) {
-      cells.push(`<div class="rc-day ${d.weekend ? "we" : ""} ${d.priceCents == null ? "norate" : ""} ${d.date < today ? "past" : ""}"
-        data-date="${d.date}" style="background:${seasonColor(d.seasonId)}" title="${esc(d.seasonName ?? "tarif de base")}">
-        <span class="d">${Number(d.date.slice(8, 10))}</span>
-        ${d.holidayRated ? `<span class="hol">férié</span>` : ""}
-        <b>${d.priceCents == null ? "—" : Math.round(d.priceCents / 100) + " €"}</b>
-        <span class="mn">${d.minNights ? "min " + d.minNights + " n" : "pas de tarif"}</span>
-      </div>`);
-    }
-
-    const legend =
-      seasons.map((s, i) => `<span><i style="background:${PALETTE[i % PALETTE.length]}"></i>${esc(s.name)}</span>`).join("") +
-      `<span><i style="background:#fff"></i>tarif de base</span>` +
-      `<span><i style="background:#fff;box-shadow:inset 0 2px 0 var(--accent2)"></i>nuit weekend (ven-sam)</span>` +
-      (unit.cleaningFeeCents > 0 ? `<span class="right">+ ménage ${eur(unit.cleaningFeeCents)} / séjour</span>` : "");
-
-    // règles du bien sélectionné (détail sous le calendrier)
-    function rulesTable() {
-      if (isSum) return "";
-      const slots = [{ seasonId: null, name: "Tarif de base (hors périodes)" }, ...seasons.map((s) => ({ seasonId: s.id, name: s.name }))];
-      return `<div class="card mb"><h3>Règles de ${esc(unit.name)}</h3>
-        <table><tr><th>Période</th><th>Nuit semaine</th><th>Nuit weekend</th><th>Fériés BE <span class="tag t-ok">auto</span></th><th>Min. nuits</th><th></th></tr>
-        ${slots
-          .map((slot) => {
-            const r = rules.find((x) => x.unitId === unit.id && x.seasonId === slot.seasonId);
-            if (!r) {
-              return `<tr><td>${esc(slot.name)}</td><td colspan="4" class="muted">pas de règle — le tarif de base s'applique</td>
-                <td><button class="btn o sm ruleNew" data-season="${slot.seasonId ?? ""}">+ créer</button></td></tr>`;
-            }
-            return `<tr data-rule="${r.id}">
-              <td>${esc(slot.name)}</td>
-              <td><input class="inline-num rWeek" value="${eurInput(r.priceWeekCents)}"> €</td>
-              <td><input class="inline-num rWe" value="${eurInput(r.priceWeekendCents)}"> €</td>
-              <td>+ <input class="inline-num rHol" style="width:55px" value="${r.holidayPct}"> %</td>
-              <td><input class="inline-num rMin" style="width:55px" value="${r.minNights}"> n</td>
-              <td><button class="btn sm ruleSave">💾</button> ${slot.seasonId != null ? `<button class="btn warn sm ruleDel">🗑</button>` : ""}</td></tr>`;
-          })
-          .join("")}
-        </table></div>`;
-    }
-
-    root.innerHTML = `
-      <div class="unit-tabs">${sellable
-        .map((u) => `<button data-unit="${u.id}" class="${u.id === unit.id ? "on" : ""}">${esc(u.name)}${u.isComposite ? " 🔗" : ""}</button>`)
-        .join("")}</div>
-      ${isSum ? `<div class="note">« ${esc(unit.name)} » est en mode <b>somme des composantes</b> : son calendrier additionne les maisons qui le composent (lecture seule — basculable en « tarif propre » dans Paramètres, TODO_PRIX_COMBINE).</div>` : ""}
-      <div class="card mb">
-        <div class="row mb">
-          <div class="n"><button class="btn o sm" id="rcPrev">◀</button> <b>${esc(monthLabel)}</b> <button class="btn o sm" id="rcNext">▶</button>
-            <button class="btn o sm" id="rcToday">aujourd'hui</button></div>
-          <div class="right muted small">${isSum ? "" : "Clique un jour puis un autre pour créer une période tarifaire sur la plage."}</div>
-        </div>
-        <div class="rc">
-          ${["L", "M", "M", "J", "V", "S", "D"].map((l) => `<div class="rc-h">${l}</div>`).join("")}
-          ${cells.join("")}
-        </div>
-        <div class="rc-legend">${legend}</div>
-        <div id="rcForm"></div>
-      </div>
-      ${rulesTable()}
-      <div class="card mb"><h3>Périodes / saisons du domaine (partagées entre les biens)</h3>
-        <table><tr><th>Nom</th><th>Du</th><th>Au</th><th>Priorité</th><th></th></tr>
-          ${seasons
-            .map(
-              (s, i) => `<tr data-season="${s.id}">
-              <td><i style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${PALETTE[i % PALETTE.length]};margin-right:6px"></i><input class="sName" style="width:calc(100% - 20px)" value="${esc(s.name)}"></td>
-              <td><input type="date" class="sFrom" value="${s.dateStart}"></td>
-              <td><input type="date" class="sTo" value="${s.dateEnd}"></td>
-              <td><input type="number" class="sPrio inline-num" style="width:60px" value="${s.priority}"></td>
-              <td><button class="btn sm sSave">💾</button> <button class="btn warn sm sDel">🗑</button></td></tr>`,
-            )
-            .join("")}
-        </table>
-        <p class="small muted" style="margin-top:6px">Une période sans règle pour un bien retombe sur son tarif de base. En cas de chevauchement, la priorité la plus haute gagne. La majoration « fériés BE » (jours fériés belges, veilles et ponts) est calculée automatiquement.</p>
-      </div>`;
-
-    // --- navigation & onglets
-    root.querySelectorAll(".unit-tabs button").forEach((b) =>
-      b.addEventListener("click", () => {
-        state.tarifUnit = Number(b.dataset.unit);
-        navigateReload();
-      }),
-    );
-    root.querySelector("#rcPrev").onclick = () => { state.tarifMonth = addDaysIso(monthStart, -1).slice(0, 7); navigateReload(); };
-    root.querySelector("#rcNext").onclick = () => { state.tarifMonth = nextMonth.slice(0, 7); navigateReload(); };
-    root.querySelector("#rcToday").onclick = () => { state.tarifMonth = todayIso().slice(0, 7); navigateReload(); };
-    function navigateReload() { location.hash = "#/tarifs"; window.dispatchEvent(new HashChangeEvent("hashchange")); }
-
-    // --- sélection de plage → création de période
-    let selStart = null;
-    const baseRule = rules.find((x) => x.unitId === unit.id && x.seasonId === null);
-    root.querySelectorAll(".rc-day[data-date]").forEach((cell) => {
-      cell.addEventListener("click", () => {
-        if (isSum) return;
-        const date = cell.dataset.date;
-        if (!selStart) {
-          selStart = date;
-          root.querySelectorAll(".rc-day.sel").forEach((c) => c.classList.remove("sel"));
-          cell.classList.add("sel");
-          root.querySelector("#rcForm").innerHTML = `<p class="small muted" style="margin-top:8px">Début : <b>${dfr(date)}</b> — clique le dernier jour de la période.</p>`;
-          return;
-        }
-        const a = selStart < date ? selStart : date;
-        const b = selStart < date ? date : selStart;
-        selStart = null;
-        root.querySelectorAll(".rc-day[data-date]").forEach((c) => {
-          c.classList.toggle("sel", c.dataset.date >= a && c.dataset.date <= b);
-        });
-        showPeriodForm(a, b);
-      });
-    });
-
-    function showPeriodForm(a, b) {
-      const maxPrio = Math.max(0, ...seasons.map((s) => s.priority));
-      root.querySelector("#rcForm").innerHTML = `
-        <div class="note" style="margin-top:12px">
-          <b>Nouvelle période tarifaire du ${dfr(a)} au ${dfr(b)}</b>
-          <div class="row" style="margin-top:8px">
-            <div style="min-width:190px"><label class="f">Nom</label><input id="npName" value="Période ${dfr(a)} → ${dfr(b)}"></div>
-            <div class="n"><label class="f">Nuit semaine (€)</label><input id="npWeek" class="inline-num" value="${baseRule ? eurInput(baseRule.priceWeekCents) : ""}"></div>
-            <div class="n"><label class="f">Nuit weekend (€)</label><input id="npWe" class="inline-num" value="${baseRule ? eurInput(baseRule.priceWeekendCents) : ""}"></div>
-            <div class="n"><label class="f">Fériés %</label><input id="npHol" class="inline-num" style="width:60px" type="number" value="${baseRule ? baseRule.holidayPct : 15}"></div>
-            <div class="n"><label class="f">Min. nuits</label><input id="npMin" class="inline-num" style="width:60px" type="number" value="${baseRule ? baseRule.minNights : 2}"></div>
-            <div class="n"><label class="f">Tous les biens</label><input id="npAll" type="checkbox" title="Appliquer les mêmes prix à tous les biens du domaine"></div>
-            <div class="n"><button class="btn sm" id="npCreate">Créer la période</button></div>
-          </div>
-          <p class="small muted" style="margin-top:6px">La période est créée en priorité ${maxPrio + 1} : elle prime sur les périodes existantes qui la chevauchent.</p>
-        </div>`;
-      root.querySelector("#npCreate").onclick = async () => {
-        const week = toCents(root.querySelector("#npWeek").value);
-        if (!week) return toast("Prix semaine requis", true);
-        const created = await api(`/api/admin/seasons?property=${pid}`, {
-          method: "POST",
-          body: { name: root.querySelector("#npName").value, dateStart: a, dateEnd: b, priority: maxPrio + 1 },
-        });
-        const ruleBody = {
-          seasonId: created.id,
-          priceWeekCents: week,
-          priceWeekendCents: toCents(root.querySelector("#npWe").value) || week,
-          holidayPct: Number(root.querySelector("#npHol").value) || 0,
-          minNights: Number(root.querySelector("#npMin").value) || 1,
-        };
-        const targets = root.querySelector("#npAll").checked
-          ? sellable.filter((u2) => !(u2.isComposite && u2.compositePricing === "sum"))
-          : [unit];
-        for (const t of targets) {
-          await api("/api/admin/rate-rules", { method: "POST", body: { ...ruleBody, unitId: t.id } });
-        }
-        toast(`Période créée pour ${targets.length} bien${targets.length > 1 ? "s" : ""}`);
-        navigateReload();
-      };
-    }
-
-    // --- édition des règles du bien
-    root.querySelectorAll(".ruleNew").forEach((btn) => {
-      btn.onclick = async () => {
-        await api("/api/admin/rate-rules", {
-          method: "POST",
-          body: {
-            unitId: unit.id,
-            seasonId: btn.dataset.season ? Number(btn.dataset.season) : null,
-            priceWeekCents: baseRule?.priceWeekCents ?? 10000,
-            priceWeekendCents: baseRule?.priceWeekendCents ?? 12000,
-            holidayPct: 15,
-            minNights: baseRule?.minNights ?? 2,
-          },
-        });
-        toast("Règle créée — ajuste les prix");
-        navigateReload();
-      };
-    });
-    root.querySelectorAll("tr[data-rule]").forEach((tr) => {
-      const id = tr.dataset.rule;
-      tr.querySelector(".ruleSave").onclick = async () => {
-        await api(`/api/admin/rate-rules/${id}`, {
-          method: "PATCH",
-          body: {
-            priceWeekCents: toCents(tr.querySelector(".rWeek").value),
-            priceWeekendCents: toCents(tr.querySelector(".rWe").value),
-            holidayPct: Number(tr.querySelector(".rHol").value),
-            minNights: Number(tr.querySelector(".rMin").value),
-          },
-        });
-        toast("Tarif enregistré");
-        navigateReload();
-      };
-      tr.querySelector(".ruleDel")?.addEventListener("click", async () => {
-        if (!confirm("Supprimer cette règle ? (le tarif de base s'appliquera)")) return;
-        await api(`/api/admin/rate-rules/${id}`, { method: "DELETE" });
-        navigateReload();
-      });
-    });
-
-    // --- édition des saisons/périodes
-    root.querySelectorAll("tr[data-season]").forEach((tr) => {
-      const id = tr.dataset.season;
-      tr.querySelector(".sSave").onclick = async () => {
-        await api(`/api/admin/seasons/${id}`, {
-          method: "PATCH",
-          body: {
-            name: tr.querySelector(".sName").value,
-            dateStart: tr.querySelector(".sFrom").value,
-            dateEnd: tr.querySelector(".sTo").value,
-            priority: Number(tr.querySelector(".sPrio").value),
-          },
-        });
-        toast("Période enregistrée");
-        navigateReload();
-      };
-      tr.querySelector(".sDel").onclick = async () => {
-        if (!confirm("Supprimer cette période ET ses règles tarifaires (tous biens) ?")) return;
-        await api(`/api/admin/seasons/${id}`, { method: "DELETE" });
-        toast("Période supprimée");
-        navigateReload();
-      };
-    });
-  });
-
   // -------------------------------------------------------------------------
   // Promotions
   // -------------------------------------------------------------------------
@@ -678,7 +427,7 @@ export function registerConfigViews() {
           </div>`;
           })
           .join("")}
-        <p class="small muted" style="margin-top:8px">« Prix combiné » d'un bien 🔗 : somme des biens liés (défaut, TODO_PRIX_COMBINE) ou tarif propre (règles dans Tarifs &amp; saisons). Les frais de ménage s'ajoutent automatiquement au devis ; pour un combiné en mode somme, ils cumulent ceux des biens liés.</p>
+        <p class="small muted" style="margin-top:8px">« Prix combiné » d'un bien 🔗 : somme des biens liés (défaut, TODO_PRIX_COMBINE) ou tarif propre (règles dans Calendrier › Prix). Les frais de ménage s'ajoutent automatiquement au devis ; pour un combiné en mode somme, ils cumulent ceux des biens liés.</p>
       </div>
       <div class="card"><h3>+ Ajouter un hébergement (maison C, nouveau gîte…)</h3>
         <div class="row">
@@ -856,7 +605,7 @@ export function registerConfigViews() {
             ${data.channelBookings.map((b) => `<tr><td class="mono">${esc(b.reference)}</td><td>${esc(b.channelLabel ?? "—")}</td>
               <td>${esc(b.unitName ?? "")}</td><td>${dshort(b.checkin)} → ${dshort(b.checkout)}</td>
               <td>${esc(b.guestName ?? "")}</td><td class="r">${eur(b.totalCents)}</td></tr>`).join("")}</table>`
-          : `<p class="muted">Aucune pour l'instant — elles apparaîtront ici (et dans Planning / Réservations) dès que les annonces seront reliées.</p>`}
+          : `<p class="muted">Aucune pour l'instant — elles apparaîtront ici (et dans Calendrier › Occupation et Ventes › Réservations) dès que les annonces seront reliées.</p>`}
       </div>
 
       <div class="card"><h3>Journal de synchronisation</h3>
