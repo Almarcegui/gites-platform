@@ -12,10 +12,11 @@
 // propre carte, en bas de la couche Prix.
 
 import {
-  addDaysIso, api, currentPropertyId, dfr, diffDaysIso, esc, eur, eurInput, focusableIn,
+  addDaysIso, api, currentPropertyId, dfr, esc, eur, eurInput, focusableIn,
   openModal, registerView, renderOccupation, setPageTitle, state, toCents,
   toast, toastUndo, todayIso,
 } from "./app.js";
+import { buildSuggestions } from "./suggestions.js";
 
 /** Fin de glisser-déposer hors de la grille : un seul écouteur pour toute la
  *  session, remplacé à chaque rendu (sinon ils s'empilent à chaque mois). */
@@ -351,7 +352,10 @@ async function renderPrix(body, root) {
 
   // --- suggestions en un clic (#31) : elles PRÉ-REMPLISSENT, elles n'écrivent pas
   if (editable) {
-    const list = buildSuggestions({ days: cal.days, sold, planning, unitId: unit.id, today, monthEnd: addDaysIso(nextMonth, -1) });
+    const list = buildSuggestions({
+      days: cal.days, soldDates: sold, bookings: planning.bookings,
+      unitId: unit.id, today, monthEnd: addDaysIso(nextMonth, -1),
+    });
     const holder = body.querySelector("#rcSuggest");
     if (list.length > 0) {
       holder.innerHTML = `<div class="card mb"><h3>Suggestions</h3>
@@ -693,72 +697,6 @@ function place(pop, cell, holder) {
   pop.style.left = `${left}px`;
   pop.style.top = `${cellBox.bottom - wrapBox.top + 6}px`;
   pop.style.width = `${width}px`;
-}
-
-// ---------------------------------------------------------------------------
-// Suggestions en un clic (#31) — trois lectures des données réelles
-// ---------------------------------------------------------------------------
-
-function buildSuggestions({ days, sold, planning, unitId, today, monthEnd }) {
-  const out = [];
-  const byDate = new Map(days.map((d) => [d.date, d]));
-  const free = (iso) => !sold.has(iso);
-
-  // 1. Nuits orphelines : 1 ou 2 nuits libres coincées entre deux séjours.
-  const stays = planning.bookings
-    .filter((b) => b.unitId === unitId)
-    .map((b) => ({ checkin: b.checkin, checkout: b.checkout }))
-    .sort((a, b) => (a.checkin < b.checkin ? -1 : 1));
-  for (let i = 0; i + 1 < stays.length; i++) {
-    const gapFrom = stays[i].checkout;
-    const gapTo = addDaysIso(stays[i + 1].checkin, -1);
-    if (gapFrom > gapTo || gapFrom < today) continue;
-    const nights = diffDaysIso(gapFrom, gapTo) + 1;
-    if (nights > 2) continue;
-    const d = byDate.get(gapFrom);
-    if (!d || d.minNights == null || d.minNights <= nights) continue;
-    out.push({
-      title: `Nuit${nights > 1 ? "s" : ""} orpheline${nights > 1 ? "s" : ""} du ${dfr(gapFrom)}`,
-      why: `${nights} nuit${nights > 1 ? "s" : ""} libre${nights > 1 ? "s" : ""} entre deux séjours, alors que le minimum est de ${d.minNights} nuits : personne ne peut réserver ce trou.`,
-      action: `Descendre le minimum à ${nights} nuit${nights > 1 ? "s" : ""}`,
-      from: gapFrom,
-      to: gapTo,
-      prefill: { minNights: nights },
-    });
-    if (out.length >= 1) break; // une seule proposition de ce type à la fois
-  }
-
-  // 2. Dernière minute : jours libres dans les 21 prochains jours.
-  const horizon = addDaysIso(today, 21);
-  const lastMinute = days.filter((d) => d.date >= today && d.date <= horizon && d.date <= monthEnd && free(d.date) && d.priceCents != null);
-  if (lastMinute.length >= 2) {
-    const first = lastMinute[0];
-    const last = lastMinute[lastMinute.length - 1];
-    const cut = Math.round(first.priceCents * 0.9);
-    out.push({
-      title: `Dernière minute — ${lastMinute.length} nuits encore libres d'ici le ${dfr(last.date)}`,
-      why: `Remise bornée à 10 % sur ces dates proches : ${eur(first.priceCents)} − 10 % = ${eur(cut)}. Au-delà, tu vends moins cher que ton tarif de base.`,
-      action: "Proposer −10 %",
-      from: first.date,
-      to: last.date,
-      prefill: { priceCents: cut },
-    });
-  }
-
-  // 3. Dates fortes : jours fériés et ponts déjà calculés par le moteur.
-  const strong = days.filter((d) => d.holidayRated && d.date >= today && d.priceCents != null && d.overridePriceCents == null);
-  if (strong.length > 0) {
-    const up = Math.round(strong[0].priceCents * 1.15);
-    out.push({
-      title: `Dates fortes — ${strong.length} jour${strong.length > 1 ? "s" : ""} férié${strong.length > 1 ? "s" : ""} ou pont ce mois-ci`,
-      why: `Le moteur les majore déjà. Un cran de plus se justifie sur ${dfr(strong[0].date)} : ${eur(strong[0].priceCents)} + 15 % = ${eur(up)}.`,
-      action: "Proposer +15 %",
-      from: strong[0].date,
-      to: strong[strong.length - 1].date,
-      prefill: { priceCents: up },
-    });
-  }
-  return out;
 }
 
 // ---------------------------------------------------------------------------
