@@ -5,7 +5,8 @@
 //   numAvail  = 0/1 depuis isUnitFree — la liaison Scieur/Scierie/Domaine est
 //               donc reflétée automatiquement (Domaine réservé chez nous →
 //               les deux rooms Beds24 passent à 0 sans configuration Beds24) ;
-//   price1    = notre prix nuit (rateCalendar), en euros ;
+//   price1    = notre prix nuit (rateCalendar, surcharges par jour comprises),
+//               en euros ; jamais poussé s'il est nul ou négatif ;
 //   minStay   = notre min-nuits du jour.
 // Les jours consécutifs identiques sont regroupés en plages (payload compact).
 //
@@ -27,6 +28,7 @@ import {
   reactivateBookingAtomic,
   listLinks,
   listRateRules,
+  listRateOverridesForProperty,
   listSeasons,
   listUnits,
   moveBookingAtomic,
@@ -76,11 +78,12 @@ export async function buildCalendarPush(
   days: number,
 ): Promise<{ roomId: number; unitName: string; calendar: CalendarSpan[] }[]> {
   const to = addDays(from, days);
-  const [units, links, seasons, rules, rows] = await Promise.all([
+  const [units, links, seasons, rules, overrides, rows] = await Promise.all([
     listUnits(db, propertyId),
     listLinks(db, propertyId),
     listSeasons(db, propertyId),
     listRateRules(db, propertyId),
+    listRateOverridesForProperty(db, propertyId, from, to),
     bookingsInWindow(db, propertyId, from, to),
   ]);
   const now = sqlNow();
@@ -108,11 +111,15 @@ export async function buildCalendarPush(
   const out = [];
   for (const u of active) {
     if (!u.beds24RoomId) continue;
-    const rates = rateCalendar(toPricingUnit(u), from, to, seasons, rules);
+    const rates = rateCalendar(toPricingUnit(u), from, to, seasons, rules, overrides);
     const days_ = rates.map((r) => ({
       date: r.date,
       numAvail: isUnitFree(u.id, r.date, addDays(r.date, 1), spans, links, now) ? 1 : 0,
-      price1: r.priceCents != null ? r.priceCents / 100 : undefined,
+      // Dernier filet avant les OTA : un prix nul ou négatif n'est jamais
+      // poussé. Les écritures sont bornées côté API (issue #50), mais une
+      // règle héritée du temps où le POST tolérait 0 traverserait sinon
+      // jusqu'à Airbnb et Booking. Sans price1, Beds24 garde le prix en place.
+      price1: r.priceCents != null && r.priceCents > 0 ? r.priceCents / 100 : undefined,
       minStay: r.minNights ?? undefined,
     }));
     out.push({ roomId: u.beds24RoomId, unitName: u.name, calendar: compactSpans(days_) });

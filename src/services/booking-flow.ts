@@ -49,6 +49,7 @@ export function quoteFromContext(ctx: QuoteContext, body: QuoteBody, today: IsoD
     today,
     seasons: ctx.seasons,
     rateRules: ctx.rateRules,
+    rateOverrides: ctx.rateOverrides,
     promotions: ctx.promotions,
     promoCode: body.promoCode ?? null,
     optionsSelected: selected,

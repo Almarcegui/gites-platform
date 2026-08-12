@@ -3,9 +3,19 @@
 // (si configuré, exigé en header Authorization: Bearer …).
 
 import { apiError, json, readJson, Router, type Handler } from "./router";
-import { addDays, diffDays, isIsoDate, sqlNow, todayInZone, type IsoDate } from "../core/dates";
+import { addDays, dayOfWeek, diffDays, isIsoDate, sqlNow, todayInZone, type IsoDate } from "../core/dates";
 import { isActiveBooking } from "../core/availability";
-import { rateCalendar } from "../core/pricing";
+import { rateCalendar, type RateOverride, type UnitPricingInfo } from "../core/pricing";
+import {
+  CHANNEL_MARKUPS_KEY,
+  CHANNEL_PRICE_FORMULA,
+  checkBounds,
+  checkPrice,
+  normalizeChannelMarkups,
+  parseChannelMarkups,
+  suggestForChannels,
+  type PriceBounds,
+} from "../core/price-guardrails";
 import {
   computeFunnel,
   computeLeadTime,
@@ -38,6 +48,8 @@ import {
   getGuest,
   getProperty,
   getQuoteContext,
+  getRateRule,
+  getUnit,
   getSettings,
   listAudit,
   listAuditByAction,
@@ -52,6 +64,10 @@ import {
   listPromotions,
   listProperties,
   listRateRules,
+  listRateOverrides,
+  listRateOverridesForProperty,
+  setRateOverrides,
+  deleteRateOverrides,
   listSeasons,
   listUnits,
   updateBookingNotes,
@@ -212,6 +228,46 @@ function badPct(v: unknown): boolean {
 function intParam(v: string | null | undefined, fallback: number): number {
   const n = Math.floor(Number(v));
   return Number.isFinite(n) && n > 0 ? n : fallback;
+}
+
+// --- tarifs : bornes, plages et surcharges ----------------------------------
+
+/** Plage maximale d'un calendrier ou d'une écriture de surcharge (un peu plus
+ *  d'un an — la vue année en a besoin, au-delà c'est une erreur de saisie). */
+const MAX_RANGE_DAYS = 370;
+
+/** Bornes de prix d'un hébergement (issue #31). Lues à chaque écriture
+ *  tarifaire : règle de saison comme surcharge de jour, même garde-fou. */
+async function boundsForUnit(db: D1Database, unitId: number): Promise<PriceBounds> {
+  const unit = await getUnit(db, unitId);
+  return { minCents: unit?.priceMinCents ?? null, maxCents: unit?.priceMaxCents ?? null };
+}
+
+/** Jours de [from, to] INCLUS, filtrés sur des jours de semaine optionnels
+ *  (0 = dimanche … 6 = samedi). C'est le geste « je sélectionne les trois
+ *  week-ends de mars et je pose 240 € ». */
+function expandRange(from: IsoDate, to: IsoDate, weekdays: number[] | null): IsoDate[] {
+  const days: IsoDate[] = [];
+  for (let d = from; d <= to; d = addDays(d, 1)) {
+    if (!weekdays || weekdays.includes(dayOfWeek(d))) days.push(d);
+  }
+  return days;
+}
+
+/** Lit et valide `from`/`to` (inclusifs) d'une requête de plage tarifaire. */
+function parseRange(from: string, to: string): { ok: true; from: IsoDate; to: IsoDate } | { ok: false; message: string } {
+  if (!isIsoDate(from) || !isIsoDate(to)) return { ok: false, message: "dates invalides (format AAAA-MM-JJ)" };
+  if (from > to) return { ok: false, message: "la date de fin doit suivre la date de début" };
+  if (diffDays(from, to) > MAX_RANGE_DAYS) return { ok: false, message: `plage trop longue (max ${MAX_RANGE_DAYS} jours)` };
+  return { ok: true, from, to };
+}
+
+/** `weekdays=0,6` → [0, 6] ; absent ou vide → null (tous les jours). */
+function parseWeekdays(raw: unknown): number[] | null {
+  const list = typeof raw === "string" ? raw.split(",") : Array.isArray(raw) ? raw : null;
+  if (!list) return null;
+  const days = [...new Set(list.map((d) => Math.floor(Number(d))).filter((d) => Number.isInteger(d) && d >= 0 && d <= 6))];
+  return days.length > 0 ? days : null;
 }
 
 function toStatsBooking(b: BookingRow): StatsBooking {
@@ -380,7 +436,24 @@ export function registerAdminRoutes(router: Router): void {
     if (!id) return apiError(400, "id invalide");
     const body = await readJson<Record<string, unknown>>(req);
     if (!body) return apiError(400, "corps JSON attendu");
+
+    // Garde-fous de prix par hébergement (issue #31) : null pour les retirer.
+    const priceMinCents =
+      !("priceMinCents" in body) ? undefined : body.priceMinCents == null ? null : Math.round(Number(body.priceMinCents));
+    const priceMaxCents =
+      !("priceMaxCents" in body) ? undefined : body.priceMaxCents == null ? null : Math.round(Number(body.priceMaxCents));
+    if (priceMinCents !== undefined || priceMaxCents !== undefined) {
+      const unit = await getUnit(env.DB, id);
+      if (!unit) return apiError(404, "hébergement inconnu");
+      const nextMin = priceMinCents === undefined ? unit.priceMinCents : priceMinCents;
+      const nextMax = priceMaxCents === undefined ? unit.priceMaxCents : priceMaxCents;
+      const ok = checkBounds(nextMin, nextMax);
+      if (!ok.ok) return apiError(400, ok.message);
+    }
+
     await updateUnit(env.DB, id, {
+      priceMinCents,
+      priceMaxCents,
       name: typeof body.name === "string" ? body.name : undefined,
       description: typeof body.description === "string" ? body.description : undefined,
       capacityBase: body.capacityBase != null ? Number(body.capacityBase) : undefined,
@@ -443,25 +516,240 @@ export function registerAdminRoutes(router: Router): void {
     return json({ ok: true });
   }));
 
-  // Calendrier des tarifs (vue elloha) : prix calculé jour par jour d'un bien.
+  // Calendrier des tarifs (vue elloha) : prix calculé jour par jour, avec sa
+  // PROVENANCE (surcharge / saison / tarif de base) pour que la cellule sache
+  // se colorer, et le prix qu'aurait le jour sans sa surcharge.
+  //
+  // `?unit=` → un bien (forme historique, inchangée pour le back-office actuel).
+  // `?units=1,2,3` ou `?property=` → plusieurs biens en UNE requête : la vue
+  // année sur trois hébergements coûtait sinon trois appels, six en changeant
+  // d'année (spec UX § 9).
   router.get("/api/admin/rate-calendar", guard(async (_req, env, _p, url) => {
-    const unitId = intParam(url.searchParams.get("unit"), 0);
-    const ctx = await getQuoteContext(env.DB, unitId);
-    if (!ctx) return apiError(404, "hébergement inconnu");
     let from = url.searchParams.get("from") ?? "";
     let to = url.searchParams.get("to") ?? "";
     if (!isIsoDate(from) || !isIsoDate(to) || from >= to) {
       from = todayInZone().slice(0, 8) + "01";
       to = addDays(from, 62);
     }
-    if (diffDays(from, to) > 370) to = addDays(from, 370);
-    const days = rateCalendar(ctx.pricingUnit, from, to, ctx.seasons, ctx.rateRules);
+    if (diffDays(from, to) > MAX_RANGE_DAYS) to = addDays(from, MAX_RANGE_DAYS);
+
+    const unitsParam = url.searchParams.get("units");
+    const propertyParam = url.searchParams.get("property");
+    const multi = unitsParam != null || propertyParam != null;
+
+    if (!multi) {
+      const unitId = intParam(url.searchParams.get("unit"), 0);
+      const ctx = await getQuoteContext(env.DB, unitId, { from, toExclusive: to });
+      if (!ctx) return apiError(404, "hébergement inconnu");
+      const days = rateCalendar(ctx.pricingUnit, from, to, ctx.seasons, ctx.rateRules, ctx.rateOverrides);
+      return json({
+        unit: {
+          id: ctx.unit.id,
+          name: ctx.unit.name,
+          cleaningFeeCents: ctx.unit.cleaningFeeCents,
+          // Un bien composite en mode « somme » n'a pas de prix propre : son
+          // calendrier est la somme des maisons et n'accepte pas de surcharge
+          // (spec UX § 5 — l'interface doit le dire, pas laisser essayer).
+          editable: !(ctx.unit.isComposite && ctx.unit.compositePricing === "sum"),
+          compositePricing: ctx.unit.compositePricing,
+          priceMinCents: ctx.unit.priceMinCents,
+          priceMaxCents: ctx.unit.priceMaxCents,
+        },
+        from,
+        to,
+        days,
+        seasons: ctx.seasons,
+      });
+    }
+
+    const propertyId = intParam(propertyParam, 1);
+    const wanted = unitsParam
+      ? new Set(unitsParam.split(",").map((v) => Math.floor(Number(v))).filter((n) => n > 0))
+      : null;
+    const [units, links, seasons, rules, overrides] = await Promise.all([
+      listUnits(env.DB, propertyId),
+      listLinks(env.DB, propertyId),
+      listSeasons(env.DB, propertyId),
+      listRateRules(env.DB, propertyId),
+      listRateOverridesForProperty(env.DB, propertyId, from, to),
+    ]);
+    const active = units.filter((u) => u.active && (!wanted || wanted.has(u.id)));
+    const physicalIds = new Set(units.filter((u) => u.active && !u.isComposite).map((u) => u.id));
+    const out = active.map((u) => {
+      const pricingUnit: UnitPricingInfo = {
+        id: u.id,
+        name: u.name,
+        compositePricing: u.isComposite ? u.compositePricing : "own",
+        cleaningFeeCents: u.cleaningFeeCents,
+        components: u.isComposite
+          ? links
+              .filter((l) => l.unitId === u.id && physicalIds.has(l.blocksUnitId))
+              .map((l) => {
+                const c = units.find((x) => x.id === l.blocksUnitId);
+                return { id: l.blocksUnitId, name: c?.name ?? "", cleaningFeeCents: c?.cleaningFeeCents ?? 0 };
+              })
+          : [],
+      };
+      return {
+        unit: {
+          id: u.id,
+          name: u.name,
+          cleaningFeeCents: u.cleaningFeeCents,
+          editable: !(u.isComposite && u.compositePricing === "sum"),
+          compositePricing: u.compositePricing,
+          priceMinCents: u.priceMinCents,
+          priceMaxCents: u.priceMaxCents,
+        },
+        days: rateCalendar(pricingUnit, from, to, seasons, rules, overrides),
+      };
+    });
+    return json({ from, to, units: out, seasons });
+  }));
+
+  // --- surcharges tarifaires par jour (issue #23) -----------------------------
+
+  // Surcharges brutes d'un bien sur une plage — ce qui est POSÉ à la main,
+  // sans le calcul. Le calendrier ci-dessus donne le résultat effectif.
+  router.get("/api/admin/rate-overrides", guard(async (_req, env, _p, url) => {
+    const unitId = intParam(url.searchParams.get("unit"), 0);
+    if (!unitId) return apiError(400, "unit requis");
+    const range = parseRange(url.searchParams.get("from") ?? "", url.searchParams.get("to") ?? "");
+    if (!range.ok) return apiError(400, range.message);
+    const overrides = await listRateOverrides(env.DB, [unitId], range.from, addDays(range.to, 1));
+    return json({ unitId, from: range.from, to: range.to, overrides });
+  }));
+
+  // Pose ou retire prix et minimum de nuits sur [from, to] INCLUS, avec un
+  // filtre optionnel de jours de semaine (`weekdays=5,6` → les week-ends).
+  //
+  // Sémantique de chaque champ, pensée pour l'éditeur de cellule :
+  //   absent  → on ne touche pas à cette valeur ;
+  //   nombre  → on la pose (validée : > 0 et dans les bornes du bien) ;
+  //   null    → on la RETIRE, le jour repasse au tarif de saison.
+  // Une surcharge vidée des deux côtés disparaît : retirer un prix ne laisse
+  // jamais un 0 fantôme derrière lui.
+  router.patch("/api/admin/rate-overrides", guard(async (req, env, _p, _url, execCtx) => {
+    const body = await readJson<{
+      unitId?: unknown; from?: unknown; to?: unknown; weekdays?: unknown;
+      priceCents?: unknown; minNights?: unknown;
+    }>(req);
+    if (!body) return apiError(400, "corps JSON attendu");
+    const unitId = intParam(String(body.unitId ?? ""), 0);
+    if (!unitId) return apiError(400, "unitId requis");
+    const range = parseRange(String(body.from ?? ""), String(body.to ?? ""));
+    if (!range.ok) return apiError(400, range.message);
+
+    const unit = await getUnit(env.DB, unitId);
+    if (!unit) return apiError(404, "hébergement inconnu");
+    // Spec UX § 5 : un bien composite en mode « somme » n'a pas de prix propre.
+    if (unit.isComposite && unit.compositePricing === "sum") {
+      return apiError(409, `« ${unit.name} » est tarifé par la somme de ses maisons — posez le prix sur chaque maison, ou basculez ce bien en tarif propre`);
+    }
+
+    const hasPrice = "priceCents" in body;
+    const hasMinNights = "minNights" in body;
+    if (!hasPrice && !hasMinNights) return apiError(400, "priceCents ou minNights attendu");
+
+    let priceCents: number | null | undefined;
+    if (hasPrice) {
+      if (body.priceCents === null) {
+        priceCents = null;
+      } else {
+        const c = checkPrice(body.priceCents, { minCents: unit.priceMinCents, maxCents: unit.priceMaxCents }, "prix");
+        if (!c.ok) return apiError(400, c.message);
+        priceCents = c.cents;
+      }
+    }
+
+    let minNights: number | null | undefined;
+    if (hasMinNights) {
+      if (body.minNights === null) {
+        minNights = null;
+      } else {
+        const n = Math.floor(Number(body.minNights));
+        if (!Number.isFinite(n) || n < 1 || n > 60) return apiError(400, "minimum de nuits invalide (1 à 60)");
+        minNights = n;
+      }
+    }
+
+    const weekdays = parseWeekdays(body.weekdays);
+    const days = expandRange(range.from, range.to, weekdays);
+    if (days.length === 0) return apiError(400, "aucun jour dans la plage après filtrage");
+
+    const res = await setRateOverrides(env.DB, unitId, days, { priceCents, minNights });
+    await audit(env.DB, "admin", "rate.override", `unit:${unitId}`, {
+      from: range.from, to: range.to, weekdays, priceCents, minNights, ...res,
+    });
+    await triggerBeds24Push(env.DB, env, execCtx, unit.propertyId);
+    return json({ ok: true, unitId, from: range.from, to: range.to, days: days.length, ...res });
+  }));
+
+  // Retire toute surcharge sur une plage — retour au tarif de saison. Sert
+  // aussi de bouton « Annuler » après avoir peint une plage (spec UX § 7).
+  router.delete("/api/admin/rate-overrides", guard(async (_req, env, _p, url, execCtx) => {
+    const unitId = intParam(url.searchParams.get("unit"), 0);
+    if (!unitId) return apiError(400, "unit requis");
+    const range = parseRange(url.searchParams.get("from") ?? "", url.searchParams.get("to") ?? "");
+    if (!range.ok) return apiError(400, range.message);
+    const unit = await getUnit(env.DB, unitId);
+    if (!unit) return apiError(404, "hébergement inconnu");
+    const days = expandRange(range.from, range.to, parseWeekdays(url.searchParams.get("weekdays")));
+    const removed = await deleteRateOverrides(env.DB, unitId, days);
+    await audit(env.DB, "admin", "rate.override_clear", `unit:${unitId}`, { from: range.from, to: range.to, removed });
+    await triggerBeds24Push(env.DB, env, execCtx, unit.propertyId);
+    return json({ ok: true, unitId, removed });
+  }));
+
+  // --- prix conseillé par plateforme (issue #31) ------------------------------
+
+  // Les places de marché prennent une commission : le tarif qu'on y affiche est
+  // volontairement majoré par rapport à la vente directe. Le calcul est
+  // délibérément sans magie — prix direct × (1 + majoration %) — pour que le
+  // propriétaire puisse le refaire de tête et rester maître de ses prix.
+  router.get("/api/admin/channel-markups", guard(async (_req, env) => {
+    const channels = parseChannelMarkups(await getSetting(env.DB, CHANNEL_MARKUPS_KEY));
+    return json({ channels, formula: CHANNEL_PRICE_FORMULA });
+  }));
+
+  router.put("/api/admin/channel-markups", guard(async (req, env) => {
+    const body = await readJson<{ channels?: unknown }>(req);
+    const channels = normalizeChannelMarkups(body?.channels);
+    if (!channels) return apiError(400, "canaux invalides — attendu une liste { channel, label, markupPct 0 à 100 }");
+    await setSetting(env.DB, CHANNEL_MARKUPS_KEY, JSON.stringify(channels));
+    await audit(env.DB, "admin", "pricing.channel_markups", "app", { channels });
+    return json({ ok: true, channels, formula: CHANNEL_PRICE_FORMULA });
+  }));
+
+  // Prix conseillé, sur un prix isolé (`?priceCents=`, pour l'éditeur de
+  // cellule) ou jour par jour sur une plage (`?unit=&from=&to=`).
+  router.get("/api/admin/suggested-prices", guard(async (_req, env, _p, url) => {
+    const channels = parseChannelMarkups(await getSetting(env.DB, CHANNEL_MARKUPS_KEY));
+    const rawPrice = url.searchParams.get("priceCents");
+    if (rawPrice != null) {
+      const cents = Math.round(Number(rawPrice));
+      if (!Number.isFinite(cents) || cents < 1) return apiError(400, "priceCents invalide");
+      return json({ directCents: cents, channels: suggestForChannels(cents, channels), formula: CHANNEL_PRICE_FORMULA });
+    }
+
+    const unitId = intParam(url.searchParams.get("unit"), 0);
+    if (!unitId) return apiError(400, "priceCents ou unit requis");
+    const range = parseRange(url.searchParams.get("from") ?? "", url.searchParams.get("to") ?? "");
+    if (!range.ok) return apiError(400, range.message);
+    const toExclusive = addDays(range.to, 1);
+    const ctx = await getQuoteContext(env.DB, unitId, { from: range.from, toExclusive });
+    if (!ctx) return apiError(404, "hébergement inconnu");
+    const days = rateCalendar(ctx.pricingUnit, range.from, toExclusive, ctx.seasons, ctx.rateRules, ctx.rateOverrides);
     return json({
-      unit: { id: ctx.unit.id, name: ctx.unit.name, cleaningFeeCents: ctx.unit.cleaningFeeCents },
-      from,
-      to,
-      days,
-      seasons: ctx.seasons,
+      unit: { id: ctx.unit.id, name: ctx.unit.name },
+      from: range.from,
+      to: range.to,
+      formula: CHANNEL_PRICE_FORMULA,
+      days: days.map((d) => ({
+        date: d.date,
+        directCents: d.priceCents,
+        source: d.source,
+        channels: d.priceCents == null ? [] : suggestForChannels(d.priceCents, channels),
+      })),
     });
   }));
 
@@ -931,15 +1219,19 @@ export function registerAdminRoutes(router: Router): void {
   router.post("/api/admin/rate-rules", guard(async (req, env, _p, _url, execCtx) => {
     const body = await readJson<Partial<RateRuleInput>>(req);
     if (!body || !body.unitId) return apiError(400, "unitId requis");
-    const priceWeek = Math.round(Number(body.priceWeekCents));
-    const priceWeekend = Math.round(Number(body.priceWeekendCents ?? priceWeek));
-    if (!Number.isFinite(priceWeek) || priceWeek < 0) return apiError(400, "prix semaine invalide");
+    // Garde-fou : prix strictement positif ET dans les bornes de l'hébergement
+    // (issue #50 / #31). Même règle qu'au PATCH, appliquée au même endroit.
+    const bounds = await boundsForUnit(env.DB, Number(body.unitId));
+    const week = checkPrice(body.priceWeekCents, bounds, "prix semaine");
+    if (!week.ok) return apiError(400, week.message);
+    const weekend = checkPrice(body.priceWeekendCents ?? week.cents, bounds, "prix weekend");
+    if (!weekend.ok) return apiError(400, weekend.message);
     try {
       const id = await createRateRule(env.DB, {
         unitId: Number(body.unitId),
         seasonId: body.seasonId != null ? Number(body.seasonId) : null,
-        priceWeekCents: priceWeek,
-        priceWeekendCents: priceWeekend,
+        priceWeekCents: week.cents,
+        priceWeekendCents: weekend.cents,
         holidayPct: Math.floor(Number(body.holidayPct ?? 0)),
         minNights: Math.max(1, Math.floor(Number(body.minNights ?? 1))),
         checkinDays: Array.isArray(body.checkinDays) ? body.checkinDays.map(Number).filter((d) => d >= 0 && d <= 6) : null,
@@ -958,9 +1250,30 @@ export function registerAdminRoutes(router: Router): void {
     const id = intParam(p.id, 0);
     const body = await readJson<Partial<RateRuleInput>>(req);
     if (!id || !body) return apiError(400, "requête invalide");
+
+    // ISSUE #50 — ce PATCH n'avait AUCUNE borne basse là où le POST en avait
+    // une, et il déclenche le push vers Beds24 juste en dessous. Un champ vidé
+    // par mégarde (`toCents("") === 0` côté back-office) publiait donc 0 €/nuit
+    // sur Airbnb et Booking. Le trou se ferme ici, avant toute écriture.
+    const rule = await getRateRule(env.DB, id);
+    if (!rule) return apiError(404, "règle tarifaire inconnue");
+    const bounds = await boundsForUnit(env.DB, rule.unitId);
+    let priceWeek: number | undefined;
+    let priceWeekend: number | undefined;
+    if (body.priceWeekCents !== undefined) {
+      const c = checkPrice(body.priceWeekCents, bounds, "prix semaine");
+      if (!c.ok) return apiError(400, c.message);
+      priceWeek = c.cents;
+    }
+    if (body.priceWeekendCents !== undefined) {
+      const c = checkPrice(body.priceWeekendCents, bounds, "prix weekend");
+      if (!c.ok) return apiError(400, c.message);
+      priceWeekend = c.cents;
+    }
+
     await updateRateRule(env.DB, id, {
-      priceWeekCents: body.priceWeekCents != null ? Math.round(Number(body.priceWeekCents)) : undefined,
-      priceWeekendCents: body.priceWeekendCents != null ? Math.round(Number(body.priceWeekendCents)) : undefined,
+      priceWeekCents: priceWeek,
+      priceWeekendCents: priceWeekend,
       holidayPct: body.holidayPct != null ? Math.floor(Number(body.holidayPct)) : undefined,
       minNights: body.minNights != null ? Math.max(1, Math.floor(Number(body.minNights))) : undefined,
       checkinDays:

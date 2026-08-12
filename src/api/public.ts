@@ -27,6 +27,7 @@ import {
   listPayments,
   listPromotions,
   listRateRules,
+  listRateOverridesForProperty,
   listSeasons,
   listUnits,
   markPaymentStatus,
@@ -225,7 +226,7 @@ export function registerPublicRoutes(router: Router): void {
       const fitsCapacity = persons <= u.capacityMax;
       let quote: Record<string, unknown> | null = null;
       if (available && fitsCapacity) {
-        const ctx = await getQuoteContext(db, u.id);
+        const ctx = await getQuoteContext(db, u.id, { from: checkin, toExclusive: checkout });
         if (ctx) {
           const q = quoteFromContext(ctx, { unitId: u.id, checkin, checkout, adults, children }, today);
           quote = {
@@ -288,11 +289,15 @@ export function registerPublicRoutes(router: Router): void {
     const [y, m] = month.split("-").map(Number);
     const to = m === 12 ? `${(y ?? 0) + 1}-01-01` : `${y}-${String((m ?? 0) + 1).padStart(2, "0")}-01`;
 
-    const [units, links, seasons, rules, rows] = await Promise.all([
+    // Les surcharges par jour entrent ici aussi : sans elles, le calendrier
+    // public afficherait le prix de saison tandis que le devis facturerait la
+    // surcharge — un écart visible du client, entre l'annonce et le paiement.
+    const [units, links, seasons, rules, overrides, rows] = await Promise.all([
       listUnits(db, property.id),
       listLinks(db, property.id),
       listSeasons(db, property.id),
       listRateRules(db, property.id),
+      listRateOverridesForProperty(db, property.id, from, to),
       bookingsInWindow(db, property.id, from, to),
     ]);
     const now = sqlNow();
@@ -319,7 +324,7 @@ export function registerPublicRoutes(router: Router): void {
     });
 
     const out = active.map((u) => {
-      const rates = rateCalendar(toPricingUnit(u), from, to, seasons, rules);
+      const rates = rateCalendar(toPricingUnit(u), from, to, seasons, rules, overrides);
       return {
         unitId: u.id,
         name: u.name,

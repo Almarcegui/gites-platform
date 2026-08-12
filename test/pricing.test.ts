@@ -380,6 +380,139 @@ describe("rateCalendar (calendrier des tarifs par jour)", () => {
   });
 });
 
+// -----------------------------------------------------------------------------
+// Surcharges par jour (issue #23 — migration 0014)
+// -----------------------------------------------------------------------------
+
+describe("surcharges par jour (rate_overrides)", () => {
+  it("priorité surcharge > saison > tarif de base sur un devis de plusieurs nuits", () => {
+    // La Scierie, lun 02/03 → ven 06/03 (4 nuits de semaine, tarif de base 120 €).
+    // Surcharge de 200 € sur le mardi 03/03 et le mercredi 04/03.
+    // Hébergement = 120 + 200 + 200 + 120 = 640 € ; taxe 4 pers. × 4 n = 16 €.
+    const q = computeQuote(
+      baseRequest({
+        rateOverrides: [
+          { unitId: 2, date: "2026-03-03", priceCents: 20000, minNights: null },
+          { unitId: 2, date: "2026-03-04", priceCents: 20000, minNights: null },
+        ],
+      }),
+    );
+    expect(q.ok).toBe(true);
+    expect(q.accommodationCents).toBe(64000);
+    expect(q.totalCents).toBe(65600);
+    // Les nuits surchargées sortent du groupe de leur saison : le devis le dit.
+    const manuelle = q.lines.find((l) => l.label.includes("prix fixé à la main"));
+    expect(manuelle?.amountCents).toBe(40000);
+    expectLinesSumToTotal(q);
+  });
+
+  it("une surcharge de saison prime la règle de saison, pas seulement le tarif de base", () => {
+    // Sam 18/07 → dim 19/07 en Haute saison : nuit weekend à 180 €.
+    // Surcharge à 250 € → 250 € et non 180 €.
+    const q = computeQuote(
+      baseRequest({
+        checkin: "2026-07-18", checkout: "2026-07-19", adults: 2,
+        rateRules: RULES.map((r) => (r.id === 22 ? { ...r, minNights: 1 } : r)),
+        rateOverrides: [{ unitId: 2, date: "2026-07-18", priceCents: 25000, minNights: null }],
+      }),
+    );
+    expect(q.ok).toBe(true);
+    expect(q.accommodationCents).toBe(25000);
+  });
+
+  it("la surcharge est un PRIX FINAL ABSOLU : ni weekend ni majoration fériés dessus (spec § 3)", () => {
+    // Mar 21/07/2026 = fête nationale, majorée de 15 % : 160 → 184 € sans surcharge.
+    // Avec une surcharge à 200 €, on facture 200 € — pas 230 €.
+    const sansSurcharge = rateCalendar(SCIERIE, "2026-07-21", "2026-07-22", SEASONS, RULES);
+    expect(sansSurcharge[0]).toMatchObject({ priceCents: 18400, holidayRated: true, source: "saison" });
+
+    const avec = rateCalendar(SCIERIE, "2026-07-21", "2026-07-22", SEASONS, RULES, [
+      { unitId: 2, date: "2026-07-21", priceCents: 20000, minNights: null },
+    ]);
+    expect(avec[0]).toMatchObject({
+      priceCents: 20000,
+      source: "override",
+      holidayRated: false,
+      fallbackPriceCents: 18400, // ce qu'affiche « Sans cette valeur : 184 € »
+      overridePriceCents: 20000,
+    });
+
+    // Idem sur une nuit de weekend : 180 € weekend → 200 €, pas 200 + supplément.
+    const we = rateCalendar(SCIERIE, "2026-07-18", "2026-07-19", SEASONS, RULES, [
+      { unitId: 2, date: "2026-07-18", priceCents: 20000, minNights: null },
+    ]);
+    expect(we[0]).toMatchObject({ priceCents: 20000, weekend: true, fallbackPriceCents: 18000 });
+  });
+
+  it("un minimum de nuits posé sur le jour d'arrivée est appliqué", () => {
+    // Tarif de base : min 2 nuits. Surcharge min 5 sur le lundi 02/03 (arrivée)
+    // → un séjour de 4 nuits est refusé, 5 nuits passe.
+    const over = [{ unitId: 2, date: "2026-03-02", priceCents: null, minNights: 5 }];
+    const court = computeQuote(baseRequest({ rateOverrides: over }));
+    expect(court.ok).toBe(false);
+    expect(court.errors).toContain("min_nights");
+    expect(court.minNights).toBe(5);
+
+    const long = computeQuote(baseRequest({ checkout: "2026-03-07", rateOverrides: over }));
+    expect(long.ok).toBe(true);
+    expect(long.minNights).toBe(5);
+  });
+
+  it("un minimum de nuits posé sur une nuit ENJAMBÉE ne bloque pas le séjour (spec § 4)", () => {
+    // Surcharge min 5 sur le mercredi 04/03, arrivée le lundi 02/03 : le moteur
+    // ne lit le min-nuits que de la nuit d'arrivée → séjour de 4 nuits accepté.
+    const q = computeQuote(
+      baseRequest({ rateOverrides: [{ unitId: 2, date: "2026-03-04", priceCents: null, minNights: 5 }] }),
+    );
+    expect(q.ok).toBe(true);
+    expect(q.minNights).toBe(2);
+  });
+
+  it("une surcharge de min-nuits seule ne touche pas au prix", () => {
+    const days = rateCalendar(SCIERIE, "2026-03-02", "2026-03-03", SEASONS, RULES, [
+      { unitId: 2, date: "2026-03-02", priceCents: null, minNights: 4 },
+    ]);
+    expect(days[0]).toMatchObject({
+      priceCents: 12000,       // inchangé : le prix vient toujours du tarif de base
+      source: "base",
+      minNights: 4,
+      minNightsSource: "override",
+      overridePriceCents: null,
+      overrideMinNights: 4,
+    });
+  });
+
+  it("retirer la surcharge fait revenir la saison, jamais un 0 fantôme", () => {
+    const days = rateCalendar(SCIERIE, "2026-07-01", "2026-07-02", SEASONS, RULES, []);
+    expect(days[0]).toMatchObject({ priceCents: 16000, source: "saison", overridePriceCents: null });
+  });
+
+  it("une surcharge couvre un jour SANS aucune règle tarifaire", () => {
+    const orpheline: UnitPricingInfo = { id: 99, name: "Sans règle", compositePricing: "own", cleaningFeeCents: 0, components: [] };
+    const days = rateCalendar(orpheline, "2026-03-02", "2026-03-04", SEASONS, RULES, [
+      { unitId: 99, date: "2026-03-02", priceCents: 9000, minNights: 3 },
+    ]);
+    expect(days[0]).toMatchObject({ priceCents: 9000, source: "override", minNights: 3, fallbackPriceCents: null });
+    expect(days[1]?.priceCents).toBeNull(); // le jour suivant reste non couvert
+  });
+
+  it("composite « somme » : la surcharge d'une composante remonte dans le total", () => {
+    // Ven 06/03 : Scieur 220 € + Scierie 150 € = 370 €. Surcharge Scierie à 100 €
+    // → 320 €, et la provenance du jour passe à « override » pour la coloration.
+    const days = rateCalendar(DOMAINE, "2026-03-06", "2026-03-07", SEASONS, RULES, [
+      { unitId: 2, date: "2026-03-06", priceCents: 10000, minNights: null },
+    ]);
+    expect(days[0]).toMatchObject({ priceCents: 32000, source: "override", fallbackPriceCents: 37000 });
+  });
+
+  it("les surcharges d'une autre unité n'ont aucun effet", () => {
+    const days = rateCalendar(SCIERIE, "2026-03-02", "2026-03-03", SEASONS, RULES, [
+      { unitId: 1, date: "2026-03-02", priceCents: 99900, minNights: null },
+    ]);
+    expect(days[0]).toMatchObject({ priceCents: 12000, source: "base" });
+  });
+});
+
 describe("garde-fous", () => {
   it("dates invalides", () => {
     const q = computeQuote(baseRequest({ checkin: "2026-03-06", checkout: "2026-03-06" }));
