@@ -243,10 +243,14 @@ describe("admin", () => {
     const stats = await call("GET", `/api/admin/stats?property=1&year=${year}`);
     expect(stats.status).toBe(200);
     const current = stats.data.current as { soldNights: number; occupancyPct: number; perUnit: { nights: number }[] };
-    expect(current.soldNights).toBe(7);
-    // le Domaine occupe SES DEUX maisons : l'occupation compte 14 nuits physiques
+    // le séjour tombe 120 jours après aujourd'hui : fin août, il chevauche le Nouvel An —
+    // on ne compte que les nuits qui appartiennent à l'année interrogée
+    let nightsInYear = 0;
+    for (let d = CHECKIN; d < CHECKOUT; d = addDays(d, 1)) if (d.startsWith(`${year}-`)) nightsInYear += 1;
+    expect(current.soldNights).toBe(nightsInYear);
+    // le Domaine occupe SES DEUX maisons : l'occupation compte le double de nuits physiques
     const months = (stats.data.current as { months: { occupiedNights: number }[] }).months;
-    expect(months.reduce((s, m) => s + m.occupiedNights, 0)).toBe(14);
+    expect(months.reduce((s, m) => s + m.occupiedNights, 0)).toBe(nightsInYear * 2);
 
     const overview = await call("GET", "/api/admin/overview?property=1");
     expect(overview.status).toBe(200);
