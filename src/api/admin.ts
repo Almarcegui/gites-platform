@@ -8,6 +8,15 @@ import { blockingUnitIds, blocksAsSpans, isActiveBooking, isUnitFree } from "../
 import { rateCalendar, type RateOverride, type UnitPricingInfo } from "../core/pricing";
 import { detectDrift, type DriftSignal } from "../core/drift";
 import {
+  GUEST_ID_TYPES,
+  GUEST_ID_TYPE_FR,
+  GUEST_REGISTER_RETENTION_YEARS,
+  MAX_GUEST_ENTRIES_PER_REQUEST,
+  MAX_REGISTER_EXPORT_DAYS,
+  parseGuestEntry,
+  type GuestRegisterEntry,
+} from "../core/guest-register";
+import {
   CHANNEL_MARKUPS_KEY,
   CHANNEL_PRICE_FORMULA,
   checkBounds,
@@ -51,6 +60,9 @@ import {
   getProperty,
   getQuoteContext,
   getRateRule,
+  insertGuestEntry,
+  listGuestRegister,
+  listGuestRegisterBetween,
   getUnit,
   getSettings,
   listAudit,
@@ -1274,6 +1286,138 @@ export function registerAdminRoutes(router: Router): void {
       quote = null;
     }
     return json({ booking, payments, emails, history, quote });
+  }));
+
+  // --- registre des personnes hébergées (issue #84) -----------------------------
+  //
+  // Journal append-only, saisi À L'ARRIVÉE depuis la fiche réservation. Rien
+  // n'est collecté au moment de la réservation en ligne : le tunnel public ne
+  // connaît pas ces routes, et aucune sortie du système (e-mail, canal OTA,
+  // export iCal, statistiques, voucher) ne lit cette table.
+
+  router.get("/api/admin/bookings/:id/guest-register", guard(async (_req, env, p) => {
+    const id = intParam(p.id, 0);
+    const booking = await getBooking(env.DB, id);
+    if (!booking) return apiError(404, "réservation inconnue");
+    const guest = booking.guestId != null ? await getGuest(env.DB, booking.guestId) : null;
+    return json({
+      entries: await listGuestRegister(env.DB, id),
+      idTypes: GUEST_ID_TYPES.map((value) => ({ value, label: GUEST_ID_TYPE_FR[value] })),
+      // Pré-remplissage du premier occupant : le réservant, dont on a déjà le
+      // nom. Les champs d'état civil restent vides — ils se lisent sur la
+      // pièce d'identité présentée à l'arrivée, ils ne se devinent pas.
+      prefill: {
+        firstName: guest?.firstName ?? "",
+        lastName: guest?.lastName ?? "",
+        nationality: guest?.country ?? "",
+        arrivalDate: booking.checkin,
+        departureDate: booking.checkout,
+        occupants: booking.adults + booking.children,
+      },
+      retentionYears: GUEST_REGISTER_RETENTION_YEARS,
+    });
+  }));
+
+  router.post("/api/admin/bookings/:id/guest-register", guard(async (req, env, p) => {
+    const id = intParam(p.id, 0);
+    const booking = await getBooking(env.DB, id);
+    if (!booking) return apiError(404, "réservation inconnue");
+    // Une réservation annulée n'a hébergé personne : le masquage du bouton
+    // côté back-office ne suffit pas, la route le refuse aussi.
+    if (booking.status === "cancelled") return apiError(409, "réservation annulée — aucun occupant à enregistrer");
+    const body = await readJson<{ entries?: unknown }>(req);
+    const raw = Array.isArray(body?.entries) ? body.entries : null;
+    if (!raw || raw.length === 0) return apiError(400, "aucun occupant à enregistrer");
+    if (raw.length > MAX_GUEST_ENTRIES_PER_REQUEST) {
+      return apiError(400, `trop d'occupants en une fois (max ${MAX_GUEST_ENTRIES_PER_REQUEST})`);
+    }
+
+    // Tout est validé AVANT la première écriture : une saisie de 4 occupants
+    // dont le 3e est fautif ne doit pas laisser 2 lignes orphelines en base.
+    const today = todayInZone();
+    const parsed: GuestRegisterEntry[] = [];
+    for (let i = 0; i < raw.length; i++) {
+      const res = parseGuestEntry(raw[i], today);
+      if (!res.ok) return apiError(400, `occupant ${i + 1} : ${res.message}`);
+      // Les dates déclarées restent DANS le séjour. Sans cette borne, une
+      // faute de frappe sur l'année de départ sortait la réservation entière
+      // du délai de conservation au passage suivant de la purge — ou l'y
+      // enfermait pour un siècle (contre-review du 2026-08-28).
+      if (res.entry.arrivalDate < booking.checkin || res.entry.departureDate > booking.checkout) {
+        return apiError(400, `occupant ${i + 1} : dates hors du séjour (${booking.checkin} → ${booking.checkout})`);
+      }
+      parsed.push(res.entry);
+    }
+
+    // Une correction se fait ligne par ligne. C'est le SEUL cas où une
+    // insertion peut être refusée (ligne déjà remplacée), donc le seul où un
+    // lot pourrait s'arrêter en cours de route et laisser des lignes déjà
+    // écrites derrière lui — l'append-only n'ayant pas de retour en arrière.
+    // Un lot de plusieurs occupants ne porte donc jamais de correction, et ne
+    // peut pas échouer à mi-parcours.
+    if (parsed.length > 1 && parsed.some((e) => e.supersedesId != null)) {
+      return apiError(400, "une correction s'enregistre seule, pas dans un lot d'occupants");
+    }
+
+    const by = currentUser(req);
+    const ids: number[] = [];
+    for (const entry of parsed) {
+      const res = await insertGuestEntry(env.DB, { bookingId: id, entry, recordedBy: by });
+      if (!res.ok) {
+        // La ligne visée n'existe pas, appartient à une autre réservation, ou
+        // a déjà été corrigée. Le lot ne portant qu'une correction à la fois
+        // (garde ci-dessus), rien n'a encore été écrit ici.
+        return apiError(409, "cette ligne a déjà été corrigée ou n'appartient pas à cette réservation");
+      }
+      ids.push(res.id);
+    }
+
+    // Journal d'audit : le NOMBRE d'occupants et rien d'autre. Aucune donnée
+    // nominative ne doit transiter par `audit_log`, qui est relu et exporté
+    // dans des contextes qui n'ont pas à connaître le registre.
+    await audit(env.DB, "admin", "guest_register.record", `booking:${id}`, {
+      occupants: ids.length,
+      corrections: parsed.filter((e) => e.supersedesId != null).length,
+      par: by,
+    });
+    return json({ entries: await listGuestRegister(env.DB, id) }, 201);
+  }));
+
+  // Export CSV par période — la sortie unique de ces données, sur demande
+  // d'une autorité. Retient les séjours qui CROISENT [from, to], bornes
+  // incluses ; `property` restreint au domaine demandé.
+  router.get("/api/admin/guest-register.csv", guard(async (req, env, _p, url) => {
+    const from = url.searchParams.get("from") ?? "";
+    const to = url.searchParams.get("to") ?? "";
+    if (!isIsoDate(from) || !isIsoDate(to)) return apiError(400, "période requise (from et to, format AAAA-MM-JJ)");
+    if (from > to) return apiError(400, "la date de fin doit suivre la date de début");
+    if (diffDays(from, to) > MAX_REGISTER_EXPORT_DAYS) {
+      return apiError(400, `période trop longue (max ${MAX_REGISTER_EXPORT_DAYS} jours)`);
+    }
+    const propertyId = intParam(url.searchParams.get("property"), 0) || undefined;
+    const entries = await listGuestRegisterBetween(env.DB, from, to, propertyId);
+    const rows: unknown[][] = [
+      [
+        "Réservation", "Hébergement", "Nom", "Prénom", "Date de naissance", "Nationalité",
+        "Type de pièce", "Numéro de pièce", "Arrivée", "Départ", "Saisi par", "Saisi le", "État",
+      ],
+      ...entries.map((e) => [
+        e.bookingReference ?? "", e.unitName ?? "", e.lastName, e.firstName, e.birthDate, e.nationality,
+        GUEST_ID_TYPE_FR[e.idType] ?? e.idType, e.idNumber, e.arrivalDate, e.departureDate,
+        e.recordedBy, e.recordedAt,
+        e.supersededById != null
+          ? `remplacée par la ligne ${e.supersededById}`
+          : e.supersedesId != null
+            ? `en vigueur (remplace la ligne ${e.supersedesId})`
+            : "en vigueur",
+      ]),
+    ];
+    // L'export lui aussi se trace sans donnée nominative : qui a exporté quelle
+    // période, et combien de lignes en sont sorties.
+    await audit(env.DB, "admin", "guest_register.export", undefined, {
+      from, to, property: propertyId ?? "tous", lignes: entries.length, par: currentUser(req),
+    });
+    return csvResponse(rows, `registre-${from}_${to}.csv`);
   }));
 
   // Vente manuelle (résa téléphone) : devis serveur + création directe.

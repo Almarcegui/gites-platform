@@ -9,6 +9,7 @@
 
 import { addDays, isIsoDate, sqlNow, todayInZone, type IsoDate } from "../core/dates";
 import type { UnitLink } from "../core/availability";
+import type { GuestIdType, GuestRegisterEntry } from "../core/guest-register";
 import type { OptionDef, Promotion, RateOverride, RateRule, Season, UnitPricingInfo } from "../core/pricing";
 import {
   MESSAGE_UNANSWERED_HOURS,
@@ -2866,6 +2867,192 @@ export async function setSyncConflictStatus(
     .bind(id, status, reason, at)
     .run();
   return (res.meta.changes ?? 0) > 0;
+}
+
+// ---------------------------------------------------------------------------
+// Registre des personnes hébergées (issue #84)
+//
+// Journal APPEND-ONLY. Aucune fonction de ce bloc ne fait d'UPDATE ni de DELETE
+// de contenu : corriger une ligne, c'est en insérer une nouvelle qui la
+// remplace (`supersedes_id`). Le seul DELETE est la purge de conservation, en
+// fin de bloc, appelée par le traitement planifié.
+//
+// Cloisonnement : ces lignes ne sont lues QUE par la fiche réservation du
+// back-office et par l'export CSV admin. Aucune autre fonction de ce fichier
+// ne joint cette table, donc ni les e-mails, ni les canaux OTA, ni l'export
+// iCal, ni les statistiques, ni le voucher ne peuvent la voir.
+// ---------------------------------------------------------------------------
+
+export interface GuestRegisterRow {
+  id: number;
+  bookingId: number;
+  supersedesId: number | null;
+  /** Id de la ligne qui remplace celle-ci, s'il en existe une (lecture seule). */
+  supersededById: number | null;
+  lastName: string;
+  firstName: string;
+  birthDate: IsoDate;
+  nationality: string;
+  idType: GuestIdType;
+  idNumber: string;
+  arrivalDate: IsoDate;
+  departureDate: IsoDate;
+  recordedBy: string;
+  recordedAt: string;
+  bookingReference?: string;
+  unitName?: string;
+}
+
+function mapGuestRegister(r: Raw): GuestRegisterRow {
+  return {
+    id: num(r.id),
+    bookingId: num(r.booking_id),
+    supersedesId: numOrNull(r.supersedes_id),
+    supersededById: numOrNull(r.superseded_by_id),
+    lastName: str(r.last_name),
+    firstName: str(r.first_name),
+    birthDate: str(r.birth_date),
+    nationality: str(r.nationality),
+    idType: str(r.id_type) as GuestIdType,
+    idNumber: str(r.id_number),
+    arrivalDate: str(r.arrival_date),
+    departureDate: str(r.departure_date),
+    recordedBy: str(r.recorded_by),
+    recordedAt: str(r.recorded_at),
+    bookingReference: strOrNull(r.booking_reference) ?? undefined,
+    unitName: strOrNull(r.unit_name) ?? undefined,
+  };
+}
+
+/** `superseded_by_id` est calculé à la lecture (auto-jointure) plutôt que
+ *  stocké : une colonne dénormalisée demanderait un UPDATE de la ligne
+ *  remplacée, ce que l'append-only interdit. */
+const GUEST_REGISTER_SELECT = `
+  SELECT r.*, (SELECT s.id FROM guest_register s WHERE s.supersedes_id = r.id) AS superseded_by_id
+    FROM guest_register r`;
+
+export type InsertGuestEntryResult =
+  | { ok: true; id: number }
+  | { ok: false; reason: "supersedes" };
+
+/** Ajoute UNE déclaration d'occupant.
+ *
+ *  Quand `supersedesId` est fourni, l'insertion est conditionnée dans la MÊME
+ *  instruction : la ligne corrigée doit exister, appartenir à cette
+ *  réservation, et ne pas être déjà remplacée. Aucune fenêtre entre la
+ *  vérification et l'écriture — deux corrections simultanées de la même ligne
+ *  ne peuvent pas passer toutes les deux (l'index UNIQUE partiel de la
+ *  migration 0020 est la seconde ceinture). */
+export async function insertGuestEntry(
+  db: D1Database,
+  input: {
+    bookingId: number;
+    entry: GuestRegisterEntry;
+    recordedBy: string;
+    now?: Date;
+  },
+): Promise<InsertGuestEntryResult> {
+  const e = input.entry;
+  const res = await db
+    .prepare(
+      `INSERT INTO guest_register
+         (booking_id, supersedes_id, last_name, first_name, birth_date, nationality,
+          id_type, id_number, arrival_date, departure_date, recorded_by, recorded_at)
+       SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12
+        WHERE ?2 IS NULL
+           OR EXISTS (
+                SELECT 1 FROM guest_register o
+                 WHERE o.id = ?2
+                   AND o.booking_id = ?1
+                   AND NOT EXISTS (SELECT 1 FROM guest_register s WHERE s.supersedes_id = o.id)
+              )`,
+    )
+    .bind(
+      input.bookingId,
+      e.supersedesId,
+      e.lastName,
+      e.firstName,
+      e.birthDate,
+      e.nationality,
+      e.idType,
+      e.idNumber,
+      e.arrivalDate,
+      e.departureDate,
+      input.recordedBy,
+      sqlNow(input.now ?? new Date()),
+    )
+    .run();
+  if (res.meta.changes !== 1) return { ok: false, reason: "supersedes" };
+  return { ok: true, id: res.meta.last_row_id };
+}
+
+/** Toutes les lignes d'une réservation, corrections comprises, dans l'ordre de
+ *  saisie. Le back-office distingue « en vigueur » et « remplacée » avec
+ *  `supersededById`. */
+export async function listGuestRegister(db: D1Database, bookingId: number): Promise<GuestRegisterRow[]> {
+  const { results } = await db
+    .prepare(`${GUEST_REGISTER_SELECT} WHERE r.booking_id = ?1 ORDER BY r.id`)
+    .bind(bookingId)
+    .all();
+  return (results as Raw[]).map(mapGuestRegister);
+}
+
+/** Lignes dont le SÉJOUR croise [from, to] (bornes incluses) — la question
+ *  que pose une autorité est « qui était hébergé pendant cette période », pas
+ *  « qui est arrivé pendant cette période » : une personne présente le 2
+ *  juillet et arrivée le 28 juin doit sortir dans un export de juillet.
+ *
+ *  Le chevauchement rattrape aussi le cas d'une correction qui rectifie une
+ *  date : filtrer sur la seule arrivée pouvait sortir la ligne d'origine sans
+ *  sa correction, donc un CSV portant un renvoi vers une ligne absente
+ *  (contre-review du 2026-08-28).
+ *
+ *  `propertyId` restreint au domaine demandé ; absent, l'export les couvre
+ *  tous. Jointure à la réservation pour situer le séjour (référence,
+ *  hébergement) — `bookings.unit_id` est NOT NULL et aucune unité n'est
+ *  jamais supprimée, la jointure interne ne peut donc rien perdre. */
+export async function listGuestRegisterBetween(
+  db: D1Database,
+  from: IsoDate,
+  to: IsoDate,
+  propertyId?: number,
+): Promise<GuestRegisterRow[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT r.*, (SELECT s.id FROM guest_register s WHERE s.supersedes_id = r.id) AS superseded_by_id,
+              b.reference AS booking_reference, u.name AS unit_name
+         FROM guest_register r
+         JOIN bookings b ON b.id = r.booking_id
+         JOIN units u ON u.id = b.unit_id
+        WHERE r.arrival_date <= ?2 AND r.departure_date >= ?1
+          AND (?3 IS NULL OR u.property_id = ?3)
+        ORDER BY r.arrival_date, r.booking_id, r.id`,
+    )
+    .bind(from, to, propertyId ?? null)
+    .all();
+  return (results as Raw[]).map(mapGuestRegister);
+}
+
+/** Purge de conservation — LE SEUL DELETE du projet sur cette table.
+ *
+ *  Le tri se fait par RÉSERVATION et non ligne par ligne : une correction peut
+ *  porter une date de départ différente de la ligne qu'elle remplace, et
+ *  effacer la ligne d'origine sans sa correction laisserait une référence
+ *  `supersedes_id` orpheline. Un séjour ne sort donc qu'entier, et seulement
+ *  quand sa date de départ la PLUS RÉCENTE est antérieure à la butoir. */
+export async function purgeGuestRegisterBefore(db: D1Database, cutoff: IsoDate): Promise<number> {
+  const res = await db
+    .prepare(
+      `DELETE FROM guest_register
+        WHERE booking_id IN (
+          SELECT booking_id FROM guest_register
+           GROUP BY booking_id
+          HAVING MAX(departure_date) < ?1
+        )`,
+    )
+    .bind(cutoff)
+    .run();
+  return res.meta.changes ?? 0;
 }
 
 // ---------------------------------------------------------------------------

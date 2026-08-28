@@ -4,8 +4,8 @@
 // calendrier unifié (#24 #25).
 
 import {
-  api, copyText, currentPropertyId, dfr, dshort, esc, eur, eurInput, openBooking, openModal,
-  registerView, state, toCents, toast,
+  addDaysIso, api, copyText, currentPropertyId, dfr, downloadCsv, dshort, esc, eur, eurInput,
+  openBooking, openModal, registerView, state, toCents, toast, todayIso,
 } from "./app.js";
 
 const MODE_FR = {
@@ -404,6 +404,14 @@ export function registerConfigViews() {
         <div class="row" style="margin-top:10px"><button class="btn sm" id="cgvSave">Enregistrer les CGV</button>
         <span class="muted small">Version 2.0 posée par la migration 0016. Texte brut : une ligne « Article N » isolée est affichée en gras dans le tunnel. L'article 4.1 renvoie au pourcentage d'arrhes de l'hébergement, réglé ci-dessous.</span></div>
       </div>
+      <div class="card mb"><h3>Registre des personnes hébergées — export</h3>
+        <div class="row">
+          <div class="n"><label class="f">Du (séjour)</label><input id="regFrom" type="date" value="${esc(addDaysIso(todayIso(), -365))}"></div>
+          <div class="n"><label class="f">Au (séjour)</label><input id="regTo" type="date" value="${esc(todayIso())}"></div>
+          <div class="n"><button class="btn o sm" id="regExport">Exporter en CSV</button></div>
+        </div>
+        <p class="small muted" style="margin-top:6px">La saisie se fait à l'arrivée, sur la fiche de chaque réservation. Le registre est un journal : une ligne enregistrée ne se modifie pas, une correction ajoute une ligne qui remplace la précédente. Les lignes sont effacées automatiquement au-delà de la durée de conservation, et ne sortent d'ici par aucun autre canal.</p>
+      </div>
       <div class="card mb"><h3>Hébergements</h3>
         ${units
           .map((u) => {
@@ -501,6 +509,17 @@ export function registerConfigViews() {
         },
       });
       toast("Réglages email enregistrés");
+    };
+    root.querySelector("#regExport").onclick = () => {
+      const from = root.querySelector("#regFrom").value;
+      const to = root.querySelector("#regTo").value;
+      if (!from || !to || from > to) return toast("Période invalide", true);
+      // Restreint au domaine sélectionné : un export demandé pour un domaine
+      // n'a pas à sortir les occupants de l'autre.
+      downloadCsv(
+        `/api/admin/guest-register.csv?from=${from}&to=${to}&property=${currentPropertyId()}`,
+        `registre-${from}_${to}.csv`,
+      );
     };
     root.querySelector("#cgvSave").onclick = async () => {
       await api(`/api/admin/settings?property=${currentPropertyId()}`, {
