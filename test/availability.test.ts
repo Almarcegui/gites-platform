@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import {
   isActiveBooking,
   isUnitFree,
+  blockingSourceUnitIds,
   blockingUnitIds,
   busySpans,
   mergeSpans,
@@ -167,5 +168,36 @@ describe("périodes occupées (planning / export iCal)", () => {
       { checkin: "2026-08-10", checkout: "2026-08-16" },
       { checkin: "2026-08-20", checkout: "2026-08-23" },
     ]);
+  });
+});
+
+// Issue #45 — le tunnel doit pouvoir DIRE quelle unité fait tomber le Domaine.
+describe("sources d'un blocage (issue #45)", () => {
+  it("nomme la maison réservée qui bloque le Domaine entier", () => {
+    const bookings = [confirmed(2, "2026-08-10", "2026-08-12")];
+    expect(blockingSourceUnitIds(3, "2026-08-10", "2026-08-12", bookings, LINKS, NOW)).toEqual([2]);
+    // et réciproquement : une résa Domaine explique la Scierie indisponible
+    const inverse = [confirmed(3, "2026-08-10", "2026-08-12")];
+    expect(blockingSourceUnitIds(2, "2026-08-10", "2026-08-12", inverse, LINKS, NOW)).toEqual([3]);
+  });
+
+  it("les deux maisons prises → les deux sont citées, triées", () => {
+    const bookings = [confirmed(2, "2026-08-10", "2026-08-12"), confirmed(1, "2026-08-11", "2026-08-13")];
+    expect(blockingSourceUnitIds(3, "2026-08-10", "2026-08-12", bookings, LINKS, NOW)).toEqual([1, 2]);
+  });
+
+  it("sa propre réservation n'est pas une explication", () => {
+    const bookings = [confirmed(3, "2026-08-10", "2026-08-12")];
+    expect(blockingSourceUnitIds(3, "2026-08-10", "2026-08-12", bookings, LINKS, NOW)).toEqual([]);
+  });
+
+  it("hors chevauchement, hold expiré ou annulation : rien à expliquer", () => {
+    const ailleurs = [confirmed(2, "2026-09-10", "2026-09-12")];
+    expect(blockingSourceUnitIds(3, "2026-08-10", "2026-08-12", ailleurs, LINKS, NOW)).toEqual([]);
+    const expire: BookingSpan[] = [
+      { unitId: 2, checkin: "2026-08-10", checkout: "2026-08-12", status: "pending", holdExpiresAt: "2026-05-01 12:00:00" },
+      { unitId: 1, checkin: "2026-08-10", checkout: "2026-08-12", status: "cancelled" },
+    ];
+    expect(blockingSourceUnitIds(3, "2026-08-10", "2026-08-12", expire, LINKS, NOW)).toEqual([]);
   });
 });

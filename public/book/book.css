@@ -32,7 +32,24 @@ input[type=checkbox]{width:auto}
 .btn.big{width:100%;padding:13px;font-size:15px}
 
 .prop{display:flex;gap:14px;align-items:center;border:1px solid var(--line);border-radius:8px;padding:14px;background:#fff;margin-bottom:10px}
-.prop.off{opacity:.55}
+/* Carte indisponible : on assombrit la PHOTO, plus la carte entière.
+   L'ancien `opacity:.55` posé sur `.prop.off` s'appliquait au groupe : le badge
+   rouge passait sous le seuil de contraste AA, et les boutons de dates
+   proposées (issue #66) — pourtant cliquables — avaient l'air désactivés.
+   Une opacité d'enfant ne peut PAS remonter celle du parent : la seule sortie
+   est de cibler le décor. La carte porte maintenant une phrase à lire
+   (pourquoi le Domaine tombe, ce qui reste libre — issue #45), elle doit être
+   lisible. */
+.prop.off{background:#FCFBF9}
+.prop.off .ph{opacity:.5}
+.prop.off .info>b{color:var(--muted)}
+/* Carte choisie à l'étape « Hébergement » (issue #46) : bordure et fond
+   accentués, sans changer la géométrie (l'anneau est un box-shadow, pas une
+   bordure plus épaisse — sinon les cartes sautent au clic). Les autres cartes
+   restent cliquables : le bouton est un bascule `aria-pressed`. */
+.prop.sel{border-color:var(--accent);background:#F4F8F5;box-shadow:0 0 0 1px var(--accent)}
+/* Pourquoi cette unité est indisponible, quand une unité LIÉE occupe les nuits. */
+.prop .why{display:inline-block;margin-top:4px;line-height:1.45;color:var(--ink)}
 .prop .ph{width:110px;height:78px;background:#D8D2C4 center/cover no-repeat;border-radius:5px;flex:none;display:flex;align-items:center;justify-content:center;color:#8b8574;font-size:11px}
 .prop .info{flex:1;min-width:0}
 .prop .price{text-align:right;flex:none}

@@ -207,7 +207,12 @@ describe("admin", () => {
 
     // le Domaine est bloqué par liaison
     const avail = await call("GET", `/api/public/availability?property=pre-more&checkin=${CHECKIN}&checkout=${CHECKOUT}&adults=4`);
-    expect((avail.data.units as { unitId: number; available: boolean }[]).find((u) => u.unitId === 3)!.available).toBe(false);
+    const availUnits = avail.data.units as { unitId: number; available: boolean; blockedByUnitIds: number[] }[];
+    expect(availUnits.find((u) => u.unitId === 3)!.available).toBe(false);
+    // issue #45 : la réponse DIT quelle unité fait tomber le Domaine, et la
+    // maison restée libre ne porte aucune explication.
+    expect(availUnits.find((u) => u.unitId === 3)!.blockedByUnitIds).toEqual([1]);
+    expect(availUnits.find((u) => u.unitId === 2)!.blockedByUnitIds).toEqual([]);
 
     // planning : la ligne Domaine porte un blocage par liaison
     const planning = await call("GET", `/api/admin/planning?property=1&from=${CHECKIN}&to=${CHECKOUT}`);
