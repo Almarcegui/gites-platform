@@ -177,6 +177,16 @@ async function ownPendingHold(
   return booking;
 }
 
+/** Coordonnée de contact telle qu'elle peut être montrée au public.
+ *  Les seeds portent des valeurs `TODO_…` tant que l'adresse réelle n'est pas
+ *  tranchée (issue #4) : elles ne doivent jamais sortir du serveur — ni dans le
+ *  tunnel, ni sur le voucher, ni sur les pages légales (issue #9), qui affichent
+ *  alors leur repli (« via le formulaire de contact du site »). */
+export function publicContact(value: string | null | undefined): string | null {
+  const v = (value ?? "").trim();
+  return v === "" || /^TODO_/i.test(v) ? null : v;
+}
+
 export function registerPublicRoutes(router: Router): void {
   // --- liste des domaines (landing multi-biens) -------------------------------
   router.get("/api/public/properties", async (_req, env) => {
@@ -211,8 +221,8 @@ export function registerPublicRoutes(router: Router): void {
         name: property.name,
         address: property.address,
         commune: property.commune,
-        contactEmail: property.contactEmail,
-        contactPhone: property.contactPhone,
+        contactEmail: publicContact(property.contactEmail),
+        contactPhone: publicContact(property.contactPhone),
       },
       units: units
         .filter((u) => u.active)
@@ -872,8 +882,8 @@ export function registerPublicRoutes(router: Router): void {
       // Adresse du gîte : elle n'était nulle part sur le voucher, alors que
       // c'est l'information qu'on cherche la veille du départ (issue #47-7).
       contact: {
-        email: property?.contactEmail ?? null,
-        phone: property?.contactPhone ?? null,
+        email: publicContact(property?.contactEmail),
+        phone: publicContact(property?.contactPhone),
         address: property?.address ?? null,
         commune: property?.commune ?? null,
       },
