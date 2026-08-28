@@ -82,9 +82,10 @@ describe("issue #47 — micro-corrections du tunnel", () => {
     expect(VOUCHER).toMatch(/publicLabel && l\.unitPriceCents != null/);
   });
 
-  it("3. « et taxes » n'est plus promis quand la taxe de séjour vaut 0", () => {
+  it("3. « et taxes » n'est plus promis : le résumé dit « ménage et charges compris »", () => {
     expect(JS).not.toMatch(/ménage et taxes compris/);
-    expect(JS).toMatch(/ménage\$\{u\.quote\.taxCents > 0 \? " et taxe de séjour" : ""\} compris/);
+    expect(JS).not.toMatch(/taxe de séjour/);
+    expect(JS).toMatch(/ménage et charges compris/);
   });
 
   it("5. les trois pages cul-de-sac offrent un retour au site", () => {
