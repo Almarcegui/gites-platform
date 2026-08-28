@@ -4,8 +4,10 @@
 //  3. rappels de solde à l'échéance (une seule fois par résa, mode stub par défaut)
 //  4. push Beds24 des calendriers mappés (dispo + prix — inactif sans token)
 //
-// Plus deux ménages : sessions admin périmées, et sessions de paiement restées
-// « en attente » au-delà de leur durée de vie (issue #69).
+// Plus trois ménages : sessions admin périmées, sessions de paiement restées
+// « en attente » au-delà de leur durée de vie (issue #69), et purge du
+// registre des personnes hébergées au-delà de sa durée de conservation
+// (issue #84, vérifiée une fois par jour).
 
 import { sqlNow, todayInZone } from "../core/dates";
 import {
@@ -22,6 +24,7 @@ import { beds24Configured } from "./beds24";
 import { purgeExpiredSessions } from "./admin-auth";
 import { pullBeds24Bookings, pushCalendars } from "./beds24-sync";
 import { runDailyDigest } from "./digest";
+import { runGuestRegisterPurge } from "./guest-register";
 import { voucherUrl } from "./booking-flow";
 import { buildBalanceReminderEmail, queueEmail } from "./email";
 import { CRON_HEARTBEAT_KEY } from "./health";
@@ -164,6 +167,20 @@ export async function runScheduled(env: Env, now: Date = new Date(), fetcher: ty
     await runDailyReconcile(env, now);
   } catch (e) {
     await audit(db, "cron", "beds24.reconcile.error", undefined, { error: e instanceof Error ? e.message : String(e) });
+  }
+
+  // 4 ter. Registre des personnes hébergées : purge au-delà de la durée de
+  //    conservation (issue #84). Vérifié UNE FOIS PAR JOUR — le cron passe 96
+  //    fois, un DELETE quotidien tient le délai à la journée près. Le journal
+  //    ne porte QUE des compteurs : jamais un nom, une nationalité ni un
+  //    numéro de pièce ne doit se retrouver dans `audit_log`.
+  try {
+    const purge = await runGuestRegisterPurge(db, now);
+    if (purge.ran && purge.deleted > 0) {
+      await audit(db, "cron", "guest_register.purge", undefined, { lignes: purge.deleted, avant: purge.cutoff });
+    }
+  } catch (e) {
+    await audit(db, "cron", "guest_register.purge.error", undefined, { error: e instanceof Error ? e.message : String(e) });
   }
 
   // 5. Résumé quotidien au propriétaire (7 h, fuseau de Bruxelles). En DERNIER
