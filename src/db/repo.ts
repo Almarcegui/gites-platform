@@ -7,9 +7,17 @@
 // simultanées sur des unités en conflit ne peuvent jamais passer toutes les
 // deux. Ce comportement est prouvé par test/booking-db.test.ts (courses).
 
-import { isIsoDate, sqlNow, todayInZone, type IsoDate } from "../core/dates";
+import { addDays, isIsoDate, sqlNow, todayInZone, type IsoDate } from "../core/dates";
 import type { UnitLink } from "../core/availability";
 import type { OptionDef, Promotion, RateOverride, RateRule, Season, UnitPricingInfo } from "../core/pricing";
+import {
+  MESSAGE_UNANSWERED_HOURS,
+  RATE_HORIZON_DAYS,
+  type DriftInput,
+  type FeedState,
+  type MessageState,
+  type UnitRateTarget,
+} from "../core/drift";
 
 type Raw = Record<string, unknown>;
 const num = (v: unknown): number => Number(v ?? 0);
@@ -2015,6 +2023,128 @@ export async function healthSignals(db: D1Database, propertyId: number, now: Dat
     })),
     beds24LastPull: lastPull,
     beds24StaleHours: staleHours == null || Number.isNaN(staleHours) ? null : Math.round(staleHours * 10) / 10,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Signaux de dérive lente (carte « Santé », issue #71)
+// ---------------------------------------------------------------------------
+
+/** Rassemble ce dont les quatre détecteurs de `src/core/drift.ts` ont besoin.
+ *  Tout se calcule à partir des tables existantes — aucune migration.
+ *
+ *  Les fenêtres sont volontairement bornées : 90 jours de tarifs, les messages
+ *  d'un mois. Cette lecture tourne à chaque ouverture du tableau de bord. */
+export async function collectDriftInput(
+  db: D1Database,
+  propertyId: number,
+  now: Date = new Date(),
+): Promise<DriftInput> {
+  const today = todayInZone(now);
+  const horizonEnd = addDays(today, RATE_HORIZON_DAYS);
+
+  // 1. Flux iCal du domaine. `created_at` sert de point de départ aux flux
+  //    jamais relevés : un flux ajouté il y a dix minutes n'est pas en dérive.
+  const feedRows = await db
+    .prepare(
+      `SELECT f.id, f.name, f.active, f.last_sync_at, f.created_at, u.name AS unit_name
+         FROM ical_feeds f JOIN units u ON u.id = f.unit_id
+        WHERE u.property_id = ?1 ORDER BY f.id`,
+    )
+    .bind(propertyId)
+    .all();
+  const feeds: FeedState[] = (feedRows.results as Raw[]).map((r) => ({
+    id: num(r.id),
+    name: str(r.name),
+    unitName: strOrNull(r.unit_name),
+    active: num(r.active) === 1,
+    lastSyncAt: strOrNull(r.last_sync_at),
+    createdAt: strOrNull(r.created_at),
+  }));
+
+  // 2. Couverture tarifaire des unités actives. Le composite « somme » tire son
+  //    prix de ses composantes : il lui faut la même vue que le calendrier admin.
+  const [units, links, seasons, rules] = await Promise.all([
+    listUnits(db, propertyId),
+    listLinks(db, propertyId),
+    listSeasons(db, propertyId),
+    listRateRules(db, propertyId),
+  ]);
+  const activeUnits = units.filter((u) => u.active);
+  // Composantes d'un composite : les unités physiques qu'il bloque, ACTIVES OU
+  // NON — exactement ce que fait `getQuoteContext`, donc exactement ce qui sera
+  // facturé. Filtrer les inactives ferait additionner un domaine amputé : un
+  // prix valide, mais minoré, et aucun signal pour le dire.
+  const driftUnits: UnitRateTarget[] = activeUnits.map((u) => ({
+    active: true,
+    pricingUnit: {
+      id: u.id,
+      name: u.name,
+      compositePricing: u.isComposite ? u.compositePricing : "own",
+      cleaningFeeCents: u.cleaningFeeCents,
+      components: u.isComposite
+        ? links
+            .filter((l) => l.unitId === u.id && units.some((x) => x.id === l.blocksUnitId && !x.isComposite))
+            .map((l) => {
+              const c = units.find((x) => x.id === l.blocksUnitId);
+              return { id: l.blocksUnitId, name: c?.name ?? "", cleaningFeeCents: c?.cleaningFeeCents ?? 0 };
+            })
+        : [],
+    } satisfies UnitPricingInfo,
+  }));
+  const rateOverrides = await listRateOverrides(
+    db,
+    activeUnits.map((u) => u.id),
+    today,
+    horizonEnd,
+  );
+
+  // 3. Messages : un fil se juge sur son dernier échange, donc on lit large
+  //    autour du seuil (un mois) plutôt que la seule fenêtre de 48 h — sinon la
+  //    réponse de l'équipe, plus ancienne que la question, sortirait du cadre.
+  //    Tri DESCENDANT sous le plafond : si le mois dépasse 500 messages, ce sont
+  //    les PLUS RÉCENTS qu'il faut garder. Trier à l'endroit ferait deux dégâts
+  //    d'un coup — la question d'hier jamais vue, et la réponse d'hier hors
+  //    cadre, donc un fil clos annoncé en souffrance. Le détecteur retrie.
+  const since = sqlNow(new Date(now.getTime() - Math.max(30 * 24, MESSAGE_UNANSWERED_HOURS * 4) * 3_600_000));
+  const messageRows = await db
+    .prepare(
+      `SELECT m.id, m.direction, m.status, m.received_at, m.from_name, m.from_email, m.to_email,
+              m.booking_id, m.guest_id, b.reference AS booking_reference
+         FROM messages m LEFT JOIN bookings b ON b.id = m.booking_id
+        WHERE m.property_id = ?1 AND m.received_at >= ?2
+        ORDER BY m.id DESC LIMIT 500`,
+    )
+    .bind(propertyId, since)
+    .all();
+  const messages: MessageState[] = (messageRows.results as Raw[]).map((r) => ({
+    id: num(r.id),
+    direction: str(r.direction) === "out" ? "out" : "in",
+    status: str(r.status) === "traité" ? "traité" : "nouveau",
+    receivedAt: str(r.received_at),
+    fromName: strOrNull(r.from_name),
+    fromEmail: strOrNull(r.from_email),
+    toEmail: strOrNull(r.to_email),
+    bookingId: numOrNull(r.booking_id),
+    bookingReference: strOrNull(r.booking_reference),
+    guestId: numOrNull(r.guest_id),
+  }));
+
+  // 4. Battement de cœur du traitement planifié — la clé écrite en tête de
+  //    chaque tick (services/health.ts, issue #21), lue aussi par /api/public/health.
+  const heartbeat = await db
+    .prepare("SELECT value FROM app_settings WHERE key = 'cron_last_run'")
+    .first<{ value: string }>();
+
+  return {
+    feeds,
+    units: driftUnits,
+    today,
+    seasons,
+    rateRules: rules,
+    rateOverrides,
+    messages,
+    lastCronAt: heartbeat?.value ?? null,
   };
 }
 

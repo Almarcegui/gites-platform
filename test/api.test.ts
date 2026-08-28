@@ -553,3 +553,90 @@ describe("Lot 2 — tunnel de réservation", () => {
     expect((await call("POST", `/api/public/bookings/${reference}/pay`, { email: "autre@example.com" })).status).toBe(404);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Vente téléphone (issue #70) : le devis dit COMBIEN et SI c'est vendable.
+// Avant, le devis se calculait sans regarder le planning : on annonçait un
+// prix au téléphone sur un créneau déjà pris, et on ne l'apprenait qu'au 409
+// de la création — le client encore en ligne.
+// ---------------------------------------------------------------------------
+describe("vente téléphone — disponibilité vérifiée dans le devis", () => {
+  const quoteBody = (unitId: number) => ({
+    unitId,
+    checkin: CHECKIN,
+    checkout: CHECKOUT,
+    adults: 4,
+    children: 0,
+  });
+
+  it("créneau libre : le devis est calculé ET annoncé disponible", async () => {
+    const { status, data } = await call("POST", "/api/admin/quote", quoteBody(2));
+    expect(status).toBe(200);
+    expect((data.quote as { ok: boolean; totalCents: number }).ok).toBe(true);
+    const availability = data.availability as { available: boolean; conflicts: unknown[] };
+    expect(availability.available).toBe(true);
+    expect(availability.conflicts).toEqual([]);
+  });
+
+  it("créneau pris : le devis se calcule toujours, mais le conflit est NOMMÉ", async () => {
+    const created = await call("POST", "/api/public/bookings", bookingBody(2));
+    expect(created.status).toBe(201);
+    const reference = created.data.reference as string;
+
+    const { status, data } = await call("POST", "/api/admin/quote", quoteBody(2));
+    expect(status).toBe(200);
+    // Le prix reste calculable — c'est la disponibilité qui change de camp.
+    expect((data.quote as { ok: boolean }).ok).toBe(true);
+    const availability = data.availability as {
+      available: boolean;
+      conflicts: { reference: string; unitName: string; viaLink: boolean; status: string }[];
+    };
+    expect(availability.available).toBe(false);
+    expect(availability.conflicts).toHaveLength(1);
+    expect(availability.conflicts[0]!.reference).toBe(reference);
+    expect(availability.conflicts[0]!.unitName).toBe("La Scierie");
+    expect(availability.conflicts[0]!.viaLink).toBe(false);
+  });
+
+  it("même règle de liaison que le public : la Scierie prise ferme le Domaine entier", async () => {
+    const created = await call("POST", "/api/public/bookings", bookingBody(2));
+    expect(created.status).toBe(201);
+
+    const { data } = await call("POST", "/api/admin/quote", { ...quoteBody(3), adults: 12 });
+    const availability = data.availability as {
+      available: boolean;
+      conflicts: { unitName: string; viaLink: boolean }[];
+    };
+    expect(availability.available).toBe(false);
+    expect(availability.conflicts[0]!.viaLink).toBe(true);
+    expect(availability.conflicts[0]!.unitName).toBe("La Scierie");
+
+    // ... et l'autre maison, elle, reste vendable
+    const libre = await call("POST", "/api/admin/quote", quoteBody(1));
+    expect((libre.data.availability as { available: boolean }).available).toBe(true);
+  });
+
+  it("l'affichage n'est qu'une annonce : la création reste refusée en 409", async () => {
+    await call("POST", "/api/public/bookings", bookingBody(2));
+    const sale = await call("POST", "/api/admin/bookings", {
+      ...quoteBody(2),
+      guest: { lastName: "Vandenberghe", firstName: "Sophie", phone: "+32 470 11 22 33" },
+      confirmNow: true,
+      generatePaymentLink: false,
+    });
+    expect(sale.status).toBe(409);
+    expect(String(sale.data.error)).toContain("indisponible");
+  });
+
+  it("une option expirée ne bloque plus rien : le devis redevient disponible", async () => {
+    const created = await call("POST", "/api/public/bookings", bookingBody(2));
+    const reference = created.data.reference as string;
+    // On périme le hold à la main — c'est exactement ce que fait le cron.
+    await t.db
+      .prepare("UPDATE bookings SET hold_expires_at = '2020-01-01 00:00:00' WHERE reference = ?1")
+      .bind(reference)
+      .run();
+    const { data } = await call("POST", "/api/admin/quote", quoteBody(2));
+    expect((data.availability as { available: boolean }).available).toBe(true);
+  });
+});

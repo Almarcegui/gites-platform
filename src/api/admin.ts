@@ -3,9 +3,10 @@
 // (si configuré, exigé en header Authorization: Bearer …).
 
 import { apiError, json, readJson, Router, type Handler } from "./router";
-import { addDays, dayOfWeek, diffDays, isIsoDate, sqlNow, todayInZone, type IsoDate } from "../core/dates";
-import { isActiveBooking } from "../core/availability";
+import { addDays, dayOfWeek, diffDays, isIsoDate, rangesOverlap, sqlNow, todayInZone, type IsoDate } from "../core/dates";
+import { blockingUnitIds, isActiveBooking, isUnitFree } from "../core/availability";
 import { rateCalendar, type RateOverride, type UnitPricingInfo } from "../core/pricing";
+import { detectDrift, type DriftSignal } from "../core/drift";
 import {
   CHANNEL_MARKUPS_KEY,
   CHANNEL_PRICE_FORMULA,
@@ -30,6 +31,7 @@ import {
   bookingsForGuest,
   bookingsInWindow,
   cancelBooking,
+  collectDriftInput,
   confirmBookingAtomic,
   healthSignals,
   createBookingAtomic,
@@ -312,6 +314,58 @@ async function leadTimeBookings(db: D1Database, propertyId: number, year: number
       checkin: b.checkin,
       bookedOn: b.createdAt.slice(0, 10),
     }));
+}
+
+/** Créneau libre pour cette unité ? MÊME règle que le site public : l'unité
+ *  elle-même plus toutes celles qui la bloquent par `unit_links` (issue #70).
+ *
+ *  Sert à ANNONCER l'indisponibilité avant le clic — la garantie anti-surbooking
+ *  reste l'INSERT atomique de `createBookingAtomic` (ARCHITECTURE.md §3), qu'on
+ *  ne remplace jamais par un SELECT suivi d'un INSERT.
+ *
+ *  Les conflits sont renvoyés nommés : au téléphone, « pris par PM-2026-004,
+ *  Domaine entier » se dit, « indisponible » se subit. */
+async function checkAvailability(
+  db: D1Database,
+  unitId: number,
+  propertyId: number,
+  checkin: IsoDate,
+  checkout: IsoDate,
+  now: Date = new Date(),
+): Promise<{
+  available: boolean;
+  conflicts: { reference: string; unitName: string; checkin: IsoDate; checkout: IsoDate; status: string; viaLink: boolean }[];
+}> {
+  const [links, bookings] = await Promise.all([
+    listLinks(db, propertyId),
+    bookingsInWindow(db, propertyId, checkin, checkout),
+  ]);
+  const nowSql = sqlNow(now);
+  const spans = bookings.map((b) => ({
+    unitId: b.unitId,
+    checkin: b.checkin,
+    checkout: b.checkout,
+    status: b.status,
+    holdExpiresAt: b.holdExpiresAt,
+  }));
+  const available = isUnitFree(unitId, checkin, checkout, spans, links, nowSql);
+  const blockers = blockingUnitIds(unitId, links);
+  const conflicts = bookings
+    .filter(
+      (b) =>
+        blockers.has(b.unitId) &&
+        isActiveBooking({ status: b.status, holdExpiresAt: b.holdExpiresAt }, nowSql) &&
+        rangesOverlap(b.checkin, b.checkout, checkin, checkout),
+    )
+    .map((b) => ({
+      reference: b.reference,
+      unitName: b.unitName ?? `Unité ${b.unitId}`,
+      checkin: b.checkin,
+      checkout: b.checkout,
+      status: b.status,
+      viaLink: b.unitId !== unitId,
+    }));
+  return { available, conflicts };
 }
 
 export function registerAdminRoutes(router: Router): void {
@@ -843,6 +897,17 @@ export function registerAdminRoutes(router: Router): void {
     } catch (e) {
       console.error("healthSignals —", e);
     }
+
+    // Dérives LENTES (issue #71) : les quatre pannes qui ne lèvent aucune
+    // erreur — flux iCal muet, unité sans tarif applicable, message client sans
+    // réponse, traitement planifié à l'arrêt. Même repli neutre que ci-dessus :
+    // une carte « Santé » ne doit jamais faire tomber le tableau de bord.
+    let drift: DriftSignal[] = [];
+    try {
+      drift = detectDrift(await collectDriftInput(db, propertyId, now), now);
+    } catch (e) {
+      console.error("driftSignals —", e);
+    }
     let newEmails = 0;
     try {
       newEmails = await countNewMessages(db, propertyId);
@@ -893,10 +958,12 @@ export function registerAdminRoutes(router: Router): void {
         // Beds24 figé > 2 h = les calendriers OTA ne reflètent plus nos dates :
         // risque de surbooking silencieux tant que personne ne regarde.
         beds24Stale: health.beds24StaleHours != null && health.beds24StaleHours > 2,
+        drift,
         ok:
           health.orphanPayments.length === 0 &&
           health.failedEmails.length === 0 &&
           health.recentErrors.length === 0 &&
+          drift.length === 0 &&
           !(health.beds24StaleHours != null && health.beds24StaleHours > 2),
       },
     });
@@ -1161,7 +1228,19 @@ export function registerAdminRoutes(router: Router): void {
       { ...body, adults: Math.max(1, Number(body.adults ?? 1)), children: Math.max(0, Number(body.children ?? 0)) },
       todayInZone(),
     );
-    return json({ unit: { id: ctx.unit.id, name: ctx.unit.name }, quote });
+    // Le devis dit combien ; il doit aussi dire SI c'est vendable (issue #70).
+    // Sans ce champ, la vente téléphone calculait un prix sur un créneau déjà
+    // pris et ne l'apprenait qu'au 409 de la création, le client au téléphone.
+    // Même règle de liaison que le site public — l'INSERT atomique reste la
+    // vérité transactionnelle, ceci n'est que l'annonce anticipée.
+    const availability = await checkAvailability(
+      env.DB,
+      ctx.unit.id,
+      ctx.unit.propertyId,
+      String(body.checkin),
+      String(body.checkout),
+    );
+    return json({ unit: { id: ctx.unit.id, name: ctx.unit.name }, quote, availability });
   }));
 
   // --- saisons ----------------------------------------------------------------
