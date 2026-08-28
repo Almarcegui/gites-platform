@@ -10,6 +10,8 @@
 // Volontairement séparé de `site.js`, qui ne sert que la page d'accueil et
 // déclenche des appels dont ces pages n'ont que faire (calendrier, contact).
 
+import "/arrhes.js";
+
 const cibles = [...document.querySelectorAll("[data-prix-unite]")];
 
 if (cibles.length) {

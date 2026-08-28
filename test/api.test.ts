@@ -474,7 +474,7 @@ describe("Lot 2 — tunnel de réservation", () => {
     });
     const lines = (quote.data.quote as { lines: { kind: string; label: string }[] }).lines;
     expect(lines.some((l) => l.kind === "tax")).toBe(false);
-    expect(lines.find((l) => l.kind === "fee")?.label).toBe("Frais généraux — ménage, draps et charges");
+    expect(lines.find((l) => l.kind === "fee")?.label).toBe("Frais généraux — ménage et charges");
   });
 
   it("expose le texte des CGV et le hold sur la fiche domaine", async () => {
