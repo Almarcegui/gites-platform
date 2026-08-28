@@ -2,6 +2,7 @@
 // app.js : socle (état, client API, helpers UI, routeur) + vues de pilotage.
 // Les vues de configuration vivent dans config.js.
 
+import { stayBadge } from "./badges.js";
 import { registerCalendarView } from "./calendar.js";
 import { registerConfigViews } from "./config.js";
 
@@ -246,16 +247,23 @@ export function copyText(text) {
   );
 }
 
-export function bookingTag(b, today = todayIso()) {
+export function bookingTag(b, today = todayIso(), movement = null) {
   if (b.status === "cancelled") return `<span class="tag t-mut">Annulée</span>`;
-  if (b.status === "pending") return `<span class="tag t-warn">Option (paiement)</span>`;
-  if (b.source === "ical") return `<span class="tag t-chan">${esc(b.channelLabel || "Canal externe")}</span>`;
-  if (b.checkout <= today) return `<span class="tag t-mut">Terminée</span>`;
+  // Où en est le séjour (issue #53) — préfixe le badge financier plutôt que de
+  // le remplacer : « arrive demain » et « solde dû » sont deux informations
+  // qu'on veut lire ensemble, pas l'une à la place de l'autre. `movement`
+  // restreint la lecture à l'arrivée ou au départ (tableau de bord).
+  const when = stayBadge(b, today, movement);
+  if (b.status === "pending") return `${when}<span class="tag t-warn">Option (paiement)</span>`;
+  if (b.source === "ical") return `${when}<span class="tag t-chan">${esc(b.channelLabel || "Canal externe")}</span>`;
+  // Un départ du jour n'est pas encore « Terminée » : le ménage reste à faire
+  // et le solde reste encaissable. On laisse donc passer au badge financier.
+  if (b.checkout <= today && !when) return `<span class="tag t-mut">Terminée</span>`;
   const balance = b.totalCents - b.paidCents;
-  if (b.totalCents > 0 && balance <= 0) return `<span class="tag t-ok">Soldée</span>`;
-  if (b.paidCents > 0) return `<span class="tag t-warn">Solde dû ${eur(balance)}</span>`;
-  if (b.totalCents > 0) return `<span class="tag t-bad">Impayée</span>`;
-  return `<span class="tag t-mut">—</span>`;
+  if (b.totalCents > 0 && balance <= 0) return `${when}<span class="tag t-ok">Soldée</span>`;
+  if (b.paidCents > 0) return `${when}<span class="tag t-warn">Solde dû ${eur(balance)}</span>`;
+  if (b.totalCents > 0) return `${when}<span class="tag t-bad">Impayée</span>`;
+  return `${when}<span class="tag t-mut">—</span>`;
 }
 
 const SOURCE_FR = { direct: "Site", manual: "Manuelle", ical: "iCal", import: "Import" };
@@ -571,7 +579,7 @@ registerView("dash", "Tableau de bord", async (root) => {
       (m) => `<tr class="clickable" data-booking="${m.id}">
         <td>${m.kind === "arrivée" ? "→" : "←"} ${m.kind === "arrivée" ? dshort(m.checkin) : dshort(m.checkout)}</td>
         <td>${esc(m.unitName)}</td><td>${esc(m.guestName || "—")}</td><td>${m.persons}</td>
-        <td>${bookingTag({ ...m, source: "direct" }, data.today)}</td></tr>`,
+        <td>${bookingTag({ ...m, source: "direct" }, data.today, m.kind === "arrivée" ? "arrival" : "departure")}</td></tr>`,
     )
     .join("");
 
@@ -1037,15 +1045,33 @@ function openBlockDates(unitId, unitName, from, toInclusive) {
 // VUE — Réservations (+ fiche résa + nouvelle vente)
 // ---------------------------------------------------------------------------
 
+/** Les quatre périodes de la liste des réservations (issue #51), dans l'ordre
+ *  d'affichage. `all` ne filtre rien — c'est le refuge de la recherche. */
+const RESA_PERIODS = [
+  ["upcoming", "À venir", "Aucune arrivée à venir."],
+  ["current", "En cours", "Personne sur place aujourd’hui."],
+  ["past", "Passées", "Aucun séjour passé."],
+  ["all", "Toutes", "Aucune réservation."],
+];
+
 registerView("resa", "Réservations", async (root) => {
   const params = new URLSearchParams(location.hash.split("?")[1] || "");
   const status = params.get("status") || "";
   const search = params.get("search") || "";
+  // Défaut : « à venir », pour que la vue réponde à « qui arrive bientôt ? »
+  // sans un clic. Exception : une recherche cherche dans TOUT l'historique —
+  // sinon taper une référence de l'an dernier ne renvoie rien.
+  const known = RESA_PERIODS.some(([k]) => k === params.get("period"));
+  const period = known ? params.get("period") : search ? "all" : "upcoming";
   const q = new URLSearchParams({ property: String(state.propertyId) });
   if (status) q.set("status", status);
   if (search) q.set("search", search);
+  if (period !== "all") q.set("period", period);
   const data = await api(`/api/admin/bookings?${q}`);
-  const today = todayIso();
+  // Le jour de référence vient du serveur (fuseau Europe/Brussels) : c'est lui
+  // qui a filtré, l'horloge du poste ne doit pas dire autre chose.
+  const today = data.today || todayIso();
+  const empty = RESA_PERIODS.find(([k]) => k === period)?.[2] ?? "Aucune réservation.";
 
   root.innerHTML = `
     <div class="card">
@@ -1063,6 +1089,14 @@ registerView("resa", "Réservations", async (root) => {
         <div class="n"><button class="btn o sm" id="importElloha">Importer elloha</button></div>
         <div class="right n"><button class="btn" id="newSale">+ Nouvelle vente (tél.)</button></div>
       </div>
+      <div class="chips" role="group" aria-label="Période">
+        ${RESA_PERIODS.map(
+          ([key, label]) =>
+            `<button type="button" class="chip${key === period ? " on" : ""}" data-period="${key}"
+              aria-pressed="${key === period}">${label}</button>`,
+        ).join("")}
+        <span class="small muted" style="margin-left:auto">Triées par date d’arrivée${period === "upcoming" || period === "current" ? " (la plus proche en tête)" : " (la plus récente en tête)"}</span>
+      </div>
       <table>
         <tr><th>N°</th><th>Unité</th><th>Séjour</th><th>Client</th><th class="r">Total</th><th class="r">Payé</th><th>Statut</th><th>Source</th></tr>
         ${data.bookings
@@ -1075,20 +1109,27 @@ registerView("resa", "Réservations", async (root) => {
           <td class="r">${b.paidCents ? eur(b.paidCents) : "—"}</td>
           <td>${bookingTag(b, today)}</td><td class="muted">${sourceFr(b.source)}</td></tr>`,
           )
-          .join("") || `<tr><td colspan="8" class="muted">Aucune réservation.</td></tr>`}
+          .join("") || `<tr><td colspan="8" class="muted">${esc(empty)}</td></tr>`}
       </table>
     </div>`;
 
-  const apply = () => {
+  const apply = (nextPeriod = period) => {
     const s = root.querySelector("#fSearch").value.trim();
     const st = root.querySelector("#fStatus").value;
     const p = new URLSearchParams();
+    p.set("period", nextPeriod);
     if (st) p.set("status", st);
     if (s) p.set("search", s);
     location.hash = `#/resa?${p}`;
   };
-  root.querySelector("#fStatus").onchange = apply;
-  root.querySelector("#fSearch").onkeydown = (e) => e.key === "Enter" && apply();
+  // La recherche porte sur TOUT l'historique — chercher une référence de l'an
+  // dernier depuis « à venir » ne doit pas renvoyer une liste vide. Elle
+  // bascule donc sur « Toutes », et l'effacer ramène à la vue de travail par
+  // défaut. Règle sans état caché : l'URL dit toujours ce qui est affiché.
+  const applySearch = () => apply(root.querySelector("#fSearch").value.trim() ? "all" : "upcoming");
+  root.querySelectorAll("[data-period]").forEach((b) => (b.onclick = () => apply(b.dataset.period)));
+  root.querySelector("#fStatus").onchange = () => apply();
+  root.querySelector("#fSearch").onkeydown = (e) => e.key === "Enter" && applySearch();
   root.querySelector("#newSale").onclick = () => openNewSale();
   root.querySelector("#exportCsv").onclick = () => downloadCsv(`/api/admin/bookings.csv?property=${state.propertyId}`, "reservations.csv");
   root.querySelector("#importElloha").onclick = () => openEllohaImport();

@@ -651,6 +651,9 @@ export async function getBookingByReference(db: D1Database, reference: string): 
   return row ? mapBooking(row as Raw) : null;
 }
 
+export type BookingPeriod = "upcoming" | "current" | "past";
+export type BookingSort = "created" | "checkin";
+
 export interface BookingFilters {
   propertyId?: number;
   status?: string;
@@ -658,6 +661,13 @@ export interface BookingFilters {
   to?: IsoDate;     // checkin < to
   search?: string;  // référence ou nom client
   limit?: number;
+  /** Fenêtre relative à `today` — « à venir » / « en cours » / « passées » (issue #51). */
+  period?: BookingPeriod;
+  /** Jour de référence des périodes ; injectable pour les tests. */
+  today?: IsoDate;
+  /** `checkin` (défaut du back-office) répond à « qui arrive bientôt ? ».
+   *  `created` garde l'ordre historique — utilisé par l'export CSV. */
+  sort?: BookingSort;
 }
 
 export async function listBookings(db: D1Database, f: BookingFilters = {}): Promise<BookingRow[]> {
@@ -676,8 +686,30 @@ export async function listBookings(db: D1Database, f: BookingFilters = {}): Prom
     const i = binds.length;
     where.push(`(b.reference LIKE ?${i} OR g.last_name LIKE ?${i} OR g.first_name LIKE ?${i} OR g.email LIKE ?${i})`);
   }
+  if (f.period) {
+    // « En cours » = ce qui occupe la journée d'aujourd'hui, arrivée ET départ
+    // du jour compris : le départ du matin fait encore partie du travail du
+    // jour (état des lieux, ménage, solde). Les trois périodes forment une
+    // partition — chaque réservation tombe dans exactement une.
+    const today = f.today ?? todayInZone();
+    if (f.period === "upcoming") push("b.checkin > ?", today);
+    else if (f.period === "current") {
+      push("b.checkin <= ?", today);
+      push("b.checkout >= ?", today);
+    } else push("b.checkout < ?", today);
+  }
+
+  // Tri par arrivée : croissant quand on regarde devant soi (le prochain
+  // arrivant en tête), décroissant quand on regarde derrière (le dernier
+  // séjour en tête). Sans ça, « passées » remonterait 2024 en premier.
+  const order =
+    f.sort === "checkin"
+      ? f.period === "upcoming" || f.period === "current"
+        ? "b.checkin ASC, b.id ASC"
+        : "b.checkin DESC, b.id DESC"
+      : "b.created_at DESC, b.id DESC";
   const sql = `${BOOKING_JOIN}${where.length ? " WHERE " + where.join(" AND ") : ""}
-    ORDER BY b.created_at DESC, b.id DESC LIMIT ${Math.min(f.limit ?? 200, 1000)}`;
+    ORDER BY ${order} LIMIT ${Math.min(f.limit ?? 200, 1000)}`;
   const { results } = await db.prepare(sql).bind(...binds).all();
   return (results as Raw[]).map(mapBooking);
 }

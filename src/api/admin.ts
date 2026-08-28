@@ -626,7 +626,7 @@ export function registerAdminRoutes(router: Router): void {
       cleaningFeeCents: body.cleaningFeeCents != null ? Math.round(Number(body.cleaningFeeCents)) : undefined,
       photoUrl: typeof body.photoUrl === "string" ? body.photoUrl.trim() : undefined,
     });
-    await audit(env.DB, "admin", "unit.update", `unit:${id}`, body);
+    await audit(env.DB, "admin", "unit.update", `unit:${id}`, { ...body, par: currentUser(req) });
     return json({ ok: true });
   }));
 
@@ -665,7 +665,7 @@ export function registerAdminRoutes(router: Router): void {
         checkinDays: null,
       });
     }
-    await audit(env.DB, "admin", "unit.create", `unit:${id}`, { name, propertyId });
+    await audit(env.DB, "admin", "unit.create", `unit:${id}`, { name, propertyId, par: currentUser(req) });
     return json({ id }, 201);
   }));
 
@@ -675,7 +675,7 @@ export function registerAdminRoutes(router: Router): void {
     const body = await readJson<{ partnerIds?: unknown[] }>(req);
     if (!id || !body || !Array.isArray(body.partnerIds)) return apiError(400, "partnerIds attendu");
     await setMutualLinks(env.DB, id, body.partnerIds.map(Number));
-    await audit(env.DB, "admin", "unit.links", `unit:${id}`, { partnerIds: body.partnerIds });
+    await audit(env.DB, "admin", "unit.links", `unit:${id}`, { partnerIds: body.partnerIds, par: currentUser(req) });
     return json({ ok: true });
   }));
 
@@ -842,7 +842,7 @@ export function registerAdminRoutes(router: Router): void {
 
     const res = await setRateOverrides(env.DB, unitId, days, { priceCents, minNights });
     await audit(env.DB, "admin", "rate.override", `unit:${unitId}`, {
-      from: range.from, to: range.to, weekdays, priceCents, minNights, ...res,
+      from: range.from, to: range.to, weekdays, priceCents, minNights, ...res, par: currentUser(req),
     });
     await triggerBeds24Push(env.DB, env, execCtx, unit.propertyId);
     return json({ ok: true, unitId, from: range.from, to: range.to, days: days.length, ...res });
@@ -850,7 +850,7 @@ export function registerAdminRoutes(router: Router): void {
 
   // Retire toute surcharge sur une plage — retour au tarif de saison. Sert
   // aussi de bouton « Annuler » après avoir peint une plage (spec UX § 7).
-  router.delete("/api/admin/rate-overrides", guard(async (_req, env, _p, url, execCtx) => {
+  router.delete("/api/admin/rate-overrides", guard(async (req, env, _p, url, execCtx) => {
     const unitId = intParam(url.searchParams.get("unit"), 0);
     if (!unitId) return apiError(400, "unit requis");
     const range = parseRange(url.searchParams.get("from") ?? "", url.searchParams.get("to") ?? "");
@@ -859,7 +859,7 @@ export function registerAdminRoutes(router: Router): void {
     if (!unit) return apiError(404, "hébergement inconnu");
     const days = expandRange(range.from, range.to, parseWeekdays(url.searchParams.get("weekdays")));
     const removed = await deleteRateOverrides(env.DB, unitId, days);
-    await audit(env.DB, "admin", "rate.override_clear", `unit:${unitId}`, { from: range.from, to: range.to, removed });
+    await audit(env.DB, "admin", "rate.override_clear", `unit:${unitId}`, { from: range.from, to: range.to, removed, par: currentUser(req) });
     await triggerBeds24Push(env.DB, env, execCtx, unit.propertyId);
     return json({ ok: true, unitId, removed });
   }));
@@ -880,7 +880,7 @@ export function registerAdminRoutes(router: Router): void {
     const channels = normalizeChannelMarkups(body?.channels);
     if (!channels) return apiError(400, "canaux invalides — attendu une liste { channel, label, markupPct 0 à 100 }");
     await setSetting(env.DB, CHANNEL_MARKUPS_KEY, JSON.stringify(channels));
-    await audit(env.DB, "admin", "pricing.channel_markups", "app", { channels });
+    await audit(env.DB, "admin", "pricing.channel_markups", "app", { channels, par: currentUser(req) });
     return json({ ok: true, channels, formula: CHANNEL_PRICE_FORMULA });
   }));
 
@@ -928,7 +928,7 @@ export function registerAdminRoutes(router: Router): void {
       contactEmail: typeof body.contactEmail === "string" ? body.contactEmail : undefined,
       contactPhone: typeof body.contactPhone === "string" ? body.contactPhone : undefined,
     });
-    await audit(env.DB, "admin", "property.update", `property:${id}`, body);
+    await audit(env.DB, "admin", "property.update", `property:${id}`, { ...body, par: currentUser(req) });
     return json({ ok: true });
   }));
 
@@ -1232,8 +1232,15 @@ export function registerAdminRoutes(router: Router): void {
   }));
 
   // --- réservations -----------------------------------------------------------
+  // La liste de travail répond d'abord à « qui arrive bientôt ? » : tri par
+  // date d'arrivée par défaut, et filtre de période à venir / en cours /
+  // passées (issue #51). `sort=created` restitue l'ordre historique.
   router.get("/api/admin/bookings", guard(async (_req, env, _p, url) => {
     const propertyId = intParam(url.searchParams.get("property"), 0) || undefined;
+    const rawPeriod = url.searchParams.get("period") ?? "";
+    const period = (["upcoming", "current", "past"] as const).find((p) => p === rawPeriod);
+    if (rawPeriod && !period) return apiError(400, "period invalide — attendu upcoming, current ou past");
+    const today = todayInZone();
     const bookings = await listBookings(env.DB, {
       propertyId,
       status: url.searchParams.get("status") ?? undefined,
@@ -1241,8 +1248,11 @@ export function registerAdminRoutes(router: Router): void {
       from: url.searchParams.get("from") ?? undefined,
       to: url.searchParams.get("to") ?? undefined,
       limit: intParam(url.searchParams.get("limit"), 200),
+      period,
+      today,
+      sort: url.searchParams.get("sort") === "created" ? "created" : "checkin",
     });
-    return json({ bookings });
+    return json({ bookings, today, period: period ?? null });
   }));
 
   router.get("/api/admin/bookings/:id", guard(async (_req, env, p) => {
@@ -1675,7 +1685,7 @@ export function registerAdminRoutes(router: Router): void {
       return apiError(400, "nom et dates (début ≤ fin) requis");
     }
     const id = await createSeason(env.DB, propertyId, { name, dateStart, dateEnd, priority: Math.floor(Number(body?.priority ?? 0)) });
-    await audit(env.DB, "admin", "season.create", `season:${id}`, body);
+    await audit(env.DB, "admin", "season.create", `season:${id}`, { ...body, par: currentUser(req) });
     await triggerBeds24PushAll(env.DB, env, execCtx);
     return json({ id }, 201);
   }));
@@ -1692,15 +1702,15 @@ export function registerAdminRoutes(router: Router): void {
       dateEnd: body.dateEnd !== undefined ? String(body.dateEnd) : undefined,
       priority: body.priority !== undefined ? Math.floor(Number(body.priority)) : undefined,
     });
-    await audit(env.DB, "admin", "season.update", `season:${id}`, body);
+    await audit(env.DB, "admin", "season.update", `season:${id}`, { ...body, par: currentUser(req) });
     await triggerBeds24PushAll(env.DB, env, execCtx);
     return json({ ok: true });
   }));
 
-  router.delete("/api/admin/seasons/:id", guard(async (_req, env, p, _url, execCtx) => {
+  router.delete("/api/admin/seasons/:id", guard(async (req, env, p, _url, execCtx) => {
     const id = intParam(p.id, 0);
     await deleteSeason(env.DB, id);
-    await audit(env.DB, "admin", "season.delete", `season:${id}`);
+    await audit(env.DB, "admin", "season.delete", `season:${id}`, { par: currentUser(req) });
     await triggerBeds24PushAll(env.DB, env, execCtx);
     return json({ ok: true });
   }));
@@ -1731,7 +1741,7 @@ export function registerAdminRoutes(router: Router): void {
         minNights: Math.max(1, Math.floor(Number(body.minNights ?? 1))),
         checkinDays: Array.isArray(body.checkinDays) ? body.checkinDays.map(Number).filter((d) => d >= 0 && d <= 6) : null,
       });
-      await audit(env.DB, "admin", "rate.create", `rate:${id}`, body);
+      await audit(env.DB, "admin", "rate.create", `rate:${id}`, { ...body, par: currentUser(req) });
       await triggerBeds24PushAll(env.DB, env, execCtx);
       return json({ id }, 201);
     } catch (e) {
@@ -1778,15 +1788,15 @@ export function registerAdminRoutes(router: Router): void {
             ? body.checkinDays.map(Number).filter((d) => d >= 0 && d <= 6)
             : null,
     });
-    await audit(env.DB, "admin", "rate.update", `rate:${id}`, body);
+    await audit(env.DB, "admin", "rate.update", `rate:${id}`, { ...body, par: currentUser(req) });
     await triggerBeds24PushAll(env.DB, env, execCtx);
     return json({ ok: true });
   }));
 
-  router.delete("/api/admin/rate-rules/:id", guard(async (_req, env, p, _url, execCtx) => {
+  router.delete("/api/admin/rate-rules/:id", guard(async (req, env, p, _url, execCtx) => {
     const id = intParam(p.id, 0);
     await deleteRateRule(env.DB, id);
-    await audit(env.DB, "admin", "rate.delete", `rate:${id}`);
+    await audit(env.DB, "admin", "rate.delete", `rate:${id}`, { par: currentUser(req) });
     await triggerBeds24PushAll(env.DB, env, execCtx);
     return json({ ok: true });
   }));
@@ -1818,7 +1828,7 @@ export function registerAdminRoutes(router: Router): void {
       maxUses: body.maxUses != null ? Math.floor(Number(body.maxUses)) : null,
       active: body.active !== false,
     });
-    await audit(env.DB, "admin", "promotion.create", `promotion:${id}`, body);
+    await audit(env.DB, "admin", "promotion.create", `promotion:${id}`, { ...body, par: currentUser(req) });
     return json({ id }, 201);
   }));
 
@@ -1838,14 +1848,14 @@ export function registerAdminRoutes(router: Router): void {
       maxUses: body.maxUses !== undefined ? (body.maxUses == null ? null : Math.floor(Number(body.maxUses))) : undefined,
       active: typeof body.active === "boolean" ? body.active : undefined,
     });
-    await audit(env.DB, "admin", "promotion.update", `promotion:${id}`, body);
+    await audit(env.DB, "admin", "promotion.update", `promotion:${id}`, { ...body, par: currentUser(req) });
     return json({ ok: true });
   }));
 
-  router.delete("/api/admin/promotions/:id", guard(async (_req, env, p) => {
+  router.delete("/api/admin/promotions/:id", guard(async (req, env, p) => {
     const id = intParam(p.id, 0);
     await deletePromotion(env.DB, id);
-    await audit(env.DB, "admin", "promotion.delete", `promotion:${id}`);
+    await audit(env.DB, "admin", "promotion.delete", `promotion:${id}`, { par: currentUser(req) });
     return json({ ok: true });
   }));
 
@@ -1874,7 +1884,7 @@ export function registerAdminRoutes(router: Router): void {
       active: body?.active !== false,
       sortOrder: Math.floor(Number(body?.sortOrder ?? 0)),
     });
-    await audit(env.DB, "admin", "option.create", `option:${id}`, body);
+    await audit(env.DB, "admin", "option.create", `option:${id}`, { ...body, par: currentUser(req) });
     return json({ id }, 201);
   }));
 
@@ -1891,14 +1901,14 @@ export function registerAdminRoutes(router: Router): void {
       active: typeof body.active === "boolean" ? body.active : undefined,
       sortOrder: body.sortOrder != null ? Math.floor(Number(body.sortOrder)) : undefined,
     });
-    await audit(env.DB, "admin", "option.update", `option:${id}`, body);
+    await audit(env.DB, "admin", "option.update", `option:${id}`, { ...body, par: currentUser(req) });
     return json({ ok: true });
   }));
 
-  router.delete("/api/admin/options/:id", guard(async (_req, env, p) => {
+  router.delete("/api/admin/options/:id", guard(async (req, env, p) => {
     const id = intParam(p.id, 0);
     await deleteOption(env.DB, id);
-    await audit(env.DB, "admin", "option.delete", `option:${id}`);
+    await audit(env.DB, "admin", "option.delete", `option:${id}`, { par: currentUser(req) });
     return json({ ok: true });
   }));
 
