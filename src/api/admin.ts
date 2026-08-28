@@ -986,10 +986,16 @@ export function registerAdminRoutes(router: Router): void {
       .filter((b) => compositeIds.has(b.unitId) && b.checkout >= today && b.checkin <= addDays(today, 60))
       .map((b) => {
         const blocked = links.filter((l) => l.unitId === b.unitId).map((l) => units.find((u) => u.id === l.blocksUnitId)?.name ?? "");
-        return { reference: b.reference, checkin: b.checkin, checkout: b.checkout, unitName: b.unitName, blocked };
+        // `id` : sans lui l'alerte du tableau de bord ne mène nulle part (issue #48).
+        return { id: b.id, reference: b.reference, checkin: b.checkin, checkout: b.checkout, unitName: b.unitName, blocked };
       });
 
-    const feeds = await listFeeds(db);
+    // `listFeeds` ne connaît pas les domaines : sans ce filtre, le tableau de
+    // bord d'un domaine affiche les flux en erreur de l'autre — et depuis que
+    // l'alerte est cliquable (issue #48), elle mène alors à une vue Synchro où
+    // le flux nommé n'existe pas.
+    const unitIds = new Set(units.map((u) => u.id));
+    const feeds = (await listFeeds(db)).filter((f) => unitIds.has(f.unitId));
     const feedAlerts = feeds.filter((f) => f.lastStatus && f.lastStatus !== "ok");
 
     // Carte « Santé » : ce qui échoue aujourd'hui sans que personne ne l'apprenne
@@ -1061,7 +1067,7 @@ export function registerAdminRoutes(router: Router): void {
         overdueBalances: balancesDue.filter((b) => b.overdue),
         linkAlerts,
         feedAlerts: feedAlerts.map((f) => ({ id: f.id, name: f.name, status: f.lastStatus })),
-        activeHolds: activeHolds.map((b) => ({ reference: b.reference, unitName: b.unitName, holdExpiresAt: b.holdExpiresAt })),
+        activeHolds: activeHolds.map((b) => ({ id: b.id, reference: b.reference, unitName: b.unitName, holdExpiresAt: b.holdExpiresAt })),
         newEmails,
       },
       health: {

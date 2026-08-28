@@ -261,6 +261,33 @@ export function bookingTag(b, today = todayIso()) {
 const SOURCE_FR = { direct: "Site", manual: "Manuelle", ical: "iCal", import: "Import" };
 export const sourceFr = (s) => SOURCE_FR[s] || s;
 
+/** Types d'e-mails, en français. Le `kind` technique (`balance_reminder`) ne se
+ *  lit pas au téléphone : la fiche réservation et la carte « Santé » affichent
+ *  toutes deux le libellé métier (issue #49). */
+const EMAIL_KIND_FR = {
+  voucher: "Voucher",
+  payment_receipt: "Reçu de paiement",
+  payment_link: "Lien de paiement",
+  balance_reminder: "Relance du solde",
+  abandon_reminder: "Relance de réservation abandonnée",
+  reply: "Réponse au client",
+  daily_digest: "Résumé quotidien",
+};
+export const emailKindFr = (k) => EMAIL_KIND_FR[k] || k;
+
+/** Statuts de `email_log`. « stub » veut dire que RIEN n'est parti — c'est le
+ *  mode par défaut tant que l'envoi n'est pas activé, et le confondre avec un
+ *  envoi réussi fait croire que le client a reçu son voucher. */
+const EMAIL_STATUS_FR = {
+  sent: ["envoyé", "t-ok"],
+  stub: ["non envoyé (envoi désactivé)", "t-mut"],
+  failed: ["échec", "t-bad"],
+};
+export function emailStatusTag(status) {
+  const [label, cls] = EMAIL_STATUS_FR[status] || [status, "t-mut"];
+  return `<span class="tag ${cls}">${esc(label)}</span>`;
+}
+
 // ---------------------------------------------------------------------------
 // Routeur & topbar
 // ---------------------------------------------------------------------------
@@ -356,6 +383,29 @@ function renderNav(route) {
   return current;
 }
 
+/** Vues qui ne savent lire qu'UN domaine : en mode « Tous », elles retombent
+ *  sur le premier via `currentPropertyId()`. Sans le dire, on croit lire les
+ *  chiffres du groupe alors qu'on lit ceux du Pré Moré (issue #52). */
+const MONO_PROPERTY_ROUTES = new Set([
+  "stats", "cal/prix", "cal/annee",
+  "promos", "options", "paiements", "ical", "params", "canaux",
+]);
+
+/** Bandeau de périmètre : il ne s'affiche que quand la vue affichée est plus
+ *  étroite que la sélection. Il nomme le domaine réellement lu. */
+function renderScopeNotice(route) {
+  const el = document.getElementById("scopeNotice");
+  if (!el) return;
+  if (state.propertyId !== 0 || !MONO_PROPERTY_ROUTES.has(route)) {
+    el.innerHTML = "";
+    return;
+  }
+  const shown = state.properties.find((p) => p.id === currentPropertyId());
+  el.innerHTML = `<div class="note">Cet écran ne sait afficher qu'un domaine à la fois. Chiffres du domaine : <b>${esc(shown?.name || "—")}</b>${
+    state.properties.length > 1 ? ` — choisis un autre domaine en haut à droite pour voir le sien.` : ""
+  }</div>`;
+}
+
 async function navigate() {
   const raw = (location.hash.replace(/^#\//, "") || "dash").split("?")[0];
   if (ALIASES[raw]) {
@@ -366,6 +416,7 @@ async function navigate() {
   const view = VIEWS[name] || VIEWS.dash;
   const entry = renderNav(VIEWS[name] ? raw : "dash");
   setPageTitle(entry?.label || view.title);
+  renderScopeNotice(VIEWS[name] ? raw : "dash");
   $main().innerHTML = `<div class="card muted">Chargement…</div>`;
   try {
     await view.render($main(), sub);
@@ -374,19 +425,29 @@ async function navigate() {
   }
 }
 
+/** Bascule de domaine — un seul endroit qui écrit `state.propertyId` et sa
+ *  trace dans `localStorage`. `0` (« Tous les domaines ») est une valeur
+ *  légitime, qui doit survivre au rechargement (issue #52). */
+export function selectProperty(id) {
+  state.propertyId = Number(id) || 0;
+  localStorage.setItem("gp_property", String(state.propertyId));
+  state.tarifUnit = null;
+  renderPropertySwitch();
+  refreshBadges();
+}
+
 function renderPropertySwitch() {
   const el = document.getElementById("propertySwitch");
   const entries = [{ id: 0, name: "Tous" }, ...state.properties];
   el.innerHTML = entries
-    .map((p) => `<a data-pid="${p.id}" class="${p.id === state.propertyId ? "on" : ""}">${esc(p.name)}</a>`)
+    .map(
+      (p) =>
+        `<a data-pid="${p.id}" class="${p.id === state.propertyId ? "on" : ""}"${p.id === state.propertyId ? ' aria-current="true"' : ""}>${esc(p.name)}</a>`,
+    )
     .join(" · ");
   el.querySelectorAll("a").forEach((a) =>
     a.addEventListener("click", () => {
-      state.propertyId = Number(a.dataset.pid);
-      localStorage.setItem("gp_property", String(state.propertyId));
-      state.tarifUnit = null;
-      renderPropertySwitch();
-      refreshBadges();
+      selectProperty(a.dataset.pid);
       navigate();
     }),
   );
@@ -514,21 +575,25 @@ registerView("dash", "Tableau de bord", async (root) => {
     )
     .join("");
 
+  // Une alerte qui ne mène nulle part oblige à retrouver soi-même la résa ou le
+  // flux concerné (issue #48). Chaque ligne porte donc sa cible, selon la même
+  // convention que la carte « Santé » : `data-booking` ouvre la fiche,
+  // `data-goto` change d'écran.
   const alerts = [];
   for (const b of data.alerts.overdueBalances) {
-    alerts.push(`<tr><td>⚠️ Solde en retard</td><td>${esc(b.guestName || b.reference)} — ${eur(b.balanceCents)} (échéance ${dfr(b.balanceDueDate)})</td></tr>`);
+    alerts.push(`<tr class="clickable" data-booking="${b.id}"><td>⚠️ Solde en retard</td><td>${esc(b.guestName || b.reference)} — ${eur(b.balanceCents)} (échéance ${dfr(b.balanceDueDate)})</td></tr>`);
   }
   for (const l of data.alerts.linkAlerts) {
-    alerts.push(`<tr><td>🔗 Liaison active</td><td>Résa « ${esc(l.unitName)} » ${dshort(l.checkin)}–${dshort(l.checkout)} → ${esc(l.blocked.join(" + "))} bloqués</td></tr>`);
+    alerts.push(`<tr class="clickable" data-booking="${l.id}"><td>🔗 Liaison active</td><td>Résa « ${esc(l.unitName)} » ${dshort(l.checkin)}–${dshort(l.checkout)} → ${esc(l.blocked.join(" + "))} bloqués</td></tr>`);
   }
   for (const f of data.alerts.feedAlerts) {
-    alerts.push(`<tr><td>📡 Flux iCal</td><td>${esc(f.name)} : ${esc(f.status)}</td></tr>`);
+    alerts.push(`<tr class="clickable" data-goto="#/ical"><td>📡 Flux iCal</td><td>${esc(f.name)} : ${esc(f.status)}</td></tr>`);
   }
   for (const h of data.alerts.activeHolds) {
-    alerts.push(`<tr><td>⏳ Option en cours</td><td>${esc(h.reference)} — ${esc(h.unitName)} (expire ${esc((h.holdExpiresAt || "").slice(11, 16))} UTC)</td></tr>`);
+    alerts.push(`<tr class="clickable" data-booking="${h.id}"><td>⏳ Option en cours</td><td>${esc(h.reference)} — ${esc(h.unitName)} (expire ${esc((h.holdExpiresAt || "").slice(11, 16))} UTC)</td></tr>`);
   }
   if (data.alerts.newEmails > 0) {
-    alerts.push(`<tr class="clickable" onclick="location.hash='#/messages'"><td>✉️ Messages</td><td>${data.alerts.newEmails} message(s) client à traiter</td></tr>`);
+    alerts.push(`<tr class="clickable" data-goto="#/messages"><td>✉️ Messages</td><td>${data.alerts.newEmails} message(s) client à traiter</td></tr>`);
   }
   if (alerts.length === 0) alerts.push(`<tr><td colspan="2" class="muted">Rien à signaler.</td></tr>`);
 
@@ -546,8 +611,11 @@ registerView("dash", "Tableau de bord", async (root) => {
       <td><b>${esc(o.reference)}</b> — encaissé ${eur(o.overpaidCents)} de plus que le total dû. À rembourser (deux sessions de paiement ont pu aboutir).</td></tr>`);
   }
   for (const m of h.failedEmails || []) {
-    santeRows.push(`<tr><td><span class="tag t-warn">Email</span></td>
-      <td>Envoi « ${esc(m.kind)} » échoué vers ${esc(m.toEmail)}${m.errorDetail ? ` <span class="muted small">(${esc(m.errorDetail)})</span>` : ""} — le client n'a rien reçu.</td></tr>`);
+    // Un envoi échoué se rattrape depuis la fiche de la résa (« Renvoyer le
+    // voucher », « Relancer le solde ») : c'est là que mène l'alerte quand
+    // l'email est rattaché à une réservation (issue #48).
+    santeRows.push(`<tr class="${m.bookingId ? "clickable" : ""}"${m.bookingId ? ` data-booking="${m.bookingId}"` : ""}><td><span class="tag t-warn">Email</span></td>
+      <td>Envoi « ${esc(emailKindFr(m.kind))} » échoué vers ${esc(m.toEmail)}${m.reference ? ` (résa <b>${esc(m.reference)}</b>)` : ""}${m.errorDetail ? ` <span class="muted small">(${esc(m.errorDetail)})</span>` : ""} — le client n'a rien reçu.</td></tr>`);
   }
   if (h.beds24Stale) {
     santeRows.push(`<tr class="clickable" onclick="location.hash='#/canaux'"><td><span class="tag t-warn">Beds24</span></td>
@@ -592,13 +660,35 @@ registerView("dash", "Tableau de bord", async (root) => {
           : `<table>${santeRows.join("")}</table>`
       }
     </div>`;
-  root.querySelectorAll("[data-booking]").forEach((tr) => tr.addEventListener("click", () => openBooking(Number(tr.dataset.booking))));
-  root.querySelectorAll("[data-goto]").forEach((tr) =>
-    tr.addEventListener("click", () => {
-      location.hash = tr.dataset.goto;
+  wireAlertTargets(root);
+});
+
+/** Câblage unique des cibles d'alerte (issue #48) : `data-booking` ouvre la
+ *  fiche réservation, `data-goto` mène à l'écran où l'on agit. Les lignes sont
+ *  aussi atteignables au clavier — une alerte qu'on ne peut qu'attraper à la
+ *  souris n'est pas « à un clic » pour tout le monde. */
+export function activateTarget(el, run) {
+  el.tabIndex = 0;
+  el.setAttribute("role", "link");
+  el.addEventListener("click", run);
+  el.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      run();
+    }
+  });
+}
+
+export function wireAlertTargets(root) {
+  root.querySelectorAll("[data-booking]").forEach((el) => activateTarget(el, () => openBooking(Number(el.dataset.booking))));
+  // `data-property` porte son propre câblage (changement de domaine avant le
+  // saut) : ne pas le doubler ici, sinon la vue se rend deux fois.
+  root.querySelectorAll("[data-goto]:not([data-property])").forEach((el) =>
+    activateTarget(el, () => {
+      location.hash = el.dataset.goto;
     }),
   );
-});
+}
 
 // --- Tableau de bord « Tous les domaines » : tous mes biens d'un coup d'œil --
 
@@ -637,7 +727,7 @@ async function renderDashAll(root) {
       } else if (nextBlock) {
         nextLine = `Bloqué (liaison) ${dshort(nextBlock.checkin)}→${dshort(nextBlock.checkout)} <span class="muted small">${esc(nextBlock.sourceReference)}</span>`;
       }
-      cards.push(`<div class="bien" data-goto="${property.id}">
+      cards.push(`<div class="bien" data-property="${property.id}">
         <div class="ph" ${u.photoUrl ? `style="background-image:url('${esc(u.photoUrl)}')"` : ""}>${u.photoUrl ? "" : "photo"}</div>
         <div class="bd"><b>${esc(u.name)} ${u.isComposite ? "🔗" : ""}</b>
           <span class="sub">${esc(property.name)} · ${u.capacityBase}${u.capacityMax > u.capacityBase ? "-" + u.capacityMax : ""} p.</span>
@@ -645,9 +735,16 @@ async function renderDashAll(root) {
       </div>`);
     }
     allMovements.push(...overview.movements.map((m) => ({ ...m, propertyName: property.name })));
+    // Comme en mono-domaine, une alerte mène à l'endroit où l'on agit (issue #48).
+    // Une cible mono-domaine (la synchro iCal) exige de basculer d'abord sur le
+    // domaine concerné, sinon on atterrit sur les flux d'un autre bien.
     const a = overview.alerts;
-    for (const b of a.overdueBalances) allAlerts.push(`⚠️ ${esc(property.name)} — solde en retard ${esc(b.reference)} (${eur(b.balanceCents)})`);
-    for (const f of a.feedAlerts) allAlerts.push(`📡 ${esc(property.name)} — flux ${esc(f.name)} : ${esc(f.status)}`);
+    for (const b of a.overdueBalances) {
+      allAlerts.push({ attrs: `data-booking="${b.id}"`, html: `⚠️ ${esc(property.name)} — solde en retard ${esc(b.reference)} (${eur(b.balanceCents)})` });
+    }
+    for (const f of a.feedAlerts) {
+      allAlerts.push({ attrs: `data-property="${property.id}" data-goto="#/ical"`, html: `📡 ${esc(property.name)} — flux ${esc(f.name)} : ${esc(f.status)}` });
+    }
   }
 
   root.innerHTML = `
@@ -662,16 +759,20 @@ async function renderDashAll(root) {
           .join("") || `<tr><td colspan="5" class="muted">Aucun mouvement cette semaine.</td></tr>`}</table>
       </div>
       <div class="card"><h3>Alertes</h3>
-        ${allAlerts.length ? `<table>${allAlerts.map((a) => `<tr><td>${a}</td></tr>`).join("")}</table>` : `<p class="muted small">Rien à signaler.</p>`}
+        ${allAlerts.length ? `<table>${allAlerts.map((a) => `<tr class="clickable" ${a.attrs}><td>${a.html}</td></tr>`).join("")}</table>` : `<p class="muted small">Rien à signaler.</p>`}
       </div>
     </div>`;
-  root.querySelectorAll("[data-booking]").forEach((tr) => tr.addEventListener("click", () => openBooking(Number(tr.dataset.booking))));
-  root.querySelectorAll("[data-goto]").forEach((c) =>
-    c.addEventListener("click", () => {
-      state.propertyId = Number(c.dataset.goto);
-      localStorage.setItem("gp_property", String(state.propertyId));
-      location.hash = "#/cal";
-      location.reload();
+  wireAlertTargets(root);
+  // Carte d'un bien, ou alerte dont la cible ne sait lire qu'un domaine : on
+  // bascule le sélecteur sur le domaine concerné, puis on ouvre l'écran. Plus
+  // de `location.reload()` ici — il rechargeait toute l'application pour un
+  // changement d'état que le routeur sait faire (issue #52).
+  root.querySelectorAll("[data-property]").forEach((el) =>
+    activateTarget(el, () => {
+      selectProperty(Number(el.dataset.property));
+      const target = el.dataset.goto || "#/cal";
+      if (location.hash === target) navigate();
+      else location.hash = target;
     }),
   );
 }
@@ -1216,24 +1317,30 @@ export async function openBooking(id) {
       <td class="r">${eur(p.amountCents)}</td><td><span class="tag ${p.status === "succeeded" ? "t-ok" : p.status === "pending" ? "t-warn" : p.outcome ? "t-mut" : "t-bad"}">${p.outcome === "expired" ? "expirée" : p.outcome === "superseded" ? "remplacée" : esc(p.status)}</span></td></tr>`,
     )
     .join("");
-  // Historique : le journal d'audit de la réservation, fusionné avec les envois
-  // d'emails. Répond à « qui a relancé le solde, et quand ? » (issue #69).
-  const historyRows = [
-    ...(history || []).map((h) => ({
-      at: h.createdAt,
-      what: HISTORY_FR[h.action] || h.action,
-      who: historyWho(h),
-    })),
-    ...(emails || []).map((e) => ({
-      at: e.createdAt,
-      what: `✉️ ${e.kind} → ${e.toEmail}${e.status === "sent" ? "" : ` (${e.status})`}`,
-      who: "système",
-    })),
-  ]
+  // Historique : le journal d'audit de la réservation — qui a fait quoi, et
+  // quand (issue #69). Les envois d'e-mails y figuraient aussi ; ils ont leur
+  // propre section depuis l'issue #49, avec statut et destinataire lisibles.
+  const historyRows = (history || [])
+    .map((h) => ({ at: h.createdAt, what: HISTORY_FR[h.action] || h.action, who: historyWho(h) }))
     .sort((x, y) => (x.at < y.at ? 1 : -1))
     .map(
       (r) => `<tr><td class="small">${esc(r.at.slice(0, 16).replace("T", " "))}</td>
         <td>${esc(r.what)}</td><td class="small muted">${esc(r.who)}</td></tr>`,
+    )
+    .join("");
+
+  // E-mails : « le voucher est-il parti ? » est la question la plus fréquente au
+  // téléphone, et l'API renvoyait déjà le journal (issue #49). Le statut compte
+  // autant que la date : en mode stub, RIEN n'est envoyé.
+  const emailRows = (emails || [])
+    .slice()
+    .sort((x, y) => (x.createdAt < y.createdAt ? 1 : -1))
+    .map(
+      (e) => `<tr>
+        <td class="small">${esc(e.createdAt.slice(0, 16).replace("T", " "))}</td>
+        <td>${esc(emailKindFr(e.kind))}<div class="small muted">${esc(e.subject || "")}</div></td>
+        <td class="small">${esc(e.toEmail)}</td>
+        <td>${emailStatusTag(e.status)}${e.errorDetail ? `<div class="small muted">${esc(e.errorDetail)}</div>` : ""}</td></tr>`,
     )
     .join("");
 
@@ -1259,6 +1366,9 @@ export async function openBooking(id) {
       </div>
     </div>
     <div class="mb"><label class="f">Notes internes</label><textarea id="notes" rows="2">${esc(b.internalNotes || "")}</textarea></div>
+    <div class="mb"><h3>E-mails</h3>
+      <table><tr><th>Envoyé le</th><th>Type</th><th>Destinataire</th><th>Statut</th></tr>
+      ${emailRows || `<tr><td colspan="4" class="muted">Aucun e-mail pour cette réservation.</td></tr>`}</table></div>
     <div class="mb"><h3>Historique</h3>
       <table>${historyRows || `<tr><td class="muted">Rien à afficher.</td></tr>`}</table></div>
     <div class="row">
@@ -1813,7 +1923,15 @@ if (state.user) {
   try {
     const { properties } = await api("/api/admin/properties");
     state.properties = properties;
-    if (!properties.some((p) => p.id === state.propertyId)) state.propertyId = properties[0]?.id ?? 1;
+    // `0` = « Tous les domaines », une sélection légitime : la garde ne doit
+    // corriger qu'un identifiant de domaine devenu inconnu (domaine supprimé,
+    // autre base). Auparavant elle écrasait « Tous » à chaque démarrage, et
+    // les `location.reload()` du back-office la faisaient donc sauter en
+    // permanence — le tableau de bord multi-biens était inaccessible (#52).
+    if (state.propertyId !== 0 && !properties.some((p) => p.id === state.propertyId)) {
+      state.propertyId = properties[0]?.id ?? 1;
+      localStorage.setItem("gp_property", String(state.propertyId));
+    }
     renderPropertySwitch();
   } catch (e) {
     document.getElementById("main").innerHTML = `<div class="note bad">API injoignable : ${esc(e.message)}</div>`;

@@ -263,6 +263,89 @@ describe("admin", () => {
     expect(csv!.headers.get("content-type")).toContain("text/csv");
   });
 
+  it("tableau de bord : chaque alerte porte de quoi mener à sa cible (#48)", async () => {
+    // Résa confirmée sur le Domaine entier → alerte « liaison active ».
+    // Dans les 60 jours : c'est la fenêtre que regarde l'alerte de liaison.
+    const linkIn = addDays(todayInZone(), 30);
+    const sale = await call("POST", "/api/admin/bookings", {
+      unitId: 3, checkin: linkIn, checkout: addDays(linkIn, 7), adults: 12,
+      guest: { lastName: "Janssens", email: "janssens@example.com" },
+    });
+    expect(sale.status).toBe(201);
+    const booking = sale.data.booking as { id: number; reference: string };
+
+    // Option en cours sur une autre unité et d'autres dates → alerte « option ».
+    const hold = await call(
+      "POST",
+      "/api/public/bookings",
+      bookingBody(1, { adults: 4, checkin: addDays(CHECKIN, 30), checkout: addDays(CHECKIN, 37) }),
+    );
+    expect(hold.status).toBe(201);
+
+    // Envoi d'e-mail en échec rattaché à la résa → signal « Santé » cliquable.
+    await t.db
+      .prepare(
+        `INSERT INTO email_log (booking_id, to_email, subject, body_text, kind, status, error_detail)
+         VALUES (?1, ?2, 'Votre voucher', 'corps', 'voucher', 'failed', 'HTTP 500 - fournisseur indisponible')`,
+      )
+      .bind(booking.id, "janssens@example.com")
+      .run();
+
+    const overview = await call("GET", "/api/admin/overview?property=1");
+    expect(overview.status).toBe(200);
+    const alerts = overview.data.alerts as {
+      linkAlerts: { id: number }[];
+      activeHolds: { id: number }[];
+      overdueBalances: { id: number }[];
+    };
+    // Sans identifiant, l'alerte reste du texte mort : l'exploitant doit
+    // retrouver lui-même la réservation concernée.
+    expect(alerts.linkAlerts.map((a) => a.id)).toContain(booking.id);
+    expect(alerts.activeHolds.length).toBeGreaterThan(0);
+    expect(alerts.activeHolds.every((a) => Number.isInteger(a.id) && a.id > 0)).toBe(true);
+    expect(alerts.overdueBalances.every((a) => Number.isInteger(a.id) && a.id > 0)).toBe(true);
+
+    const health = overview.data.health as { failedEmails: { bookingId: number | null; reference: string | null }[] };
+    expect(health.failedEmails.length).toBe(1);
+    expect(health.failedEmails[0]!.bookingId).toBe(booking.id);
+    expect(health.failedEmails[0]!.reference).toBe(booking.reference);
+
+    // Un flux en erreur n'appartient qu'a son domaine : sinon l'alerte mene a
+    // une vue Synchro ou le flux nomme n'existe pas.
+    await t.db
+      .prepare("INSERT INTO ical_feeds (unit_id, name, url, last_status) VALUES (2, 'Airbnb test', 'https://example.com/a.ics', 'erreur HTTP 404')")
+      .run();
+    const mine = await call("GET", "/api/admin/overview?property=1");
+    const other = await call("GET", "/api/admin/overview?property=2");
+    expect((mine.data.alerts as { feedAlerts: unknown[] }).feedAlerts.length).toBe(1);
+    expect((other.data.alerts as { feedAlerts: unknown[] }).feedAlerts.length).toBe(0);
+    await t.db.prepare("DELETE FROM ical_feeds WHERE name = 'Airbnb test'").run();
+  });
+
+  it("fiche réservation : le journal d'e-mails porte type, destinataire et statut (#49)", async () => {
+    const sale = await call("POST", "/api/admin/bookings", {
+      unitId: 2, checkin: CHECKIN, checkout: CHECKOUT, adults: 4,
+      guest: { lastName: "Mertens", email: "mertens@example.com" },
+    });
+    const booking = sale.data.booking as { id: number };
+    const resent = await call("POST", `/api/admin/bookings/${booking.id}/resend-voucher`);
+    expect(resent.status).toBe(200);
+
+    const fiche = await call("GET", `/api/admin/bookings/${booking.id}`);
+    expect(fiche.status).toBe(200);
+    const emails = fiche.data.emails as {
+      kind: string; toEmail: string; status: string; createdAt: string; errorDetail: string | null;
+    }[];
+    const voucher = emails.find((e) => e.kind === "voucher");
+    expect(voucher).toBeDefined();
+    expect(voucher!.toEmail).toBe("mertens@example.com");
+    // EMAILS_ENABLED=false : journalisé, donc RIEN n'est parti — la fiche doit
+    // pouvoir le dire, c'est toute la différence avec un envoi réussi.
+    expect(voucher!.status).toBe("stub");
+    expect(voucher!.createdAt).toMatch(/^\d{4}-\d{2}-\d{2}/);
+    expect(voucher!).toHaveProperty("errorDetail");
+  });
+
   it("le jeton ADMIN_TOKEN protège l'API admin quand il est configuré", async () => {
     const secured: Env = { ...env, ADMIN_TOKEN: "secret-jeton" };
     expect((await call("GET", "/api/admin/bookings", undefined, { authorization: "Bearer faux" }, secured)).status).toBe(401);

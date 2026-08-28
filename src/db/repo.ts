@@ -2218,6 +2218,9 @@ export interface EmailLogRow {
   bodyText: string;
   kind: string;
   status: string;
+  /** Message d'erreur du fournisseur quand `status = 'failed'` (migration 0011).
+   *  Affiché sur la fiche réservation : « échoué » sans motif n'aide personne. */
+  errorDetail: string | null;
   createdAt: string;
 }
 
@@ -2228,7 +2231,9 @@ export async function listEmailLog(db: D1Database, bookingId?: number, limit = 1
   const { results } = await stmt.all();
   return (results as Raw[]).map((r) => ({
     id: num(r.id), bookingId: numOrNull(r.booking_id), toEmail: str(r.to_email), subject: str(r.subject),
-    bodyText: str(r.body_text), kind: str(r.kind), status: str(r.status), createdAt: str(r.created_at),
+    bodyText: str(r.body_text), kind: str(r.kind), status: str(r.status),
+    errorDetail: r.error_detail == null ? null : str(r.error_detail),
+    createdAt: str(r.created_at),
   }));
 }
 
@@ -2337,8 +2342,10 @@ export interface HealthSignals {
    *  solde (deux sessions ouvertes, les deux payées) ne se voyait que dans le
    *  journal d'audit, que personne ne lit (contre-review 2026-08-28). */
   overpaidBookings: { reference: string; bookingId: number; overpaidCents: number; bookingStatus: string }[];
-  /** Emails dont l'envoi a échoué (voucher jamais reçu, personne ne le sait). */
-  failedEmails: { kind: string; toEmail: string; createdAt: string; errorDetail: string | null }[];
+  /** Emails dont l'envoi a échoué (voucher jamais reçu, personne ne le sait).
+   *  `bookingId` porte le lien vers la fiche concernée : sans lui, l'alerte du
+   *  tableau de bord nomme un échec sans dire où le rattraper (issue #48). */
+  failedEmails: { bookingId: number | null; reference: string | null; kind: string; toEmail: string; createdAt: string; errorDetail: string | null }[];
   /** Erreurs techniques journalisées dans les dernières 24 h. */
   recentErrors: { action: string; entity: string | null; createdAt: string; detail: string | null }[];
   /** Dernier rapatriement Beds24 réussi — figé = calendriers OTA à la dérive. */
@@ -2382,8 +2389,10 @@ export async function healthSignals(db: D1Database, propertyId: number, now: Dat
 
   const emails = await db
     .prepare(
-      `SELECT kind, to_email, created_at, error_detail FROM email_log
-        WHERE status = 'failed' AND created_at >= ?1 ORDER BY id DESC LIMIT 20`,
+      `SELECT e.booking_id, b.reference, e.kind, e.to_email, e.created_at, e.error_detail
+         FROM email_log e
+         LEFT JOIN bookings b ON b.id = e.booking_id
+        WHERE e.status = 'failed' AND e.created_at >= ?1 ORDER BY e.id DESC LIMIT 20`,
     )
     .bind(since)
     .all();
@@ -2443,6 +2452,8 @@ export async function healthSignals(db: D1Database, propertyId: number, now: Dat
       overpaidCents: num(r.overpaid_cents),
     })),
     failedEmails: (emails.results as Raw[]).map((r) => ({
+      bookingId: numOrNull(r.booking_id),
+      reference: r.reference == null ? null : str(r.reference),
       kind: str(r.kind),
       toEmail: str(r.to_email),
       createdAt: str(r.created_at),

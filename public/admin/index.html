@@ -28,6 +28,10 @@
     <header class="top">
       <h2 id="pageTitle">Aujourd'hui</h2>
     </header>
+    <!-- Bandeau de périmètre : rempli par le routeur quand la vue affichée est
+         plus étroite que la sélection de domaine (issue #52). Hors de #main,
+         qui est réécrit à chaque rendu de vue. -->
+    <div id="scopeNotice" role="status" aria-live="polite"></div>
     <div id="main"><div class="card">Chargement…</div></div>
   </main>
 </div>
