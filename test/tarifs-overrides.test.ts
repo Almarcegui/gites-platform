@@ -16,7 +16,11 @@ registerAdminRoutes(router);
 let t: TestDb;
 let env: Env;
 
-const ADMIN = "test-admin-token";
+// Jeton de secours au format « identifiant:motdepasse » — c'est ce format
+// qui permet à la garde de savoir QUI agit, et donc de tracer l'auteur des
+// modifications de tarifs (issue #54).
+const ADMIN_USER = "julie";
+const ADMIN = `${ADMIN_USER}:motdepasse-test`;
 const SCIERIE = 2;   // La Scierie — tarif de base 120 € semaine / 150 € weekend
 const DOMAINE = 3;   // Le Domaine entier — composite en mode « somme »
 
@@ -414,5 +418,92 @@ describe("prix conseillé par plateforme", () => {
     // la configuration précédente n'a pas été écrasée
     const { data } = await call("GET", "/api/admin/channel-markups");
     expect((data.channels as { markupPct: number }[]).every((c) => c.markupPct <= 100)).toBe(true);
+  });
+});
+
+
+// ---------------------------------------------------------------------------
+// Trace d'auteur (#54)
+// ---------------------------------------------------------------------------
+//
+// `audit_log.actor` dit par quel CANAL l'écriture est passée ('admin', 'cron',
+// 'stripe') — c'est une valeur fermée, pas une identité. L'auteur réel voyage
+// donc dans `detail.par`, mécanisme déjà posé pour les comptes du back-office
+// et lu par la fiche réservation (`historyWho`). À trois gestionnaires sur la
+// même grille, « qui a changé ce prix ? » doit avoir une réponse.
+describe("trace d'auteur sur les écritures de tarifs (#54)", () => {
+  /** Dernière entrée du journal pour une action donnée. */
+  async function lastAudit(action: string): Promise<{ actor: string; par?: string }> {
+    const row = await t.db
+      .prepare("SELECT actor, detail FROM audit_log WHERE action = ?1 ORDER BY id DESC LIMIT 1")
+      .bind(action)
+      .first<{ actor: string; detail: string | null }>();
+    if (!row) throw new Error(`aucune entrée d'audit pour ${action}`);
+    return { actor: row.actor, par: row.detail ? (JSON.parse(row.detail) as { par?: string }).par : undefined };
+  }
+
+  it("une surcharge de prix porte le nom de qui l'a posée", async () => {
+    await call("PATCH", "/api/admin/rate-overrides", { unitId: SCIERIE, from: dj(0), to: dj(2), priceCents: 24000 });
+    const entry = await lastAudit("rate.override");
+    expect(entry.par).toBe(ADMIN_USER);
+    // Le canal reste 'admin' : on ajoute une information, on n'en détourne pas une.
+    expect(entry.actor).toBe("admin");
+  });
+
+  it("le retrait d'une surcharge aussi — c'est le geste qu'on cherche à expliquer six mois plus tard", async () => {
+    await call("PATCH", "/api/admin/rate-overrides", { unitId: SCIERIE, from: dj(0), to: dj(2), priceCents: 24000 });
+    await call("DELETE", `/api/admin/rate-overrides?unit=${SCIERIE}&from=${dj(0)}&to=${dj(2)}`);
+    expect((await lastAudit("rate.override_clear")).par).toBe(ADMIN_USER);
+  });
+
+  it("une règle tarifaire modifiée garde son auteur ET les valeurs modifiées", async () => {
+    const { data } = await call("GET", "/api/admin/rate-rules?property=1");
+    const ruleId = (data.rules as { id: number }[])[0]?.id;
+    expect(ruleId).toBeGreaterThan(0);
+    expect((await call("PATCH", `/api/admin/rate-rules/${ruleId}`, { priceWeekCents: 13000 })).status).toBe(200);
+    const row = await t.db
+      .prepare("SELECT detail FROM audit_log WHERE action = 'rate.update' ORDER BY id DESC LIMIT 1")
+      .first<{ detail: string }>();
+    const detail = JSON.parse(row?.detail ?? "{}") as { par?: string; priceWeekCents?: number };
+    expect(detail.par).toBe(ADMIN_USER);
+    expect(detail.priceWeekCents).toBe(13000); // l'ajout de `par` n'écrase pas le corps
+  });
+
+  it("une majoration de canal est tracée elle aussi", async () => {
+    await call("PUT", "/api/admin/channel-markups", {
+      channels: [{ channel: "airbnb", label: "Airbnb", markupPct: 12 }],
+    });
+    expect((await lastAudit("pricing.channel_markups")).par).toBe(ADMIN_USER);
+  });
+
+  it("un corps de requête ne peut PAS usurper l'auteur — `par` est écrit en dernier", async () => {
+    // Sans cette précaution, un `{ "par": "..." }` glissé dans la charge utile
+    // écrasait l'identité posée par la garde : le journal d'audit devenait
+    // déclaratif, donc sans valeur de preuve.
+    const { data } = await call("GET", "/api/admin/rate-rules?property=1");
+    const ruleId = (data.rules as { id: number }[])[0]?.id;
+    await call("PATCH", `/api/admin/rate-rules/${ruleId}`, { priceWeekCents: 13500, par: "quelqu-un-d-autre" });
+    expect((await lastAudit("rate.update")).par).toBe(ADMIN_USER);
+  });
+
+  it("une saison créée porte aussi son auteur — le calendrier tarifaire entier est tracé", async () => {
+    expect(
+      (await call("POST", "/api/admin/seasons?property=1", {
+        name: "Test trace", dateStart: "2027-05-01", dateEnd: "2027-05-15",
+      })).status,
+    ).toBe(201);
+    expect((await lastAudit("season.create")).par).toBe(ADMIN_USER);
+  });
+
+  it("un jeton de secours sans identifiant retombe sur « admin » — pas de faux nom dans le journal", async () => {
+    const anonyme: Env = { ...env, ADMIN_TOKEN: "jeton-nu-historique" };
+    const req = new Request("http://test.local/api/admin/rate-overrides", {
+      method: "PATCH",
+      headers: { authorization: "Bearer jeton-nu-historique", "content-type": "application/json" },
+      body: JSON.stringify({ unitId: SCIERIE, from: dj(4), to: dj(4), priceCents: 24000 }),
+    });
+    const res = await router.handle(req, anonyme);
+    expect(res?.status).toBe(200);
+    expect((await lastAudit("rate.override")).par).toBe("admin");
   });
 });
