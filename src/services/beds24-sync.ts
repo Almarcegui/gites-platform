@@ -16,7 +16,7 @@
 // Cloudflare, ce module fonctionne tel quel.
 
 import { addDays, isIsoDate, sqlNow, todayInZone, type IsoDate } from "../core/dates";
-import { isUnitFree } from "../core/availability";
+import { blocksAsSpans, isUnitFree } from "../core/availability";
 import { rateCalendar, type UnitPricingInfo } from "../core/pricing";
 import {
   audit,
@@ -27,6 +27,7 @@ import {
   listBeds24Bookings,
   reactivateBookingAtomic,
   listLinks,
+  manualBlocksInWindow,
   listRateRules,
   listRateOverridesForProperty,
   listSeasons,
@@ -80,19 +81,25 @@ export async function buildCalendarPush(
   days: number,
 ): Promise<{ roomId: number; unitName: string; calendar: CalendarSpan[] }[]> {
   const to = addDays(from, days);
-  const [units, links, seasons, rules, overrides, rows] = await Promise.all([
+  const [units, links, seasons, rules, overrides, rows, blocks] = await Promise.all([
     listUnits(db, propertyId),
     listLinks(db, propertyId),
     listSeasons(db, propertyId),
     listRateRules(db, propertyId),
     listRateOverridesForProperty(db, propertyId, from, to),
     bookingsInWindow(db, propertyId, from, to),
+    manualBlocksInWindow(db, propertyId, from, to),
   ]);
   const now = sqlNow();
-  const spans = rows.map((b) => ({
-    unitId: b.unitId, checkin: b.checkin, checkout: b.checkout,
-    status: b.status, holdExpiresAt: b.holdExpiresAt,
-  }));
+  // Les blocages manuels ferment le stock poussé aux OTA exactement comme une
+  // réservation : sans eux, Airbnb et Booking vendraient des nuits de travaux.
+  const spans = [
+    ...rows.map((b) => ({
+      unitId: b.unitId, checkin: b.checkin, checkout: b.checkout,
+      status: b.status, holdExpiresAt: b.holdExpiresAt,
+    })),
+    ...blocksAsSpans(blocks),
+  ];
   const active = units.filter((u) => u.active);
   const physicalIds = new Set(active.filter((u) => !u.isComposite).map((u) => u.id));
   const toPricingUnit = (u: UnitRow): UnitPricingInfo => ({

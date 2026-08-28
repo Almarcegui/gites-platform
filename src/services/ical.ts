@@ -3,7 +3,7 @@
 // dépliage des lignes, VALUE=DATE, DTEND exclusif — comme notre checkout).
 
 import { addDays, sqlNow, todayInZone, type IsoDate } from "../core/dates";
-import { busySpans, isActiveBooking, mergeSpans } from "../core/availability";
+import { blocksAsSpans, busySpans, isActiveBooking, mergeSpans } from "../core/availability";
 import { icalScope } from "../core/sync-conflicts";
 import { closeUnseenSyncConflicts, noteSyncConflict } from "./sync-conflicts";
 import {
@@ -14,6 +14,7 @@ import {
   getBookingByExternalUid,
   listFeedBookings,
   listLinks,
+  manualBlocksInWindow,
   reactivateBookingAtomic,
   setFeedStatus,
   updateBookingDatesAtomic,
@@ -68,17 +69,24 @@ export async function exportSpansForUnit(db: D1Database, unit: UnitRow, now: Dat
   const from = addDays(today, -30);
   const to = addDays(today, 540);
   const bookings = await bookingsInWindow(db, unit.propertyId, from, to);
+  // Les blocages manuels (travaux, usage personnel) partent dans l'export au
+  // même titre que les réservations : un canal externe qui ne les verrait pas
+  // vendrait des nuits fermées (issue #74).
+  const blocks = await manualBlocksInWindow(db, unit.propertyId, from, to);
   const links = await listLinks(db, unit.propertyId);
   const nowSql = sqlNow(now);
   const spans = busySpans(
     unit.id,
-    bookings.map((b) => ({
-      unitId: b.unitId,
-      checkin: b.checkin,
-      checkout: b.checkout,
-      status: b.status,
-      holdExpiresAt: b.holdExpiresAt,
-    })),
+    [
+      ...bookings.map((b) => ({
+        unitId: b.unitId,
+        checkin: b.checkin,
+        checkout: b.checkout,
+        status: b.status,
+        holdExpiresAt: b.holdExpiresAt,
+      })),
+      ...blocksAsSpans(blocks),
+    ],
     links,
     nowSql,
   );

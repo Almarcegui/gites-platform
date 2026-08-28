@@ -167,6 +167,19 @@ WHERE NOT EXISTS (
 `res.meta.changes !== 1` ⇒ conflit, la réservation n'a pas eu lieu. Il n'y a
 **aucune fenêtre** entre le « est-ce libre ? » et le « je réserve ».
 
+À cette clause s'ajoute, depuis l'issue #74, un second `NOT EXISTS` sur la table
+`manual_blocks` (blocages manuels : travaux, usage personnel). Il emprunte la
+**même expansion par `unit_links`** et vit dans une seule fonction,
+`manualBlockConflictSql()` — recopié à la main dans cinq requêtes, il aurait
+divergé. Symétriquement, `createManualBlockAtomic()` est le pendant exact de
+`createBookingAtomic()` : un blocage et une réservation lancés en même temps sur
+le même créneau ne peuvent jamais passer tous les deux.
+
+Un blocage n'est **pas** une réservation : rien dans `bookings`, donc rien dans
+les statistiques de vente, les exports comptables ni les relances — qui ne
+lisent que cette table-là. Mais il occupe le stock, part dans l'export iCal et
+ferme les calendriers poussés aux OTA.
+
 > [!warning]
 > **Ne jamais remplacer ce chemin par un `SELECT` puis un `INSERT`.** Deux clients
 > simultanés passeraient tous les deux. C'est précisément ce que prouve
@@ -178,8 +191,8 @@ La même logique existe **deux fois** :
 
 | Implémentation | Fichier | Rôle |
 |---|---|---|
-| SQL atomique | `src/db/repo.ts` (`createBookingAtomic`, `confirmBookingAtomic`, `updateBookingDatesAtomic`) | **La vérité transactionnelle.** Seule garantie anti-surbooking. |
-| TypeScript pur | `src/core/availability.ts` (`isUnitFree`, `busySpans`, `blockingUnitIds`) | Recherche publique, planning, export iCal, push Beds24. |
+| SQL atomique | `src/db/repo.ts` (`createBookingAtomic`, `confirmBookingAtomic`, `updateBookingDatesAtomic`, `createManualBlockAtomic`) | **La vérité transactionnelle.** Seule garantie anti-surbooking. |
+| TypeScript pur | `src/core/availability.ts` (`isUnitFree`, `busySpans`, `blockingUnitIds`, `blocksAsSpans`) | Recherche publique, planning, export iCal, push Beds24. |
 
 Ce n'est pas une duplication accidentelle : la version TS sert à *afficher*,
 la version SQL sert à *engager*. Les deux sont couvertes par les mêmes cas de test.
@@ -362,6 +375,7 @@ sans compte tiers et sans risquer d'écrire à un vrai client.
 | `properties` | Les domaines (Pré Moré, Moulin) — préfixe de référence `PM`/`MB`, commune pour la taxe | 0001 (+`beds24_property_id` en 0010) |
 | `units` | Les hébergements vendables, y compris les composites comme « Domaine entier » | 0001 (+ménage/photo en 0003, +`beds24_room_id` en 0010, +`deposit_pct` en 0015) |
 | `unit_links` | **Le cœur** : quelle unité en bloque quelle autre (cf. §3) | 0001 |
+| `manual_blocks` | Blocages manuels (travaux, usage perso) — occupent le stock, jamais une vente | 0018 |
 | `seasons` | Périodes tarifaires par domaine ; la priorité la plus haute gagne | 0001 |
 | `rate_rules` | Une grille de prix par (unité, saison) ; `season_id NULL` = tarif de base | 0001 |
 | `promotions` | Remises auto (long séjour / early bird / last minute) et codes promo | 0001 |

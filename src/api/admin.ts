@@ -4,7 +4,7 @@
 
 import { apiError, json, readJson, Router, type Handler } from "./router";
 import { addDays, dayOfWeek, diffDays, isIsoDate, rangesOverlap, sqlNow, todayInZone, type IsoDate } from "../core/dates";
-import { blockingUnitIds, isActiveBooking, isUnitFree } from "../core/availability";
+import { blockingUnitIds, blocksAsSpans, isActiveBooking, isUnitFree } from "../core/availability";
 import { rateCalendar, type RateOverride, type UnitPricingInfo } from "../core/pricing";
 import { detectDrift, type DriftSignal } from "../core/drift";
 import {
@@ -65,6 +65,12 @@ import {
   listFeeds,
   listGuests,
   listLinks,
+  blockingBookings,
+  blockingManualBlocks,
+  createManualBlockAtomic,
+  getManualBlock,
+  manualBlocksInWindow,
+  releaseManualBlock,
   listOptionsAdmin,
   listPayments,
   listPromotions,
@@ -336,6 +342,17 @@ async function leadTimeBookings(db: D1Database, propertyId: number, year: number
  *
  *  Les conflits sont renvoyés nommés : au téléphone, « pris par PM-2026-004,
  *  Domaine entier » se dit, « indisponible » se subit. */
+/** Un conflit nommé : une réservation active (avec sa référence) ou un blocage
+ *  manuel (avec son motif). `status = 'blocked'` distingue le second. */
+interface AvailabilityConflict {
+  reference: string;
+  unitName: string;
+  checkin: IsoDate;
+  checkout: IsoDate;
+  status: string;
+  viaLink: boolean;
+}
+
 async function checkAvailability(
   db: D1Database,
   unitId: number,
@@ -343,25 +360,26 @@ async function checkAvailability(
   checkin: IsoDate,
   checkout: IsoDate,
   now: Date = new Date(),
-): Promise<{
-  available: boolean;
-  conflicts: { reference: string; unitName: string; checkin: IsoDate; checkout: IsoDate; status: string; viaLink: boolean }[];
-}> {
-  const [links, bookings] = await Promise.all([
+): Promise<{ available: boolean; conflicts: AvailabilityConflict[] }> {
+  const [links, bookings, manualBlocks] = await Promise.all([
     listLinks(db, propertyId),
     bookingsInWindow(db, propertyId, checkin, checkout),
+    manualBlocksInWindow(db, propertyId, checkin, checkout),
   ]);
   const nowSql = sqlNow(now);
-  const spans = bookings.map((b) => ({
-    unitId: b.unitId,
-    checkin: b.checkin,
-    checkout: b.checkout,
-    status: b.status,
-    holdExpiresAt: b.holdExpiresAt,
-  }));
+  const spans = [
+    ...bookings.map((b) => ({
+      unitId: b.unitId,
+      checkin: b.checkin,
+      checkout: b.checkout,
+      status: b.status,
+      holdExpiresAt: b.holdExpiresAt,
+    })),
+    ...blocksAsSpans(manualBlocks),
+  ];
   const available = isUnitFree(unitId, checkin, checkout, spans, links, nowSql);
   const blockers = blockingUnitIds(unitId, links);
-  const conflicts = bookings
+  const conflicts: AvailabilityConflict[] = bookings
     .filter(
       (b) =>
         blockers.has(b.unitId) &&
@@ -376,6 +394,19 @@ async function checkAvailability(
       status: b.status,
       viaLink: b.unitId !== unitId,
     }));
+  // Un blocage manuel se nomme lui aussi : « travaux salle de bains » se dit
+  // au téléphone, « indisponible » se subit (issue #74).
+  for (const k of manualBlocks) {
+    if (!blockers.has(k.unitId) || !rangesOverlap(k.checkin, k.checkout, checkin, checkout)) continue;
+    conflicts.push({
+      reference: k.reason || "blocage manuel",
+      unitName: k.unitName ?? `Unité ${k.unitId}`,
+      checkin: k.checkin,
+      checkout: k.checkout,
+      status: "blocked",
+      viaLink: k.unitId !== unitId,
+    });
+  }
   return { available, conflicts };
 }
 
@@ -1008,10 +1039,11 @@ export function registerAdminRoutes(router: Router): void {
       from = today.slice(0, 8) + "01";
       to = addDays(from, 45);
     }
-    const [units, links, rows] = await Promise.all([
+    const [units, links, rows, manual] = await Promise.all([
       listUnits(db, propertyId),
       listLinks(db, propertyId),
       bookingsInWindow(db, propertyId, from, to),
+      manualBlocksInWindow(db, propertyId, from, to),
     ]);
     const now = sqlNow();
     const active = rows.filter((b) => isActiveBooking({ status: b.status, holdExpiresAt: b.holdExpiresAt }, now));
@@ -1034,14 +1066,23 @@ export function registerAdminRoutes(router: Router): void {
       balanceCents: Math.max(0, b.totalCents - b.paidCents),
     }));
 
-    // Blocages par liaison : pour chaque unité, les résas actives d'AUTRES
-    // unités qui la bloquent.
+    // Blocages par liaison : pour chaque unité, les résas actives — et les
+    // blocages manuels — d'AUTRES unités qui la bloquent.
     const blocks: { unitId: number; checkin: IsoDate; checkout: IsoDate; sourceBookingId: number; sourceReference: string }[] = [];
     for (const u of units) {
       const blockers = new Set(links.filter((l) => l.blocksUnitId === u.id).map((l) => l.unitId));
       for (const b of active) {
         if (b.unitId !== u.id && blockers.has(b.unitId)) {
           blocks.push({ unitId: u.id, checkin: b.checkin, checkout: b.checkout, sourceBookingId: b.id, sourceReference: b.reference });
+        }
+      }
+      for (const k of manual) {
+        if (k.unitId !== u.id && blockers.has(k.unitId)) {
+          blocks.push({
+            unitId: u.id, checkin: k.checkin, checkout: k.checkout,
+            sourceBookingId: 0,
+            sourceReference: k.reason ? `blocage — ${k.reason}` : "blocage manuel",
+          });
         }
       }
     }
@@ -1052,7 +1093,83 @@ export function registerAdminRoutes(router: Router): void {
       units: units.map((u) => ({ id: u.id, name: u.name, isComposite: u.isComposite, active: u.active })),
       bookings,
       blocks,
+      // Blocages manuels PORTÉS par l'unité (travaux, usage perso) : rendus
+      // distincts du blocage par liaison, et supprimables en un clic (#74).
+      manualBlocks: manual.map((k) => ({
+        id: k.id,
+        unitId: k.unitId,
+        checkin: k.checkin,
+        checkout: k.checkout,
+        reason: k.reason,
+        createdBy: k.createdBy,
+      })),
     });
+  }));
+
+  // --- blocages manuels (issue #74) -----------------------------------------
+  //
+  // Un blocage n'est PAS une réservation : il n'entre ni dans les statistiques
+  // de vente, ni dans les exports, ni dans les relances — toutes lisent
+  // `bookings`. Mais il occupe le stock par le MÊME chemin atomique, liaisons
+  // comprises : `createManualBlockAtomic` est le pendant exact de
+  // `createBookingAtomic` (ARCHITECTURE.md §3).
+  router.get("/api/admin/blocks", guard(async (_req, env, _p, url) => {
+    const propertyId = intParam(url.searchParams.get("property"), 1);
+    const today = todayInZone();
+    const from = isIsoDate(url.searchParams.get("from") ?? "") ? String(url.searchParams.get("from")) : today;
+    const to = isIsoDate(url.searchParams.get("to") ?? "") ? String(url.searchParams.get("to")) : addDays(today, 540);
+    return json({ blocks: await manualBlocksInWindow(env.DB, propertyId, from, to) });
+  }));
+
+  router.post("/api/admin/blocks", guard(async (req, env, _p, _url, execCtx) => {
+    const db = env.DB;
+    const body = await readJson<{ unitId?: number; checkin?: string; checkout?: string; reason?: string }>(req);
+    if (!body) return apiError(400, "corps JSON attendu");
+    const checkin = String(body.checkin ?? "");
+    const checkout = String(body.checkout ?? "");
+    if (!isIsoDate(checkin) || !isIsoDate(checkout) || checkin >= checkout) return apiError(400, "dates invalides");
+    const unit = await getUnit(db, Math.floor(Number(body.unitId)));
+    if (!unit) return apiError(404, "hébergement inconnu");
+    const reason = String(body.reason ?? "").trim().slice(0, 200);
+    if (reason.length < 2) return apiError(400, "motif requis (travaux, usage personnel…)");
+
+    const created = await createManualBlockAtomic(db, {
+      unitId: unit.id,
+      checkin,
+      checkout,
+      reason,
+      createdBy: currentUser(req),
+    });
+    if (!created.ok) {
+      // Le refus se nomme : « pris par PM-2026-004 » se tranche au téléphone.
+      const [conflicts, others] = await Promise.all([
+        blockingBookings(db, unit.id, checkin, checkout),
+        blockingManualBlocks(db, unit.id, checkin, checkout),
+      ]);
+      return apiError(409, "créneau déjà occupé — rien n'a été bloqué", {
+        conflicts: conflicts.map((b) => ({ reference: b.reference, unitName: b.unitName, checkin: b.checkin, checkout: b.checkout })),
+        blocks: others.map((k) => ({ reason: k.reason, unitName: k.unitName, checkin: k.checkin, checkout: k.checkout })),
+      });
+    }
+    await audit(db, "admin", "block.create", `block:${created.id}`, {
+      par: currentUser(req), unit: unit.name, checkin, checkout, reason,
+    });
+    triggerBeds24Push(db, env, execCtx, unit.propertyId);
+    return json({ block: await getManualBlock(db, created.id) }, 201);
+  }));
+
+  router.delete("/api/admin/blocks/:id", guard(async (req, env, p, _url, execCtx) => {
+    const db = env.DB;
+    const id = intParam(p.id, 0);
+    const block = await getManualBlock(db, id);
+    if (!block) return apiError(404, "blocage inconnu");
+    const released = await releaseManualBlock(db, id, currentUser(req));
+    if (!released) return apiError(409, "blocage déjà levé");
+    await audit(db, "admin", "block.release", `block:${id}`, {
+      par: currentUser(req), unit: block.unitName, checkin: block.checkin, checkout: block.checkout,
+    });
+    if (block.propertyId != null) triggerBeds24Push(db, env, execCtx, block.propertyId);
+    return json({ ok: true });
   }));
 
   // --- réservations -----------------------------------------------------------

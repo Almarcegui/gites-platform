@@ -113,6 +113,7 @@ commandes interdites sans accord explicite du propriétaire — voir
 | `0015` | pourcentage d'arrhes par hébergement (`units.deposit_pct`, seed à 50) |
 | `0016` | conditions générales de location v2 pour les deux domaines |
 | `0017` | conflits de synchronisation persistés (`sync_conflicts`, issue #72) |
+| `0018` | blocages manuels (`manual_blocks`) — travaux, usage personnel |
 
 Le détail des règles métier qu'elles encodent est dans le
 [`README.md`](../README.md) racine.

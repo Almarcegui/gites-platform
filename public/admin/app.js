@@ -706,7 +706,9 @@ export async function renderOccupation(root, monthStart) {
     header += `<div class="h ${cls}">${dowLetter(iso)}${d + 1}</div>`;
   }
 
-  // une ligne par unité : barres (résas), hachures (blocages liaison), cellules libres
+  // une ligne par unité : barres (résas), hachures (blocages), cellules libres.
+  // Les cellules libres portent unité + date : c'est ce qui permet de tirer
+  // une plage à la souris pour poser un blocage manuel (issue #74).
   function rowFor(unit, data) {
     const segs = [];
     for (const b of data.bookings.filter((x) => x.unitId === unit.id)) {
@@ -721,29 +723,49 @@ export async function renderOccupation(root, monthStart) {
       if (end <= start) continue;
       segs.push({ start, span: end - start, type: "block", blk });
     }
+    for (const mb of (data.manualBlocks || []).filter((x) => x.unitId === unit.id)) {
+      const start = Math.max(0, diffDaysIso(monthStart, mb.checkin));
+      const end = Math.min(nbDays, diffDaysIso(monthStart, mb.checkout));
+      if (end <= start) continue;
+      segs.push({ start, span: end - start, type: "manual", mb });
+    }
     segs.sort((a, b2) => a.start - b2.start);
+
+    const freeCell = (index) => {
+      const iso = addDaysIso(monthStart, index);
+      return `<div class="cell ${isWeekendDay(iso) ? "we" : ""}" data-unit="${unit.id}" data-date="${iso}"></div>`;
+    };
 
     let html = `<div class="u">${esc(unit.name)}${unit.isComposite ? ' <span class="muted">🔗</span>' : ""}</div>`;
     let cursor = 0;
     for (const s of segs) {
-      for (; cursor < s.start; cursor++) {
-        const iso = addDaysIso(monthStart, cursor);
-        html += `<div class="cell ${isWeekendDay(iso) ? "we" : ""}"></div>`;
+      // Deux segments peuvent se recouvrir sur une ligne combinée (une résa sur
+      // une maison et un blocage sur l'autre bloquent tous deux le Domaine).
+      // Sans ce rognage, le curseur reculerait et TOUTE la ligne se décalerait
+      // d'un jour ou plus (contre-review Gemini, 2026-08-28).
+      if (s.start < cursor) {
+        s.span -= cursor - s.start;
+        s.start = cursor;
+        if (s.span <= 0) continue;
       }
+      for (; cursor < s.start; cursor++) html += freeCell(cursor);
       if (s.type === "booking") {
         const b = s.b;
         const cls = b.status === "pending" ? "pending" : b.source === "ical" ? "channel" : b.isComposite ? "composite" : "";
         const label = `${b.guestName} · ${b.persons}p` + (b.paidState === "acompte" || b.paidState === "impayée" ? ` · ${b.paidState === "acompte" ? "solde dû" : "impayée"}` : "");
         html += `<div class="bar ${cls}" style="grid-column: span ${s.span}" title="${esc(b.reference)} — ${dfr(b.checkin)} → ${dfr(b.checkout)}" data-booking="${b.id}">${esc(label)}</div>`;
+      } else if (s.type === "manual") {
+        const mb = s.mb;
+        html += `<div class="mblk" style="grid-column: span ${s.span}" title="Bloqué — ${esc(mb.reason)} (${dfr(mb.checkin)} → ${dfr(mb.checkout)}${mb.createdBy ? ", " + esc(mb.createdBy) : ""})">
+          <span class="mblk-t">${esc(mb.reason)}</span>
+          <button type="button" class="mblk-x" data-unblock="${mb.id}" title="Lever ce blocage" aria-label="Lever le blocage : ${esc(mb.reason)}">×</button>
+        </div>`;
       } else {
         html += `<div class="blk" style="grid-column: span ${s.span}" title="Bloqué par liaison — ${esc(s.blk.sourceReference)}"></div>`;
       }
       cursor = s.start + s.span;
     }
-    for (; cursor < nbDays; cursor++) {
-      const iso = addDaysIso(monthStart, cursor);
-      html += `<div class="cell ${isWeekendDay(iso) ? "we" : ""}"></div>`;
-    }
+    for (; cursor < nbDays; cursor++) html += freeCell(cursor);
     return html;
   }
 
@@ -762,14 +784,152 @@ export async function renderOccupation(root, monthStart) {
     <div class="note">Les lignes combinées (🔗, ex. <b>Domaine entier</b>) sont calculées : elles se bloquent dès qu'un bien lié est réservé, et réciproquement. Aucune action manuelle.</div>
     <div class="card">
       <div class="row mb"><div class="right n"><button class="btn sm" id="newSale">+ Nouvelle vente (tél.)</button></div></div>
+      <p class="small muted mb">Glisse sur des jours libres pour <b>bloquer</b> des dates (travaux, usage personnel). Un blocage se lève en cliquant sa croix.</p>
       ${grids}
       <div class="legend">Libre <i style="background:#EFF3EC"></i> Réservé <i style="background:var(--accent)"></i>
         Résa combinée <i style="background:var(--accent2)"></i> Option en cours <i style="background:repeating-linear-gradient(45deg,var(--accent),var(--accent) 4px,#4a7a5c 4px,#4a7a5c 8px)"></i>
-        Canal externe (iCal) <i style="background:var(--chan)"></i> Bloqué par liaison <i class="blk" style="border:1px solid #ccc"></i></div>
+        Canal externe (iCal) <i style="background:var(--chan)"></i> Bloqué par liaison <i class="blk" style="border:1px solid #ccc"></i>
+        Blocage manuel <i class="mblk-key"></i></div>
     </div>`;
 
   root.querySelector("#newSale").onclick = () => openNewSale();
   root.querySelectorAll("[data-booking]").forEach((el) => el.addEventListener("click", () => openBooking(Number(el.dataset.booking))));
+
+  // --- lever un blocage en un clic
+  root.querySelectorAll("[data-unblock]").forEach((btn) =>
+    btn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      btn.disabled = true;
+      try {
+        await api(`/api/admin/blocks/${Number(btn.dataset.unblock)}`, { method: "DELETE" });
+        toast("Blocage levé — les dates redeviennent vendables.");
+        navigate();
+      } catch (err) {
+        btn.disabled = false;
+        toast(err.message, true);
+      }
+    }),
+  );
+
+  wireBlockSelection(root, dataSets);
+}
+
+/** Sélection d'une plage de jours libres sur une ligne du planning, pour poser
+ *  un blocage manuel. Contrainte volontaire : la sélection ne franchit ni une
+ *  réservation ni un blocage — on ne peut donc pas dessiner une plage que le
+ *  serveur refusera à coup sûr. La vérité reste l'insertion atomique : ce
+ *  geste ne fait que PROPOSER des dates (issue #74). */
+function wireBlockSelection(root, dataSets) {
+  const unitName = new Map();
+  for (const { data } of dataSets) for (const u of data.units) unitName.set(u.id, u.name);
+
+  let unitId = null;
+  let anchor = null;
+  let head = null;
+  const cells = [...root.querySelectorAll(".cell[data-date]")];
+  const range = () => (anchor <= head ? [anchor, head] : [head, anchor]);
+
+  // Jours libres par hébergement : seules les cellules vides en portent un.
+  // C'est ce qui permet d'arrêter la sélection AVANT une réservation, plutôt
+  // que de laisser dessiner une plage que le serveur refusera.
+  const freeDays = new Map();
+  for (const c of cells) {
+    const u = Number(c.dataset.unit);
+    if (!freeDays.has(u)) freeDays.set(u, new Set());
+    freeDays.get(u).add(c.dataset.date);
+  }
+
+  /** Dernier jour atteignable depuis l'ancre sans franchir une nuit occupée. */
+  const clamp = (target) => {
+    const free = freeDays.get(unitId);
+    const step = target >= anchor ? 1 : -1;
+    let last = anchor;
+    for (let d = anchor; step > 0 ? d <= target : d >= target; d = addDaysIso(d, step)) {
+      if (!free || !free.has(d)) break;
+      last = d;
+    }
+    return last;
+  };
+
+  const paint = () => {
+    const [a, b] = anchor ? range() : [null, null];
+    for (const c of cells) {
+      const on = a != null && Number(c.dataset.unit) === unitId && c.dataset.date >= a && c.dataset.date <= b;
+      c.classList.toggle("sel", on);
+    }
+  };
+  const reset = () => { unitId = null; anchor = null; head = null; paint(); };
+
+  for (const cell of cells) {
+    cell.addEventListener("mousedown", (e) => {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      unitId = Number(cell.dataset.unit);
+      anchor = cell.dataset.date;
+      head = anchor;
+      paint();
+    });
+    cell.addEventListener("mouseenter", () => {
+      if (anchor == null || Number(cell.dataset.unit) !== unitId) return;
+      head = clamp(cell.dataset.date);
+      paint();
+    });
+  }
+
+  const finish = () => {
+    if (anchor == null) return;
+    const [from, toInclusive] = range();
+    const unit = unitId;
+    reset();
+    openBlockDates(unit, unitName.get(unit) || `Unité ${unit}`, from, toInclusive);
+  };
+  if (blockDragRelease) document.removeEventListener("mouseup", blockDragRelease);
+  blockDragRelease = finish;
+  document.addEventListener("mouseup", blockDragRelease);
+}
+
+/** Un seul écouteur de relâchement pour toute la session, remplacé à chaque
+ *  rendu — sinon ils s'empilent d'un mois à l'autre. */
+let blockDragRelease = null;
+
+/** Poser un blocage : motif obligatoire, dates rappelées en clair. Le départ
+ *  est exclusif comme partout ailleurs (dernière nuit + 1). */
+function openBlockDates(unitId, unitName, from, toInclusive) {
+  const checkout = addDaysIso(toInclusive, 1);
+  const nights = diffDaysIso(from, checkout);
+  const modal = openModal(`
+    <h2>Bloquer des dates <button class="x">×</button></h2>
+    <div class="note"><b>${esc(unitName)}</b> — du ${dfr(from)} au ${dfr(checkout)}
+      (${nights} nuit${nights > 1 ? "s" : ""}). Ces dates ne seront plus vendables, ici comme sur les canaux externes.
+      Un blocage n'est pas une réservation : il n'entre ni dans les statistiques de vente, ni dans les relances.</div>
+    <label class="f" for="blkReason">Motif</label>
+    <input id="blkReason" list="blkReasons" placeholder="travaux, usage personnel, entretien…" maxlength="200">
+    <datalist id="blkReasons">
+      <option value="Travaux"></option><option value="Usage personnel"></option>
+      <option value="Entretien"></option><option value="Ménage approfondi"></option>
+    </datalist>
+    <div class="row" style="margin-top:12px">
+      <div class="right n"><button class="btn" id="blkGo">Bloquer ces dates</button></div>
+    </div>`);
+  const input = modal.querySelector("#blkReason");
+  input.focus();
+  const go = modal.querySelector("#blkGo");
+  go.onclick = async () => {
+    const reason = input.value.trim();
+    if (reason.length < 2) return toast("Indique un motif — c'est ce qu'on relit six mois plus tard.", true);
+    // Sans ce verrou, un double-clic pose deux blocages : le second échoue en
+    // conflit avec le premier, et l'utilisateur voit une erreur incompréhensible.
+    go.disabled = true;
+    try {
+      await api("/api/admin/blocks", { method: "POST", body: { unitId, checkin: from, checkout, reason } });
+      modal.remove();
+      toast(`Bloqué : ${unitName}, ${dfr(from)} → ${dfr(checkout)}.`);
+      navigate();
+    } catch (e) {
+      go.disabled = false;
+      toast(e.message, true);
+    }
+  };
 }
 
 // ---------------------------------------------------------------------------

@@ -14,13 +14,14 @@
 // tout le reste — un import ne peut jamais créer de surbooking.
 
 import { isIsoDate, rangesOverlap, sqlNow, type IsoDate } from "../core/dates";
-import { blockingUnitIds, isActiveBooking, type BookingSpan, type UnitLink } from "../core/availability";
+import { blockingUnitIds, blocksAsSpans, isActiveBooking, type BookingSpan, type UnitLink } from "../core/availability";
 import {
   addPayment,
   audit,
   bookingsInWindow,
   createBookingAtomic,
   listLinks,
+  manualBlocksInWindow,
   listUnits,
   upsertGuest,
   type UnitRow,
@@ -236,10 +237,15 @@ export async function importElloha(
   // simulées, pour détecter aussi les conflits internes au fichier.
   const nowSql = sqlNow(now);
   const existingSpans: BookingSpan[] = dryRun
-    ? (await bookingsInWindow(db, propertyId, "2000-01-01", "2100-01-01")).map((b) => ({
-        unitId: b.unitId, checkin: b.checkin, checkout: b.checkout,
-        status: b.status, holdExpiresAt: b.holdExpiresAt,
-      }))
+    ? [
+        ...(await bookingsInWindow(db, propertyId, "2000-01-01", "2100-01-01")).map((b) => ({
+          unitId: b.unitId, checkin: b.checkin, checkout: b.checkout,
+          status: b.status, holdExpiresAt: b.holdExpiresAt,
+        })),
+        // La simulation doit annoncer les mêmes conflits que l'import réel :
+        // un blocage manuel fera refuser la ligne par l'INSERT atomique.
+        ...blocksAsSpans(await manualBlocksInWindow(db, propertyId, "2000-01-01", "2100-01-01")),
+      ]
     : [];
 
   const get = (r: string[], name: string): string => (col(name) >= 0 ? (r[col(name)] ?? "").trim() : "");

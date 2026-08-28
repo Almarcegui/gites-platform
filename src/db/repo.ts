@@ -28,6 +28,32 @@ import {
 } from "../core/sync-conflicts";
 
 type Raw = Record<string, unknown>;
+
+/** Le créneau est-il fermé par un BLOCAGE MANUEL actif (issue #74) ?
+ *
+ *  Fragment SQL partagé par les CINQ écritures atomiques (création,
+ *  confirmation, changement de dates, déménagement, réactivation) : un blocage
+ *  manuel occupe le stock exactement comme une réservation confirmée, avec la
+ *  MÊME expansion par `unit_links` — bloquer La Scierie ferme le Domaine.
+ *
+ *  Il est défini ici une seule fois, et pas recopié dans chaque requête :
+ *  c'est la seule façon d'éviter qu'un des cinq chemins diverge en silence.
+ *  Les trois arguments sont des EXPRESSIONS SQL écrites dans ce fichier
+ *  (numéros de paramètres liés ou sous-requêtes), jamais des données. */
+function manualBlockConflictSql(unitExpr: string, checkinExpr: string, checkoutExpr: string): string {
+  return `NOT EXISTS (
+            SELECT 1 FROM manual_blocks k
+             WHERE k.active = 1
+               AND k.checkin < ${checkoutExpr}
+               AND k.checkout > ${checkinExpr}
+               AND k.unit_id IN (
+                 SELECT ${unitExpr}
+                 UNION ALL
+                 SELECT ul.unit_id FROM unit_links ul WHERE ul.blocks_unit_id = ${unitExpr}
+               )
+          )`;
+}
+
 const num = (v: unknown): number => Number(v ?? 0);
 const numOrNull = (v: unknown): number | null => (v == null ? null : Number(v));
 const str = (v: unknown): string => String(v ?? "");
@@ -581,7 +607,8 @@ export async function createBookingAtomic(db: D1Database, input: CreateBookingIn
               UNION ALL
               SELECT ul.unit_id FROM unit_links ul WHERE ul.blocks_unit_id = ?1
             )
-       )`,
+       )
+         AND ${manualBlockConflictSql("?1", "?3", "?4")}`,
     )
     .bind(
       input.unitId,                    // ?1
@@ -745,7 +772,12 @@ export async function confirmBookingAtomic(db: D1Database, id: number, now: stri
                  SELECT ul.unit_id FROM unit_links ul
                   WHERE ul.blocks_unit_id = (SELECT unit_id FROM bookings WHERE id = ?1)
                )
-          )`,
+          )
+          AND ${manualBlockConflictSql(
+            "(SELECT unit_id FROM bookings WHERE id = ?1)",
+            "(SELECT checkin FROM bookings WHERE id = ?1)",
+            "(SELECT checkout FROM bookings WHERE id = ?1)",
+          )}`,
     )
     .bind(id, now)
     .run();
@@ -1111,6 +1143,11 @@ export async function expireStalePaymentSessions(
 /** Déplace une résa iCal sur de nouvelles dates, avec le MÊME garde-fou
  *  atomique que la création (en s'excluant elle-même du test de conflit).
  *  meta.changes === 0 ⇒ conflit, les dates existantes sont conservées. */
+/** Change les dates d'une réservation SANS la déplacer. `AND unit_id = ?1`
+ *  n'est pas décoratif : sans lui, un appelant qui se tromperait d'unité ferait
+ *  tester le conflit sur une unité et écrire sur une autre — la garde
+ *  s'appliquerait au mauvais calendrier (contre-review Gemini, 2026-08-28).
+ *  Pour changer d'unité, c'est `moveBookingAtomic`. */
 export async function updateBookingDatesAtomic(
   db: D1Database,
   id: number,
@@ -1126,6 +1163,7 @@ export async function updateBookingDatesAtomic(
     .prepare(
       `UPDATE bookings SET checkin = ?3, checkout = ?4, updated_at = ?5
         WHERE id = ?2
+          AND unit_id = ?1
           AND NOT EXISTS (
             SELECT 1 FROM bookings b
              WHERE b.id != ?2
@@ -1137,7 +1175,8 @@ export async function updateBookingDatesAtomic(
                  UNION ALL
                  SELECT ul.unit_id FROM unit_links ul WHERE ul.blocks_unit_id = ?1
                )
-          )`,
+          )
+          AND ${manualBlockConflictSql("?1", "?3", "?4")}`,
     )
     .bind(unitId, id, checkin, checkout, now)
     .run();
@@ -1181,7 +1220,8 @@ export async function moveBookingAtomic(
                  UNION ALL
                  SELECT ul.unit_id FROM unit_links ul WHERE ul.blocks_unit_id = ?1
                )
-          )`,
+          )
+          AND ${manualBlockConflictSql("?1", "?3", "?4")}`,
     )
     .bind(toUnitId, id, checkin, checkout, now)
     .run();
@@ -1242,6 +1282,7 @@ export async function reactivateBookingAtomic(
           SET status = 'confirmed', checkin = ?3, checkout = ?4, hold_expires_at = NULL,
               cancelled_at = NULL, cancel_reason = NULL, updated_at = ?5
         WHERE id = ?2
+          AND unit_id = ?1
           AND status = 'cancelled'
           AND NOT EXISTS (
             SELECT 1 FROM bookings b
@@ -1254,9 +1295,178 @@ export async function reactivateBookingAtomic(
                  UNION ALL
                  SELECT ul.unit_id FROM unit_links ul WHERE ul.blocks_unit_id = ?1
                )
-          )`,
+          )
+          AND ${manualBlockConflictSql("?1", "?3", "?4")}`,
     )
     .bind(unitId, id, checkin, checkout, now)
+    .run();
+  return res.meta.changes === 1;
+}
+
+// ---------------------------------------------------------------------------
+// Blocages manuels (issue #74) — travaux, usage personnel, entretien.
+//
+// Ce n'est PAS une réservation : rien dans `bookings`, donc rien dans les
+// statistiques de vente, les exports comptables ni les relances de solde, qui
+// ne lisent que cette table-là. Mais c'est la même occupation de stock : la
+// clause `manualBlockConflictSql` est consultée par les cinq écritures
+// atomiques, avec la même expansion par `unit_links`.
+// ---------------------------------------------------------------------------
+
+export interface ManualBlockRow {
+  id: number;
+  unitId: number;
+  unitName?: string;
+  propertyId?: number;
+  checkin: IsoDate;
+  checkout: IsoDate;
+  reason: string;
+  createdBy: string;
+  active: boolean;
+  releasedAt: string | null;
+  releasedBy: string | null;
+  createdAt: string;
+}
+
+function mapManualBlock(r: Raw): ManualBlockRow {
+  return {
+    id: num(r.id),
+    unitId: num(r.unit_id),
+    unitName: strOrNull(r.unit_name) ?? undefined,
+    propertyId: r.property_id == null ? undefined : num(r.property_id),
+    checkin: str(r.checkin),
+    checkout: str(r.checkout),
+    reason: str(r.reason),
+    createdBy: str(r.created_by),
+    active: num(r.active) === 1,
+    releasedAt: strOrNull(r.released_at),
+    releasedBy: strOrNull(r.released_by),
+    createdAt: str(r.created_at),
+  };
+}
+
+const MANUAL_BLOCK_JOIN = `
+  SELECT k.*, u.name AS unit_name, u.property_id AS property_id
+    FROM manual_blocks k
+    JOIN units u ON u.id = k.unit_id`;
+
+export interface CreateManualBlockInput {
+  unitId: number;
+  checkin: IsoDate;
+  checkout: IsoDate;
+  reason: string;
+  createdBy: string;
+  now?: Date;
+}
+
+export type CreateManualBlockResult =
+  | { ok: true; id: number }
+  | { ok: false; reason: "conflict" };
+
+/** Pose un blocage manuel avec LE MÊME garde-fou atomique que la création
+ *  d'une réservation : un seul `INSERT … SELECT … WHERE NOT EXISTS`, qui
+ *  vérifie d'un coup les réservations actives ET les blocages déjà posés,
+ *  liaisons comprises. Aucune fenêtre entre « est-ce libre ? » et « je pose ».
+ *
+ *  C'est ce qui fait qu'une course entre un blocage et une réservation sur le
+ *  même créneau ne laisse jamais passer les deux. */
+export async function createManualBlockAtomic(
+  db: D1Database,
+  input: CreateManualBlockInput,
+): Promise<CreateManualBlockResult> {
+  if (!isIsoDate(input.checkin) || !isIsoDate(input.checkout) || input.checkin >= input.checkout) {
+    throw new Error(`createManualBlockAtomic: dates invalides ${input.checkin} → ${input.checkout}`);
+  }
+  const now = sqlNow(input.now ?? new Date());
+  const res = await db
+    .prepare(
+      `INSERT INTO manual_blocks (unit_id, checkin, checkout, reason, created_by, active, created_at, updated_at)
+       SELECT ?1, ?2, ?3, ?5, ?6, 1, ?4, ?4
+       WHERE NOT EXISTS (
+         SELECT 1 FROM bookings b
+          WHERE b.checkin < ?3
+            AND b.checkout > ?2
+            AND (b.status = 'confirmed' OR (b.status = 'pending' AND b.hold_expires_at > ?4))
+            AND b.unit_id IN (
+              SELECT ?1
+              UNION ALL
+              SELECT ul.unit_id FROM unit_links ul WHERE ul.blocks_unit_id = ?1
+            )
+       )
+         AND ${manualBlockConflictSql("?1", "?2", "?3")}`,
+    )
+    .bind(input.unitId, input.checkin, input.checkout, now, input.reason, input.createdBy)
+    .run();
+  if (res.meta.changes !== 1) return { ok: false, reason: "conflict" };
+  return { ok: true, id: res.meta.last_row_id };
+}
+
+export async function getManualBlock(db: D1Database, id: number): Promise<ManualBlockRow | null> {
+  const row = await db.prepare(`${MANUAL_BLOCK_JOIN} WHERE k.id = ?1`).bind(id).first();
+  return row ? mapManualBlock(row as Raw) : null;
+}
+
+/** Blocages actifs d'un domaine qui intersectent une fenêtre — planning,
+ *  disponibilité publique, export iCal, push Beds24. */
+export async function manualBlocksInWindow(
+  db: D1Database,
+  propertyId: number,
+  from: IsoDate,
+  to: IsoDate,
+): Promise<ManualBlockRow[]> {
+  const { results } = await db
+    .prepare(
+      `${MANUAL_BLOCK_JOIN}
+        WHERE u.property_id = ?1 AND k.active = 1 AND k.checkin < ?3 AND k.checkout > ?2
+        ORDER BY k.checkin`,
+    )
+    .bind(propertyId, from, to)
+    .all();
+  return (results as Raw[]).map(mapManualBlock);
+}
+
+/** Blocages actifs qui ferment un créneau sur une unité, liaisons comprises —
+ *  la même condition que le garde-fou d'insertion, mais en lecture. Sert à
+ *  NOMMER le motif : « travaux salle de bains » se dit au téléphone,
+ *  « indisponible » se subit. */
+export async function blockingManualBlocks(
+  db: D1Database,
+  unitId: number,
+  checkin: IsoDate,
+  checkout: IsoDate,
+): Promise<ManualBlockRow[]> {
+  const { results } = await db
+    .prepare(
+      `${MANUAL_BLOCK_JOIN}
+        WHERE k.active = 1
+          AND k.checkin < ?3
+          AND k.checkout > ?2
+          AND k.unit_id IN (
+            SELECT ?1
+            UNION ALL
+            SELECT ul.unit_id FROM unit_links ul WHERE ul.blocks_unit_id = ?1
+          )
+        ORDER BY k.checkin`,
+    )
+    .bind(unitId, checkin, checkout)
+    .all();
+  return (results as Raw[]).map(mapManualBlock);
+}
+
+/** Lève un blocage. Jamais de DELETE (convention du schéma) : on garde qui
+ *  avait fermé quoi, pourquoi, et qui a rouvert. */
+export async function releaseManualBlock(
+  db: D1Database,
+  id: number,
+  releasedBy: string,
+  now: string = sqlNow(),
+): Promise<boolean> {
+  const res = await db
+    .prepare(
+      `UPDATE manual_blocks SET active = 0, released_at = ?2, released_by = ?3, updated_at = ?2
+        WHERE id = ?1 AND active = 1`,
+    )
+    .bind(id, now, releasedBy)
     .run();
   return res.meta.changes === 1;
 }

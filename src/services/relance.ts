@@ -29,8 +29,16 @@
 // journal des envois.
 
 import { sqlNow, type IsoDate } from "../core/dates";
-import { isUnitFree, type BookingSpan, type UnitLink } from "../core/availability";
-import { audit, bookingsInWindow, getProperty, hasEmailOfKind, listLinks, type PropertyRow } from "../db/repo";
+import { blocksAsSpans, isUnitFree, type BookingSpan, type UnitLink } from "../core/availability";
+import {
+  audit,
+  bookingsInWindow,
+  getProperty,
+  hasEmailOfKind,
+  listLinks,
+  manualBlocksInWindow,
+  type PropertyRow,
+} from "../db/repo";
 import { formatDateFr, queueEmail } from "./email";
 
 /** Délai après l'expiration du blocage avant d'envoyer la relance (issue : « proposer 24 h »). */
@@ -204,15 +212,20 @@ export async function runAbandonedReminders(env: Env, now: Date = new Date()): P
     if (!linksByProperty.has(b.propertyId)) {
       linksByProperty.set(b.propertyId, await listLinks(db, b.propertyId));
     }
-    const spans: BookingSpan[] = (await bookingsInWindow(db, b.propertyId, b.checkin, b.checkout))
-      .filter((r) => r.id !== b.id) // sa propre trace ne doit pas la bloquer
-      .map((r) => ({
-        unitId: r.unitId,
-        checkin: r.checkin,
-        checkout: r.checkout,
-        status: r.status,
-        holdExpiresAt: r.holdExpiresAt,
-      }));
+    // Un blocage manuel posé depuis l'abandon rend le créneau invendable : on
+    // ne relance pas sur des dates qu'on a soi-même fermées (issue #74).
+    const spans: BookingSpan[] = [
+      ...(await bookingsInWindow(db, b.propertyId, b.checkin, b.checkout))
+        .filter((r) => r.id !== b.id) // sa propre trace ne doit pas la bloquer
+        .map((r) => ({
+          unitId: r.unitId,
+          checkin: r.checkin,
+          checkout: r.checkout,
+          status: r.status,
+          holdExpiresAt: r.holdExpiresAt,
+        })),
+      ...blocksAsSpans(await manualBlocksInWindow(db, b.propertyId, b.checkin, b.checkout)),
+    ];
     const free = isUnitFree(b.unitId, b.checkin, b.checkout, spans, linksByProperty.get(b.propertyId) ?? [], nowSql);
     if (!free) {
       result.skipped += 1;

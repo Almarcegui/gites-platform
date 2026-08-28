@@ -5,7 +5,7 @@
 
 import { apiError, json, readJson, Router } from "./router";
 import { addDays, diffDays, isIsoDate, sqlNow, todayInZone, type IsoDate } from "../core/dates";
-import { isUnitFree } from "../core/availability";
+import { blocksAsSpans, isUnitFree } from "../core/availability";
 import { rateCalendar, type UnitPricingInfo } from "../core/pricing";
 import { suggestStays, type NightOption, type StaySuggestion } from "../core/stay-options";
 import {
@@ -33,6 +33,7 @@ import {
   listRateOverridesForProperty,
   listSeasons,
   listUnits,
+  manualBlocksInWindow,
   markPaymentStatus,
   recordCgvAcceptance,
   upsertGuest,
@@ -274,10 +275,11 @@ export function registerPublicRoutes(router: Router): void {
     const wideTo = addDays(checkin, Math.max(SUGGEST_DAYS_AFTER, nights + SUGGEST_DAYS_BEFORE));
     const suggestTo = wideTo > horizon ? horizon : wideTo;
 
-    const [units, links, bookings] = await Promise.all([
+    const [units, links, bookings, blocks] = await Promise.all([
       listUnits(db, property.id),
       listLinks(db, property.id),
       bookingsInWindow(db, property.id, suggestFrom, suggestTo),
+      manualBlocksInWindow(db, property.id, suggestFrom, suggestTo),
     ]);
     const now = sqlNow();
 
@@ -286,15 +288,20 @@ export function registerPublicRoutes(router: Router): void {
     // référence devinée ne donne rien.
     const own = await ownPendingHold(env, req, db, property.id, now);
 
-    const spans = bookings
-      .filter((b) => b.id !== own?.id)
-      .map((b) => ({
-        unitId: b.unitId,
-        checkin: b.checkin,
-        checkout: b.checkout,
-        status: b.status,
-        holdExpiresAt: b.holdExpiresAt,
-      }));
+    // Les blocages manuels (travaux, usage personnel) occupent le stock comme
+    // une réservation : le tunnel public ne doit jamais proposer ces nuits.
+    const spans = [
+      ...bookings
+        .filter((b) => b.id !== own?.id)
+        .map((b) => ({
+          unitId: b.unitId,
+          checkin: b.checkin,
+          checkout: b.checkout,
+          status: b.status,
+          holdExpiresAt: b.holdExpiresAt,
+        })),
+      ...blocksAsSpans(blocks),
+    ];
     const persons = adults + children;
 
     const out = [];
@@ -419,19 +426,23 @@ export function registerPublicRoutes(router: Router): void {
     // Les surcharges par jour entrent ici aussi : sans elles, le calendrier
     // public afficherait le prix de saison tandis que le devis facturerait la
     // surcharge — un écart visible du client, entre l'annonce et le paiement.
-    const [units, links, seasons, rules, overrides, rows] = await Promise.all([
+    const [units, links, seasons, rules, overrides, rows, blocks] = await Promise.all([
       listUnits(db, property.id),
       listLinks(db, property.id),
       listSeasons(db, property.id),
       listRateRules(db, property.id),
       listRateOverridesForProperty(db, property.id, from, to),
       bookingsInWindow(db, property.id, from, to),
+      manualBlocksInWindow(db, property.id, from, to),
     ]);
     const now = sqlNow();
-    const spans = rows.map((b) => ({
-      unitId: b.unitId, checkin: b.checkin, checkout: b.checkout,
-      status: b.status, holdExpiresAt: b.holdExpiresAt,
-    }));
+    const spans = [
+      ...rows.map((b) => ({
+        unitId: b.unitId, checkin: b.checkin, checkout: b.checkout,
+        status: b.status, holdExpiresAt: b.holdExpiresAt,
+      })),
+      ...blocksAsSpans(blocks),
+    ];
     const active = units.filter((u) => u.active);
     const physicalIds = new Set(active.filter((u) => !u.isComposite).map((u) => u.id));
 
@@ -485,11 +496,12 @@ export function registerPublicRoutes(router: Router): void {
     const today = todayInZone();
     const horizon = availabilityHorizon(today);
 
-    const [promotions, units, links, bookings] = await Promise.all([
+    const [promotions, units, links, bookings, blocks] = await Promise.all([
       listPromotions(db, property.id),
       listUnits(db, property.id),
       listLinks(db, property.id),
       bookingsInWindow(db, property.id, today, horizon),
+      manualBlocksInWindow(db, property.id, today, horizon),
     ]);
 
     const offers = publicPromotions(promotions, today);
@@ -497,13 +509,16 @@ export function registerPublicRoutes(router: Router): void {
       today,
       unitIds: units.filter((u) => u.active).map((u) => u.id),
       links,
-      bookings: bookings.map((b) => ({
-        unitId: b.unitId,
-        checkin: b.checkin,
-        checkout: b.checkout,
-        status: b.status,
-        holdExpiresAt: b.holdExpiresAt,
-      })),
+      bookings: [
+        ...bookings.map((b) => ({
+          unitId: b.unitId,
+          checkin: b.checkin,
+          checkout: b.checkout,
+          status: b.status,
+          holdExpiresAt: b.holdExpiresAt,
+        })),
+        ...blocksAsSpans(blocks),
+      ],
       now: sqlNow(),
     });
 
