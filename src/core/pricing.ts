@@ -138,6 +138,12 @@ export interface QuoteLine {
   kind: "accommodation" | "holiday_surcharge" | "discount" | "promo" | "fee" | "option" | "tax";
   label: string;
   amountCents: number; // négatif pour les remises
+  /** Libellé sans l'origine du prix, pour le tunnel et le voucher (issue #47).
+   *  `label` garde la provenance (« · tarif de base », nom de saison) : elle
+   *  sert au back-office, pas au voyageur. Absent = pas de reformulation. */
+  publicLabel?: string;
+  /** Prix d'UNE nuit du groupe, quand toutes ont le même (issue #47). */
+  unitPriceCents?: number;
 }
 
 export interface Quote {
@@ -402,7 +408,14 @@ function breakdownForUnit(
   ratedDays: Set<IsoDate>,
   overrides: Map<string, RateOverride>,
 ): UnitBreakdown {
-  interface Group { seasonLabel: string; weekend: boolean; count: number; amountCents: number }
+  interface Group {
+    seasonLabel: string;
+    weekend: boolean;
+    count: number;
+    amountCents: number;
+    /** prix d'une nuit du groupe, null dès que deux nuits diffèrent */
+    unitPriceCents: number | null;
+  }
   const groups = new Map<string, Group>();
   let surcharge = 0;
   let holidayNights = 0;
@@ -425,7 +438,18 @@ function breakdownForUnit(
     const seasonLabel =
       r.source === "override" ? "prix fixé à la main" : r.season ? r.season.name : "tarif de base";
     const key = `${seasonLabel}|${r.weekend ? "we" : "wk"}`;
-    const g = groups.get(key) ?? { seasonLabel, weekend: r.weekend, count: 0, amountCents: 0 };
+    const g = groups.get(key) ?? {
+      seasonLabel,
+      weekend: r.weekend,
+      count: 0,
+      amountCents: 0,
+      unitPriceCents: r.baseCents,
+    };
+    // Deux surcharges manuelles de montants différents tombent dans le MÊME
+    // groupe (même libellé « prix fixé à la main », même type de jour) : sans
+    // ce contrôle nuit par nuit, le tunnel afficherait leur moyenne comme s'il
+    // s'agissait du tarif affiché (contre-review Gemini 2026-08-28).
+    if (g.unitPriceCents !== r.baseCents) g.unitPriceCents = null;
     g.count += 1;
     g.amountCents += r.baseCents;
     groups.set(key, g);
@@ -435,13 +459,19 @@ function breakdownForUnit(
     }
   });
 
-  const lines: QuoteLine[] = [...groups.values()].map((g) => ({
-    kind: "accommodation",
-    label:
-      `${g.count} nuit${g.count > 1 ? "s" : ""} ${g.weekend ? "weekend" : "semaine"} · ${g.seasonLabel}` +
-      (labelWithUnit ? ` — ${unitName}` : ""),
-    amountCents: g.amountCents,
-  }));
+  const lines: QuoteLine[] = [...groups.values()].map((g) => {
+    const stem = `${g.count} nuit${g.count > 1 ? "s" : ""} ${g.weekend ? "weekend" : "semaine"}`;
+    const suffix = labelWithUnit ? ` — ${unitName}` : "";
+    return {
+      kind: "accommodation" as const,
+      label: `${stem} · ${g.seasonLabel}${suffix}`,
+      amountCents: g.amountCents,
+      publicLabel: `${stem}${suffix}`,
+      // Prix unitaire seulement si TOUTES les nuits du groupe valent ce
+      // montant-là : jamais une moyenne présentée comme un tarif (issue #47).
+      ...(g.unitPriceCents != null ? { unitPriceCents: g.unitPriceCents } : {}),
+    };
+  });
 
   return {
     lines,

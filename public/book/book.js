@@ -448,6 +448,9 @@ async function search() {
   $("bookingPanel").innerHTML = "";
   SELECTED = null;
   const seq = ++searchSeq;
+  // aria-busy était figé à "false" dans le HTML : la région annonçait
+  // « Recherche… » puis la liste, deux fois pour un seul geste (issue #47-6).
+  $("results").setAttribute("aria-busy", "true");
   $("results").innerHTML = `<div class="card muted">Recherche…</div>`;
   let data;
   try {
@@ -456,6 +459,7 @@ async function search() {
     );
   } catch (e) {
     if (seq !== searchSeq) return;
+    $("results").setAttribute("aria-busy", "false");
     $("results").innerHTML = "";
     $("searchMsg").innerHTML = `<div class="note bad">${esc(e.message)}</div>`;
     return;
@@ -493,6 +497,9 @@ async function search() {
     </div>`;
   });
   $("results").innerHTML = cards.join("") || `<div class="note">Aucun hébergement.</div>`;
+  // La liste est complète : la région redevient « au repos » et c'est ce
+  // basculement qui déclenche l'annonce, une seule fois (issue #47-6).
+  $("results").setAttribute("aria-busy", "false");
   document.querySelectorAll("[data-select]").forEach((b) => b.addEventListener("click", () => openBookingPanel(Number(b.dataset.select))));
   document.querySelectorAll(".sugg-b").forEach((b) =>
     b.addEventListener("click", () => applySuggestion(b.dataset.in, b.dataset.out)),
@@ -558,11 +565,14 @@ async function openBookingPanel(unitId) {
   // arrive avec une réponse mise en cache par un ancien déploiement.
   const depositPct = SELECTED.depositPct ?? PROP.settings.depositPct;
 
+  // Le texte du choix est dans un <span> : le libellé devient une vraie ligne
+  // flex (radio à taille native + texte qui s'aligne sous lui-même), au lieu
+  // d'un radio étiré sur toute la largeur du bloc (issue #42).
   const payChoices = [];
   if (PROP.settings.allowDeposit)
-    payChoices.push(`<label><input type="radio" name="payMode" value="deposit" checked> <b>Arrhes de ${depositPct} %</b> maintenant — solde ${PROP.settings.balanceDueDays} jours avant l'arrivée</label>`);
+    payChoices.push(`<label><input type="radio" name="payMode" value="deposit" checked><span><b>Arrhes de ${depositPct} %</b> maintenant — solde ${PROP.settings.balanceDueDays} jours avant l'arrivée</span></label>`);
   if (PROP.settings.allowFullPayment)
-    payChoices.push(`<label><input type="radio" name="payMode" value="full" ${!PROP.settings.allowDeposit ? "checked" : ""}> <b>Totalité</b> maintenant</label>`);
+    payChoices.push(`<label><input type="radio" name="payMode" value="full" ${!PROP.settings.allowDeposit ? "checked" : ""}><span><b>Totalité</b> maintenant</span></label>`);
 
   $("bookingPanel").innerHTML = `
     <div class="panel-grid">
@@ -584,10 +594,11 @@ async function openBookingPanel(unitId) {
           </details>
           <div class="paybox">
             <h4>💳 Paiement sécurisé <span class="badge-secure">Stripe</span></h4>
-            ${payChoices.join("")}
+            <fieldset class="paychoices"><legend class="sr-only">Montant à payer maintenant</legend>${payChoices.join("")}</fieldset>
             <div class="cards">Bancontact · Visa · Mastercard — aucun montant n'est débité sans confirmation.</div>
           </div>
-          <div class="agree"><label class="small"><input type="checkbox" id="gCgv"> J'accepte les <a href="#" id="cgvLink">conditions générales et le contrat de location</a> *</label>
+          <div class="agree"><label class="small" id="cgvLabel"><input type="checkbox" id="gCgv" aria-describedby="cgvMsg"> J'accepte les <a href="#" id="cgvLink">conditions générales et le contrat de location</a> *</label>
+          <div id="cgvMsg" class="field-msg" role="alert"></div>
           <div id="cgvBox" class="cgv-box" style="display:none"></div>
           <label class="small optin"><input type="checkbox" id="gOptin"> Tenez-moi au courant des disponibilités et offres par email <span class="muted">(facultatif, désinscription à tout moment)</span></label></div>
           <div id="bookMsg" role="alert" aria-live="assertive"></div>
@@ -628,6 +639,10 @@ async function openBookingPanel(unitId) {
   });
   $("cgvLink").addEventListener("click", (e) => {
     e.preventDefault();
+    // Le lien vit DANS le label de la case : sans cette ligne, un navigateur
+    // qui remonte l'événement jusqu'au label cocherait la case en même temps
+    // qu'il déplie les CGV (contre-review Gemini 2026-08-28).
+    e.stopPropagation();
     const box = $("cgvBox");
     box.style.display = box.style.display === "none" ? "block" : "none";
     if (!box.innerHTML) {
@@ -639,7 +654,10 @@ async function openBookingPanel(unitId) {
         : `<p>Les conditions générales et le contrat de location complets sont joints à la confirmation de réservation et consultables à tout moment sur votre voucher en ligne.</p>`;
     }
   });
-  $("gCgv").addEventListener("change", payButtonRefresh);
+  $("gCgv").addEventListener("change", () => {
+    if ($("gCgv").checked) clearCgvError();
+    payButtonRefresh();
+  });
   $("bPay").addEventListener("click", submitBooking);
   $("mbPay").onclick = submitBooking;
   // Le passage à l'étape 3 est le plus souvent AUTOMATIQUE (auto-sélection du
@@ -661,9 +679,12 @@ function collectOptions() {
 function payButtonRefresh() {
   if (!SELECTED) return;
   const ok = QUOTE?.ok === true;
-  const accepted = $("gCgv")?.checked === true;
+  // MÊME règle sur les deux boutons (issue #41) : le bouton mobile exigeait en
+  // plus la case CGV cochée et restait grisé sans dire pourquoi, alors que le
+  // bouton desktop laissait cliquer puis affichait un message. On garde la
+  // version qui s'explique : cliquable, refus motivé à côté de la case.
   $("bPay").disabled = !ok;
-  $("mbPay").disabled = !ok || !accepted;
+  $("mbPay").disabled = !ok;
   if (!ok) return;
   const mode = document.querySelector('input[name="payMode"]:checked')?.value;
   const amount = mode === "full" || QUOTE.balanceDueDate == null ? QUOTE.totalCents : QUOTE.depositCents;
@@ -672,6 +693,18 @@ function payButtonRefresh() {
   $("mbAmount").textContent = eur(amount);
   $("mbLabel").textContent = mode === "full" || QUOTE.balanceDueDate == null ? "Totalité" : "Arrhes";
   $("mobileBar").style.display = "flex";
+}
+
+/** Libellé d'une ligne de devis côté client (issue #47-2).
+ *  Le moteur envoie « 3 nuits semaine · tarif de base » : l'origine du prix
+ *  intéresse le back-office, pas le voyageur, qui veut savoir combien coûte
+ *  UNE nuit. Repli sur le libellé technique si le moteur ne fournit pas le
+ *  prix unitaire (nuits de prix différents regroupées, ancien devis stocké).
+ */
+function lineLabel(l) {
+  return l?.publicLabel && l.unitPriceCents != null
+    ? `${l.publicLabel} à ${eur(l.unitPriceCents)} la nuit`
+    : (l?.label ?? "");
 }
 
 async function refreshQuote() {
@@ -693,7 +726,7 @@ async function refreshQuote() {
       return;
     }
     const rows = quote.lines
-      .map((l) => `<tr><td>${esc(l.label)}</td><td class="r ${l.amountCents < 0 ? "neg" : ""}">${eur(l.amountCents)}</td></tr>`)
+      .map((l) => `<tr><td>${esc(lineLabel(l))}</td><td class="r ${l.amountCents < 0 ? "neg" : ""}">${eur(l.amountCents)}</td></tr>`)
       .join("");
     const depositLine =
       quote.balanceDueDate != null
@@ -714,12 +747,26 @@ async function refreshQuote() {
   }
 }
 
+/** Efface le refus posé sur la case CGV (issue #41). */
+function clearCgvError() {
+  const zone = $("cgvMsg");
+  if (zone) zone.textContent = "";
+  $("gCgv")?.removeAttribute("aria-invalid");
+  $("cgvLabel")?.classList.remove("err");
+}
+
 async function submitBooking() {
   const msg = $("bookMsg");
   msg.innerHTML = "";
+  clearCgvError();
+  // Refus attaché à SA case : message à côté d'elle et focus posé dessus —
+  // même comportement sur mobile et sur desktop (issue #41).
   if (!$("gCgv").checked) {
-    msg.innerHTML = `<div class="note bad">Merci d'accepter les conditions générales.</div>`;
-    $("guestCard").scrollIntoView({ behavior: "smooth", block: "center" });
+    $("cgvMsg").textContent = "Cochez cette case pour continuer : c'est l'acceptation du contrat de location.";
+    $("gCgv").setAttribute("aria-invalid", "true");
+    $("cgvLabel").classList.add("err");
+    $("gCgv").focus({ preventScroll: true });
+    $("cgvLabel").scrollIntoView({ behavior: "smooth", block: "center" });
     return;
   }
   const lastName = $("gLast").value.trim();

@@ -21,7 +21,9 @@ h3{font-size:13px;text-transform:uppercase;letter-spacing:.7px;color:var(--muted
 label.f{display:block;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px}
 input,select,textarea{font:14px/1.4 inherit;color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:9px 10px;background:#fff;width:100%}
 input:focus,select:focus,textarea:focus{outline:2px solid var(--accent);outline-offset:2px;border-color:var(--accent)}
-input[type=checkbox]{width:auto}
+/* Sans cette ligne, les cases et les radios héritent du width:100% ci-dessus :
+   un radio de 465 px de large, à la zone cliquable illisible (issue #42). */
+input[type=checkbox],input[type=radio]{width:auto;flex:none;margin:0;cursor:pointer}
 .row{display:flex;gap:12px;align-items:end;flex-wrap:wrap}
 .row>div{flex:1;min-width:120px}
 .row>div.n{flex:0 0 auto;min-width:0}
@@ -85,6 +87,10 @@ table.quote{width:100%;border-collapse:collapse;font-size:14px}
 .cgv-box .cgv-h{margin-top:12px;color:#1f2937}
 .cgv-box .cgv-h:first-child{margin-top:0}
 .big-check{font-size:44px;text-align:center;margin:10px 0}
+/* Pages de fin de parcours (merci, annulation, voucher) : sans ce lien, la
+   seule sortie est le bouton « précédent » du navigateur (issue #47-5). */
+.back-top{display:inline-block;font-size:13px;text-decoration:none;color:var(--muted);margin-bottom:12px}
+.back-top:hover{color:var(--accent)}
 .mono{font-family:ui-monospace,Menlo,monospace}
 a{color:var(--accent)}
 
@@ -127,6 +133,10 @@ a{color:var(--accent)}
 
 /* --- barre séjour : résumé + voyageurs, la recherche part toute seule --- */
 .stay-bar{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-top:10px}
+/* Le groupe se choisit AVANT les dates : sinon on sélectionne un séjour pour
+   découvrir ensuite que l'hébergement ne prend pas tout le monde (#47-1). */
+.pax-top{margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--line)}
+.pax-top .pax-title{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-right:auto}
 .stay-bar>div:first-child{flex:1;min-width:220px}
 .pax{display:flex;gap:8px;align-items:center;flex:none}
 .pax label.f{margin:0}
@@ -143,6 +153,11 @@ a{color:var(--accent)}
 .fold summary{cursor:pointer;font-size:13px;color:var(--accent);font-weight:600}
 .agree{margin-top:14px;display:flex;flex-direction:column;gap:8px}
 .agree .optin{color:var(--muted)}
+/* Message de validation attaché à son champ (issue #41) : l'erreur se lit à
+   côté de la case, pas dans un bandeau générique en bas de formulaire. */
+.field-msg{color:var(--bad);font-size:12.5px;font-weight:600}
+.field-msg:empty{display:none}
+.agree label.err{color:var(--bad)}
 .reassure{font-size:12px;color:var(--muted);margin-top:10px;line-height:1.5}
 .qcard summary{cursor:pointer;font-size:13px;font-weight:600;color:var(--accent)}
 
@@ -160,7 +175,9 @@ a{color:var(--accent)}
 /* --- bloc paiement --- */
 .paybox{border:1.5px solid var(--accent);border-radius:8px;padding:12px 14px;margin-top:14px;background:#FBFDFB}
 .paybox h4{font-size:13px;margin-bottom:8px}
-.paybox label{display:block;padding:6px 0;font-size:14px}
+.paybox .paychoices{border:0;padding:0;margin:0;min-width:0}
+.paybox label{display:flex;align-items:flex-start;gap:9px;padding:6px 0;font-size:14px;cursor:pointer}
+.paybox label input[type=radio]{margin-top:3px}
 .paybox .cards{font-size:11.5px;color:var(--muted);margin-top:6px}
 .badge-secure{display:inline-block;background:#E6EFE8;color:var(--ok);border-radius:10px;padding:1px 8px;font-size:11px;font-weight:700}
 

@@ -333,6 +333,10 @@ export function registerPublicRoutes(router: Router): void {
               // remise ne se découvrait qu'au devis (issue #35).
               discountCents: q.discountCents,
               autoDiscountApplied: q.autoDiscountApplied,
+              // La carte annonçait « ménage et taxes compris » quelle que soit
+              // la commune : sans ce champ, elle ne peut pas dire la vérité
+              // quand la taxe de séjour vaut 0 (issue #47-3).
+              taxCents: q.taxCents,
             };
           }
           // Rien de réservable à ces dates → on propose ce qui l'est. C'est ce
@@ -835,6 +839,9 @@ export function registerPublicRoutes(router: Router): void {
       quoteLines = null;
     }
     return json({
+      // Heure SERVEUR : le voucher compare l'expiration de l'option à cette
+      // heure-là, jamais à l'horloge du poste, qui peut dériver (issue #47-4).
+      now: sqlNow(),
       booking: {
         reference: booking.reference,
         status: booking.status,
@@ -862,7 +869,14 @@ export function registerPublicRoutes(router: Router): void {
         cautionCents: settings?.cautionCents ?? 0,
       },
       cgvText: settings?.cgvText ?? "",
-      contact: { email: property?.contactEmail ?? null, phone: property?.contactPhone ?? null },
+      // Adresse du gîte : elle n'était nulle part sur le voucher, alors que
+      // c'est l'information qu'on cherche la veille du départ (issue #47-7).
+      contact: {
+        email: property?.contactEmail ?? null,
+        phone: property?.contactPhone ?? null,
+        address: property?.address ?? null,
+        commune: property?.commune ?? null,
+      },
     });
   });
 
