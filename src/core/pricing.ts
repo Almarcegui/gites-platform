@@ -586,7 +586,7 @@ export function computeQuote(req: QuoteRequest): Quote {
     ? req.unit.components.reduce((s, c) => s + c.cleaningFeeCents, 0)
     : req.unit.cleaningFeeCents;
   if (cleaningFeeCents > 0) {
-    lines.push({ kind: "fee", label: "Frais généraux — ménage, draps et charges", amountCents: cleaningFeeCents });
+    lines.push({ kind: "fee", label: "Frais généraux — ménage et charges", amountCents: cleaningFeeCents });
   }
 
   // --- options

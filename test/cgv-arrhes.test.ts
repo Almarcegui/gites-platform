@@ -1,4 +1,4 @@
-// Conditions générales v2 (issue #3) et arrhes par hébergement (issue #75),
+// Conditions générales v3 (migration 0019) et arrhes par hébergement (issue #75),
 // vérifiées contre une vraie base D1 avec toutes les migrations rejouées.
 //
 // Ces deux sujets partagent un même point de rupture : le découpage naïf des
@@ -64,7 +64,7 @@ async function call(
   return { status: res.status, data: (await res.json()) as Record<string, unknown> };
 }
 
-describe("CGV v2 injectées en base (issue #3)", () => {
+describe("CGV v3 injectées en base (migration 0019)", () => {
   it("les deux domaines servent le texte définitif, sans placeholder", async () => {
     for (const slug of ["pre-more", "moulin-braives"]) {
       const res = await call("GET", `/api/public/properties/${slug}`);
@@ -79,11 +79,13 @@ describe("CGV v2 injectées en base (issue #3)", () => {
   it("le texte n'est pas tronqué par le découpage des migrations", async () => {
     const res = await call("GET", "/api/public/properties/pre-more");
     const cgv = String(res.data.cgvText);
-    // 14 articles, du premier au dernier, et la toute dernière phrase.
-    expect((cgv.match(/^Article \d+ /gm) ?? []).length).toBe(14);
+    // 13 articles, du premier au dernier, et la toute dernière phrase.
+    expect((cgv.match(/^Article \d+ /gm) ?? []).length).toBe(13);
     expect(cgv).toContain("Article 1 — Parties et objet");
-    expect(cgv).toContain("Article 14 — Droit applicable et litiges");
-    expect(cgv.trim().endsWith("ec.europa.eu/consumers/odr.")).toBe(true);
+    expect(cgv).toContain("Article 13 — Droit applicable et litiges");
+    expect(
+      cgv.trim().endsWith("les règles impératives de compétence et de protection lui restent acquises."),
+    ).toBe(true);
   });
 
   it("le texte reste cohérent avec les réglages en vigueur", async () => {
@@ -102,6 +104,38 @@ describe("CGV v2 injectées en base (issue #3)", () => {
 
     // Le pourcentage d'arrhes n'est PAS figé : il renvoie à l'affichage.
     expect(cgv).toContain("affiché lors de la réservation");
+  });
+
+  it("ne mentionne plus les draps, la taxe de séjour, la TVA ni un enregistrement", async () => {
+    for (const slug of ["pre-more", "moulin-braives"]) {
+      const res = await call("GET", `/api/public/properties/${slug}`);
+      const cgv = String(res.data.cgvText);
+      for (const mot of ["draps", "linge", "taies", "taxe de séjour", "TVA", "enregistrement"]) {
+        expect(cgv.toLowerCase()).not.toContain(mot.toLowerCase());
+      }
+      // Le réglage est à 0 sur les deux domaines...
+      const tax = await t.db
+        .prepare("SELECT value FROM settings WHERE key = 'tourist_tax_cents_per_person_night' AND property_id = ?1")
+        .bind(slug === "pre-more" ? 1 : 2)
+        .first<{ value: string }>();
+      expect(tax?.value).toBe("0");
+
+      // ...et le devis n'en porte donc plus la ligne, quel que soit le nombre
+      // d'occupants (computeQuote n'émet la ligne que si le montant est > 0).
+      const quote = await call("POST", "/api/public/quote", {
+        unitId: slug === "pre-more" ? 1 : 4,
+        checkin: CHECKIN,
+        checkout: CHECKOUT,
+        adults: 4,
+        children: 2,
+      });
+      const lines = (quote.data.quote as { lines: { kind: string; label: string }[] }).lines;
+      expect(lines.some((l) => l.kind === "tax")).toBe(false);
+      for (const l of lines) {
+        expect(l.label.toLowerCase()).not.toContain("draps");
+        expect(l.label.toLowerCase()).not.toContain("taxe");
+      }
+    }
   });
 
   it("la preuve d'acceptation porte sur le texte complet", async () => {

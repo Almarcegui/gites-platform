@@ -153,7 +153,7 @@ test/                  12 fichiers, 152 tests
   site est **sur demande** → les prix de nuit restent des placeholders TODO_TARIFS.
 - **Régime « pas de services » (décisions Julien 27/07, risque de requalification
   TVA para-hôtelière)** : draps et taies **inclus de base** dans les « Frais
-  généraux — ménage, draps et charges » (plus jamais en option payante — les
+  généraux — ménage et charges » (plus jamais en option payante — les
   options draps et l'option « Ménage » doublon sont désactivées, migration 0009) ;
   sauna et bain chaud restent réservables via un bouton **« + Ajouter »**
   (mise à disposition d'équipement, carte « Équipements du séjour ») ; **aucune

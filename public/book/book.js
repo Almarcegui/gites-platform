@@ -479,7 +479,7 @@ async function search() {
         <div class="info"><b>${esc(u.name)}</b> · ${capacity}<br>
           <span class="muted small">${esc(u.description ?? "")}</span></div>
         <div class="price">${strikeThrough(u.quote.totalCents, u.quote.discountCents)}<b>${eur(u.quote.totalCents)}</b><br>
-          <span class="per">${nights} nuit${nights > 1 ? "s" : ""}, ménage et taxes compris</span>
+          <span class="per">${nights} nuit${nights > 1 ? "s" : ""}, ménage et charges compris</span>
           ${u.quote.autoDiscountApplied ? `<br><span class="savings">${esc(u.quote.autoDiscountApplied)} déduite</span>` : ""}<br>
           <button class="btn" style="margin-top:6px" data-select="${u.unitId}" aria-pressed="false">Réserver</button></div>
       </div>`;
