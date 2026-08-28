@@ -108,6 +108,10 @@ commandes interdites sans accord explicite du propriétaire — voir
 | `0010` | correspondance Beds24 (`beds24_property_id`, `beds24_room_id`) |
 | `0011` | (porte le commentaire sans double tiret, cf. règle ci-dessus) |
 | `0012` | comptes du back-office (`admin_users`) |
+| `0013` | journal des recherches (`search_log`) |
+| `0014` | surcharges tarifaires par jour, garde-fous de prix par hébergement |
+| `0015` | pourcentage d'arrhes par hébergement (`units.deposit_pct`, seed à 50) |
+| `0016` | conditions générales de location v2 pour les deux domaines |
 
 Le détail des règles métier qu'elles encodent est dans le
 [`README.md`](../README.md) racine.

@@ -225,6 +225,10 @@ export function registerPublicRoutes(router: Router): void {
           isComposite: u.isComposite,
           cleaningFeeCents: u.cleaningFeeCents,
           photoUrl: u.photoUrl,
+          // Pourcentage d'arrhes EFFECTIF de l'hébergement (issue #75) : le
+          // tunnel l'annonce avant même d'avoir un devis, et le repli sur le
+          // domaine est résolu ici plutôt que dans le navigateur.
+          depositPct: u.depositPct ?? settings.depositPct,
         })),
       options: options.filter((o) => o.active),
       settings: {
@@ -316,6 +320,7 @@ export function registerPublicRoutes(router: Router): void {
               checkinDays: q.checkinDays,
               totalCents: q.totalCents,
               depositCents: q.depositCents,
+              depositPct: q.depositPct,
               // Remise déjà appliquée par le moteur : sans ces deux champs, la
               // carte de résultat affichait un prix remisé SANS le dire, et la
               // remise ne se découvrait qu'au devis (issue #35).
@@ -435,6 +440,7 @@ export function registerPublicRoutes(router: Router): void {
       name: u.name,
       compositePricing: u.isComposite ? u.compositePricing : "own",
       cleaningFeeCents: u.cleaningFeeCents,
+      depositPct: u.depositPct,
       components: u.isComposite
         ? links
             .filter((l) => l.unitId === u.id && physicalIds.has(l.blocksUnitId))
@@ -795,8 +801,15 @@ export function registerPublicRoutes(router: Router): void {
     const property = booking.propertyId != null ? await getProperty(db, booking.propertyId) : null;
     const settings = booking.propertyId != null ? await getSettings(db, booking.propertyId) : null;
     let quoteLines: unknown = null;
+    // Pourcentage d'arrhes CONTRACTUEL : celui figé dans le devis au moment de
+    // la réservation (issue #75), pas la valeur courante de l'hébergement — le
+    // voucher est la pièce du contrat conclu, il ne suit pas les retouches de
+    // tarification faites après coup.
+    let depositPct: number | null = null;
     try {
-      quoteLines = booking.quoteJson ? (JSON.parse(booking.quoteJson) as { lines: unknown }).lines : null;
+      const q = booking.quoteJson ? (JSON.parse(booking.quoteJson) as { lines: unknown; depositPct?: number }) : null;
+      quoteLines = q?.lines ?? null;
+      depositPct = typeof q?.depositPct === "number" ? q.depositPct : null;
     } catch {
       quoteLines = null;
     }
@@ -820,6 +833,7 @@ export function registerPublicRoutes(router: Router): void {
         balanceDueDate: booking.balanceDueDate,
         holdExpiresAt: booking.status === "pending" ? booking.holdExpiresAt : null,
         quoteLines,
+        depositPct,
       },
       stay: {
         checkinTime: settings?.checkinTime ?? "16:00",

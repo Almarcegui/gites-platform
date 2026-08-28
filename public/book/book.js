@@ -10,6 +10,8 @@
 // La ligne « Domaine entier » n'apparaît disponible que si TOUTES ses maisons
 // sont libres — garanti par le moteur de liaison côté serveur.
 
+import { cgvHtml } from "./cgv.js";
+
 const params = new URLSearchParams(location.search);
 const PROPERTY = params.get("property");
 
@@ -503,9 +505,14 @@ async function openBookingPanel(unitId) {
     })
     .join("");
 
+  // Pourcentage d'arrhes de l'hébergement réservé (issue #75). L'API a déjà
+  // résolu le repli sur le domaine — le `??` n'est qu'un filet si un client
+  // arrive avec une réponse mise en cache par un ancien déploiement.
+  const depositPct = SELECTED.depositPct ?? PROP.settings.depositPct;
+
   const payChoices = [];
   if (PROP.settings.allowDeposit)
-    payChoices.push(`<label><input type="radio" name="payMode" value="deposit" checked> <b>Arrhes de ${PROP.settings.depositPct} %</b> maintenant — solde ${PROP.settings.balanceDueDays} jours avant l'arrivée</label>`);
+    payChoices.push(`<label><input type="radio" name="payMode" value="deposit" checked> <b>Arrhes de ${depositPct} %</b> maintenant — solde ${PROP.settings.balanceDueDays} jours avant l'arrivée</label>`);
   if (PROP.settings.allowFullPayment)
     payChoices.push(`<label><input type="radio" name="payMode" value="full" ${!PROP.settings.allowDeposit ? "checked" : ""}> <b>Totalité</b> maintenant</label>`);
 
@@ -575,10 +582,13 @@ async function openBookingPanel(unitId) {
     e.preventDefault();
     const box = $("cgvBox");
     box.style.display = box.style.display === "none" ? "block" : "none";
-    if (!box.textContent) {
-      box.textContent = PROP.cgvText?.trim()
-        ? PROP.cgvText
-        : "Les conditions générales et le contrat de location complets sont joints à la confirmation de réservation et consultables à tout moment sur votre voucher en ligne.";
+    if (!box.innerHTML) {
+      box.innerHTML = PROP.cgvText?.trim()
+        ? cgvHtml(PROP.cgvText) +
+          // L'article 4.1 renvoie au « pourcentage affiché lors de la
+          // réservation » : on le lui donne, pour cet hébergement-ci.
+          `<p class="cgv-h"><b>Pour ${esc(SELECTED.name)}, le pourcentage d'arrhes de l'article 4.1 est de ${depositPct} %.</b></p>`
+        : `<p>Les conditions générales et le contrat de location complets sont joints à la confirmation de réservation et consultables à tout moment sur votre voucher en ligne.</p>`;
     }
   });
   $("gCgv").addEventListener("change", payButtonRefresh);
