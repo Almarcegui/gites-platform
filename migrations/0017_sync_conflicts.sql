@@ -1,4 +1,4 @@
--- Migration 0015 — Conflits de synchronisation persistés (issue #72).
+-- Migration 0017 — Conflits de synchronisation persistés (issue #72).
 --
 -- Jusqu'ici, un conflit détecté par l'import iCal ou par le rapatriement des
 -- canaux partait dans `audit_log` et dans le champ `last_status` du flux, tous

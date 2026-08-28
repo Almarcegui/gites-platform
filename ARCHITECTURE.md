@@ -378,7 +378,7 @@ sans compte tiers et sans risquer d'écrire à un vrai client.
 | `admin_users` | Comptes du back-office (PBKDF2) | 0012 |
 | `admin_sessions` | Sessions, indexées par SHA-256 du jeton | 0012 |
 | `app_settings` | Réglages **globaux** à l'application (≠ `settings`, qui est par domaine) | 0012 |
-| `sync_conflicts` | Ce qu'un canal annonce et que nous n'avons pas pu refléter — une ligne par conflit distinct, `open` / `resolved` / `ignored` | 0015 |
+| `sync_conflicts` | Ce qu'un canal annonce et que nous n'avons pas pu refléter — une ligne par conflit distinct, `open` / `resolved` / `ignored` | 0017 |
 
 **Contraintes structurantes** :
 
