@@ -16,8 +16,16 @@ import {
   type DriftInput,
   type FeedState,
   type MessageState,
+  type OpenConflictSummary,
   type UnitRateTarget,
 } from "../core/drift";
+import {
+  conflictFingerprint,
+  type SyncConflictInput,
+  type SyncConflictKind,
+  type SyncConflictSource,
+  type SyncConflictStatus,
+} from "../core/sync-conflicts";
 
 type Raw = Record<string, unknown>;
 const num = (v: unknown): number => Number(v ?? 0);
@@ -2179,6 +2187,11 @@ export async function collectDriftInput(
     createdAt: strOrNull(r.created_at),
   }));
 
+  // 1 bis. Conflits de synchronisation encore ouverts (issue #72) : un compte
+  //    exact et l'ancienneté du plus vieux, en une requête agrégée — la vue
+  //    Canaux, elle, en dresse la liste.
+  const openConflicts = await summarizeOpenSyncConflicts(db, propertyId);
+
   // 2. Couverture tarifaire des unités actives. Le composite « somme » tire son
   //    prix de ses composantes : il lui faut la même vue que le calendrier admin.
   const [units, links, seasons, rules] = await Promise.all([
@@ -2255,6 +2268,7 @@ export async function collectDriftInput(
 
   return {
     feeds,
+    openConflicts,
     units: driftUnits,
     today,
     seasons,
@@ -2263,6 +2277,239 @@ export async function collectDriftInput(
     messages,
     lastCronAt: heartbeat?.value ?? null,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Conflits de synchronisation (issue #72) — ce que les canaux nous demandent
+// et que nous n'avons pas pu refléter, gardé jusqu'à ce qu'il disparaisse ou
+// qu'un humain le tranche. Identité et libellés : src/core/sync-conflicts.ts.
+// ---------------------------------------------------------------------------
+
+export interface SyncConflictRow {
+  id: number;
+  propertyId: number;
+  unitId: number;
+  unitName: string;
+  source: SyncConflictSource;
+  scope: string;
+  kind: SyncConflictKind;
+  fingerprint: string;
+  checkin: IsoDate;
+  checkout: IsoDate;
+  externalUid: string | null;
+  bookingReference: string | null;
+  channelLabel: string | null;
+  label: string;
+  status: SyncConflictStatus;
+  ignoreReason: string | null;
+  firstSeenAt: string;
+  lastSeenAt: string;
+  resolvedAt: string | null;
+}
+
+function mapSyncConflict(r: Raw): SyncConflictRow {
+  return {
+    id: num(r.id),
+    propertyId: num(r.property_id),
+    unitId: num(r.unit_id),
+    unitName: str(r.unit_name),
+    source: str(r.source) === "beds24" ? "beds24" : "ical",
+    scope: str(r.scope),
+    kind: str(r.kind) as SyncConflictKind,
+    fingerprint: str(r.fingerprint),
+    checkin: str(r.checkin) as IsoDate,
+    checkout: str(r.checkout) as IsoDate,
+    externalUid: strOrNull(r.external_uid),
+    bookingReference: strOrNull(r.booking_reference),
+    channelLabel: strOrNull(r.channel_label),
+    label: str(r.label),
+    status: str(r.status) as SyncConflictStatus,
+    ignoreReason: strOrNull(r.ignore_reason),
+    firstSeenAt: str(r.first_seen_at),
+    lastSeenAt: str(r.last_seen_at),
+    resolvedAt: strOrNull(r.resolved_at),
+  };
+}
+
+/** Enregistre une détection. Premier passage : la ligne naît « open ».
+ *  Passages suivants sur le MÊME conflit : seule `last_seen_at` bouge — c'est
+ *  toute la raison d'être de la table (avant, chaque tick écrasait le
+ *  précédent et personne ne savait depuis quand ça durait).
+ *
+ *  Un conflit IGNORÉ le reste : il est redétecté 96 fois par jour, le
+ *  repasser en « open » annulerait la décision au premier tick suivant.
+ *  Un conflit RÉSOLU qui réapparaît se rouvre, en gardant sa première
+ *  détection — c'est le même écart qui revient, pas un nouveau.
+ *
+ *  Le domaine se déduit de l'hébergement : aucun appelant n'a à le porter. */
+export async function recordSyncConflict(
+  db: D1Database,
+  c: SyncConflictInput,
+  seenAt: string = sqlNow(),
+): Promise<void> {
+  await db
+    .prepare(
+      `INSERT INTO sync_conflicts
+         (property_id, unit_id, source, scope, kind, fingerprint, checkin, checkout,
+          external_uid, booking_reference, channel_label, label, status, first_seen_at, last_seen_at)
+       SELECT u.property_id, u.id, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, 'open', ?12, ?12
+         FROM units u WHERE u.id = ?1
+       ON CONFLICT (fingerprint) DO UPDATE SET
+         last_seen_at = excluded.last_seen_at,
+         scope = excluded.scope,
+         label = excluded.label,
+         booking_reference = excluded.booking_reference,
+         channel_label = excluded.channel_label,
+         status = CASE WHEN sync_conflicts.status = 'ignored' THEN 'ignored' ELSE 'open' END,
+         resolved_at = CASE WHEN sync_conflicts.status = 'ignored' THEN sync_conflicts.resolved_at ELSE NULL END`,
+    )
+    .bind(
+      c.unitId,
+      c.source,
+      c.scope,
+      c.kind,
+      conflictFingerprint(c),
+      c.checkin,
+      c.checkout,
+      c.externalUid ?? null,
+      c.bookingReference ?? null,
+      c.channelLabel ?? null,
+      c.label,
+      seenAt,
+    )
+    .run();
+}
+
+/** Referme les conflits d'un passage de synchro qui n'ont PAS été revus.
+ *
+ *  Le repère est l'horodatage du passage : `recordSyncConflict` vient de poser
+ *  `last_seen_at = seenAt` sur tout ce qui a été redétecté, donc tout ce qui
+ *  reste en deçà a disparu de la source (événement retiré, créneau libéré).
+ *  Pas de liste d'empreintes à transporter, pas de SQL construit à la volée.
+ *
+ *  Les conflits IGNORÉS ne sont pas touchés : la décision humaine prime, et
+ *  elle n'a pas à être reprise parce que la source s'est tue un passage.
+ *
+ *  À n'appeler que sur un passage qui a réellement balayé son périmètre : un
+ *  flux illisible ou un lot vide n'apporte aucune information sur ce qui a
+ *  disparu (même prudence que la garde de sanité de l'import iCal). */
+export async function resolveUnseenSyncConflicts(
+  db: D1Database,
+  scope: string,
+  seenAt: string,
+): Promise<number> {
+  const res = await db
+    .prepare(
+      `UPDATE sync_conflicts SET status = 'resolved', resolved_at = ?2
+        WHERE scope = ?1 AND status = 'open' AND last_seen_at < ?2`,
+    )
+    .bind(scope, seenAt)
+    .run();
+  return res.meta.changes ?? 0;
+}
+
+/** Referme les conflits d'un périmètre dont la source vient de REPARLER sans
+ *  reproduire l'écart.
+ *
+ *  C'est la fermeture des passages PARTIELS (pull incrémental Beds24) : on ne
+ *  peut y conclure que sur ce que la fenêtre a effectivement rapporté. Refermer
+ *  tout ce qui n'a pas été revu y serait faux — après un déblocage forcé du
+ *  curseur (MAX_CURSOR_HOLD_DAYS), la résa fautive sort de la fenêtre alors que
+ *  le conflit tient toujours, et la première résa sans rapport suffirait à
+ *  effacer l'alerte (contre-review 2026-08-28). */
+export async function resolveSeenSyncConflicts(
+  db: D1Database,
+  scope: string,
+  externalUids: readonly string[],
+  seenAt: string,
+): Promise<number> {
+  const uids = [...new Set(externalUids)];
+  if (uids.length === 0) return 0;
+  const placeholders = uids.map((_, i) => `?${i + 3}`).join(", ");
+  const res = await db
+    .prepare(
+      `UPDATE sync_conflicts SET status = 'resolved', resolved_at = ?2
+        WHERE scope = ?1 AND status = 'open' AND last_seen_at < ?2
+          AND external_uid IN (${placeholders})`,
+    )
+    .bind(scope, seenAt, ...uids)
+    .run();
+  return res.meta.changes ?? 0;
+}
+
+/** Compte et ancienneté des conflits ouverts d'un domaine — ce dont la carte
+ *  « Santé » a besoin, sans charger les lignes. Une lecture bornée aurait
+ *  annoncé « 50 conflits » à partir du cinquante-et-unième, et daté la dérive
+ *  sur le mauvais (contre-review 2026-08-28). */
+export async function summarizeOpenSyncConflicts(
+  db: D1Database,
+  propertyId: number,
+): Promise<OpenConflictSummary> {
+  const row = await db
+    .prepare(
+      `SELECT COUNT(*) AS n, MIN(first_seen_at) AS oldest,
+              (SELECT label FROM sync_conflicts
+                WHERE property_id = ?1 AND status = 'open'
+                ORDER BY first_seen_at, id LIMIT 1) AS oldest_label
+         FROM sync_conflicts WHERE property_id = ?1 AND status = 'open'`,
+    )
+    .bind(propertyId)
+    .first<Raw>();
+  return {
+    count: num(row?.n),
+    oldestFirstSeenAt: strOrNull(row?.oldest),
+    oldestLabel: strOrNull(row?.oldest_label),
+  };
+}
+
+/** Conflits d'un domaine, les ouverts d'abord puis les plus récents. */
+export async function listSyncConflicts(
+  db: D1Database,
+  propertyId: number,
+  filter: { status?: SyncConflictStatus; limit?: number } = {},
+): Promise<SyncConflictRow[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT c.*, u.name AS unit_name FROM sync_conflicts c JOIN units u ON u.id = c.unit_id
+        WHERE c.property_id = ?1 AND (?2 IS NULL OR c.status = ?2)
+        ORDER BY CASE c.status WHEN 'open' THEN 0 WHEN 'ignored' THEN 1 ELSE 2 END,
+                 c.last_seen_at DESC, c.id DESC
+        LIMIT ?3`,
+    )
+    .bind(propertyId, filter.status ?? null, filter.limit ?? 100)
+    .all();
+  return (results as Raw[]).map(mapSyncConflict);
+}
+
+export async function getSyncConflict(db: D1Database, id: number): Promise<SyncConflictRow | null> {
+  const row = await db
+    .prepare("SELECT c.*, u.name AS unit_name FROM sync_conflicts c JOIN units u ON u.id = c.unit_id WHERE c.id = ?1")
+    .bind(id)
+    .first();
+  return row ? mapSyncConflict(row as Raw) : null;
+}
+
+/** Décision humaine : ignorer (avec motif) ou rouvrir. Le motif est conservé
+ *  même après réouverture — savoir ce qu'on avait décidé la dernière fois vaut
+ *  mieux que repartir d'une page blanche. */
+export async function setSyncConflictStatus(
+  db: D1Database,
+  id: number,
+  status: SyncConflictStatus,
+  reason: string | null,
+  at: string = sqlNow(),
+): Promise<boolean> {
+  const res = await db
+    .prepare(
+      `UPDATE sync_conflicts
+          SET status = ?2,
+              ignore_reason = COALESCE(?3, ignore_reason),
+              resolved_at = CASE WHEN ?2 = 'open' THEN NULL ELSE ?4 END
+        WHERE id = ?1`,
+    )
+    .bind(id, status, reason, at)
+    .run();
+  return (res.meta.changes ?? 0) > 0;
 }
 
 // ---------------------------------------------------------------------------

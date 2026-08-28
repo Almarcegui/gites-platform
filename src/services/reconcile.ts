@@ -211,7 +211,9 @@ export async function reconcileBeds24Property(
   // 3. Rapprochement : exactement les mêmes primitives que l'incrémental —
   //    création, changement de dates, changement de LOGEMENT, annulation,
   //    réactivation d'une résa rouverte (#18). Rien n'est dupliqué ici.
-  const applied = await applyChannelBookings(db, remote, roomToUnit, now);
+  // `fullSweep` : ici, la liste EST l'état complet de la source sur l'horizon —
+  // ce qui n'y figure plus a disparu, conflits de synchro compris (issue #72).
+  const applied = await applyChannelBookings(db, remote, roomToUnit, now, { fullSweep: true });
   report.imported = applied.imported;
   report.updated = applied.updated;
   report.relocated = applied.relocated;

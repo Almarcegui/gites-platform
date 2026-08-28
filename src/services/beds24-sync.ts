@@ -37,7 +37,9 @@ import {
   upsertGuest,
   type UnitRow,
 } from "../db/repo";
+import { beds24UnitScope } from "../core/sync-conflicts";
 import { beds24Configured, beds24Fetch } from "./beds24";
+import { closeSeenSyncConflicts, closeUnseenSyncConflicts, noteSyncConflict } from "./sync-conflicts";
 import { getSetting, setSetting } from "./settings";
 
 export interface CalendarSpan {
@@ -183,6 +185,8 @@ export interface ChannelSyncResult {
   relocated: number;
   skipped: number;
   conflicts: string[];
+  /** Conflits d'un passage précédent qui ne se reproduisent plus (issue #72). */
+  resolvedConflicts: number;
   /** Résas dont le traitement a échoué — le pull continue quand même. */
   errors: string[];
 }
@@ -200,27 +204,35 @@ function channelLabel(b: Beds24Booking): string {
   return known[key] ?? `${raw} (Beds24)`;
 }
 
-/** Applique une liste de résas Beds24 à notre base. Pur (pas de réseau) → testé. */
+/** Applique une liste de résas Beds24 à notre base. Pur (pas de réseau) → testé.
+ *
+ *  `fullSweep` dit si la liste est l'ÉTAT COMPLET de la source sur le périmètre
+ *  (rapatriement quotidien) ou une simple fenêtre incrémentale : de cela dépend
+ *  ce qu'on a le droit de conclure sur les conflits qui n'y figurent pas. */
 export async function applyChannelBookings(
   db: D1Database,
   bookings: Beds24Booking[],
   roomToUnit: Map<number, number>,
   now: Date = new Date(),
+  options: { fullSweep?: boolean } = {},
 ): Promise<ChannelSyncResult> {
   const result: ChannelSyncResult = {
-    imported: 0, updated: 0, cancelled: 0, reactivated: 0, relocated: 0, skipped: 0, conflicts: [], errors: [],
+    imported: 0, updated: 0, cancelled: 0, reactivated: 0, relocated: 0, skipped: 0,
+    conflicts: [], resolvedConflicts: 0, errors: [],
   };
   const nowSql = sqlNow(now);
   const today = todayInZone(now);
   const existing = await listBeds24Bookings(db);
   const byUid = new Map(existing.map((b) => [b.externalUid ?? "", b]));
+  // Une détection non écrite interdit toute fermeture sur ce passage.
+  const register = { ok: true };
 
   for (const b of bookings) {
     // Une résa qui casse ne doit JAMAIS emporter le rapatriement des autres :
     // sinon une seule ligne fautive gelait tout le flux du domaine, à chaque
     // passage du cron, jusqu'à intervention manuelle (issue #18).
     try {
-      await applyOneChannelBooking(db, b, roomToUnit, byUid, result, { now, nowSql, today });
+      await applyOneChannelBooking(db, b, roomToUnit, byUid, result, { now, nowSql, today, register });
     } catch (e) {
       result.errors.push(`beds24:${b.id} : ${e instanceof Error ? e.message : String(e)}`);
       await audit(db, "cron", "beds24.booking.error", `beds24:${b.id}`, {
@@ -228,6 +240,27 @@ export async function applyChannelBookings(
         arrival: b.arrival,
         departure: b.departure,
       });
+    }
+  }
+
+  // Conflits refermés (issue #72), et seulement ceux dont ce passage peut
+  // réellement conclure quelque chose :
+  //   · fenêtre INCRÉMENTALE → uniquement les résas que la fenêtre a rapportées
+  //     et qui ne conflictent plus. Refermer tout ce qui n'a pas été revu y
+  //     serait faux : après un déblocage forcé du curseur, la résa fautive sort
+  //     de la fenêtre alors que le conflit tient toujours, et la première résa
+  //     sans rapport effacerait l'alerte ;
+  //   · rapatriement COMPLET → l'état de la source fait foi, ce qui n'y est
+  //     plus a disparu pour de bon.
+  // Dans les deux cas, une détection qui n'a pas pu être écrite gèle la
+  // fermeture : sinon la panne effacerait le conflit qu'elle empêche de noter.
+  if (register.ok) {
+    const seenUids = bookings.map((b) => `beds24:${b.id}`);
+    for (const unitId of new Set(roomToUnit.values())) {
+      const scope = beds24UnitScope(unitId);
+      result.resolvedConflicts += options.fullSweep
+        ? await closeUnseenSyncConflicts(db, scope, nowSql)
+        : await closeSeenSyncConflicts(db, scope, seenUids, nowSql);
     }
   }
   return result;
@@ -241,9 +274,9 @@ async function applyOneChannelBooking(
   roomToUnit: Map<number, number>,
   byUid: Map<string, { id: number; unitId: number; reference: string; checkin: IsoDate; checkout: IsoDate }>,
   result: ChannelSyncResult,
-  clock: { now: Date; nowSql: string; today: IsoDate },
+  clock: { now: Date; nowSql: string; today: IsoDate; register: { ok: boolean } },
 ): Promise<void> {
-  const { now, nowSql, today } = clock;
+  const { now, nowSql, today, register } = clock;
   const unitId = roomToUnit.get(b.roomId);
   const extUid = `beds24:${b.id}`;
   const known = byUid.get(extUid);
@@ -277,9 +310,13 @@ async function applyOneChannelBooking(
       if (back) {
         result.reactivated += 1;
       } else {
-        result.conflicts.push(
-          `${archived.reference} : réactivation ${b.arrival}→${b.departure} impossible (créneau repris depuis l'annulation)`,
-        );
+        const label = `${archived.reference} : réactivation ${b.arrival}→${b.departure} impossible (créneau repris depuis l'annulation)`;
+        result.conflicts.push(label);
+        register.ok = (await noteSyncConflict(db, {
+          source: "beds24", scope: beds24UnitScope(archived.unitId), kind: "reactivate",
+          unitId: archived.unitId, checkin: b.arrival, checkout: b.departure, externalUid: extUid,
+          bookingReference: archived.reference, channelLabel: channelLabel(b), label,
+        }, nowSql)) && register.ok;
         await audit(db, "cron", "beds24.reactivate.conflict", `booking:${archived.id}`, {
           externalUid: extUid,
           reference: archived.reference,
@@ -315,7 +352,13 @@ async function applyOneChannelBooking(
     if (created.ok) {
       result.imported += 1;
     } else {
-      result.conflicts.push(`beds24:${b.id} ${b.arrival}→${b.departure} : créneau déjà pris localement`);
+      const label = `beds24:${b.id} ${b.arrival}→${b.departure} : créneau déjà pris localement`;
+      result.conflicts.push(label);
+      register.ok = (await noteSyncConflict(db, {
+        source: "beds24", scope: beds24UnitScope(unitId), kind: "import", unitId,
+        checkin: b.arrival, checkout: b.departure, externalUid: extUid,
+        channelLabel: channelLabel(b), label,
+      }, nowSql)) && register.ok;
     }
   } else if (known.unitId !== unitId) {
     // CHANGEMENT DE LOGEMENT (issue #19). La comparaison ne portait que sur les
@@ -333,9 +376,13 @@ async function applyOneChannelBooking(
         arrival: b.arrival, departure: b.departure,
       });
     } else {
-      result.conflicts.push(
-        `${known.reference} : changement de logement (${known.unitId} → ${unitId}) ${b.arrival}→${b.departure} impossible (créneau occupé à destination)`,
-      );
+      const label = `${known.reference} : changement de logement (${known.unitId} → ${unitId}) ${b.arrival}→${b.departure} impossible (créneau occupé à destination)`;
+      result.conflicts.push(label);
+      register.ok = (await noteSyncConflict(db, {
+        source: "beds24", scope: beds24UnitScope(unitId), kind: "relocate", unitId,
+        checkin: b.arrival, checkout: b.departure, externalUid: extUid,
+        bookingReference: known.reference, channelLabel: channelLabel(b), label,
+      }, nowSql)) && register.ok;
       await audit(db, "cron", "beds24.relocate.conflict", `booking:${known.id}`, {
         externalUid: extUid, reference: known.reference,
         fromUnitId: known.unitId, toUnitId: unitId,
@@ -347,7 +394,13 @@ async function applyOneChannelBooking(
     if (moved) {
       result.updated += 1;
     } else {
-      result.conflicts.push(`${known.reference} : déplacement ${b.arrival}→${b.departure} impossible (conflit)`);
+      const label = `${known.reference} : déplacement ${b.arrival}→${b.departure} impossible (conflit)`;
+      result.conflicts.push(label);
+      register.ok = (await noteSyncConflict(db, {
+        source: "beds24", scope: beds24UnitScope(known.unitId), kind: "move", unitId: known.unitId,
+        checkin: b.arrival, checkout: b.departure, externalUid: extUid,
+        bookingReference: known.reference, channelLabel: channelLabel(b), label,
+      }, nowSql)) && register.ok;
     }
   }
 }

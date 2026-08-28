@@ -4,6 +4,8 @@
 
 import { addDays, sqlNow, todayInZone, type IsoDate } from "../core/dates";
 import { busySpans, isActiveBooking, mergeSpans } from "../core/availability";
+import { icalScope } from "../core/sync-conflicts";
+import { closeUnseenSyncConflicts, noteSyncConflict } from "./sync-conflicts";
 import {
   audit,
   bookingsInWindow,
@@ -150,6 +152,8 @@ export interface SyncResult {
   /** Événements disparus du flux puis réapparus (annulation levée côté canal). */
   reactivated: number;
   conflicts: string[];
+  /** Conflits d'un passage précédent qui ne se reproduisent plus (issue #72). */
+  resolvedConflicts: number;
   error: string | null;
   /** VEVENT annoncés par le flux mais illisibles (date/UID manquants). */
   malformed: number;
@@ -164,11 +168,15 @@ export async function syncFeed(
   now: Date = new Date(),
 ): Promise<SyncResult> {
   const result: SyncResult = {
-    feedId: feed.id, imported: 0, updated: 0, cancelled: 0, reactivated: 0, conflicts: [], error: null,
+    feedId: feed.id, imported: 0, updated: 0, cancelled: 0, reactivated: 0, conflicts: [], resolvedConflicts: 0, error: null,
     malformed: 0, suspicious: false,
   };
   const today = todayInZone(now);
   const nowSql = sqlNow(now);
+  const scope = icalScope(feed.id);
+  // Une détection non écrite interdit de refermer quoi que ce soit à ce
+  // passage : sinon la panne qui empêche de noter le conflit l'efface.
+  let registerOk = true;
 
   let events: IcsEvent[];
   try {
@@ -229,9 +237,13 @@ export async function syncFeed(
         if (back) {
           result.reactivated += 1;
         } else {
-          result.conflicts.push(
-            `${archived.reference} : réactivation ${ev.dtstart}→${ev.dtend} impossible (créneau repris depuis l'annulation)`,
-          );
+          const label = `${archived.reference} : réactivation ${ev.dtstart}→${ev.dtend} impossible (créneau repris depuis l'annulation)`;
+          result.conflicts.push(label);
+          registerOk = (await noteSyncConflict(db, {
+            source: "ical", scope, kind: "reactivate", unitId: archived.unitId,
+            checkin: ev.dtstart, checkout: ev.dtend, externalUid: extUid,
+            bookingReference: archived.reference, channelLabel: feed.name, label,
+          }, nowSql)) && registerOk;
           await audit(db, "cron", "ical.reactivate.conflict", `booking:${archived.id}`, {
             feedId: feed.id, externalUid: extUid, reference: archived.reference,
             dtstart: ev.dtstart, dtend: ev.dtend,
@@ -255,14 +267,26 @@ export async function syncFeed(
       if (created.ok) {
         result.imported += 1;
       } else {
-        result.conflicts.push(`${ev.dtstart}→${ev.dtend} (nouvel événement, créneau déjà pris)`);
+        const label = `${ev.dtstart}→${ev.dtend} (nouvel événement, créneau déjà pris)`;
+        result.conflicts.push(label);
+        registerOk = (await noteSyncConflict(db, {
+          source: "ical", scope, kind: "import", unitId: feed.unitId,
+          checkin: ev.dtstart, checkout: ev.dtend, externalUid: extUid,
+          channelLabel: feed.name, label,
+        }, nowSql)) && registerOk;
       }
     } else if (known.checkin !== ev.dtstart || known.checkout !== ev.dtend) {
       const moved = await updateBookingDatesAtomic(db, known.id, known.unitId, ev.dtstart, ev.dtend, nowSql);
       if (moved) {
         result.updated += 1;
       } else {
-        result.conflicts.push(`${known.reference} : déplacement ${ev.dtstart}→${ev.dtend} impossible (conflit)`);
+        const label = `${known.reference} : déplacement ${ev.dtstart}→${ev.dtend} impossible (conflit)`;
+        result.conflicts.push(label);
+        registerOk = (await noteSyncConflict(db, {
+          source: "ical", scope, kind: "move", unitId: known.unitId,
+          checkin: ev.dtstart, checkout: ev.dtend, externalUid: extUid,
+          bookingReference: known.reference, channelLabel: feed.name, label,
+        }, nowSql)) && registerOk;
       }
     }
   }
@@ -276,6 +300,11 @@ export async function syncFeed(
       result.cancelled += 1;
     }
   }
+
+  // Le flux a été relu EN ENTIER (les deux sorties anticipées ci-dessus — erreur
+  // réseau, flux vide suspect — n'arrivent pas ici) : tout conflit de ce flux
+  // qui n'a pas été redétecté à ce passage a bel et bien disparu (issue #72).
+  if (registerOk) result.resolvedConflicts = await closeUnseenSyncConflicts(db, scope, nowSql);
 
   const statusMsg =
     result.conflicts.length > 0
