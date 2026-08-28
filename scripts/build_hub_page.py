@@ -173,6 +173,25 @@ def build_page(data: dict | None) -> str:
             body_parts.append('<div class="card"><h3>Alertes</h3><ul>' +
                               "".join(f"<li>{a}</li>" for a in alerts) + "</ul></div>")
 
+    gh = "https://github.com/jdecartier-glitch/gites-platform"
+    body_parts.append(
+        '<div class="card"><h3>Repères &amp; liens</h3><table>'
+        '<tr><th>Plateforme (Cloudflare, test public)</th><td>'
+        f'<a href="{SITE_BASE}/">site</a> · <a href="{SITE_BASE}/book/">réservation</a> · '
+        f'<a href="{SITE_BASE}/admin/">back-office</a> · <a href="{SITE_BASE}/api/public/health">santé</a></td></tr>'
+        '<tr><th>GitHub (dépôt privé, source du code)</th><td>'
+        f'<a href="{gh}">dépôt</a> · <a href="{gh}/issues">issues</a> · '
+        f'<a href="{gh}/issues?q=is%3Aissue+is%3Aopen+label%3Adecision-julien">décisions Julien</a> · '
+        f'<a href="{gh}/pulls">PR</a> · <a href="{gh}/actions">CI &amp; sonde</a> · '
+        f'<a href="{gh}/blob/main/COLLABORATION.md">règles à deux</a></td></tr>'
+        '<tr><th>Autres</th><td>'
+        '<a href="https://lesgitesdupremore.be/">WordPress actuel (clients)</a> · '
+        '<a href="https://dev1.mdcdy.be/">copie Infomaniak (périmée)</a> · '
+        '<a href="https://dash.cloudflare.com/">Cloudflare</a></td></tr>'
+        '<tr><th>Obsidian</th><td><code>🏠 Privé/Plateforme Gestion Gîtes/2026-08-28 – Vue d\'ensemble &amp; liens – v1</code> '
+        '(comment ça marche, où c\'est, à quoi sert GitHub)</td></tr>'
+        '</table></div>')
+
     body_parts.append(
         '<p class="foot">Instantané généré le ' + esc(stamp) + " — rafraîchi avec le hub (8h05 / 13h05 / 18h10 L-V).<br>"
         'Plateforme en ligne : <code>' + esc(SITE_BASE) + "</code>. "
@@ -199,7 +218,7 @@ h1{{font-size:20px;margin-bottom:2px}} .sub{{color:var(--muted);font-size:12.5px
 h3{{font-size:12px;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);margin-bottom:10px}}
 table{{width:100%;border-collapse:collapse;font-size:13.5px}}
 th{{text-align:left;font-size:10.5px;text-transform:uppercase;color:var(--muted);padding:4px 8px;border-bottom:1px solid var(--line)}}
-td{{padding:7px 8px;border-bottom:1px solid #F0EDE5}}
+td{{padding:7px 8px;border-bottom:1px solid #F0EDE5}} td a{{color:var(--accent)}}
 .tag{{display:inline-block;padding:1px 8px;border-radius:10px;font-size:11.5px;font-weight:600}}
 .tag.ok{{background:#E6EFE8;color:#2F5D3F}} .tag.res{{background:#2F5D3F;color:#fff}}
 .tag.warn{{background:#EAE6DC;color:#6B7280}} .tag.chan{{background:#EEE7FA;color:#6D28D9}}
