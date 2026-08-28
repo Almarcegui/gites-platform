@@ -192,6 +192,28 @@ describe("signal 3 — message client sans réponse depuis plus de 48 h", () => 
     expect(signals).toHaveLength(1);
   });
 
+  it("email non rattaché : notre réponse ferme quand même le fil du client", () => {
+    // Ni réservation ni client connu : le fil se tient sur l'adresse. C'est
+    // `to_email` qui identifie le client dans notre réponse, pas `from_email`
+    // (qui porte l'adresse de contact du domaine).
+    const signals = detectUnansweredMessages(
+      [
+        message({ id: 1, guestId: null, receivedAt: agoHours(96), fromEmail: "inconnu@example.org" }),
+        message({
+          id: 2,
+          guestId: null,
+          direction: "out",
+          status: "traité",
+          receivedAt: agoHours(90),
+          fromEmail: "contact@lesgitesdupremore.be",
+          toEmail: "inconnu@example.org",
+        }),
+      ],
+      NOW,
+    );
+    expect(signals).toEqual([]);
+  });
+
   it("les fils sont indépendants : un client servi n'excuse pas le client oublié", () => {
     const signals = detectUnansweredMessages(
       [

@@ -2102,7 +2102,7 @@ export async function collectDriftInput(
   const since = sqlNow(new Date(now.getTime() - Math.max(30 * 24, MESSAGE_UNANSWERED_HOURS * 4) * 3_600_000));
   const messageRows = await db
     .prepare(
-      `SELECT m.id, m.direction, m.status, m.received_at, m.from_name, m.from_email,
+      `SELECT m.id, m.direction, m.status, m.received_at, m.from_name, m.from_email, m.to_email,
               m.booking_id, m.guest_id, b.reference AS booking_reference
          FROM messages m LEFT JOIN bookings b ON b.id = m.booking_id
         WHERE m.property_id = ?1 AND m.received_at >= ?2
@@ -2117,6 +2117,7 @@ export async function collectDriftInput(
     receivedAt: str(r.received_at),
     fromName: strOrNull(r.from_name),
     fromEmail: strOrNull(r.from_email),
+    toEmail: strOrNull(r.to_email),
     bookingId: numOrNull(r.booking_id),
     bookingReference: strOrNull(r.booking_reference),
     guestId: numOrNull(r.guest_id),

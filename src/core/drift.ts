@@ -153,17 +153,25 @@ export interface MessageState {
   receivedAt: string; // format sqlNow
   fromName?: string | null;
   fromEmail?: string | null;
+  toEmail?: string | null;
   bookingId?: number | null;
   bookingReference?: string | null;
   guestId?: number | null;
 }
 
 /** Clé de fil : la même que celle du back-office — la réservation d'abord,
- *  le client ensuite, l'adresse email en dernier recours. */
+ *  le client ensuite, l'adresse email en dernier recours.
+ *
+ *  Sur cette dernière, l'adresse du CLIENT est celle qui identifie le fil :
+ *  `from_email` pour un entrant, `to_email` pour notre réponse. Sans cette
+ *  bascule, une réponse à un email non rattaché (ni résa ni client connu)
+ *  ouvrirait un fil à notre propre adresse et laisserait la question du client
+ *  éternellement « sans réponse ». */
 function threadKey(m: MessageState): string {
   if (m.bookingId) return `booking:${m.bookingId}`;
   if (m.guestId) return `guest:${m.guestId}`;
-  return `email:${(m.fromEmail ?? "").toLowerCase()}`;
+  const address = m.direction === "out" ? m.toEmail : m.fromEmail;
+  return `email:${(address ?? "").toLowerCase()}`;
 }
 
 /** Fils dont le dernier message est un message CLIENT, toujours marqué
