@@ -35,7 +35,9 @@ section h2{font-size:34px;margin:10px 0 14px}
 
 /* --- nav --- */
 nav.top{position:sticky;top:0;z-index:40;background:rgba(34,48,31,.92);backdrop-filter:blur(8px);color:#E9E5DA}
-nav.top .wrap{display:flex;align-items:center;gap:22px;height:58px}
+/* gap resserré de 22 à 18 px avec l'issue #44 : le menu unifié porte deux
+   entrées de plus (Tarifs, Contact) et doit tenir sur une ligne à 1080 px. */
+nav.top .wrap{display:flex;align-items:center;gap:18px;height:58px}
 nav.top .logo{font-family:Georgia,serif;font-size:17px;color:#fff;text-decoration:none;margin-right:auto;white-space:nowrap}
 nav.top a{color:#C9C4B6;text-decoration:none;font-size:13.5px;white-space:nowrap}
 nav.top a:hover{color:#fff}
