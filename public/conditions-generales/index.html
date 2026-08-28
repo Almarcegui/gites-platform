@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Conditions générales de location — Les Gîtes du Pré Moré</title>
+<meta name="description" content="Les conditions générales de location des Gîtes du Pré Moré et du Moulin de Braives, telles qu'elles sont acceptées lors de la réservation en ligne.">
+<!-- SITE DE TEST : tarifs placeholders, CGV provisoires, contact faux.
+     Retirer cette balise robots AU LANCEMENT REEL (issue #1), en meme temps que
+     le « Disallow: / » de /robots.txt. Tant qu'elle est la, la page n'est pas indexee. -->
+<meta name="robots" content="noindex">
+<!-- Canonical (issue #30) : meme URL de base que les autres pages, a remplacer
+     par le domaine definitif en meme temps qu'elles (issue #12). -->
+<link rel="canonical" href="https://gites-platform.j-decartier.workers.dev/conditions-generales/">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="alternate icon" href="/favicon.ico" sizes="32x32">
+<link rel="stylesheet" href="../site.css">
+</head>
+<body>
+
+<nav class="top">
+  <div class="wrap">
+    <a class="logo" href="/">Les Gîtes du Pré Moré</a>
+    <button class="burger" id="navToggle" type="button"
+            aria-expanded="false" aria-controls="navPanel" aria-label="Ouvrir le menu">
+      <span aria-hidden="true"></span>
+    </button>
+    <div class="nav-links" id="navPanel">
+      <a href="/#gites">Les gîtes</a>
+      <span class="nav-sub-title" aria-hidden="true">Nos hébergements</span>
+      <a class="sub" href="/la-maison-du-scieur/">La Maison du Scieur</a>
+      <a class="sub" href="/la-scierie/">La Scierie</a>
+      <a class="sub" href="/le-moulin-de-braives/">Le Moulin de Braives</a>
+      <a href="/la-propriete/">La propriété</a>
+      <a href="/histoire/">Histoire</a>
+      <a href="/que-faire/">Que faire</a>
+      <a href="/que-manger/">Que manger</a>
+      <a href="/infos-pratiques/">Infos pratiques</a>
+      <a href="/#dispo">Disponibilités</a>
+      <a href="/#tarifs">Tarifs</a>
+      <a href="/#contact">Contact</a>
+      <span class="nav-sub-title" aria-hidden="true">Sur le domaine</span>
+      <a class="sub" href="/le-bain-chaud/">Le bain chaud</a>
+      <a class="sub" href="/le-sauna/">Le sauna</a>
+      <a class="sub" href="/le-four-a-pain/">Le four à pain</a>
+      <a class="sub" href="/les-promenades/">Les promenades</a>
+    </div>
+    <a class="cta" href="/book/?property=pre-more">Réserver</a>
+  </div>
+</nav>
+<header class="page-hero">
+  <div class="wrap">
+    <span class="eyebrow">Contrat de location</span>
+    <h1>Conditions générales de location</h1>
+    <p class="lead">Le texte que vous acceptez lors de la réservation, consultable ici à tout moment.</p>
+  </div>
+</header>
+
+<section>
+  <div class="wrap prose">
+    <!-- Le texte n'est PAS écrit ici : il est lu de la fiche du domaine
+         (/api/public/properties/<slug>, champ cgvText) et rendu par le même
+         module que le tunnel de réservation (/book/cgv.js). C'est la seule
+         façon de garantir que la page publique et le texte accepté à la
+         réservation ne divergent jamais. -->
+    <div class="legal-tabs" role="tablist" aria-label="Choisir le domaine">
+      <button type="button" role="tab" id="tab-pre-more" aria-controls="cgv-pre-more" data-cgv-tab="pre-more" aria-selected="true">Les Gîtes du Pré Moré</button>
+      <button type="button" role="tab" id="tab-moulin-braives" aria-controls="cgv-moulin-braives" data-cgv-tab="moulin-braives" aria-selected="false" tabindex="-1">Le Moulin de Braives</button>
+    </div>
+    <div id="cgv-pre-more" role="tabpanel" aria-labelledby="tab-pre-more" data-cgv-panel="pre-more">
+      <div class="cgv-full" data-cgv="pre-more" aria-live="polite"><p class="muted">Chargement des conditions générales…</p></div>
+    </div>
+    <div id="cgv-moulin-braives" role="tabpanel" aria-labelledby="tab-moulin-braives" data-cgv-panel="moulin-braives" hidden>
+      <div class="cgv-full" data-cgv="moulin-braives" aria-live="polite"><p class="muted">Chargement des conditions générales…</p></div>
+    </div>
+
+    <h2>Documents liés</h2>
+    <ul>
+      <li><a href="/mentions-legales/">Mentions légales</a></li>
+      <li><a href="/confidentialite/">Politique de confidentialité</a></li>
+    </ul>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <span>© 2026 Les Gîtes du Pré Moré — Moulin de Daverdisse</span>
+    <span>Gîtes ruraux · Gîtes PANDA (WWF)</span>
+    <a href="https://moulindebraives.be/" target="_blank" rel="noopener">Notre autre gîte : Le Moulin de Braives</a>
+    <a href="/book/?property=pre-more" style="margin-left:auto">Réserver en ligne</a>
+  </div>
+  <div class="wrap foot-pages">
+    <span>Nos gîtes :</span>
+    <a href="/la-maison-du-scieur/">La Maison du Scieur</a>
+    <a href="/la-scierie/">La Scierie</a>
+    <a href="/le-moulin-de-braives/">Le Moulin de Braives</a>
+  </div>
+  <div class="wrap foot-pages">
+    <a href="/la-propriete/">La propriété</a>
+    <a href="/histoire/">Un peu d'histoire</a>
+    <a href="/que-faire/">Que faire</a>
+    <a href="/que-manger/">Que manger</a>
+    <a href="/infos-pratiques/">Ce qu'il faut savoir</a>
+  </div>
+  <div class="wrap foot-pages">
+    <span>Sur le domaine :</span>
+    <a href="/le-bain-chaud/">Le bain chaud</a>
+    <a href="/le-sauna/">Le sauna</a>
+    <a href="/le-four-a-pain/">Le four à pain</a>
+    <a href="/les-promenades/">Les promenades</a>
+  </div>
+  <div class="wrap foot-pages foot-legal">
+    <a href="/mentions-legales/">Mentions légales</a>
+    <a href="/confidentialite/">Confidentialité</a>
+    <a href="/conditions-generales/">Conditions générales</a>
+  </div>
+</footer>
+
+<script src="/nav.js" defer></script>
+<script src="/legal.js" type="module"></script>
+</body>
+</html>

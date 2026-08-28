@@ -343,3 +343,17 @@ section[id],h2[id],h3[id]{scroll-margin-top:74px}
 .reserver-bloc .btn{margin-left:auto}
 @media(max-width:680px){.reserver-bloc .btn{margin-left:0}}
 .ctas-gite{display:flex;gap:10px;flex-wrap:wrap;margin:0}
+
+/* --- pages légales (issue #9) --- */
+.legal-table{width:100%;border-collapse:collapse;background:#fff;border:1px solid var(--line);border-radius:10px;overflow:hidden;margin:0 0 18px;font-size:14px}
+.legal-table th,.legal-table td{text-align:left;vertical-align:top;padding:9px 12px;border-bottom:1px solid var(--line)}
+.legal-table th{background:var(--cream);font-weight:600}
+.legal-table tr:last-child td{border-bottom:0}
+.legal-table code{font-size:13px}
+.prose .reg{font-size:14px;color:var(--muted)}
+.legal-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 18px}
+.legal-tabs [role=tab]{font:inherit;font-size:14.5px;padding:8px 14px;border-radius:999px;border:1.5px solid var(--accent);background:#fff;color:var(--accent);cursor:pointer}
+.legal-tabs [role=tab][aria-selected=true]{background:var(--accent);color:#fff}
+.cgv-full p{margin:0 0 10px}
+.cgv-full .cgv-h{margin-top:20px}
+.cgv-full .cgv-h:first-child{margin-top:0}
