@@ -1228,6 +1228,104 @@ export async function moveBookingAtomic(
   return res.meta.changes === 1;
 }
 
+export interface BookingStayPatch {
+  unitId: number;
+  checkin: IsoDate;
+  checkout: IsoDate;
+  adults: number;
+  children: number;
+  totalCents: number;
+  depositCents: number;
+  balanceDueDate: IsoDate | null;
+  quoteJson: string | null;
+  optionsJson: string | null;
+  promoCode: string | null;
+}
+
+export type UpdateStayResult = "updated" | "conflict" | "not_modifiable";
+
+/** Modifier un séjour (dates ET/OU logement) sans annuler-recréer — issue #73.
+ *
+ *  Une SEULE instruction : l'ancien créneau est libéré et le nouveau pris par
+ *  le même `UPDATE`, sous le MÊME garde-fou que la création (réservations
+ *  actives + blocages manuels, liaisons comprises). Il n'existe donc à aucun
+ *  instant un état où la réservation occupe les deux créneaux, ni aucun où
+ *  elle n'en occupe aucun — et deux modifications concurrentes vers le même
+ *  créneau ne peuvent pas passer toutes les deux.
+ *
+ *  Annuler puis recréer aurait rouvert le créneau d'origine le temps de la
+ *  bascule : un autre client pouvait le prendre, et la réservation modifiée se
+ *  retrouvait sans logement — en ayant perdu au passage ses paiements et sa
+ *  preuve d'acceptation des CGV.
+ *
+ *  Ce qui n'est PAS touché, et c'est le point : `paid_cents`, les lignes de
+ *  `payments`, `cgv_version` / `cgv_accepted_at` / `cgv_ip`, `reference`,
+ *  `guest_id`, `status`, `source`, `external_uid`.
+ *
+ *  'conflict' ⇒ le créneau visé est pris : RIEN n'a bougé, la réservation
+ *  d'origine reste intacte sur ses dates.
+ *
+ *  'not_modifiable' ⇒ annulée, ou option de paiement expirée. Déplacer une
+ *  réservation qui n'occupe plus rien donnerait à l'admin l'illusion d'un
+ *  créneau tenu, alors que le premier venu peut le prendre (contre-review
+ *  Gemini, 2026-08-28). */
+export async function updateBookingStayAtomic(
+  db: D1Database,
+  id: number,
+  patch: BookingStayPatch,
+  now: string = sqlNow(),
+): Promise<UpdateStayResult> {
+  if (!isIsoDate(patch.checkin) || !isIsoDate(patch.checkout) || patch.checkin >= patch.checkout) {
+    throw new Error(`updateBookingStayAtomic: dates invalides ${patch.checkin} → ${patch.checkout}`);
+  }
+  const res = await db
+    .prepare(
+      `UPDATE bookings
+          SET unit_id = ?1, checkin = ?3, checkout = ?4, adults = ?6, children = ?7,
+              total_cents = ?8, deposit_cents = ?9, balance_due_date = ?10,
+              quote_json = ?11, options_json = ?12, promo_code = ?13, updated_at = ?5
+        WHERE id = ?2
+          AND (status = 'confirmed' OR (status = 'pending' AND hold_expires_at > ?5))
+          AND NOT EXISTS (
+            SELECT 1 FROM bookings b
+             WHERE b.id != ?2
+               AND b.checkin < ?4
+               AND b.checkout > ?3
+               AND (b.status = 'confirmed' OR (b.status = 'pending' AND b.hold_expires_at > ?5))
+               AND b.unit_id IN (
+                 SELECT ?1
+                 UNION ALL
+                 SELECT ul.unit_id FROM unit_links ul WHERE ul.blocks_unit_id = ?1
+               )
+          )
+          AND ${manualBlockConflictSql("?1", "?3", "?4")}`,
+    )
+    .bind(
+      patch.unitId,           // ?1
+      id,                     // ?2
+      patch.checkin,          // ?3
+      patch.checkout,         // ?4
+      now,                    // ?5
+      patch.adults,           // ?6
+      patch.children,         // ?7
+      patch.totalCents,       // ?8
+      patch.depositCents,     // ?9
+      patch.balanceDueDate,   // ?10
+      patch.quoteJson,        // ?11
+      patch.optionsJson,      // ?12
+      patch.promoCode,        // ?13
+    )
+    .run();
+  if (res.meta.changes === 1) return "updated";
+  const row = await db
+    .prepare("SELECT status, hold_expires_at FROM bookings WHERE id = ?1")
+    .bind(id)
+    .first<{ status: string; hold_expires_at: string | null }>();
+  const occupies =
+    row?.status === "confirmed" || (row?.status === "pending" && !!row.hold_expires_at && row.hold_expires_at > now);
+  return occupies ? "conflict" : "not_modifiable";
+}
+
 /** Réservations ACTIVES qui occupent un créneau sur un logement (liaisons
  *  comprises) — la même condition que le garde-fou d'insertion, mais en
  *  lecture. Sert à nommer le coupable quand une synchronisation échoue :

@@ -191,7 +191,7 @@ La même logique existe **deux fois** :
 
 | Implémentation | Fichier | Rôle |
 |---|---|---|
-| SQL atomique | `src/db/repo.ts` (`createBookingAtomic`, `confirmBookingAtomic`, `updateBookingDatesAtomic`, `createManualBlockAtomic`) | **La vérité transactionnelle.** Seule garantie anti-surbooking. |
+| SQL atomique | `src/db/repo.ts` (`createBookingAtomic`, `confirmBookingAtomic`, `updateBookingDatesAtomic`, `updateBookingStayAtomic`, `createManualBlockAtomic`) | **La vérité transactionnelle.** Seule garantie anti-surbooking. |
 | TypeScript pur | `src/core/availability.ts` (`isUnitFree`, `busySpans`, `blockingUnitIds`, `blocksAsSpans`) | Recherche publique, planning, export iCal, push Beds24. |
 
 Ce n'est pas une duplication accidentelle : la version TS sert à *afficher*,
@@ -333,7 +333,12 @@ Trois fonctions méritent une attention particulière, toutes **atomiques** :
 - `createBookingAtomic()` — cf. §3 ;
 - `confirmBookingAtomic()` — confirme un `pending` **en revérifiant le conflit**
   (un webhook Stripe tardif ne doit pas confirmer un créneau repris) ;
-- `updateBookingDatesAtomic()` — déplacement d'une résa canal, même garde.
+- `updateBookingDatesAtomic()` — déplacement d'une résa canal, même garde ;
+- `updateBookingStayAtomic()` — modification côté back-office (dates **et/ou**
+  logement) : l'ancien créneau est libéré et le nouveau pris par la même
+  instruction, donc jamais d'instant où la réservation occupe les deux ou aucun.
+  Annuler-recréer aurait rouvert l'ancien créneau le temps de la bascule, et
+  perdu paiements et preuve CGV au passage (issue #73).
 
 Le reste est du CRUD typé : `PropertyRow`, `UnitRow`, `BookingRow`, `PaymentRow`,
 `MessageRow`, etc., chacun avec son mapper depuis la ligne SQL brute.
