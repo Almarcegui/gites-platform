@@ -944,15 +944,33 @@ function openBlockDates(unitId, unitName, from, toInclusive) {
 // VUE — Réservations (+ fiche résa + nouvelle vente)
 // ---------------------------------------------------------------------------
 
+/** Les quatre périodes de la liste des réservations (issue #51), dans l'ordre
+ *  d'affichage. `all` ne filtre rien — c'est le refuge de la recherche. */
+const RESA_PERIODS = [
+  ["upcoming", "À venir", "Aucune arrivée à venir."],
+  ["current", "En cours", "Personne sur place aujourd’hui."],
+  ["past", "Passées", "Aucun séjour passé."],
+  ["all", "Toutes", "Aucune réservation."],
+];
+
 registerView("resa", "Réservations", async (root) => {
   const params = new URLSearchParams(location.hash.split("?")[1] || "");
   const status = params.get("status") || "";
   const search = params.get("search") || "";
+  // Défaut : « à venir », pour que la vue réponde à « qui arrive bientôt ? »
+  // sans un clic. Exception : une recherche cherche dans TOUT l'historique —
+  // sinon taper une référence de l'an dernier ne renvoie rien.
+  const known = RESA_PERIODS.some(([k]) => k === params.get("period"));
+  const period = known ? params.get("period") : search ? "all" : "upcoming";
   const q = new URLSearchParams({ property: String(state.propertyId) });
   if (status) q.set("status", status);
   if (search) q.set("search", search);
+  if (period !== "all") q.set("period", period);
   const data = await api(`/api/admin/bookings?${q}`);
-  const today = todayIso();
+  // Le jour de référence vient du serveur (fuseau Europe/Brussels) : c'est lui
+  // qui a filtré, l'horloge du poste ne doit pas dire autre chose.
+  const today = data.today || todayIso();
+  const empty = RESA_PERIODS.find(([k]) => k === period)?.[2] ?? "Aucune réservation.";
 
   root.innerHTML = `
     <div class="card">
@@ -970,6 +988,14 @@ registerView("resa", "Réservations", async (root) => {
         <div class="n"><button class="btn o sm" id="importElloha">Importer elloha</button></div>
         <div class="right n"><button class="btn" id="newSale">+ Nouvelle vente (tél.)</button></div>
       </div>
+      <div class="chips" role="group" aria-label="Période">
+        ${RESA_PERIODS.map(
+          ([key, label]) =>
+            `<button type="button" class="chip${key === period ? " on" : ""}" data-period="${key}"
+              aria-pressed="${key === period}">${label}</button>`,
+        ).join("")}
+        <span class="small muted" style="margin-left:auto">Triées par date d’arrivée${period === "upcoming" || period === "current" ? " (la plus proche en tête)" : " (la plus récente en tête)"}</span>
+      </div>
       <table>
         <tr><th>N°</th><th>Unité</th><th>Séjour</th><th>Client</th><th class="r">Total</th><th class="r">Payé</th><th>Statut</th><th>Source</th></tr>
         ${data.bookings
@@ -982,20 +1008,27 @@ registerView("resa", "Réservations", async (root) => {
           <td class="r">${b.paidCents ? eur(b.paidCents) : "—"}</td>
           <td>${bookingTag(b, today)}</td><td class="muted">${sourceFr(b.source)}</td></tr>`,
           )
-          .join("") || `<tr><td colspan="8" class="muted">Aucune réservation.</td></tr>`}
+          .join("") || `<tr><td colspan="8" class="muted">${esc(empty)}</td></tr>`}
       </table>
     </div>`;
 
-  const apply = () => {
+  const apply = (nextPeriod = period) => {
     const s = root.querySelector("#fSearch").value.trim();
     const st = root.querySelector("#fStatus").value;
     const p = new URLSearchParams();
+    p.set("period", nextPeriod);
     if (st) p.set("status", st);
     if (s) p.set("search", s);
     location.hash = `#/resa?${p}`;
   };
-  root.querySelector("#fStatus").onchange = apply;
-  root.querySelector("#fSearch").onkeydown = (e) => e.key === "Enter" && apply();
+  // La recherche porte sur TOUT l'historique — chercher une référence de l'an
+  // dernier depuis « à venir » ne doit pas renvoyer une liste vide. Elle
+  // bascule donc sur « Toutes », et l'effacer ramène à la vue de travail par
+  // défaut. Règle sans état caché : l'URL dit toujours ce qui est affiché.
+  const applySearch = () => apply(root.querySelector("#fSearch").value.trim() ? "all" : "upcoming");
+  root.querySelectorAll("[data-period]").forEach((b) => (b.onclick = () => apply(b.dataset.period)));
+  root.querySelector("#fStatus").onchange = () => apply();
+  root.querySelector("#fSearch").onkeydown = (e) => e.key === "Enter" && applySearch();
   root.querySelector("#newSale").onclick = () => openNewSale();
   root.querySelector("#exportCsv").onclick = () => downloadCsv(`/api/admin/bookings.csv?property=${state.propertyId}`, "reservations.csv");
   root.querySelector("#importElloha").onclick = () => openEllohaImport();

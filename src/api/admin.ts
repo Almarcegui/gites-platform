@@ -1226,8 +1226,15 @@ export function registerAdminRoutes(router: Router): void {
   }));
 
   // --- réservations -----------------------------------------------------------
+  // La liste de travail répond d'abord à « qui arrive bientôt ? » : tri par
+  // date d'arrivée par défaut, et filtre de période à venir / en cours /
+  // passées (issue #51). `sort=created` restitue l'ordre historique.
   router.get("/api/admin/bookings", guard(async (_req, env, _p, url) => {
     const propertyId = intParam(url.searchParams.get("property"), 0) || undefined;
+    const rawPeriod = url.searchParams.get("period") ?? "";
+    const period = (["upcoming", "current", "past"] as const).find((p) => p === rawPeriod);
+    if (rawPeriod && !period) return apiError(400, "period invalide — attendu upcoming, current ou past");
+    const today = todayInZone();
     const bookings = await listBookings(env.DB, {
       propertyId,
       status: url.searchParams.get("status") ?? undefined,
@@ -1235,8 +1242,11 @@ export function registerAdminRoutes(router: Router): void {
       from: url.searchParams.get("from") ?? undefined,
       to: url.searchParams.get("to") ?? undefined,
       limit: intParam(url.searchParams.get("limit"), 200),
+      period,
+      today,
+      sort: url.searchParams.get("sort") === "created" ? "created" : "checkin",
     });
-    return json({ bookings });
+    return json({ bookings, today, period: period ?? null });
   }));
 
   router.get("/api/admin/bookings/:id", guard(async (_req, env, p) => {
