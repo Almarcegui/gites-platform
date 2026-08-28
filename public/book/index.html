@@ -43,6 +43,15 @@
 
     <!-- Étape 1 : calendrier des disponibilités et prix -->
     <div class="card" id="searchCard">
+      <!-- Voyageurs AVANT le calendrier (issue #47-1) : la capacité conditionne
+           les hébergements proposés, elle doit se choisir avant les dates. -->
+      <div class="pax pax-top">
+        <span class="pax-title" id="paxTitle">Voyageurs</span>
+        <label class="f" for="qAd">Adultes</label>
+        <select id="qAd"></select>
+        <label class="f" for="qCh">Enfants</label>
+        <select id="qCh"></select>
+      </div>
       <div class="pcal-head">
         <button class="pcal-nav" id="calPrev" aria-label="Mois précédent">◀</button>
         <b id="calLabel">…</b>
@@ -55,12 +64,6 @@
       <p class="pcal-rules" id="calRules" aria-live="polite"></p>
       <div class="stay-bar">
         <div id="staySummary" aria-live="polite" aria-atomic="true"></div>
-        <div class="pax">
-          <label class="f" for="qAd">Adultes</label>
-          <select id="qAd"></select>
-          <label class="f" for="qCh">Enfants</label>
-          <select id="qCh"></select>
-        </div>
       </div>
       <div id="searchMsg" role="alert" aria-live="assertive"></div>
     </div>

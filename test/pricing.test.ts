@@ -8,6 +8,7 @@ import {
   type PricingSettings,
   type Promotion,
   type QuoteRequest,
+  type RateOverride,
   type RateRule,
   type Season,
   type UnitPricingInfo,
@@ -612,5 +613,46 @@ describe("garde-fous", () => {
       expect(q.errors).toContain("checkin_day");
       expect(q.checkinDays).toEqual([]);
     }
+  });
+});
+
+// --- Prix à la nuit affiché au client (issue #47-2) --------------------------
+describe("libellé client des nuits d'hébergement (#47)", () => {
+  const nuitsOf = (q: ReturnType<typeof computeQuote>) => q.lines.filter((l) => l.kind === "accommodation");
+
+  it("le libellé technique reste au moteur, le libellé client perd l'origine du prix", () => {
+    // 02/03 → 06/03 : 4 nuits de semaine au tarif de base de La Scierie (120 €).
+    const q = computeQuote(baseRequest({}));
+    const [nuits] = nuitsOf(q);
+    expect(nuits.label).toBe("4 nuits semaine · tarif de base");
+    expect(nuits.publicLabel).toBe("4 nuits semaine");
+    expect(nuits.unitPriceCents).toBe(12000);
+    expect(nuits.unitPriceCents! * 4).toBe(nuits.amountCents);
+  });
+
+  it("deux surcharges de montants DIFFÉRENTS ne produisent jamais un prix moyen", () => {
+    // Même libellé (« prix fixé à la main »), même type de jour : les deux nuits
+    // tombent dans le même groupe. 90 € + 110 € = 200 € ; la moyenne serait
+    // 100 €, un tarif qu'aucune des deux nuits n'a jamais valu.
+    const overrides: RateOverride[] = [
+      { unitId: 2, date: "2026-03-02", priceCents: 9000, minNights: null },
+      { unitId: 2, date: "2026-03-03", priceCents: 11000, minNights: null },
+    ];
+    const q = computeQuote(baseRequest({ checkin: "2026-03-02", checkout: "2026-03-04", rateOverrides: overrides }));
+    expect(q.ok).toBe(true);
+    const [nuits] = nuitsOf(q);
+    expect(nuits.amountCents).toBe(20000);
+    expect(nuits.publicLabel).toBe("2 nuits semaine");
+    expect(nuits.unitPriceCents).toBeUndefined();
+  });
+
+  it("deux surcharges au MÊME montant donnent bien le prix de la nuit", () => {
+    const overrides: RateOverride[] = [
+      { unitId: 2, date: "2026-03-02", priceCents: 10000, minNights: null },
+      { unitId: 2, date: "2026-03-03", priceCents: 10000, minNights: null },
+    ];
+    const q = computeQuote(baseRequest({ checkin: "2026-03-02", checkout: "2026-03-04", rateOverrides: overrides }));
+    const [nuits] = nuitsOf(q);
+    expect(nuits.unitPriceCents).toBe(10000);
   });
 });

@@ -9,14 +9,25 @@
 </head>
 <body>
 <div class="pub" style="max-width:640px">
+  <!-- Page de fin de parcours : sans ce lien, la seule sortie est le bouton
+       « précédent » du navigateur (issue #47-5). -->
+  <a class="back-top" href="/">← Retour au site</a>
   <div id="box"><div class="card muted">Chargement…</div></div>
 </div>
 <script type="module">
 import { cgvHtml } from "./cgv.js";
+import { icsFile } from "./ics.js";
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 const eur = (c) => (c / 100).toLocaleString("fr-BE", { style: "currency", currency: "EUR" });
 const dfr = (iso) => iso ? `${iso.slice(8,10)}/${iso.slice(5,7)}/${iso.slice(0,4)}` : "—";
 const q = new URLSearchParams(location.search);
+const sqlToMs = (s) => Date.parse(String(s).replace(" ", "T") + "Z");
+
+// Le devis stocké porte l'origine du prix (« · tarif de base »), utile au
+// back-office ; le voyageur, lui, veut le prix d'UNE nuit (issue #47-2).
+const lineLabel = (l) => (l?.publicLabel && l.unitPriceCents != null
+  ? `${l.publicLabel} à ${eur(l.unitPriceCents)} la nuit`
+  : (l?.label ?? ""));
 
 (async () => {
   const box = document.getElementById("box");
@@ -29,7 +40,7 @@ const q = new URLSearchParams(location.search);
   const statusTag = b.status === "confirmed"
     ? `<span class="tag t-ok">Confirmée</span>`
     : b.status === "pending" ? `<span class="tag t-warn">Paiement en attente</span>` : `<span class="tag t-bad">Annulée</span>`;
-  const lines = (b.quoteLines || []).map((l) => `<tr><td>${esc(l.label)}</td><td class="r ${l.amountCents < 0 ? "neg" : ""}">${eur(l.amountCents)}</td></tr>`).join("");
+  const lines = (b.quoteLines || []).map((l) => `<tr><td>${esc(lineLabel(l))}</td><td class="r ${l.amountCents < 0 ? "neg" : ""}">${eur(l.amountCents)}</td></tr>`).join("");
 
   // Deux paiements possibles sur cette page, le même endpoint derrière :
   // finaliser l'acompte d'une résa en attente, ou régler le solde d'une résa
@@ -37,17 +48,58 @@ const q = new URLSearchParams(location.search);
   const dueNote = b.balanceDueDate
     ? `Échéance le ${dfr(b.balanceDueDate)}${b.balanceDueDate < new Date().toISOString().slice(0, 10) ? " — dépassée" : ""}.`
     : "";
-  const payBlock = b.status === "pending" && b.holdExpiresAt
+  // Option encore vivante ? Comparaison à l'heure SERVEUR renvoyée avec la
+  // réservation : l'horloge du poste peut dériver de plusieurs minutes, et le
+  // serveur répond 410 dès que le blocage est écoulé (issue #47-4).
+  const holdMsLeft = b.holdExpiresAt && data.now ? sqlToMs(b.holdExpiresAt) - sqlToMs(data.now) : 0;
+  const holdAlive = b.status === "pending" && b.holdExpiresAt && holdMsLeft > 0;
+
+  // Converti tout de suite en horloge locale : l'affichage doit continuer à
+  // décroître si l'onglet reste ouvert, sinon on retombe sur le compte à
+  // rebours figé que l'issue reproche (contre-review Gemini 2026-08-28).
+  const holdExpiresLocal = Date.now() + holdMsLeft;
+  const expiredHtml = `<h3>Option expirée</h3>
+        <p class="small muted">Le blocage de ce créneau est arrivé à son terme et les dates sont de nouveau ouvertes à la réservation.
+        Aucun montant n'a été débité. Vous pouvez relancer une réservation — écrivez-nous ci-dessous si vous préférez qu'on s'en occupe.</p>
+        <p style="margin-top:10px"><a class="btn" href="/book/">Relancer une réservation</a></p>`;
+  const holdLabel = (ms) => {
+    const min = Math.floor(ms / 60000);
+    return min >= 1 ? `${min} minute${min > 1 ? "s" : ""}` : "moins d'une minute";
+  };
+
+  const payBlock = holdAlive
     ? `<div class="card" id="payCard"><h3>Finaliser la réservation</h3>
-        <p class="small muted">Votre créneau est bloqué pour vous — terminez le paiement pour confirmer.</p>
+        <p class="small muted">Votre créneau vous est bloqué encore
+          <b id="holdLeft">${holdLabel(holdMsLeft)}</b>
+          — terminez le paiement pour confirmer.</p>
         <div id="payMsg"></div>
         <button class="btn big" id="payNow" style="margin-top:8px">💳 Finaliser le paiement sécurisé</button></div>`
+    : b.status === "pending"
+    ? `<div class="card" id="payCard">${expiredHtml}</div>`
     : b.status === "confirmed" && b.balanceCents > 0
     ? `<div class="card" id="payCard"><h3>Solde de votre séjour</h3>
         <p class="small muted">Il reste <b>${eur(b.balanceCents)}</b> à régler. ${esc(dueNote)} Vous pouvez payer dès maintenant, en ligne et en une fois.</p>
         <div id="payMsg"></div>
         <button class="btn big" id="payNow" style="margin-top:8px">💳 Payer le solde (${eur(b.balanceCents)})</button></div>`
     : "";
+
+  // Adresse du gîte + ajout au calendrier : les deux informations qu'on
+  // cherche la veille du départ, et qui n'étaient nulle part (issue #47-7).
+  // La commune est souvent DÉJÀ dans l'adresse en base (« …, 6890 Redu
+  // (Daverdisse) ») : on ne la répète pas.
+  const addrLine = (data.contact.address ?? "").trim();
+  const commune = (data.contact.commune ?? "").trim();
+  const address = [addrLine, commune && !addrLine.toLowerCase().includes(commune.toLowerCase()) ? commune : ""]
+    .filter(Boolean)
+    .join(", ");
+  const addrHtml = b.status === "cancelled" ? "" : `<div class="card">
+      <h3>Adresse et calendrier</h3>
+      ${address
+        ? `<p>${esc(address)}</p>
+           <p class="small" style="margin-top:6px"><a href="https://www.google.com/maps/search/?api=1&amp;query=${encodeURIComponent(address)}" target="_blank" rel="noopener">Ouvrir dans un plan</a></p>`
+        : `<p class="small muted">L'adresse précise vous est communiquée avec les informations d'arrivée.</p>`}
+      <p style="margin-top:10px"><a class="btn o" id="icsBtn" download="sejour-${esc(b.reference)}.ics" href="#">📅 Ajouter à mon agenda</a></p>
+    </div>`;
 
   box.innerHTML = `
     <div class="brand"><h1>${esc(b.propertyName)}</h1><p>Voucher de réservation</p></div>
@@ -61,6 +113,7 @@ const q = new URLSearchParams(location.search);
         <tr><td>Voyageurs</td><td class="r">${b.adults} adulte${b.adults > 1 ? "s" : ""}${b.children ? ` + ${b.children} enfant${b.children > 1 ? "s" : ""}` : ""}</td></tr>
       </table>
     </div>
+    ${addrHtml}
     ${lines ? `<div class="card"><h3>Détail du séjour</h3><table class="quote">${lines}
       <tr class="tot"><td>Total</td><td class="r">${eur(b.totalCents)}</td></tr></table></div>` : ""}
     <div class="card">
@@ -86,6 +139,31 @@ const q = new URLSearchParams(location.search);
     <div class="card"><h3>Conditions générales &amp; contrat de location</h3>
       <div class="cgv-box">${data.cgvText?.trim() ? cgvHtml(data.cgvText) + (b.depositPct != null ? `<p class="cgv-h"><b>Pour ${esc(b.unitName)}, le pourcentage d'arrhes de l'article 4.1 est de ${b.depositPct} %.</b></p>` : "") : "<p>Conditions générales à venir.</p>"}</div></div>
     <p class="footer-note"><a href="javascript:print()">Imprimer / enregistrer en PDF</a></p>`;
+
+  // Décompte vivant : l'affichage suit le temps qui passe, et la carte bascule
+  // d'elle-même sur « option expirée » à l'échéance — au lieu de proposer un
+  // paiement que le serveur refusera en 410.
+  if (holdAlive) {
+    const tick = () => {
+      const left = holdExpiresLocal - Date.now();
+      const card = document.getElementById("payCard");
+      if (!card) return;
+      if (left <= 0) {
+        card.innerHTML = expiredHtml;
+        return;
+      }
+      const zone = document.getElementById("holdLeft");
+      if (zone) zone.textContent = holdLabel(left);
+      setTimeout(tick, Math.min(20000, Math.max(1000, left)));
+    };
+    setTimeout(tick, Math.min(20000, Math.max(1000, holdMsLeft)));
+  }
+
+  const icsBtn = document.getElementById("icsBtn");
+  if (icsBtn) {
+    // Blob local : aucun aller-retour serveur, aucune dépendance.
+    icsBtn.href = URL.createObjectURL(new Blob([icsFile(b, data.stay, address)], { type: "text/calendar;charset=utf-8" }));
+  }
 
   const payBtn = document.getElementById("payNow");
   if (payBtn) {
