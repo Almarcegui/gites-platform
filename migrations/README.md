@@ -112,6 +112,7 @@ commandes interdites sans accord explicite du propriétaire — voir
 | `0014` | surcharges tarifaires par jour, garde-fous de prix par hébergement |
 | `0015` | pourcentage d'arrhes par hébergement (`units.deposit_pct`, seed à 50) |
 | `0016` | conditions générales de location v2 pour les deux domaines |
+| `0017` | conflits de synchronisation persistés (`sync_conflicts`, issue #72) |
 
 Le détail des règles métier qu'elles encodent est dans le
 [`README.md`](../README.md) racine.

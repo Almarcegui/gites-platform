@@ -378,6 +378,7 @@ sans compte tiers et sans risquer d'écrire à un vrai client.
 | `admin_users` | Comptes du back-office (PBKDF2) | 0012 |
 | `admin_sessions` | Sessions, indexées par SHA-256 du jeton | 0012 |
 | `app_settings` | Réglages **globaux** à l'application (≠ `settings`, qui est par domaine) | 0012 |
+| `sync_conflicts` | Ce qu'un canal annonce et que nous n'avons pas pu refléter — une ligne par conflit distinct, `open` / `resolved` / `ignored` | 0015 |
 
 **Contraintes structurantes** :
 
@@ -673,6 +674,14 @@ La synchro est **événementielle**, pas périodique :
 
 Nos dates priment : un conflit venant d'un canal est **refusé et signalé**.
 
+Signalé **et gardé** (issue #72) : chaque détection écrit dans `sync_conflicts`,
+une ligne par conflit distinct (`src/core/sync-conflicts.ts` en porte
+l'identité). Un conflit reproduit à chaque tick n'avance que sa dernière
+détection ; celui qui ne se reproduit plus passe `resolved` tout seul ; celui
+qu'on écarte à la main passe `ignored` **avec motif** et le reste, même
+redétecté. La vue « Canaux » liste les ouverts, le compte remonte dans la carte
+« Santé » (`src/core/drift.ts`).
+
 > [!warning]
 > **Piège dev local + VPN.** `workerd` lit `/etc/resolv.conf`. Derrière un VPN
 > d'entreprise (résolveurs `100.64.0.x`), les domaines publics renvoient des
@@ -687,7 +696,8 @@ Nos dates priment : un conflit venant d'un canal est **refusé et signalé**.
 Export `GET /ical/<token>.ics` par unité, **blocages par liaison inclus**.
 Import : flux relevés par le cron — nouvel événement → résa `ical` confirmée
 (même garde anti-conflit) ; déplacé → dates mises à jour ; disparu → résa future
-annulée ; conflit → refus + alerte au tableau de bord.
+annulée ; conflit → refus + ligne persistée dans `sync_conflicts` (cf. ci-dessus),
+plus l'alerte au tableau de bord.
 
 ### Email
 

@@ -55,6 +55,9 @@ import {
   getSettings,
   listAudit,
   listAuditByAction,
+  listSyncConflicts,
+  getSyncConflict,
+  setSyncConflictStatus,
   listBeds24Bookings,
   listBookings,
   listAuditByEntity,
@@ -1973,14 +1976,40 @@ export function registerAdminRoutes(router: Router): void {
   // Vue « Canaux » : tout l'état local en un appel (aucun réseau sortant —
   // la vue reste instantanée même hors ligne ; le test de connexion réel
   // passe par GET /api/admin/beds24/status, déclenché par bouton).
+  // Conflits de synchronisation (issue #72) — la seule action possible depuis
+  // le back-office est une DÉCISION : ignorer (avec motif) ou rouvrir. On ne
+  // « résout » pas un conflit à la main : c'est la synchro qui constate qu'il
+  // ne se reproduit plus, sinon on masquerait un calendrier encore faux.
+  router.patch("/api/admin/sync-conflicts/:id", guard(async (req, env, p) => {
+    const id = intParam(p.id, 0);
+    const body = await readJson<{ status?: string; reason?: string }>(req);
+    if (!id || !body) return apiError(400, "requête invalide");
+    const status = String(body.status ?? "");
+    if (status !== "ignored" && status !== "open") {
+      return apiError(400, "statut invalide — attendu « ignored » ou « open »");
+    }
+    const reason = String(body.reason ?? "").trim().slice(0, 500);
+    if (status === "ignored" && !reason) return apiError(400, "motif requis pour ignorer un conflit");
+    const conflict = await getSyncConflict(env.DB, id);
+    if (!conflict) return apiError(404, "conflit introuvable");
+    await setSyncConflictStatus(env.DB, id, status, reason || null, sqlNow());
+    await audit(env.DB, "admin", status === "ignored" ? "sync_conflict.ignored" : "sync_conflict.reopened", `conflict:${id}`, {
+      label: conflict.label, reason: reason || null,
+    });
+    return json({ ok: true });
+  }));
+
   router.get("/api/admin/channels/overview", guard(async (_req, env, _p, url) => {
     const db = env.DB;
     const propertyId = intParam(url.searchParams.get("property"), 1);
-    const [property, units, channelBookings, events] = await Promise.all([
+    const [property, units, channelBookings, events, conflicts] = await Promise.all([
       getProperty(db, propertyId),
       listUnits(db, propertyId),
       listBeds24Bookings(db),
       listAuditByAction(db, "beds24.", 15),
+      // Conflits de synchro persistés (issue #72) : ouverts d'abord, puis les
+      // ignorés (avec leur motif) — les résolus n'encombrent pas la vue.
+      listSyncConflicts(db, propertyId, { limit: 60 }),
     ]);
     const lastPull = await db
       .prepare("SELECT value FROM settings WHERE property_id = ?1 AND key = 'beds24_last_pull'")
@@ -2005,6 +2034,14 @@ export function registerAdminRoutes(router: Router): void {
       })),
       lastPull: lastPull?.value ?? null,
       events,
+      conflicts: conflicts
+        .filter((c) => c.status !== "resolved")
+        .map((c) => ({
+          id: c.id, source: c.source, kind: c.kind, status: c.status,
+          unitId: c.unitId, unitName: c.unitName, checkin: c.checkin, checkout: c.checkout,
+          bookingReference: c.bookingReference, channelLabel: c.channelLabel, label: c.label,
+          firstSeenAt: c.firstSeenAt, lastSeenAt: c.lastSeenAt, ignoreReason: c.ignoreReason,
+        })),
     });
   }));
 }

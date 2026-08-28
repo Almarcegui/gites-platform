@@ -27,6 +27,7 @@ import {
   insertInboundMessage,
   listLinks,
   listOptionsAdmin,
+  listPayments,
   listProperties,
   listPromotions,
   listRateRules,

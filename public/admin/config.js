@@ -5,7 +5,7 @@
 
 import {
   api, copyText, currentPropertyId, dfr, dshort, esc, eur, eurInput, openBooking, openModal,
-  registerView, toCents, toast,
+  registerView, state, toCents, toast,
 } from "./app.js";
 
 const MODE_FR = {
@@ -560,6 +560,8 @@ export function registerConfigViews() {
   registerView("canaux", "Canaux OTA", async (root) => {
     const data = await api(`/api/admin/channels/overview?property=${currentPropertyId()}`);
     const mapped = data.units.filter((u) => u.beds24RoomId);
+    const openConflicts = (data.conflicts || []).filter((c) => c.status === "open");
+    const ignoredConflicts = (data.conflicts || []).filter((c) => c.status === "ignored");
     const statusBadge = data.configured
       ? `<span class="tag t-ok">Connecté à Beds24</span>`
       : `<span class="tag t-warn">Non configuré — aucun jeton Beds24</span>`;
@@ -602,6 +604,35 @@ export function registerConfigViews() {
         <p class="small muted">En cas de doute, demandez à Claude : « rétablis la liaison Beds24 » — il vous guide pas à pas.</p>
       </div>`}
 
+      <div class="card mb"><h3>Conflits de synchronisation ${
+        openConflicts.length === 0
+          ? `<span class="tag t-ok">aucun</span>`
+          : `<span class="tag t-warn">${openConflicts.length} ouvert${openConflicts.length > 1 ? "s" : ""}</span>`
+      }</h3>
+        <p class="small muted">Ce qu'une plateforme annonce et que nous n'avons <b>pas pu refléter</b> : les dates
+          restent en vente d'un côté et occupées de l'autre. Un conflit reste listé tant qu'il se reproduit, et
+          disparaît de lui-même dès que la synchro ne le revoit plus — rien à cocher.</p>
+        ${openConflicts.length === 0
+          ? `<p class="muted">Rien à trancher : tout ce que les plateformes annoncent est reflété chez nous.</p>`
+          : `<table><tr><th>Hébergement</th><th>Séjour</th><th>Ce qui bloque</th><th>Détecté</th><th class="r">Décision</th></tr>
+            ${openConflicts.map((c) => `<tr>
+              <td>${esc(c.unitName)}<div class="small muted">${esc(c.channelLabel || (c.source === "ical" ? "Flux iCal" : "Canal"))}</div></td>
+              <td>${dshort(c.checkin)} → ${dshort(c.checkout)}</td>
+              <td class="small">${esc(c.label)}</td>
+              <td class="small">${esc((c.firstSeenAt || "").slice(0, 16))}<div class="muted">revu ${esc((c.lastSeenAt || "").slice(0, 16))}</div></td>
+              <td class="r">
+                <button class="btn o sm cPlan" data-date="${esc(c.checkin)}">Voir au planning</button>
+                <button class="btn o sm cIgnore" data-id="${c.id}">Ignorer</button></td></tr>`).join("")}</table>`}
+        ${ignoredConflicts.length === 0 ? "" : `
+          <h4 style="margin-top:14px">Ignorés</h4>
+          <table><tr><th>Hébergement</th><th>Séjour</th><th>Ce qui bloque</th><th>Motif</th><th class="r">Décision</th></tr>
+          ${ignoredConflicts.map((c) => `<tr class="muted">
+            <td>${esc(c.unitName)}</td><td>${dshort(c.checkin)} → ${dshort(c.checkout)}</td>
+            <td class="small">${esc(c.label)}</td>
+            <td class="small">${esc(c.ignoreReason || "—")}</td>
+            <td class="r"><button class="btn o sm cReopen" data-id="${c.id}">Rouvrir</button></td></tr>`).join("")}</table>`}
+      </div>
+
       <div class="card mb"><h3>Correspondance des hébergements</h3>
         <table><tr><th>Chez nous</th><th>Chez Beds24</th></tr>
         ${data.units.map((u) => `<tr><td>${esc(u.name)}</td>
@@ -627,6 +658,25 @@ export function registerConfigViews() {
 
     const note = root.querySelector("#chanNote");
     root.querySelectorAll(".copyWebhook").forEach((b) => (b.onclick = () => copyText(data.webhookUrl)));
+
+    // Conflits de synchro (issue #72) : le planning à la bonne date, et la
+    // décision d'ignorer — jamais sans motif, c'est lui qui rend la décision
+    // relisible dans six mois.
+    root.querySelectorAll(".cPlan").forEach((b) => (b.onclick = () => {
+      state.calMonth = (b.dataset.date || "").slice(0, 7);
+      location.hash = "#/cal";
+    }));
+    const setConflict = async (id, status, reason) => {
+      await api(`/api/admin/sync-conflicts/${id}`, { method: "PATCH", body: { status, reason } });
+      toast(status === "ignored" ? "Conflit ignoré" : "Conflit rouvert");
+      location.reload();
+    };
+    root.querySelectorAll(".cIgnore").forEach((b) => (b.onclick = async () => {
+      const reason = (prompt("Pourquoi ignorer ce conflit ? (le motif reste affiché)") || "").trim();
+      if (!reason) return;
+      await setConflict(b.dataset.id, "ignored", reason);
+    }));
+    root.querySelectorAll(".cReopen").forEach((b) => (b.onclick = () => setConflict(b.dataset.id, "open", "")));
     root.querySelector("#chkStatus").onclick = async () => {
       note.textContent = "test en cours…";
       try {

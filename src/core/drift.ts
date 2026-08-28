@@ -25,7 +25,7 @@ export const MESSAGE_UNANSWERED_HOURS = 48;
 export const CRON_SILENT_MINUTES = 30;
 export const RATE_HORIZON_DAYS = 90;
 
-export type DriftKind = "ical_stale" | "unit_no_rate" | "message_unanswered" | "cron_silent";
+export type DriftKind = "ical_stale" | "sync_conflict" | "unit_no_rate" | "message_unanswered" | "cron_silent";
 
 export interface DriftSignal {
   kind: DriftKind;
@@ -98,6 +98,45 @@ export function detectStaleFeeds(feeds: readonly FeedState[], now: Date = new Da
     });
   }
   return out;
+}
+
+// ---------------------------------------------------------------------------
+// 1 bis. Conflits de synchronisation ouverts (issue #72)
+// ---------------------------------------------------------------------------
+
+export interface OpenConflictState {
+  id: number;
+  label: string;
+  /** Première détection, format sqlNow — c'est l'ancienneté qui alarme. */
+  firstSeenAt: string;
+}
+
+/** Un conflit ouvert est un calendrier faux qui dure : la source annonce un
+ *  séjour que nous n'avons pas pu refléter, donc les dates restent en vente
+ *  quelque part. Le détail vit dans la vue Canaux — ici, une ligne qui dit
+ *  combien et depuis quand.
+ *
+ *  Les conflits IGNORÉS n'entrent jamais ici : les écarter est une décision,
+ *  la carte « Santé » n'a pas à la remettre en cause à chaque ouverture. */
+export function detectOpenSyncConflicts(
+  conflicts: readonly OpenConflictState[],
+  now: Date = new Date(),
+): DriftSignal[] {
+  if (conflicts.length === 0) return [];
+  const ages = conflicts.map((c) => hoursSince(c.firstSeenAt, now)).filter((h): h is number => h != null);
+  const oldest = ages.length > 0 ? Math.max(...ages) : null;
+  const since = oldest == null ? "" : ` — le plus ancien depuis ${humanAge(oldest)}`;
+  return [
+    {
+      kind: "sync_conflict",
+      label: "Synchro",
+      detail:
+        conflicts.length === 1
+          ? `Un conflit de synchronisation non résolu${since} : ${conflicts[0]!.label}`
+          : `${conflicts.length} conflits de synchronisation non résolus${since}. Les dates concernées restent en vente sur un canal.`,
+      href: "#/canaux",
+    },
+  ];
 }
 
 // ---------------------------------------------------------------------------
@@ -243,6 +282,7 @@ export function detectSilentCron(lastCronAt: string | null, now: Date = new Date
 
 export interface DriftInput {
   feeds: readonly FeedState[];
+  openConflicts: readonly OpenConflictState[];
   units: readonly UnitRateTarget[];
   today: IsoDate;
   seasons: readonly Season[];
@@ -257,6 +297,7 @@ export interface DriftInput {
 export function detectDrift(input: DriftInput, now: Date = new Date()): DriftSignal[] {
   return [
     ...detectStaleFeeds(input.feeds, now),
+    ...detectOpenSyncConflicts(input.openConflicts, now),
     ...detectUnitsWithoutRate(input.units, input.today, input.seasons, input.rateRules, input.rateOverrides),
     ...detectUnansweredMessages(input.messages, now),
     ...detectSilentCron(input.lastCronAt, now),
