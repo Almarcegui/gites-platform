@@ -371,8 +371,20 @@ function onSelectionChange() {
 
 let searchSeq = 0;
 
-/** Phrase qui explique pourquoi cet hébergement n'est pas réservable. */
-function unavailableReason(u, nights) {
+/** Énumération française : « A », « A et B », « A, B et C ». */
+function frList(items) {
+  if (items.length <= 1) return items[0] ?? "";
+  return `${items.slice(0, -1).join(", ")} et ${items[items.length - 1]}`;
+}
+
+/** Noms des unités LIÉES dont l'occupation rend celle-ci indisponible (#45). */
+function blockerNames(u, units) {
+  const byId = new Map(units.map((x) => [x.unitId, x.name]));
+  return (u.blockedByUnitIds ?? []).map((id) => byId.get(id)).filter(Boolean);
+}
+
+/** Étiquette courte : pourquoi cet hébergement n'est pas réservable. */
+function unavailableReason(u, nights, units = []) {
   if (u.available && !u.fitsCapacity) return `Capacité maximale : ${u.capacityMax} personnes`;
   const q = u.quote;
   if (q && !q.ok && q.errors.includes("min_nights")) {
@@ -386,7 +398,25 @@ function unavailableReason(u, nights) {
   }
   if (q && !q.ok && q.errors.includes("no_rate")) return "Tarifs pas encore publiés pour ces dates";
   if (q && !q.ok) return "Non réservable en ligne sur ces dates";
+  // Issue #45 — la liaison A/B/Domaine, dite en clair. Le Domaine entier tombe
+  // dès qu'UNE des deux maisons est prise : la carte se grisait sans un mot.
+  // L'accord est volontairement porté par « ces nuits » (féminin pluriel,
+  // invariable) : les noms d'hébergements viennent du back-office et leur genre
+  // est inconnu du code.
+  const blockers = blockerNames(u, units);
+  if (blockers.length) return `Ces nuits sont déjà prises sur ${frList(blockers)}`;
   return "Déjà réservé sur ces dates";
+}
+
+/** Issue #45 — la sortie : ce qui reste réservable quand une unité liée tombe.
+ *  L'information est déjà dans la réponse de recherche, il ne manquait que la
+ *  phrase. Vide si le blocage n'est pas dû à une liaison, ou si plus rien
+ *  n'est réservable (les suggestions de dates prennent alors le relais). */
+function unavailableDetail(u, units, bookable) {
+  if (!blockerNames(u, units).length) return "";
+  const libres = bookable.filter((b) => b.unitId !== u.unitId).map((b) => b.name);
+  if (!libres.length) return "";
+  return `${frList(libres)} ${libres.length > 1 ? "restent libres" : "reste libre"} sur ces dates.`;
 }
 
 /** Plages réservables les plus proches, en un clic. */
@@ -444,19 +474,21 @@ async function search() {
     const capacity = `${u.capacityBase}${u.capacityMax > u.capacityBase ? "-" + u.capacityMax : ""} p.`;
     const photo = u.photoUrl ? `style="background-image:url('${esc(u.photoUrl)}')"` : "";
     if (u.available && u.fitsCapacity && u.quote?.ok) {
-      return `<div class="prop">
+      return `<div class="prop" data-unit="${u.unitId}">
         <div class="ph" ${photo}>${u.photoUrl ? "" : "photo"}</div>
         <div class="info"><b>${esc(u.name)}</b> · ${capacity}<br>
           <span class="muted small">${esc(u.description ?? "")}</span></div>
         <div class="price">${strikeThrough(u.quote.totalCents, u.quote.discountCents)}<b>${eur(u.quote.totalCents)}</b><br>
           <span class="per">${nights} nuit${nights > 1 ? "s" : ""}, ménage et taxes compris</span>
           ${u.quote.autoDiscountApplied ? `<br><span class="savings">${esc(u.quote.autoDiscountApplied)} déduite</span>` : ""}<br>
-          <button class="btn" style="margin-top:6px" data-select="${u.unitId}">Réserver</button></div>
+          <button class="btn" style="margin-top:6px" data-select="${u.unitId}" aria-pressed="false">Réserver</button></div>
       </div>`;
     }
-    return `<div class="prop off">
+    const detail = unavailableDetail(u, data.units, bookable);
+    return `<div class="prop off" data-unit="${u.unitId}">
       <div class="ph" ${photo}>${u.photoUrl ? "" : "photo"}</div>
-      <div class="info"><b>${esc(u.name)}</b> · ${capacity}<br><span class="tag t-bad">${esc(unavailableReason(u, nights))}</span>
+      <div class="info"><b>${esc(u.name)}</b> · ${capacity}<br><span class="tag t-bad">${esc(unavailableReason(u, nights, data.units))}</span>
+        ${detail ? `<br><span class="small why">${esc(detail)}</span>` : ""}
         ${suggestionsBlock(u)}</div>
     </div>`;
   });
@@ -487,7 +519,23 @@ async function search() {
 
 let quoteSeq = 0;
 
+/** Issue #46 — la carte choisie se voit. Les autres restent cliquables : c'est
+ *  un groupe de boutons bascule (`aria-pressed`), pas une liste figée. Le
+ *  libellé du bouton suit l'état, pour que l'information ne repose ni sur la
+ *  seule couleur ni sur la seule bordure. */
+function markSelected(unitId) {
+  document.querySelectorAll("#results .prop").forEach((el) => {
+    const on = Number(el.dataset.unit) === unitId;
+    el.classList.toggle("sel", on);
+    const b = el.querySelector("[data-select]");
+    if (!b) return;
+    b.setAttribute("aria-pressed", on ? "true" : "false");
+    b.textContent = on ? "Votre choix" : "Réserver";
+  });
+}
+
 async function openBookingPanel(unitId) {
+  markSelected(unitId);
   SELECTED = PROP.units.find((u) => u.id === unitId);
   QUOTE = null;
   setStep(3);

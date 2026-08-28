@@ -82,6 +82,30 @@ export function isUnitFree(
   );
 }
 
+/** Unités TIERCES dont une occupation active recouvre [checkin, checkout) et
+ *  rendent donc `unitId` indisponible — la contrepartie « pourquoi » de
+ *  `isUnitFree` (issue #45). L'unité elle-même est exclue : quand c'est sa
+ *  propre réservation qui occupe les nuits, il n'y a rien à expliquer.
+ *  Résultat trié par identifiant, pour un affichage stable. */
+export function blockingSourceUnitIds(
+  unitId: number,
+  checkin: IsoDate,
+  checkout: IsoDate,
+  bookings: BookingSpan[],
+  links: UnitLink[],
+  now: string,
+): number[] {
+  const blockers = blockingUnitIds(unitId, links);
+  const out = new Set<number>();
+  for (const b of bookings) {
+    if (b.unitId === unitId || !blockers.has(b.unitId)) continue;
+    if (!isActiveBooking(b, now)) continue;
+    if (!rangesOverlap(b.checkin, b.checkout, checkin, checkout)) continue;
+    out.add(b.unitId);
+  }
+  return [...out].sort((a, b) => a - b);
+}
+
 export interface BusySpan {
   checkin: IsoDate;
   checkout: IsoDate;
