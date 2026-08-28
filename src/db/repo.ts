@@ -2343,6 +2343,8 @@ export interface HealthSignals {
    *  journal d'audit, que personne ne lit (contre-review 2026-08-28). */
   overpaidBookings: { reference: string; bookingId: number; overpaidCents: number; bookingStatus: string }[];
   /** Emails dont l'envoi a échoué (voucher jamais reçu, personne ne le sait).
+   *  Bornés au domaine interrogé, sauf les envois sans réservation rattachée
+   *  (digest quotidien) qui n'appartiennent à aucun domaine.
    *  `bookingId` porte le lien vers la fiche concernée : sans lui, l'alerte du
    *  tableau de bord nomme un échec sans dire où le rattraper (issue #48). */
   failedEmails: { bookingId: number | null; reference: string | null; kind: string; toEmail: string; createdAt: string; errorDetail: string | null }[];
@@ -2392,9 +2394,12 @@ export async function healthSignals(db: D1Database, propertyId: number, now: Dat
       `SELECT e.booking_id, b.reference, e.kind, e.to_email, e.created_at, e.error_detail
          FROM email_log e
          LEFT JOIN bookings b ON b.id = e.booking_id
-        WHERE e.status = 'failed' AND e.created_at >= ?1 ORDER BY e.id DESC LIMIT 20`,
+         LEFT JOIN units u ON u.id = b.unit_id
+        WHERE e.status = 'failed' AND e.created_at >= ?1
+          AND (e.booking_id IS NULL OR u.property_id = ?2)
+        ORDER BY e.id DESC LIMIT 20`,
     )
-    .bind(since)
+    .bind(since, propertyId)
     .all();
 
   const errors = await db

@@ -618,7 +618,7 @@ registerView("dash", "Tableau de bord", async (root) => {
       <td>Envoi « ${esc(emailKindFr(m.kind))} » échoué vers ${esc(m.toEmail)}${m.reference ? ` (résa <b>${esc(m.reference)}</b>)` : ""}${m.errorDetail ? ` <span class="muted small">(${esc(m.errorDetail)})</span>` : ""} — le client n'a rien reçu.</td></tr>`);
   }
   if (h.beds24Stale) {
-    santeRows.push(`<tr class="clickable" onclick="location.hash='#/canaux'"><td><span class="tag t-warn">Beds24</span></td>
+    santeRows.push(`<tr class="clickable" data-goto="#/canaux"><td><span class="tag t-warn">Beds24</span></td>
       <td>Aucun rapatriement depuis ${h.beds24StaleHours} h — les calendriers OTA peuvent vendre des dates déjà prises.</td></tr>`);
   }
   for (const e of h.recentErrors || []) {

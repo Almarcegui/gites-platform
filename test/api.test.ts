@@ -310,16 +310,21 @@ describe("admin", () => {
     expect(health.failedEmails[0]!.bookingId).toBe(booking.id);
     expect(health.failedEmails[0]!.reference).toBe(booking.reference);
 
-    // Un flux en erreur n'appartient qu'a son domaine : sinon l'alerte mene a
-    // une vue Synchro ou le flux nomme n'existe pas.
+    // Un flux en erreur, comme un envoi rate, n'appartient qu'a SON domaine :
+    // sinon l'alerte du Moulin nomme un flux du Pre More, et cliquable elle
+    // mene a une vue Synchro ou ce flux n'existe pas.
     await t.db
       .prepare("INSERT INTO ical_feeds (unit_id, name, url, last_status) VALUES (2, 'Airbnb test', 'https://example.com/a.ics', 'erreur HTTP 404')")
       .run();
-    const mine = await call("GET", "/api/admin/overview?property=1");
-    const other = await call("GET", "/api/admin/overview?property=2");
-    expect((mine.data.alerts as { feedAlerts: unknown[] }).feedAlerts.length).toBe(1);
-    expect((other.data.alerts as { feedAlerts: unknown[] }).feedAlerts.length).toBe(0);
-    await t.db.prepare("DELETE FROM ical_feeds WHERE name = 'Airbnb test'").run();
+    try {
+      const mine = await call("GET", "/api/admin/overview?property=1");
+      const other = await call("GET", "/api/admin/overview?property=2");
+      expect((mine.data.alerts as { feedAlerts: unknown[] }).feedAlerts.length).toBe(1);
+      expect((other.data.alerts as { feedAlerts: unknown[] }).feedAlerts.length).toBe(0);
+      expect((other.data.health as { failedEmails: unknown[] }).failedEmails.length).toBe(0);
+    } finally {
+      await t.db.prepare("DELETE FROM ical_feeds WHERE name = 'Airbnb test'").run();
+    }
   });
 
   it("fiche réservation : le journal d'e-mails porte type, destinataire et statut (#49)", async () => {
