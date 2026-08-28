@@ -994,6 +994,132 @@ registerView("resa", "Réservations", async (root) => {
   root.querySelectorAll("[data-booking]").forEach((tr) => tr.addEventListener("click", () => openBooking(Number(tr.dataset.booking))));
 });
 
+/** Modifier une réservation sans annuler-recréer (issue #73).
+ *
+ *  Le geste le plus fréquent au téléphone : « on décale d'une semaine »,
+ *  « finalement on prend l'autre maison », « ce n'est pas le bon prénom ».
+ *  Il imposait d'annuler puis de recréer, donc de perdre les paiements reçus
+ *  et la preuve d'acceptation des CGV.
+ *
+ *  Deux temps, volontairement : on RECALCULE d'abord (le nouveau montant et
+ *  l'écart avec le déjà-payé s'affichent), on valide ensuite. Personne ne doit
+ *  découvrir un nouveau prix après coup.
+ */
+async function openEditBooking(b, onDone) {
+  const { units } = await api(`/api/admin/units?property=${b.propertyId}`);
+  const sellable = units.filter((u) => u.active);
+  // `guestName` est la concaténation prénom + nom : on la redécoupe au premier
+  // espace, et un nom d'un seul mot reste un NOM (jamais un prénom).
+  const parts = String(b.guestName || "").trim().split(/\s+/).filter(Boolean);
+  const firstName = parts.length > 1 ? parts[0] : "";
+  const lastName = parts.length > 1 ? parts.slice(1).join(" ") : (parts[0] ?? "");
+
+  const modal = openModal(`
+    <h2>Modifier ${esc(b.reference)} <button class="x">×</button></h2>
+    <div class="note">Les paiements reçus (${eur(b.paidCents)}) et la preuve d'acceptation des CGV sont conservés.
+      Le créneau d'origine n'est libéré que si le nouveau est libre — sinon rien ne bouge.</div>
+    <div class="row mb">
+      <div class="n"><label class="f" for="edUnit">Hébergement</label>
+        <select id="edUnit">${sellable
+          .map((u) => `<option value="${u.id}" ${u.id === b.unitId ? "selected" : ""}>${esc(u.name)}</option>`)
+          .join("")}</select></div>
+      <div class="n"><label class="f" for="edIn">Arrivée</label><input type="date" id="edIn" value="${esc(b.checkin)}"></div>
+      <div class="n"><label class="f" for="edOut">Départ</label><input type="date" id="edOut" value="${esc(b.checkout)}"></div>
+      <div class="n"><label class="f" for="edAd">Adultes</label><input type="number" min="1" id="edAd" class="inline-num" value="${b.adults}"></div>
+      <div class="n"><label class="f" for="edCh">Enfants</label><input type="number" min="0" id="edCh" class="inline-num" value="${b.children}"></div>
+    </div>
+    <div class="row mb">
+      <div class="n"><label class="f" for="edFirst">Prénom</label><input id="edFirst" value="${esc(firstName)}"></div>
+      <div class="n"><label class="f" for="edLast">Nom</label><input id="edLast" value="${esc(lastName)}"></div>
+      <div class="n"><label class="f" for="edMail">Email</label><input id="edMail" value="${esc(b.guestEmail || "")}"></div>
+    </div>
+    <div id="edQuote" class="mb"></div>
+    <div class="row">
+      <div class="n"><button class="btn o sm" id="edCalc">Recalculer le devis</button></div>
+      <div class="n"><button class="btn sm" id="edSave" disabled>Valider la modification</button></div>
+    </div>`);
+
+  const $ = (sel) => modal.querySelector(sel);
+  const stay = () => ({
+    unitId: Number($("#edUnit").value),
+    checkin: $("#edIn").value,
+    checkout: $("#edOut").value,
+    adults: Number($("#edAd").value),
+    children: Number($("#edCh").value),
+  });
+  const changedStay = () => {
+    const s = stay();
+    return s.unitId !== b.unitId || s.checkin !== b.checkin || s.checkout !== b.checkout
+      || s.adults !== b.adults || s.children !== b.children;
+  };
+
+  // Toute retouche du séjour invalide le devis affiché : on ne valide jamais
+  // sur un montant calculé pour d'autres dates.
+  for (const sel of ["#edUnit", "#edIn", "#edOut", "#edAd", "#edCh"]) {
+    $(sel).addEventListener("change", () => {
+      $("#edSave").disabled = changedStay();
+      if (changedStay()) $("#edQuote").innerHTML = `<div class="note">Dates ou hébergement modifiés — recalcule le devis avant de valider.</div>`;
+    });
+  }
+
+  $("#edCalc").onclick = async () => {
+    const s = stay();
+    if (!s.checkin || !s.checkout || s.checkin >= s.checkout) return toast("Dates invalides", true);
+    try {
+      const { quote, availability } = await api("/api/admin/quote", { method: "POST", body: { ...s, bookingId: b.id } });
+      const delta = (quote.ok ? quote.totalCents : 0) - b.paidCents;
+      const conflictRows = (availability.conflicts || [])
+        .map((c) => `<li>${esc(c.unitName)} — ${esc(c.reference)} (${dfr(c.checkin)} → ${dfr(c.checkout)})</li>`)
+        .join("");
+      $("#edQuote").innerHTML = `
+        ${availability.available ? "" : `<div class="note bad"><b>Créneau indisponible.</b><ul>${conflictRows}</ul></div>`}
+        ${quote.ok ? `<table class="quote">
+            ${quote.lines.map((l) => `<tr><td>${esc(l.label)}</td><td class="r">${eur(l.amountCents)}</td></tr>`).join("")}
+            <tr class="tot"><td>Nouveau total</td><td class="r">${eur(quote.totalCents)}</td></tr>
+            <tr><td>Déjà payé (conservé)</td><td class="r">${eur(b.paidCents)}</td></tr>
+            <tr class="tot"><td>${delta >= 0 ? "Solde à encaisser" : "Avoir à rembourser (à faire à la main)"}</td>
+                <td class="r">${eur(Math.abs(delta))}</td></tr>
+          </table>` : `<div class="note bad">Devis impossible : ${esc((quote.errors || []).join(", "))}</div>`}`;
+      $("#edSave").disabled = !(quote.ok && availability.available);
+    } catch (e) {
+      toast(e.message, true);
+    }
+  };
+
+  $("#edSave").onclick = async () => {
+    const save = $("#edSave");
+    save.disabled = true;
+    try {
+      const res = await api(`/api/admin/bookings/${b.id}`, {
+        method: "PATCH",
+        body: {
+          ...stay(),
+          guest: {
+            firstName: $("#edFirst").value,
+            lastName: $("#edLast").value,
+            email: $("#edMail").value,
+          },
+        },
+      });
+      toast(
+        res.refundCents > 0
+          ? `Modifiée — avoir de ${eur(res.refundCents)} à rembourser à la main.`
+          : res.balanceCents > 0
+            ? `Modifiée — solde à encaisser : ${eur(res.balanceCents)}.`
+            : "Modifiée — rien à régler.",
+      );
+      modal.remove();
+      onDone();
+    } catch (e) {
+      save.disabled = false;
+      toast(e.message, true);
+    }
+  };
+
+  // Le devis d'ouverture décrit l'état actuel : on part de quelque chose.
+  $("#edCalc").click();
+}
+
 // --- Import elloha (phase 2) — CSV collé, simulation d'abord ----------------
 
 function openEllohaImport() {
@@ -1043,6 +1169,9 @@ const HISTORY_FR = {
   "booking.create": "Réservée en ligne par le client",
   "booking.create_manual": "Créée en vente manuelle",
   "booking.dates_updated": "Dates déplacées",
+  "booking.modify": "Réservation modifiée (dates / hébergement)",
+  "booking.modify_conflict": "Modification refusée — créneau déjà pris",
+  "booking.modify_guest": "Coordonnées du client corrigées",
   "email.abandon_reminder": "Relance de réservation abandonnée",
   "email.balance_reminder": "Relance du solde envoyée",
   "email.inbound": "Email entrant rattaché",
@@ -1072,7 +1201,11 @@ function historyWho(entry) {
 
 export async function openBooking(id) {
   const { booking: b, payments, emails, history, quote } = await api(`/api/admin/bookings/${id}`);
-  const balance = Math.max(0, b.totalCents - b.paidCents);
+  const delta = b.totalCents - b.paidCents;
+  const balance = Math.max(0, delta);
+  // Un trop-perçu ne doit pas disparaître derrière un « solde : 0 € » : après
+  // une modification à la baisse, c'est un avoir à rembourser à la main.
+  const refund = Math.max(0, -delta);
   const quoteRows = quote?.lines
     ? quote.lines.map((l) => `<tr><td>${esc(l.label)}</td><td class="r">${eur(l.amountCents)}</td></tr>`).join("") +
       `<tr class="tot"><td>Total</td><td class="r">${eur(b.totalCents)}</td></tr>`
@@ -1112,7 +1245,11 @@ export async function openBooking(id) {
       <div><label class="f">Client</label><b>${esc(b.guestName || "—")}</b><div class="small muted">${esc(b.guestEmail || "")}</div></div>
       <div><label class="f">Source</label><b>${sourceFr(b.source)}${b.channelLabel ? " · " + esc(b.channelLabel) : ""}</b></div>
       <div><label class="f">Payé / Total</label><b>${eur(b.paidCents)} / ${eur(b.totalCents)}</b></div>
-      <div><label class="f">Solde</label><b>${eur(balance)}</b>${b.balanceDueDate ? `<div class="small muted">échéance ${dfr(b.balanceDueDate)}</div>` : ""}</div>
+      <div><label class="f">${refund > 0 ? "À rembourser" : "Solde"}</label><b${refund > 0 ? ' style="color:var(--warn)"' : ""}>${eur(refund > 0 ? refund : balance)}</b>${
+        refund > 0
+          ? `<div class="small muted">trop-perçu — remboursement à faire à la main</div>`
+          : b.balanceDueDate ? `<div class="small muted">échéance ${dfr(b.balanceDueDate)}</div>` : ""
+      }</div>
     </div>
     ${b.guestNotes ? `<div class="note">Message du client : ${esc(b.guestNotes)}</div>` : ""}
     <div class="grid c2e mb">
@@ -1125,6 +1262,7 @@ export async function openBooking(id) {
     <div class="mb"><h3>Historique</h3>
       <table>${historyRows || `<tr><td class="muted">Rien à afficher.</td></tr>`}</table></div>
     <div class="row">
+      ${b.status !== "cancelled" ? `<button class="btn o sm" id="btnEdit">Modifier</button>` : ""}
       ${b.status === "pending" ? `<button class="btn sm" id="btnConfirm">Confirmer (paiement reçu hors ligne)</button>` : ""}
       ${b.status !== "cancelled" ? `<button class="btn o sm" id="btnPay">+ Paiement manuel</button>` : ""}
       ${b.status !== "cancelled" && balance > 0 ? `<button class="btn o sm" id="btnLink">Lien de paiement (${eur(balance)})</button>` : ""}
@@ -1134,6 +1272,8 @@ export async function openBooking(id) {
       <button class="btn o sm" id="btnNotes">Enregistrer les notes</button>
       ${b.status !== "cancelled" ? `<button class="btn warn sm right" id="btnCancel">Annuler la réservation</button>` : ""}
     </div>`);
+
+  modal.querySelector("#btnEdit")?.addEventListener("click", () => openEditBooking(b, () => { modal.remove(); openBooking(id); }));
 
   modal.querySelector("#btnNotes").onclick = async () => {
     await api(`/api/admin/bookings/${id}`, { method: "PATCH", body: { internalNotes: modal.querySelector("#notes").value } });

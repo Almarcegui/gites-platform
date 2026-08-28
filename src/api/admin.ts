@@ -83,6 +83,7 @@ import {
   listSeasons,
   listUnits,
   updateBookingNotes,
+  updateBookingStayAtomic,
   updateChecklistItem,
   updateFeed,
   updateGuest,
@@ -342,6 +343,53 @@ async function leadTimeBookings(db: D1Database, propertyId: number, year: number
  *
  *  Les conflits sont renvoyés nommés : au téléphone, « pris par PM-2026-004,
  *  Domaine entier » se dit, « indisponible » se subit. */
+/** Entier borné, NaN-safe. `Number("abc")` vaut NaN, et TOUTE comparaison avec
+ *  NaN est fausse : sans ce garde-fou, un `adults: "abc"` traversait le
+ *  contrôle de capacité (`NaN > max` est faux) et finissait lié en SQL
+ *  (contre-review Gemini, 2026-08-28). */
+function intOr(value: unknown, fallback: number, min: number): number {
+  const n = Math.floor(Number(value));
+  return Number.isFinite(n) ? Math.max(min, n) : fallback;
+}
+
+/** Les options d'une réservation, reconstruites depuis son devis enregistré.
+ *
+ *  `options_json` ne garde que des libellés et des montants : sans cette
+ *  reconstruction, recalculer un devis sans renvoyer les options les effacerait
+ *  en silence — le total chuterait et la plateforme annoncerait un avoir à
+ *  rembourser qui n'existe pas (contre-review Gemini, 2026-08-28).
+ *
+ *  Le libellé commence toujours par le nom de l'option ; la quantité d'une
+ *  option « à l'unité » se relit dans sa parenthèse. Une ligne qu'on n'arrive
+ *  PAS à rattacher fait échouer la modification : mieux vaut un refus explicite
+ *  qu'un prix silencieusement faux. */
+function optionsFromQuote(
+  optionsJson: string | null,
+  referential: { id: number; name: string; pricingMode: string }[],
+): { ok: true; options: { id: number; qty: number }[] } | { ok: false; unmatched: string[] } {
+  let lines: { label?: unknown }[] = [];
+  try {
+    const parsed: unknown = optionsJson ? JSON.parse(optionsJson) : [];
+    lines = Array.isArray(parsed) ? (parsed as { label?: unknown }[]) : [];
+  } catch {
+    lines = [];
+  }
+  const options: { id: number; qty: number }[] = [];
+  const unmatched: string[] = [];
+  for (const line of lines) {
+    const label = String(line?.label ?? "");
+    if (!label) continue;
+    const opt = referential.find((o) => label === o.name || label.startsWith(`${o.name} (`));
+    if (!opt) {
+      unmatched.push(label);
+      continue;
+    }
+    const qty = opt.pricingMode === "per_unit_qty" ? Number(/\((\d+)/.exec(label)?.[1] ?? 1) || 1 : 1;
+    options.push({ id: opt.id, qty });
+  }
+  return unmatched.length > 0 ? { ok: false, unmatched } : { ok: true, options };
+}
+
 /** Un conflit nommé : une réservation active (avec sa référence) ou un blocage
  *  manuel (avec son motif). `status = 'blocked'` distingue le second. */
 interface AvailabilityConflict {
@@ -360,6 +408,10 @@ async function checkAvailability(
   checkin: IsoDate,
   checkout: IsoDate,
   now: Date = new Date(),
+  // Modifier une réservation, c'est se comparer à tout le monde SAUF soi-même :
+  // sans cette exclusion, prolonger un séjour d'une nuit se heurterait à sa
+  // propre occupation (issue #73).
+  excludeBookingId?: number,
 ): Promise<{ available: boolean; conflicts: AvailabilityConflict[] }> {
   const [links, bookings, manualBlocks] = await Promise.all([
     listLinks(db, propertyId),
@@ -367,8 +419,9 @@ async function checkAvailability(
     manualBlocksInWindow(db, propertyId, checkin, checkout),
   ]);
   const nowSql = sqlNow(now);
+  const others = excludeBookingId ? bookings.filter((b) => b.id !== excludeBookingId) : bookings;
   const spans = [
-    ...bookings.map((b) => ({
+    ...others.map((b) => ({
       unitId: b.unitId,
       checkin: b.checkin,
       checkout: b.checkout,
@@ -379,7 +432,7 @@ async function checkAvailability(
   ];
   const available = isUnitFree(unitId, checkin, checkout, spans, links, nowSql);
   const blockers = blockingUnitIds(unitId, links);
-  const conflicts: AvailabilityConflict[] = bookings
+  const conflicts: AvailabilityConflict[] = others
     .filter(
       (b) =>
         blockers.has(b.unitId) &&
@@ -1395,17 +1448,181 @@ export function registerAdminRoutes(router: Router): void {
     return json({ ok: true });
   }));
 
-  router.patch("/api/admin/bookings/:id", guard(async (req, env, p) => {
+  /** Modifier une réservation SANS annuler-recréer (issue #73).
+   *
+   *  Trois choses peuvent bouger, indépendamment : le séjour (dates et/ou
+   *  logement), les coordonnées du client, les notes internes.
+   *
+   *  Le séjour passe par `updateBookingStayAtomic` : le créneau d'origine est
+   *  libéré et le nouveau pris par la MÊME instruction, sous le même garde-fou
+   *  que la création. Annuler puis recréer aurait rouvert l'ancien créneau le
+   *  temps de la bascule — et surtout perdu les paiements reçus et la preuve
+   *  d'acceptation des CGV, ce qui est précisément le geste que cette issue
+   *  supprime.
+   *
+   *  Le devis est recalculé sur les nouvelles dates. Le déjà-payé est
+   *  conservé : l'écart devient un solde à payer, ou un avoir à rembourser —
+   *  remboursement MANUEL, jamais déclenché par cette route (le back-office
+   *  l'affiche, un humain le traite dans Stripe).
+   */
+  router.patch("/api/admin/bookings/:id", guard(async (req, env, p, _url, execCtx) => {
+    const db = env.DB;
     const id = intParam(p.id, 0);
-    const body = await readJson<{ internalNotes?: string }>(req);
-    if (!body || typeof body.internalNotes !== "string") return apiError(400, "internalNotes attendu");
-    await updateBookingNotes(env.DB, id, body.internalNotes);
-    return json({ ok: true });
+    const body = await readJson<{
+      internalNotes?: string;
+      guest?: { firstName?: string; lastName?: string; email?: string; phone?: string; address?: string; country?: string };
+      unitId?: number;
+      checkin?: string;
+      checkout?: string;
+      adults?: number;
+      children?: number;
+      options?: { id: number; qty: number }[];
+      promoCode?: string | null;
+      paymentMode?: "deposit" | "full";
+    }>(req);
+    if (!body) return apiError(400, "corps JSON attendu");
+
+    const before = await getBooking(db, id);
+    if (!before) return apiError(404, "réservation inconnue");
+
+    const wantsStay = body.checkin != null || body.checkout != null || body.unitId != null
+      || body.adults != null || body.children != null || body.options != null || body.promoCode !== undefined;
+    const wantsGuest = body.guest != null;
+    const wantsNotes = typeof body.internalNotes === "string";
+    if (!wantsStay && !wantsGuest && !wantsNotes) return apiError(400, "rien à modifier");
+
+    // --- séjour ---------------------------------------------------------------
+    let quotePayload: unknown = null;
+    if (wantsStay) {
+      if (before.status === "cancelled") return apiError(409, "réservation annulée — elle ne se modifie plus");
+      const checkin = String(body.checkin ?? before.checkin);
+      const checkout = String(body.checkout ?? before.checkout);
+      if (!isIsoDate(checkin) || !isIsoDate(checkout) || checkin >= checkout) return apiError(400, "dates invalides");
+      const adults = intOr(body.adults ?? before.adults, before.adults, 1);
+      const children = intOr(body.children ?? before.children, before.children, 0);
+      const unitId = intOr(body.unitId ?? before.unitId, before.unitId, 1);
+
+      const ctx = await getQuoteContext(db, unitId);
+      if (!ctx) return apiError(404, "hébergement inconnu");
+      if (adults + children > ctx.unit.capacityMax) {
+        return apiError(409, `capacité dépassée : ${ctx.unit.name} accueille ${ctx.unit.capacityMax} personnes`);
+      }
+
+      // Options non renvoyées ⇒ on reconduit celles de la réservation, jamais
+      // « aucune » : un recalcul ne doit pas faire disparaître ce qui est vendu.
+      let options = body.options;
+      if (options === undefined) {
+        const carried = optionsFromQuote(before.optionsJson, ctx.options);
+        if (!carried.ok) {
+          return apiError(409, "options de cette réservation non reconnues — précise-les pour recalculer le devis", {
+            details: carried.unmatched,
+          });
+        }
+        options = carried.options;
+      }
+
+      const quote = quoteFromContext(
+        ctx,
+        {
+          unitId,
+          checkin,
+          checkout,
+          adults,
+          children,
+          options,
+          promoCode: body.promoCode !== undefined ? body.promoCode : before.promoCode,
+        },
+        todayInZone(),
+      );
+      if (!quote.ok) return apiError(409, "devis impossible sur ces dates", { details: quote.errors, minNights: quote.minNights });
+
+      const full = body.paymentMode === "full" || quote.balanceDueDate === null;
+      const outcome = await updateBookingStayAtomic(db, id, {
+        unitId,
+        checkin,
+        checkout,
+        adults,
+        children,
+        totalCents: quote.totalCents,
+        // « Attendu à la réservation », recalculé comme à la création. Le
+        // déjà-encaissé vit dans `payments` / `paid_cents` et n'y touche pas.
+        depositCents: Math.min(full ? quote.totalCents : quote.depositCents, quote.totalCents),
+        balanceDueDate: full ? null : quote.balanceDueDate,
+        quoteJson: JSON.stringify(quote),
+        optionsJson: JSON.stringify(quote.lines.filter((l) => l.kind === "option")),
+        promoCode: quote.promoApplied,
+      });
+      if (outcome === "conflict") {
+        // Le refus se nomme, et la réservation d'origine n'a pas bougé.
+        const conflicts = await checkAvailability(db, unitId, ctx.unit.propertyId, checkin, checkout, new Date(), id);
+        await audit(db, "admin", "booking.modify_conflict", `booking:${id}`, {
+          par: currentUser(req), vers: { unitId, checkin, checkout },
+        });
+        return apiError(409, "créneau indisponible — la réservation n'a pas été modifiée", { conflicts: conflicts.conflicts });
+      }
+      if (outcome !== "updated") return apiError(409, "réservation non modifiable");
+
+      // Avant / après dans le journal : c'est ce qu'on relit six mois plus tard.
+      await audit(db, "admin", "booking.modify", `booking:${id}`, {
+        par: currentUser(req),
+        avant: {
+          unitId: before.unitId, unitName: before.unitName, checkin: before.checkin, checkout: before.checkout,
+          adults: before.adults, children: before.children, totalCents: before.totalCents,
+        },
+        apres: {
+          unitId, unitName: ctx.unit.name, checkin, checkout,
+          adults, children, totalCents: quote.totalCents,
+        },
+      });
+      quotePayload = quote;
+      triggerBeds24Push(db, env, execCtx, ctx.unit.propertyId);
+      if (before.propertyId != null && before.propertyId !== ctx.unit.propertyId) {
+        triggerBeds24Push(db, env, execCtx, before.propertyId);
+      }
+    }
+
+    // --- coordonnées du client -------------------------------------------------
+    if (wantsGuest && before.guestId) {
+      const g = body.guest ?? {};
+      const clean = (v: unknown): string | null => {
+        const t = String(v ?? "").trim();
+        return t === "" ? null : t;
+      };
+      await updateGuest(db, before.guestId, {
+        firstName: clean(g.firstName),
+        lastName: clean(g.lastName) ?? undefined,
+        email: clean(g.email),
+        phone: clean(g.phone),
+        address: clean(g.address),
+        country: clean(g.country),
+      });
+      // L'« après » se relit en base : `updateGuest` ne remplace que les champs
+      // fournis (COALESCE), recomposer le payload afficherait des trous.
+      const refreshed = await getBooking(db, id);
+      await audit(db, "admin", "booking.modify_guest", `booking:${id}`, {
+        par: currentUser(req),
+        avant: { nom: before.guestName, email: before.guestEmail },
+        apres: { nom: refreshed?.guestName ?? null, email: refreshed?.guestEmail ?? null },
+      });
+    }
+
+    if (wantsNotes) await updateBookingNotes(db, id, String(body.internalNotes));
+
+    const after = await getBooking(db, id);
+    const delta = (after?.totalCents ?? 0) - (after?.paidCents ?? 0);
+    return json({
+      ok: true,
+      booking: after,
+      quote: quotePayload,
+      // Positif = solde à encaisser ; négatif = avoir à rembourser à la main.
+      balanceCents: Math.max(0, delta),
+      refundCents: Math.max(0, -delta),
+    });
   }));
 
   // Devis côté admin (vente manuelle)
   router.post("/api/admin/quote", guard(async (req, env) => {
-    const body = await readJson<QuoteBody>(req);
+    const body = await readJson<QuoteBody & { bookingId?: number }>(req);
     if (!body) return apiError(400, "corps JSON attendu");
     if (!isIsoDate(String(body.checkin)) || !isIsoDate(String(body.checkout)) || String(body.checkin) >= String(body.checkout)) {
       return apiError(400, "dates invalides");
@@ -1428,6 +1645,10 @@ export function registerAdminRoutes(router: Router): void {
       ctx.unit.propertyId,
       String(body.checkin),
       String(body.checkout),
+      new Date(),
+      // Devis de MODIFICATION : la réservation qu'on déplace ne se bloque pas
+      // elle-même (issue #73).
+      body.bookingId ? Math.floor(Number(body.bookingId)) : undefined,
     );
     return json({ unit: { id: ctx.unit.id, name: ctx.unit.name }, quote, availability });
   }));
