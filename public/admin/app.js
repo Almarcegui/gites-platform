@@ -1314,6 +1314,7 @@ const HISTORY_FR = {
   "booking.modify": "Réservation modifiée (dates / hébergement)",
   "booking.modify_conflict": "Modification refusée — créneau déjà pris",
   "booking.modify_guest": "Coordonnées du client corrigées",
+  "guest_register.record": "Occupants enregistrés à l'arrivée",
   "email.abandon_reminder": "Relance de réservation abandonnée",
   "email.balance_reminder": "Relance du solde envoyée",
   "email.inbound": "Email entrant rattaché",
@@ -1412,6 +1413,8 @@ export async function openBooking(id) {
       ${emailRows || `<tr><td colspan="4" class="muted">Aucun e-mail pour cette réservation.</td></tr>`}</table></div>
     <div class="mb"><h3>Historique</h3>
       <table>${historyRows || `<tr><td class="muted">Rien à afficher.</td></tr>`}</table></div>
+    <div class="mb"><h3>Registre des personnes hébergées</h3>
+      <div id="registerZone" class="small muted">Chargement…</div></div>
     <div class="row">
       ${b.status !== "cancelled" ? `<button class="btn o sm" id="btnEdit">Modifier</button>` : ""}
       ${b.status === "pending" ? `<button class="btn sm" id="btnConfirm">Confirmer (paiement reçu hors ligne)</button>` : ""}
@@ -1423,6 +1426,11 @@ export async function openBooking(id) {
       <button class="btn o sm" id="btnNotes">Enregistrer les notes</button>
       ${b.status !== "cancelled" ? `<button class="btn warn sm right" id="btnCancel">Annuler la réservation</button>` : ""}
     </div>`);
+
+  // Registre : chargé à part, APRÈS l'ouverture de la fiche. Ces données ne
+  // voyagent pas avec le reste de la réservation — elles ont leur propre
+  // requête, et la fiche reste utilisable si on ne les regarde pas.
+  renderGuestRegister(modal, id, b);
 
   modal.querySelector("#btnEdit")?.addEventListener("click", () => openEditBooking(b, () => { modal.remove(); openBooking(id); }));
 
@@ -1493,6 +1501,153 @@ export async function openBooking(id) {
       modal.remove();
       openBooking(id);
     };
+  });
+}
+
+// --- Registre des personnes hébergées (issue #84) --------------------------
+//
+// Saisie À L'ARRIVÉE, depuis la fiche réservation : le tunnel public ne
+// collecte rien de tout ça. Le registre est un journal — on n'y modifie
+// jamais une ligne, on en ajoute une qui la remplace.
+
+/** Champs d'un occupant. `values` pré-remplit, `index` numérote le bloc. */
+function occupantFields(index, values, idTypes) {
+  const v = values || {};
+  const opts = idTypes
+    .map((t) => `<option value="${esc(t.value)}"${v.idType === t.value ? " selected" : ""}>${esc(t.label)}</option>`)
+    .join("");
+  return `
+    <fieldset class="mb" data-occ="${index}">
+      <legend class="f">Occupant ${index + 1}</legend>
+      <div class="formgrid">
+        <div><label class="f">Nom</label><input data-k="lastName" value="${esc(v.lastName || "")}"></div>
+        <div><label class="f">Prénom</label><input data-k="firstName" value="${esc(v.firstName || "")}"></div>
+        <div><label class="f">Date de naissance</label><input data-k="birthDate" type="date" value="${esc(v.birthDate || "")}"></div>
+        <div><label class="f">Nationalité</label><input data-k="nationality" value="${esc(v.nationality || "")}"></div>
+        <div><label class="f">Type de pièce</label><select data-k="idType">${opts}</select></div>
+        <div><label class="f">Numéro de pièce</label><input data-k="idNumber" value="${esc(v.idNumber || "")}"></div>
+        <div><label class="f">Arrivée</label><input data-k="arrivalDate" type="date" value="${esc(v.arrivalDate || "")}"></div>
+        <div><label class="f">Départ</label><input data-k="departureDate" type="date" value="${esc(v.departureDate || "")}"></div>
+      </div>
+    </fieldset>`;
+}
+
+/** Lit les blocs d'un formulaire d'occupants → tableau prêt pour l'API. */
+function readOccupants(root, supersedesId = null) {
+  return [...root.querySelectorAll("[data-occ]")].map((box) => {
+    const entry = { supersedesId };
+    box.querySelectorAll("[data-k]").forEach((el) => { entry[el.dataset.k] = el.value.trim(); });
+    return entry;
+  });
+}
+
+/** Affiche le registre d'une réservation dans la fiche, et câble la saisie. */
+export async function renderGuestRegister(modal, bookingId, booking) {
+  const zone = modal.querySelector("#registerZone");
+  if (!zone) return;
+  let data;
+  try {
+    data = await api(`/api/admin/bookings/${bookingId}/guest-register`);
+  } catch {
+    zone.innerHTML = `<span class="muted">Registre indisponible.</span>`;
+    return;
+  }
+  const { entries, idTypes, prefill, retentionYears } = data;
+  const labelOf = (value) => (idTypes.find((t) => t.value === value) || {}).label || value;
+  const current = entries.filter((e) => e.supersededById == null);
+
+  const rows = entries
+    .map(
+      (e) => `<tr${e.supersededById != null ? ' class="muted"' : ""}>
+        <td>${esc(e.lastName)}</td><td>${esc(e.firstName)}</td>
+        <td class="small">${dfr(e.birthDate)}</td><td class="small">${esc(e.nationality)}</td>
+        <td class="small">${esc(labelOf(e.idType))}<div class="small muted">${esc(e.idNumber)}</div></td>
+        <td class="small">${dfr(e.arrivalDate)} → ${dfr(e.departureDate)}</td>
+        <td class="small muted">${esc(e.recordedBy || "—")}<div>${esc((e.recordedAt || "").slice(0, 16).replace("T", " "))}</div></td>
+        <td class="small">${
+          e.supersededById != null
+            ? `remplacée`
+            : `<button class="btn o sm" data-fix="${e.id}">Corriger</button>`
+        }</td></tr>`,
+    )
+    .join("");
+
+  zone.innerHTML = `
+    <table><tr><th>Nom</th><th>Prénom</th><th>Naissance</th><th>Nationalité</th><th>Pièce</th><th>Séjour</th><th>Saisi par</th><th></th></tr>
+      ${rows || `<tr><td colspan="8" class="muted">Aucun occupant enregistré.</td></tr>`}</table>
+    <div class="row" style="margin-top:8px">
+      ${booking.status !== "cancelled" ? `<button class="btn o sm" id="btnRegAdd">Saisir les occupants à l'arrivée</button>` : ""}
+      <span class="small muted">${current.length} occupant(s) au registre · journal non modifiable, conservation ${retentionYears} ans · exports dans Paramètres</span>
+    </div>`;
+
+  zone.querySelector("#btnRegAdd")?.addEventListener("click", () => {
+    const missing = Math.max(1, (prefill.occupants || 1) - current.length);
+    const sub = openModal(`
+      <h2>Occupants — ${esc(booking.reference)} <button class="x">×</button></h2>
+      <p class="small muted">Saisie à l'arrivée, sur présentation des pièces d'identité. Chaque enregistrement est définitif : une erreur se corrige en ajoutant une ligne qui remplace la précédente.</p>
+      <div class="row mb">
+        <div><label class="f">Nombre d'occupants</label><input id="regCount" class="inline-num" type="number" min="1" max="30" value="${missing}"></div>
+        <div class="n"><button class="btn o sm" id="regGen">Mettre à jour le formulaire</button></div>
+      </div>
+      <div id="regForm"></div>
+      <div class="row" style="margin-top:8px"><button class="btn sm" id="regSave">Enregistrer au registre</button></div>`);
+
+    // `keep` reprend ce qui est déjà tapé : changer le nombre d'occupants ne
+    // doit pas effacer les trois fiches qu'on vient de remplir à la main.
+    const build = (n, keep = []) => {
+      const blocks = [];
+      for (let i = 0; i < n; i++) {
+        // Seul le PREMIER bloc est pré-rempli, et seulement quand le registre
+        // est encore vide : le réservant est alors le plus probable des
+        // occupants. L'état civil reste vide — il se lit sur la pièce.
+        const seed = i === 0 && current.length === 0
+          ? { firstName: prefill.firstName, lastName: prefill.lastName, nationality: prefill.nationality }
+          : {};
+        const values = { ...seed, arrivalDate: prefill.arrivalDate, departureDate: prefill.departureDate, ...(keep[i] || {}) };
+        blocks.push(occupantFields(i, values, idTypes));
+      }
+      sub.querySelector("#regForm").innerHTML = blocks.join("");
+    };
+    build(missing);
+    sub.querySelector("#regGen").onclick = () => {
+      const n = Math.max(1, Math.min(30, Number(sub.querySelector("#regCount").value) || 1));
+      sub.querySelector("#regCount").value = n;
+      build(n, readOccupants(sub));
+    };
+    sub.querySelector("#regSave").onclick = async () => {
+      try {
+        await api(`/api/admin/bookings/${bookingId}/guest-register`, { method: "POST", body: { entries: readOccupants(sub) } });
+      } catch (e) {
+        return toast(e.message || "Enregistrement refusé", true);
+      }
+      toast("Occupants enregistrés au registre");
+      sub.remove();
+      renderGuestRegister(modal, bookingId, booking);
+    };
+  });
+
+  zone.querySelectorAll("[data-fix]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const line = entries.find((e) => e.id === Number(btn.dataset.fix));
+      const sub = openModal(`
+        <h2>Corriger une ligne du registre <button class="x">×</button></h2>
+        <p class="small muted">La ligne d'origine reste au registre : la correction ajoute une ligne qui la remplace.</p>
+        <div id="regFixForm">${occupantFields(0, line, idTypes)}</div>
+        <div class="row" style="margin-top:8px"><button class="btn sm" id="regFixSave">Enregistrer la correction</button></div>`);
+      sub.querySelector("#regFixSave").onclick = async () => {
+        try {
+          await api(`/api/admin/bookings/${bookingId}/guest-register`, {
+            method: "POST",
+            body: { entries: readOccupants(sub, line.id) },
+          });
+        } catch (e) {
+          return toast(e.message || "Correction refusée", true);
+        }
+        toast("Correction enregistrée");
+        sub.remove();
+        renderGuestRegister(modal, bookingId, booking);
+      };
+    });
   });
 }
 
