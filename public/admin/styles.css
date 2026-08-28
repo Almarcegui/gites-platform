@@ -268,3 +268,15 @@ i.lg.mn3y{background:#F3F1EC;border-top:3px solid var(--gold)}
 .fbar{display:inline-block;height:9px;border-radius:5px;background:var(--accent);min-width:2px;vertical-align:middle}
 tr.drop td{background:#FDF8EE}
 tr.drop .fbar{background:var(--warn)}
+
+/* --- blocages manuels (issue #74) : hachure + motif, distincte du blocage
+   par liaison (gris beige) pour qu'un blocage voulu ne se confonde pas avec
+   une conséquence calculée --- */
+.mblk{background:repeating-linear-gradient(45deg,#E8DCC8,#E8DCC8 4px,#F3EBDC 4px,#F3EBDC 8px);border:1px solid #D8C7A6;border-radius:3px;height:32px;line-height:30px;font-size:10.5px;color:#6B5B3E;padding:0 4px 0 6px;display:flex;align-items:center;gap:4px;overflow:hidden}
+.mblk-t{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600}
+.mblk-x{border:0;background:rgba(255,255,255,.6);color:#6B5B3E;border-radius:3px;cursor:pointer;font-size:14px;line-height:1;padding:2px 5px}
+.mblk-x:hover{background:#fff}
+.mblk-x:disabled{opacity:.4;cursor:default}
+.legend i.mblk-key{background:repeating-linear-gradient(45deg,#E8DCC8,#E8DCC8 3px,#F3EBDC 3px,#F3EBDC 6px);border:1px solid #D8C7A6}
+.cell[data-date]{cursor:cell}
+.cell.sel{background:#CFE0D2;box-shadow:inset 0 0 0 1px var(--accent)}

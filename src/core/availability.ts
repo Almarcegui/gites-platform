@@ -24,6 +24,31 @@ export interface BookingSpan {
   holdExpiresAt?: string | null; // 'YYYY-MM-DD HH:MM:SS' UTC (format sqlNow)
 }
 
+/** Blocage manuel (travaux, usage personnel) — issue #74. Ce n'est pas une
+ *  vente, mais c'est la même occupation de stock. */
+export interface ManualBlockSpan {
+  unitId: number;
+  checkin: IsoDate;
+  checkout: IsoDate;
+}
+
+/** Convertit des blocages manuels en périodes occupées, pour les faire entrer
+ *  dans le MÊME moteur de liaison que les réservations (`isUnitFree`,
+ *  `busySpans`). Un blocage occupe comme une réservation confirmée : ni option
+ *  qui expire, ni statut à interpréter.
+ *
+ *  Le passage par cette fonction est volontaire : c'est le seul endroit où la
+ *  question « un blocage occupe-t-il comme une résa ? » reçoit une réponse. */
+export function blocksAsSpans(blocks: ManualBlockSpan[]): BookingSpan[] {
+  return blocks.map((b) => ({
+    unitId: b.unitId,
+    checkin: b.checkin,
+    checkout: b.checkout,
+    status: "confirmed" as const,
+    holdExpiresAt: null,
+  }));
+}
+
 /** Une résa bloque-t-elle le stock à l'instant `now` (format sqlNow) ?
  *  confirmed → oui ; pending → tant que son option court ; cancelled → non. */
 export function isActiveBooking(b: Pick<BookingSpan, "status" | "holdExpiresAt">, now: string): boolean {
