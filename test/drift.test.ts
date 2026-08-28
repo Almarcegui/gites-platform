@@ -214,6 +214,20 @@ describe("signal 3 — message client sans réponse depuis plus de 48 h", () => 
     expect(signals).toEqual([]);
   });
 
+  it("sans la moindre attache, deux messages restent deux fils distincts", () => {
+    // Ni résa, ni client, ni adresse : les agglomérer sous une clé vide ferait
+    // passer une seule réponse pour la réponse à tout le monde.
+    const signals = detectUnansweredMessages(
+      [
+        message({ id: 1, guestId: null, fromEmail: null, receivedAt: agoHours(72) }),
+        message({ id: 2, guestId: null, fromEmail: null, receivedAt: agoHours(72), fromName: "Bea Lopez" }),
+        message({ id: 3, guestId: null, fromEmail: null, direction: "out", status: "traité", receivedAt: agoHours(2) }),
+      ],
+      NOW,
+    );
+    expect(signals).toHaveLength(2);
+  });
+
   it("les fils sont indépendants : un client servi n'excuse pas le client oublié", () => {
     const signals = detectUnansweredMessages(
       [
@@ -310,6 +324,28 @@ describe("collectDriftInput — lecture des tables existantes (aucune migration)
     expect(noRate.map((s) => s.detail).join(" ")).toContain("Le Domaine entier");
     // Tous les signaux pointent vers un écran du back-office (issue #48).
     expect(signals.every((s) => s.href.startsWith("#/"))).toBe(true);
+  });
+
+  it("composite « somme » : une composante désactivée sans tarif ne se cache pas", async () => {
+    // Une maison passe en maintenance et perd son tarif. Le Domaine entier se
+    // facture toujours en additionnant SES composantes — y compris celle-là.
+    // Si on l'oubliait, le domaine afficherait un prix valide mais amputé, et
+    // aucun signal ne le dirait : vente à prix cassé, en silence.
+    const now = new Date();
+    await db.prepare("UPDATE units SET active = 0 WHERE id = 2").run();
+    await db.prepare("DELETE FROM rate_rules WHERE unit_id = 2").run();
+    try {
+      const signals = detectDrift(await collectDriftInput(db, 1, now), now);
+      const noRate = signals.filter((s) => s.kind === "unit_no_rate");
+      expect(noRate.map((s) => s.detail).join(" ")).toContain("Le Domaine entier");
+      // La maison désactivée, elle, n'est plus vendable de toute façon.
+      expect(noRate.map((s) => s.detail).join(" ")).not.toContain("La Scierie");
+    } finally {
+      await db.prepare("UPDATE units SET active = 1 WHERE id = 2").run();
+      await db
+        .prepare("INSERT INTO rate_rules (unit_id, season_id, price_week_cents, price_weekend_cents, holiday_pct, min_nights) VALUES (2, NULL, 12000, 15000, 15, 2)")
+        .run();
+    }
   });
 
   it("un flux d'un AUTRE domaine ne pollue pas la carte du domaine courant", async () => {

@@ -1121,6 +1121,9 @@ export async function openNewSale() {
       generatePaymentLink: modal.querySelector("#nsLink").checked,
       internalNotes: modal.querySelector("#nsNote").value,
     };
+    // Verrou de soumission : sans lui, un double-clic part deux fois et la
+    // base rejette la seconde en 409 — un conflit fabriqué de toutes pièces.
+    modal.querySelector("#nsCreate").disabled = true;
     try {
       const res = await api("/api/admin/bookings", { method: "POST", body });
       const b = res.booking;
@@ -1132,6 +1135,11 @@ export async function openNewSale() {
       lockCreate("Réservation créée.");
       toast(`Réservation ${b.reference} créée`);
     } catch (e) {
+      // Échec de création — typiquement le 409 de l'INSERT atomique, quelqu'un
+      // ayant pris le créneau entre le devis et le clic. Laisser « Créneau
+      // libre » à l'écran ferait mentir la page et inviterait à recliquer :
+      // on referme et on force le recalcul, qui nommera le conflit.
+      lockCreate("Création refusée — recalcule le devis pour voir l'état réel du créneau.");
       toast(e.message, true);
     }
   };

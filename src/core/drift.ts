@@ -170,8 +170,10 @@ export interface MessageState {
 function threadKey(m: MessageState): string {
   if (m.bookingId) return `booking:${m.bookingId}`;
   if (m.guestId) return `guest:${m.guestId}`;
-  const address = m.direction === "out" ? m.toEmail : m.fromEmail;
-  return `email:${(address ?? "").toLowerCase()}`;
+  const address = (m.direction === "out" ? m.toEmail : m.fromEmail) ?? "";
+  // Sans la moindre attache, chaque message est son propre fil : les agglomérer
+  // sous une clé vide ferait passer une seule réponse pour la réponse à tous.
+  return address ? `email:${address.toLowerCase()}` : `orphelin:${m.id}`;
 }
 
 /** Fils dont le dernier message est un message CLIENT, toujours marqué

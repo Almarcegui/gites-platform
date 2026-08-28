@@ -2071,7 +2071,10 @@ export async function collectDriftInput(
     listRateRules(db, propertyId),
   ]);
   const activeUnits = units.filter((u) => u.active);
-  const physicalIds = new Set(activeUnits.filter((u) => !u.isComposite).map((u) => u.id));
+  // Composantes d'un composite : les unités physiques qu'il bloque, ACTIVES OU
+  // NON — exactement ce que fait `getQuoteContext`, donc exactement ce qui sera
+  // facturé. Filtrer les inactives ferait additionner un domaine amputé : un
+  // prix valide, mais minoré, et aucun signal pour le dire.
   const driftUnits: UnitRateTarget[] = activeUnits.map((u) => ({
     active: true,
     pricingUnit: {
@@ -2081,7 +2084,7 @@ export async function collectDriftInput(
       cleaningFeeCents: u.cleaningFeeCents,
       components: u.isComposite
         ? links
-            .filter((l) => l.unitId === u.id && physicalIds.has(l.blocksUnitId))
+            .filter((l) => l.unitId === u.id && units.some((x) => x.id === l.blocksUnitId && !x.isComposite))
             .map((l) => {
               const c = units.find((x) => x.id === l.blocksUnitId);
               return { id: l.blocksUnitId, name: c?.name ?? "", cleaningFeeCents: c?.cleaningFeeCents ?? 0 };
@@ -2099,6 +2102,10 @@ export async function collectDriftInput(
   // 3. Messages : un fil se juge sur son dernier échange, donc on lit large
   //    autour du seuil (un mois) plutôt que la seule fenêtre de 48 h — sinon la
   //    réponse de l'équipe, plus ancienne que la question, sortirait du cadre.
+  //    Tri DESCENDANT sous le plafond : si le mois dépasse 500 messages, ce sont
+  //    les PLUS RÉCENTS qu'il faut garder. Trier à l'endroit ferait deux dégâts
+  //    d'un coup — la question d'hier jamais vue, et la réponse d'hier hors
+  //    cadre, donc un fil clos annoncé en souffrance. Le détecteur retrie.
   const since = sqlNow(new Date(now.getTime() - Math.max(30 * 24, MESSAGE_UNANSWERED_HOURS * 4) * 3_600_000));
   const messageRows = await db
     .prepare(
@@ -2106,7 +2113,7 @@ export async function collectDriftInput(
               m.booking_id, m.guest_id, b.reference AS booking_reference
          FROM messages m LEFT JOIN bookings b ON b.id = m.booking_id
         WHERE m.property_id = ?1 AND m.received_at >= ?2
-        ORDER BY m.id ASC LIMIT 500`,
+        ORDER BY m.id DESC LIMIT 500`,
     )
     .bind(propertyId, since)
     .all();
