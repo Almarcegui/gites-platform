@@ -407,7 +407,8 @@ export async function refreshBadges() {
       const h = d.health || {};
       next.today +=
         (a.overdueBalances?.length || 0) + (a.feedAlerts?.length || 0) +
-        (h.orphanPayments?.length || 0) + (h.failedEmails?.length || 0) + (h.beds24Stale ? 1 : 0);
+        (h.orphanPayments?.length || 0) + (h.failedEmails?.length || 0) + (h.beds24Stale ? 1 : 0) +
+        (h.drift?.length || 0);
       next.sales += (a.activeHolds?.length || 0) + (d.kpis?.balanceDueCount || 0);
       next.messages += a.newEmails || 0;
     }
@@ -551,6 +552,12 @@ registerView("dash", "Tableau de bord", async (root) => {
     santeRows.push(`<tr><td><span class="tag t-mut">Technique</span></td>
       <td>${esc(e.action)}${e.entity ? ` <span class="muted small">${esc(e.entity)}</span>` : ""} — ${esc((e.createdAt || "").slice(0, 16))}</td></tr>`);
   }
+  // Dérives LENTES (issue #71) : rien n'a échoué, il ne se passe simplement
+  // plus rien. Chaque signal porte le lien de l'écran où on agit (issue #48).
+  for (const d of h.drift || []) {
+    santeRows.push(`<tr class="clickable" data-goto="${esc(d.href)}"><td><span class="tag t-warn">${esc(d.label)}</span></td>
+      <td>${esc(d.detail)}</td></tr>`);
+  }
 
   root.innerHTML = `
     <div class="grid c4 mb">
@@ -581,6 +588,11 @@ registerView("dash", "Tableau de bord", async (root) => {
       }
     </div>`;
   root.querySelectorAll("[data-booking]").forEach((tr) => tr.addEventListener("click", () => openBooking(Number(tr.dataset.booking))));
+  root.querySelectorAll("[data-goto]").forEach((tr) =>
+    tr.addEventListener("click", () => {
+      location.hash = tr.dataset.goto;
+    }),
+  );
 });
 
 // --- Tableau de bord « Tous les domaines » : tous mes biens d'un coup d'œil --
@@ -1024,20 +1036,62 @@ export async function openNewSale() {
     promoCode: modal.querySelector("#nsPromo").value.trim() || null,
   });
 
+  // « Créer » n'est ouvert que par un devis À JOUR sur un créneau LIBRE
+  // (issue #70). `quoted` mémorise l'empreinte exacte du devis affiché :
+  // dès qu'un champ qui change le prix ou la disponibilité bouge, l'empreinte
+  // ne correspond plus et le bouton se referme. Les champs client (nom, email,
+  // note…) n'entrent pas dans l'empreinte : ils ne changent ni l'un ni l'autre.
+  let quoted = null;
+  let created = false;
+  const lockCreate = (hint) => {
+    quoted = null;
+    modal.querySelector("#nsCreate").disabled = true;
+    modal.querySelector("#nsHint").textContent = hint;
+  };
+  const onQuoteFieldChange = () => {
+    if (quoted === null) return;
+    if (JSON.stringify(collectBody()) !== quoted) lockCreate("Un champ a changé — recalcule le devis avant de créer.");
+  };
+  modal.addEventListener("input", onQuoteFieldChange);
+  modal.addEventListener("change", onQuoteFieldChange);
+
+  const conflictLine = (c) =>
+    `${esc(c.reference)} — ${esc(c.unitName)}, ${dfr(c.checkin)} → ${dfr(c.checkout)}` +
+    `${c.status === "pending" ? " (option en cours)" : ""}${c.viaLink ? " — blocage par liaison" : ""}`;
+
   modal.querySelector("#nsQuote").onclick = async () => {
     const body = collectBody();
     if (!body.checkin || !body.checkout) return toast("Choisis les dates", true);
+    const signature = JSON.stringify(body);
     try {
-      const { quote } = await api("/api/admin/quote", { method: "POST", body });
+      const { quote, availability } = await api("/api/admin/quote", { method: "POST", body });
       const zone = modal.querySelector("#nsQuoteZone");
       if (!quote.ok) {
         zone.innerHTML = `<div class="note bad">Devis impossible : ${quote.errors.includes("min_nights") ? `minimum ${quote.minNights} nuits sur ces dates` : esc(quote.errors.join(", "))}</div>`;
-        modal.querySelector("#nsCreate").disabled = true;
+        lockCreate("Devis impossible sur ces dates.");
         return;
       }
-      zone.innerHTML = `<table class="quote">${quote.lines.map((l) => `<tr><td>${esc(l.label)}</td><td class="r">${eur(l.amountCents)}</td></tr>`).join("")}
+      // Disponibilité annoncée AVANT le clic — au téléphone, découvrir le
+      // conflit au moment de créer, c'est le découvrir devant le client.
+      const avail = availability || { available: true, conflicts: [] };
+      const availBlock = avail.available
+        ? `<div class="note ok">✅ Créneau libre pour cet hébergement (liaisons comprises).</div>`
+        : `<div class="note bad"><b>Créneau indisponible</b> — déjà pris par :<ul style="margin:6px 0 0 18px">${(avail.conflicts || [])
+            .map((c) => `<li>${conflictLine(c)}</li>`)
+            .join("")}</ul></div>`;
+      zone.innerHTML = `${availBlock}
+        <table class="quote">${quote.lines.map((l) => `<tr><td>${esc(l.label)}</td><td class="r">${eur(l.amountCents)}</td></tr>`).join("")}
         <tr class="tot"><td>Total${quote.balanceDueDate ? ` — arrhes ${eur(quote.depositCents)}, solde ${dfr(quote.balanceDueDate)}` : " (paiement intégral)"}</td><td class="r">${eur(quote.totalCents)}</td></tr></table>
         ${quote.warnings.includes("promo_invalid") ? `<div class="note bad">Code promo invalide — devis calculé sans le code.</div>` : ""}`;
+      if (!avail.available) {
+        lockCreate("Créneau indisponible — change les dates ou l'hébergement.");
+        return;
+      }
+      if (created) {
+        lockCreate("Réservation déjà créée — ferme la fenêtre pour en saisir une autre.");
+        return;
+      }
+      quoted = signature;
       modal.querySelector("#nsCreate").disabled = false;
       modal.querySelector("#nsHint").textContent = "";
     } catch (e) {
@@ -1048,6 +1102,12 @@ export async function openNewSale() {
   modal.querySelector("#nsCreate").onclick = async () => {
     const lastName = modal.querySelector("#nsLast").value.trim();
     if (lastName.length < 2) return toast("Nom du client requis", true);
+    // Ceinture et bretelles : si l'empreinte a bougé entre le dernier
+    // recalcul et le clic, on refuse plutôt que de vendre un devis périmé.
+    if (quoted === null || JSON.stringify(collectBody()) !== quoted) {
+      lockCreate("Le devis n'est plus à jour — recalcule-le.");
+      return toast("Recalcule le devis avant de créer", true);
+    }
     const body = {
       ...collectBody(),
       guest: {
@@ -1068,7 +1128,8 @@ export async function openNewSale() {
         ✅ Réservation <b>${esc(b.reference)}</b> créée (${esc(b.status === "confirmed" ? "confirmée" : "option 72 h")}).
         ${res.paymentUrl ? `<br>Lien de paiement : <span class="mono copy">${esc(res.paymentUrl)}</span>` : ""}</div>`;
       modal.querySelector("#nsResult .copy")?.addEventListener("click", () => copyText(res.paymentUrl));
-      modal.querySelector("#nsCreate").disabled = true;
+      created = true;
+      lockCreate("Réservation créée.");
       toast(`Réservation ${b.reference} créée`);
     } catch (e) {
       toast(e.message, true);
