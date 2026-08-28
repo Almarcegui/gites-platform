@@ -12,6 +12,7 @@ import {
   type Season,
   type UnitPricingInfo,
 } from "../src/core/pricing";
+import { addDays } from "../src/core/dates";
 
 // --- Fixtures : miroir du seed Pré Moré -------------------------------------
 const SEASONS: Season[] = [
@@ -535,7 +536,23 @@ describe("garde-fous", () => {
     const lundi = computeQuote(baseRequest({ rateRules: rules })); // 02/03 = lundi
     expect(lundi.ok).toBe(false);
     expect(lundi.errors).toContain("checkin_day");
+    expect(lundi.checkinDays).toEqual([5, 6]);
     const vendredi = computeQuote(baseRequest({ rateRules: rules, checkin: "2026-03-06", checkout: "2026-03-08" }));
     expect(vendredi.ok).toBe(true);
+  });
+
+  it("composite 'sum' : deux composantes aux jours d'arrivée INCOMPATIBLES ne laissent aucune arrivée", () => {
+    // Le piège : l'intersection est vide. La traiter comme « aucune contrainte »
+    // rouvrirait le séjour n'importe quel jour — un surbooking de règle.
+    const rules: RateRule[] = [
+      { id: 51, unitId: 1, seasonId: null, priceWeekCents: 18000, priceWeekendCents: 22000, holidayPct: 0, minNights: 1, checkinDays: [6] },
+      { id: 52, unitId: 2, seasonId: null, priceWeekCents: 12000, priceWeekendCents: 15000, holidayPct: 0, minNights: 1, checkinDays: [5] },
+    ];
+    for (const checkin of ["2026-03-06", "2026-03-07", "2026-03-09"]) {
+      const q = computeQuote(baseRequest({ unit: DOMAINE, rateRules: rules, checkin, checkout: addDays(checkin, 2), adults: 17 }));
+      expect(q.ok).toBe(false);
+      expect(q.errors).toContain("checkin_day");
+      expect(q.checkinDays).toEqual([]);
+    }
   });
 });

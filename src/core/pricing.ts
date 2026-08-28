@@ -284,12 +284,17 @@ export interface DayRate {
   overrideMinNights: number | null;
 }
 
-/** Intersection de deux jeux de jours d'arrivée autorisés — `null` signifie
- *  « aucune contrainte » et se laisse donc absorber par l'autre. Un composite
- *  « somme » n'accepte une arrivée que si TOUTES ses composantes l'acceptent. */
+/** Intersection de deux jeux de jours d'arrivée autorisés. Un composite
+ *  « somme » n'accepte une arrivée que si TOUTES ses composantes l'acceptent.
+ *
+ *  Trois états à ne pas confondre : `null` = aucune contrainte (se laisse
+ *  absorber), une liste non vide = ces jours-là, et une liste VIDE = plus aucun
+ *  jour possible. Confondre les deux derniers effacerait une impossibilité :
+ *  deux composantes aux règles incompatibles (l'une samedi, l'autre vendredi)
+ *  redeviendraient réservables n'importe quel jour. */
 function intersectCheckinDays(a: number[] | null, b: number[] | null): number[] | null {
-  if (!b || b.length === 0) return a;
-  if (!a || a.length === 0) return [...b];
+  if (b == null || b.length === 0) return a;
+  if (a == null) return [...b];
   return a.filter((d) => b.includes(d));
 }
 
@@ -512,7 +517,8 @@ export function computeQuote(req: QuoteRequest): Quote {
   if (nights < minNights) errors.push("min_nights");
   let checkinDays: number[] | null = null;
   for (const b of breakdowns) checkinDays = intersectCheckinDays(checkinDays, b.arrivalCheckinDays);
-  if (checkinDays && checkinDays.length > 0 && !checkinDays.includes(dayOfWeek(req.checkin))) {
+  // Liste vide = aucune arrivée possible : `includes` est faux, l'erreur tombe.
+  if (checkinDays != null && !checkinDays.includes(dayOfWeek(req.checkin))) {
     errors.push("checkin_day");
   }
 

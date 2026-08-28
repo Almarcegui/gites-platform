@@ -22,6 +22,13 @@ const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const dow = (iso) => new Date(iso + "T12:00:00Z").getUTCDay(); // 0 = dimanche
 const JOURS = ["dimanche", "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi"];
 
+/** Règle d'arrivée en clair. Une liste VIDE n'est pas « aucune contrainte » :
+ *  c'est « plus aucune arrivée possible » (règles de saison incompatibles). */
+function arrivalLabel(days) {
+  const label = checkinDaysLabel(days);
+  return label ? `arrivée ${label}` : "aucune arrivée possible";
+}
+
 /** « le samedi », « le vendredi ou le samedi » — dire la règle, pas la subir. */
 function checkinDaysLabel(days) {
   const names = [...new Set(days ?? [])].filter((d) => d >= 0 && d <= 6)
@@ -227,14 +234,17 @@ async function renderCalendar() {
     const perUnit = data.units.map((u) => u.days[i]);
     const date = perUnit[0].date;
     const free = perUnit.filter((d) => d.available && d.priceCents != null);
-    const restricted = free.filter((d) => d.checkinDays && d.checkinDays.length);
+    // `checkinDays` a trois états côté serveur : null = aucune contrainte,
+    // liste = ces jours-là, liste VIDE = aucune arrivée possible. L'agrégat est
+    // une UNION : il suffit qu'un hébergement libre accepte le jour.
+    const restricted = free.filter((d) => d.checkinDays != null);
     days.push({
       date,
       past: perUnit[0].past,
       available: free.length > 0,
       minPrice: free.length ? Math.min(...free.map((d) => d.priceCents)) : null,
       minNights: free.length ? Math.min(...free.map((d) => d.minNights || 1)) : null,
-      // null = aucun hébergement n'impose de jour d'arrivée
+      // null = au moins un hébergement libre n'impose aucun jour d'arrivée
       arrivalDays: free.length && restricted.length === free.length
         ? [...new Set(restricted.flatMap((d) => d.checkinDays))].sort((a, b) => a - b)
         : null,
@@ -256,7 +266,7 @@ async function renderCalendar() {
     const mn = !d.past && d.available && d.minNights > 1 ? `<span class="mn">min ${d.minNights} n</span>` : "";
     const hints = d.past || !d.available ? [] : [
       d.minNights > 1 ? `${d.minNights} nuits minimum` : "",
-      d.arrivalDays != null ? `arrivée ${checkinDaysLabel(d.arrivalDays)}` : "",
+      d.arrivalDays != null ? arrivalLabel(d.arrivalDays) : "",
     ].filter(Boolean);
     const title = hints.length ? ` title="${esc(hints.join(" · "))}"` : "";
     html += `<button type="button" class="${cls}" data-date="${d.date}"${title} ${d.past ? "disabled" : ""}>
@@ -293,8 +303,8 @@ function renderCalRules(days) {
     .map((s) => {
       const parts = [];
       if (s.minNights > 1) parts.push(`<b>${s.minNights} nuits minimum</b>`);
-      if (s.arrivalDays != null) parts.push(`arrivée ${esc(checkinDaysLabel(s.arrivalDays))}`);
-      return `<span class="rule">${parts.join(", ")} ${period(s)}</span>`;
+      if (s.arrivalDays != null) parts.push(esc(arrivalLabel(s.arrivalDays)));
+      return `<span class="rule">${parts.join(", ")} ${esc(period(s))}</span>`;
     })
     .join(" · ");
 }
@@ -367,7 +377,10 @@ function unavailableReason(u, nights) {
     return `Séjour trop court : ${q.minNights} nuits minimum à ces dates (vous en avez demandé ${nights})`;
   }
   if (q && !q.ok && q.errors.includes("checkin_day")) {
-    return `Arrivée possible uniquement ${checkinDaysLabel(q.checkinDays)} à ces dates`;
+    const jours = checkinDaysLabel(q.checkinDays);
+    return jours
+      ? `Arrivée possible uniquement ${jours} à ces dates`
+      : "Aucun jour d'arrivée n'est autorisé à ces dates";
   }
   if (q && !q.ok && q.errors.includes("no_rate")) return "Tarifs pas encore publiés pour ces dates";
   if (q && !q.ok) return "Non réservable en ligne sur ces dates";

@@ -224,6 +224,26 @@ describe("neutralité vis-à-vis du plafond anti-abus (#6 / #68)", () => {
   });
 });
 
+describe("la reprise reste bornée (#68)", () => {
+  it("une boucle de reprises finit en 429 : pas de sessions de paiement à l'infini", async () => {
+    const hold = await poserHold();
+    let dernier = 200;
+    // La création a déjà consommé une tentative ; le plafond est de 10.
+    for (let i = 0; i < 12 && dernier === 200; i += 1) {
+      dernier = (await call("POST", "/api/public/bookings", bookingBody(), hold.cookie)).status;
+    }
+    expect(dernier).toBe(429);
+    const paiements = await db.prepare("SELECT COUNT(*) AS n FROM payments").first<{ n: number }>();
+    expect(paiements?.n).toBeLessThanOrEqual(10);
+    // Le hold n'est pas perdu pour autant : il court toujours.
+    const encore = await db
+      .prepare("SELECT status FROM bookings WHERE reference = ?1")
+      .bind(hold.data.reference)
+      .first<{ status: string }>();
+    expect(encore?.status).toBe("pending");
+  });
+});
+
 describe("le cookie de session ne se devine pas (#68)", () => {
   it("une signature forgée ne donne ni la disponibilité, ni la réservation", async () => {
     const hold = await poserHold();

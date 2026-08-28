@@ -19,7 +19,8 @@ export interface NightOption {
   /** minimum de nuits imposé si le séjour COMMENCE cette nuit ;
    *  null = aucun tarif ne couvre le jour, donc pas de séjour possible */
   minNights: number | null;
-  /** jours d'arrivée autorisés (0=dim … 6=sam) ; null = aucune contrainte */
+  /** jours d'arrivée autorisés (0=dim … 6=sam) ; null = aucune contrainte,
+   *  liste vide = aucune arrivée possible (règles de saison incompatibles) */
   checkinDays: number[] | null;
 }
 
@@ -29,10 +30,11 @@ export interface StaySuggestion {
   nights: number;
 }
 
-/** Ce jour est-il une arrivée autorisée par la règle de saison ? */
+/** Ce jour est-il une arrivée autorisée par la règle de saison ?
+ *  `null` = aucune contrainte ; liste vide = aucune arrivée possible. */
 export function isAllowedCheckin(day: Pick<NightOption, "date" | "checkinDays">): boolean {
   const days = day.checkinDays;
-  if (!days || days.length === 0) return true;
+  if (days == null) return true;
   return days.includes(dayOfWeek(day.date));
 }
 

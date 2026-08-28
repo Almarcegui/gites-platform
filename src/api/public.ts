@@ -72,6 +72,15 @@ const SUGGEST_DAYS_AFTER = 45;
 /** Nombre de plages proposées — « une ou deux », pas une liste à trier. */
 const SUGGEST_MAX = 2;
 
+/** Sessions de paiement tolérées sur UNE même option (issue #68).
+ *
+ *  Une reprise ne crée aucune réservation : elle échappe donc, par
+ *  construction, aux deux plafonds de l'issue #6. Sans borne, un porteur de
+ *  cookie valide pourrait boucler sur la reprise et faire ouvrir autant de
+ *  sessions Stripe. Dix tentatives couvrent très large un vrai client (carte
+ *  refusée, retour arrière, changement de navigateur). */
+const MAX_HOLD_CHECKOUTS = 10;
+
 interface StayParams {
   checkin: IsoDate;
   checkout: IsoDate;
@@ -569,10 +578,21 @@ export function registerPublicRoutes(router: Router): void {
         const dueNow = fullNow ? q.totalCents : q.depositCents;
         const sameGuest = (own.guestEmail ?? "").toLowerCase() === email.toLowerCase();
         if (q.ok && sameGuest && own.quoteJson === JSON.stringify(q) && own.depositCents === dueNow) {
+          const attempts = await listPayments(db, { bookingId: own.id });
+          if (attempts.length >= MAX_HOLD_CHECKOUTS) {
+            await audit(db, "public", "booking.rate_limited", `booking:${own.id}`, {
+              reason: "resume_burst", reference: own.reference, attempts: attempts.length,
+            });
+            return apiError(
+              429,
+              "Trop de tentatives de paiement sur cette réservation. Reprenez-la depuis le lien reçu par email, ou contactez-nous : nous la finalisons pour vous.",
+              { code: "too_many_resumes" },
+            );
+          }
           // Les tentatives de paiement précédentes sont soldées, comme sur la
           // reprise depuis le voucher (un paiement qui aboutirait quand même
           // reste honoré par le webhook, qui travaille sur l'id de session).
-          for (const pay of (await listPayments(db, { bookingId: own.id })).filter((x) => x.status === "pending")) {
+          for (const pay of attempts.filter((x) => x.status === "pending")) {
             await markPaymentStatus(db, pay.id, "failed");
           }
           await audit(db, "public", "booking.hold_resumed", `booking:${own.id}`, {

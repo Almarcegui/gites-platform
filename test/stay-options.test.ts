@@ -4,7 +4,7 @@
 // suggestion doit remplir. Le pendant côté API (recherche 3 nuits en haute
 // saison) vit dans test/tunnel-min-nuits.test.ts.
 import { describe, expect, it } from "vitest";
-import { checkinDaysLabel, isBookableStay, suggestStays, type NightOption } from "../src/core/stay-options";
+import { checkinDaysLabel, isAllowedCheckin, isBookableStay, suggestStays, type NightOption } from "../src/core/stay-options";
 import { addDays, dayOfWeek } from "../src/core/dates";
 
 /** Calendrier synthétique : 60 jours à partir d'un lundi, tout libre. */
@@ -70,6 +70,15 @@ describe("suggestStays — jours d'arrivée imposés", () => {
     expect(out.length).toBeGreaterThan(0);
     expect(out.every((s) => dayOfWeek(s.checkin) === 6)).toBe(true);
     expect(out[0]?.checkin).toBe("2026-01-17"); // le samedi le plus proche
+  });
+
+  it("une liste de jours VIDE veut dire « aucune arrivée », pas « aucune contrainte »", () => {
+    // Cas d'un composite dont deux composantes imposent des jours d'arrivée
+    // incompatibles : l'intersection est vide, plus rien n'est réservable.
+    const days = calendar(LUNDI, 30, () => ({ minNights: 2, checkinDays: [] }));
+    expect(isAllowedCheckin(days[0]!)).toBe(false);
+    expect(suggestStays(days, { checkin: "2026-01-12", nights: 2 })).toEqual([]);
+    expect(isBookableStay(days, "2026-01-12", "2026-01-14")).toBe(false);
   });
 
   it("un jour sans tarif n'est jamais une arrivée, ni une nuit de séjour", () => {
