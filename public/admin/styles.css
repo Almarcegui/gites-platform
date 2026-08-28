@@ -81,6 +81,12 @@ td.r,th.r{text-align:right}
 .t-ok{background:#E6EFE8;color:var(--ok)} .t-warn{background:#FBF0DE;color:var(--warn)}
 .t-bad{background:#F8E7E7;color:var(--bad)} .t-mut{background:#EEECE6;color:var(--muted)}
 .t-chan{background:#EEE7FA;color:var(--chan)}
+/* Badges temporels (issue #53) : ils cohabitent avec le badge financier, d'où
+   l'espacement entre deux pastilles. L'or est déjà la couleur « attention » du
+   back-office (compteur de navigation, onglet actif) — pas une 6e teinte. */
+.t-now{background:var(--gold);color:#3A2F10} .t-soon{background:#FBF1D9;color:#7A5A12}
+.tag + .tag{margin-left:4px}
+
 
 /* --- boutons & formulaires --- */
 .btn{background:var(--accent);color:#fff;border:none;border-radius:5px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit}

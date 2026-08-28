@@ -2,6 +2,7 @@
 // app.js : socle (état, client API, helpers UI, routeur) + vues de pilotage.
 // Les vues de configuration vivent dans config.js.
 
+import { stayBadge } from "./badges.js";
 import { registerCalendarView } from "./calendar.js";
 import { registerConfigViews } from "./config.js";
 
@@ -246,16 +247,23 @@ export function copyText(text) {
   );
 }
 
-export function bookingTag(b, today = todayIso()) {
+export function bookingTag(b, today = todayIso(), movement = null) {
   if (b.status === "cancelled") return `<span class="tag t-mut">Annulée</span>`;
-  if (b.status === "pending") return `<span class="tag t-warn">Option (paiement)</span>`;
-  if (b.source === "ical") return `<span class="tag t-chan">${esc(b.channelLabel || "Canal externe")}</span>`;
-  if (b.checkout <= today) return `<span class="tag t-mut">Terminée</span>`;
+  // Où en est le séjour (issue #53) — préfixe le badge financier plutôt que de
+  // le remplacer : « arrive demain » et « solde dû » sont deux informations
+  // qu'on veut lire ensemble, pas l'une à la place de l'autre. `movement`
+  // restreint la lecture à l'arrivée ou au départ (tableau de bord).
+  const when = stayBadge(b, today, movement);
+  if (b.status === "pending") return `${when}<span class="tag t-warn">Option (paiement)</span>`;
+  if (b.source === "ical") return `${when}<span class="tag t-chan">${esc(b.channelLabel || "Canal externe")}</span>`;
+  // Un départ du jour n'est pas encore « Terminée » : le ménage reste à faire
+  // et le solde reste encaissable. On laisse donc passer au badge financier.
+  if (b.checkout <= today && !when) return `<span class="tag t-mut">Terminée</span>`;
   const balance = b.totalCents - b.paidCents;
-  if (b.totalCents > 0 && balance <= 0) return `<span class="tag t-ok">Soldée</span>`;
-  if (b.paidCents > 0) return `<span class="tag t-warn">Solde dû ${eur(balance)}</span>`;
-  if (b.totalCents > 0) return `<span class="tag t-bad">Impayée</span>`;
-  return `<span class="tag t-mut">—</span>`;
+  if (b.totalCents > 0 && balance <= 0) return `${when}<span class="tag t-ok">Soldée</span>`;
+  if (b.paidCents > 0) return `${when}<span class="tag t-warn">Solde dû ${eur(balance)}</span>`;
+  if (b.totalCents > 0) return `${when}<span class="tag t-bad">Impayée</span>`;
+  return `${when}<span class="tag t-mut">—</span>`;
 }
 
 const SOURCE_FR = { direct: "Site", manual: "Manuelle", ical: "iCal", import: "Import" };
@@ -510,7 +518,7 @@ registerView("dash", "Tableau de bord", async (root) => {
       (m) => `<tr class="clickable" data-booking="${m.id}">
         <td>${m.kind === "arrivée" ? "→" : "←"} ${m.kind === "arrivée" ? dshort(m.checkin) : dshort(m.checkout)}</td>
         <td>${esc(m.unitName)}</td><td>${esc(m.guestName || "—")}</td><td>${m.persons}</td>
-        <td>${bookingTag({ ...m, source: "direct" }, data.today)}</td></tr>`,
+        <td>${bookingTag({ ...m, source: "direct" }, data.today, m.kind === "arrivée" ? "arrival" : "departure")}</td></tr>`,
     )
     .join("");
 
