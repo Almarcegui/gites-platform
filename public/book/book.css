@@ -62,7 +62,11 @@ table.quote{width:100%;border-collapse:collapse;font-size:14px}
 @media(max-width:560px){.formgrid{grid-template-columns:1fr}}
 .footer-note{font-size:12px;color:var(--muted);text-align:center;margin-top:14px}
 .center{text-align:center}
-.cgv-box{max-height:180px;overflow-y:auto;background:#FAF9F6;border:1px solid var(--line);border-radius:6px;padding:12px;font-size:12.5px;white-space:pre-wrap;color:#4b5563}
+.cgv-box{max-height:180px;overflow-y:auto;background:#FAF9F6;border:1px solid var(--line);border-radius:6px;padding:12px;font-size:12.5px;color:#4b5563}
+.cgv-box p{margin:0 0 8px}
+.cgv-box p:last-child{margin-bottom:0}
+.cgv-box .cgv-h{margin-top:12px;color:#1f2937}
+.cgv-box .cgv-h:first-child{margin-top:0}
 .big-check{font-size:44px;text-align:center;margin:10px 0}
 .mono{font-family:ui-monospace,Menlo,monospace}
 a{color:var(--accent)}

@@ -504,6 +504,19 @@ export function registerAdminRoutes(router: Router): void {
       !("priceMinCents" in body) ? undefined : body.priceMinCents == null ? null : Math.round(Number(body.priceMinCents));
     const priceMaxCents =
       !("priceMaxCents" in body) ? undefined : body.priceMaxCents == null ? null : Math.round(Number(body.priceMaxCents));
+
+    // Arrhes propres à l'hébergement (issue #75). Champ vidé → null, ce qui
+    // signifie « repli sur le pourcentage du domaine » et non « 0 % ».
+    let depositPct: number | null | undefined;
+    if ("depositPct" in body) {
+      if (body.depositPct == null || body.depositPct === "") {
+        depositPct = null;
+      } else {
+        const v = Math.round(Number(body.depositPct));
+        if (!Number.isFinite(v) || v < 0 || v > 100) return apiError(400, "pourcentage d'arrhes attendu entre 0 et 100");
+        depositPct = v;
+      }
+    }
     if (priceMinCents !== undefined || priceMaxCents !== undefined) {
       const unit = await getUnit(env.DB, id);
       if (!unit) return apiError(404, "hébergement inconnu");
@@ -516,6 +529,7 @@ export function registerAdminRoutes(router: Router): void {
     await updateUnit(env.DB, id, {
       priceMinCents,
       priceMaxCents,
+      depositPct,
       name: typeof body.name === "string" ? body.name : undefined,
       description: typeof body.description === "string" ? body.description : undefined,
       capacityBase: body.capacityBase != null ? Number(body.capacityBase) : undefined,
@@ -643,6 +657,7 @@ export function registerAdminRoutes(router: Router): void {
         name: u.name,
         compositePricing: u.isComposite ? u.compositePricing : "own",
         cleaningFeeCents: u.cleaningFeeCents,
+        depositPct: u.depositPct,
         components: u.isComposite
           ? links
               .filter((l) => l.unitId === u.id && physicalIds.has(l.blocksUnitId))

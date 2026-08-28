@@ -11,7 +11,8 @@
 <div class="pub" style="max-width:640px">
   <div id="box"><div class="card muted">Chargement…</div></div>
 </div>
-<script>
+<script type="module">
+import { cgvHtml } from "./cgv.js";
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 const eur = (c) => (c / 100).toLocaleString("fr-BE", { style: "currency", currency: "EUR" });
 const dfr = (iso) => iso ? `${iso.slice(8,10)}/${iso.slice(5,7)}/${iso.slice(0,4)}` : "—";
@@ -83,7 +84,7 @@ const q = new URLSearchParams(location.search);
       <p style="margin-top:8px"><button class="btn" id="msgSend">Envoyer</button> <span id="msgNote" class="small muted"></span></p>
     </div>
     <div class="card"><h3>Conditions générales &amp; contrat de location</h3>
-      <div class="cgv-box">${esc(data.cgvText || "Conditions générales à venir.")}</div></div>
+      <div class="cgv-box">${data.cgvText?.trim() ? cgvHtml(data.cgvText) + (b.depositPct != null ? `<p class="cgv-h"><b>Pour ${esc(b.unitName)}, le pourcentage d'arrhes de l'article 4.1 est de ${b.depositPct} %.</b></p>` : "") : "<p>Conditions générales à venir.</p>"}</div></div>
     <p class="footer-note"><a href="javascript:print()">Imprimer / enregistrer en PDF</a></p>`;
 
   const payBtn = document.getElementById("payNow");

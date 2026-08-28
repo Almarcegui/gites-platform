@@ -376,7 +376,7 @@ export function registerConfigViews() {
         </div>
         <div class="card"><h3>Paiement &amp; séjour</h3>
           <div class="formgrid">
-            <div><label class="f">Arrhes (%)</label><input id="stDeposit" type="number" value="${settings.depositPct}"></div>
+            <div><label class="f">Arrhes (%) par défaut</label><input id="stDeposit" type="number" value="${settings.depositPct}"></div>
             <div><label class="f">Solde à J−</label><input id="stBalance" type="number" value="${settings.balanceDueDays}"></div>
             <div><label class="f">Option de paiement (min)</label><input id="stHold" type="number" value="${settings.holdMinutes}"></div>
             <div><label class="f">Taxe séjour (€/pers/nuit)</label><input id="stTax" value="${eurInput(settings.touristTaxCentsPerPersonNight)}"></div>
@@ -402,7 +402,7 @@ export function registerConfigViews() {
       <div class="card mb"><h3>CGV &amp; contrat de location (jointes au voucher)</h3>
         <textarea id="stCgv" rows="6">${esc(settings.cgvText)}</textarea>
         <div class="row" style="margin-top:10px"><button class="btn sm" id="cgvSave">Enregistrer les CGV</button>
-        <span class="muted small">TODO_CGV : récupérables dans elloha, onglet « Contrat de location ».</span></div>
+        <span class="muted small">Version 2.0 posée par la migration 0016. Texte brut : une ligne « Article N » isolée est affichée en gras dans le tunnel. L'article 4.1 renvoie au pourcentage d'arrhes de l'hébergement, réglé ci-dessous.</span></div>
       </div>
       <div class="card mb"><h3>Hébergements</h3>
         ${units
@@ -416,6 +416,7 @@ export function registerConfigViews() {
             <div class="n"><label class="f">Cap. std</label><input class="uCapB inline-num" type="number" value="${u.capacityBase}"></div>
             <div class="n"><label class="f">Cap. max</label><input class="uCapM inline-num" type="number" value="${u.capacityMax}"></div>
             <div class="n"><label class="f">Ménage (€)</label><input class="uFee inline-num" value="${eurInput(u.cleaningFeeCents ?? 0)}"></div>
+            <div class="n"><label class="f">Arrhes (%)</label><input class="uDeposit inline-num" type="number" min="0" max="100" placeholder="${settings.depositPct}" value="${u.depositPct ?? ""}" title="Vide = pourcentage du domaine (${settings.depositPct} %)"></div>
             ${u.isComposite ? `<div class="n"><label class="f">Prix combiné</label><select class="uPricing">
               <option value="sum" ${u.compositePricing === "sum" ? "selected" : ""}>Somme des biens liés</option>
               <option value="own" ${u.compositePricing === "own" ? "selected" : ""}>Tarif propre</option></select></div>` : ""}
@@ -518,6 +519,8 @@ export function registerConfigViews() {
             capacityBase: Number(row.querySelector(".uCapB").value),
             capacityMax: Number(row.querySelector(".uCapM").value),
             cleaningFeeCents: toCents(row.querySelector(".uFee").value),
+            // Champ vidé → null → repli sur le pourcentage du domaine (issue #75).
+            depositPct: row.querySelector(".uDeposit").value.trim() === "" ? null : Number(row.querySelector(".uDeposit").value),
             photoUrl: row.querySelector(".uPhoto").value.trim(),
             active: row.querySelector(".uActive").checked,
             ...(row.querySelector(".uPricing") ? { compositePricing: row.querySelector(".uPricing").value } : {}),

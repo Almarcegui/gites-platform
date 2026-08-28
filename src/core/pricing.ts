@@ -95,7 +95,9 @@ export interface OptionDef {
 }
 
 export interface PricingSettings {
-  depositPct: number;                    // 30 → acompte de 30 %
+  /** pourcentage d'arrhes du DOMAINE — repli quand l'unité n'en fixe pas
+   *  (issue #75) */
+  depositPct: number;
   balanceDueDays: number;                // solde exigible à J-30
   touristTaxCentsPerPersonNight: number;
   touristTaxIncludeChildren: boolean;
@@ -110,6 +112,9 @@ export interface UnitPricingInfo {
   cleaningFeeCents: number;
   /** composantes d'une unité composite en mode 'sum' (dérivées de unit_links) */
   components: { id: number; name: string; cleaningFeeCents: number }[];
+  /** pourcentage d'arrhes propre à l'hébergement (issue #75).
+   *  null ou absent = repli sur `settings.depositPct` du domaine. */
+  depositPct?: number | null;
 }
 
 export interface QuoteRequest {
@@ -155,6 +160,9 @@ export interface Quote {
   taxCents: number;
   totalCents: number;
   depositCents: number;       // dû à la réservation
+  /** pourcentage d'arrhes réellement appliqué : celui de l'unité si elle en
+   *  fixe un, sinon celui du domaine (issue #75) */
+  depositPct: number;
   balanceCents: number;
   balanceDueDate: IsoDate | null; // null = paiement total immédiat
   cautionCents: number;
@@ -470,13 +478,20 @@ function inValidityWindow(p: Promotion, today: IsoDate): boolean {
 
 // ---------------------------------------------------------------------------
 
+/** Pourcentage d'arrhes en vigueur pour ce devis : celui de l'hébergement
+ *  réservé, à défaut celui du domaine (issue #75). Une valeur d'unité à 0 est
+ *  une valeur, pas une absence — d'où le `??` et non un `||`. */
+function effectiveDepositPct(req: QuoteRequest): number {
+  return req.unit.depositPct ?? req.settings.depositPct;
+}
+
 export function computeQuote(req: QuoteRequest): Quote {
   const errors: string[] = [];
   const warnings: string[] = [];
   const empty: Quote = {
     ok: false, errors, warnings, nights: 0, minNights: 1, checkinDays: null, lines: [],
     accommodationCents: 0, discountCents: 0, cleaningFeeCents: 0, optionsCents: 0, taxCents: 0,
-    totalCents: 0, depositCents: 0, balanceCents: 0, balanceDueDate: null,
+    totalCents: 0, depositCents: 0, depositPct: effectiveDepositPct(req), balanceCents: 0, balanceDueDate: null,
     cautionCents: req.settings.cautionCents,
     autoDiscountApplied: null, promoApplied: null,
   };
@@ -628,16 +643,17 @@ export function computeQuote(req: QuoteRequest): Quote {
   // --- totaux, acompte, solde
   const totalCents = accommodationCents - discountCents + cleaningFeeCents + optionsCents + taxCents;
   const dueDate = addDays(req.checkin, -req.settings.balanceDueDays);
+  const depositPct = effectiveDepositPct(req);
   let depositCents: number;
   let balanceCents: number;
   let balanceDueDate: IsoDate | null;
-  if (req.settings.depositPct >= 100 || req.today >= dueDate) {
+  if (depositPct >= 100 || req.today >= dueDate) {
     // trop proche de l'arrivée (ou acompte configuré à 100 %) → paiement total
     depositCents = totalCents;
     balanceCents = 0;
     balanceDueDate = null;
   } else {
-    depositCents = Math.round((totalCents * req.settings.depositPct) / 100);
+    depositCents = Math.round((totalCents * depositPct) / 100);
     balanceCents = totalCents - depositCents;
     balanceDueDate = dueDate;
   }
@@ -657,6 +673,7 @@ export function computeQuote(req: QuoteRequest): Quote {
     taxCents,
     totalCents,
     depositCents,
+    depositPct,
     balanceCents,
     balanceDueDate,
     cautionCents: req.settings.cautionCents,

@@ -354,13 +354,13 @@ sans compte tiers et sans risquer d'écrire à un vrai client.
 
 ### 4.8 Base de données — `migrations/`
 
-12 migrations, appliquées dans l'ordre alphabétique du nom de fichier.
+16 migrations, appliquées dans l'ordre alphabétique du nom de fichier.
 **Aucun script de rollback** — les migrations sont à sens unique.
 
 | Table | Une ligne | Créée en |
 |---|---|---|
 | `properties` | Les domaines (Pré Moré, Moulin) — préfixe de référence `PM`/`MB`, commune pour la taxe | 0001 (+`beds24_property_id` en 0010) |
-| `units` | Les hébergements vendables, y compris les composites comme « Domaine entier » | 0001 (+ménage/photo en 0003, +`beds24_room_id` en 0010) |
+| `units` | Les hébergements vendables, y compris les composites comme « Domaine entier » | 0001 (+ménage/photo en 0003, +`beds24_room_id` en 0010, +`deposit_pct` en 0015) |
 | `unit_links` | **Le cœur** : quelle unité en bloque quelle autre (cf. §3) | 0001 |
 | `seasons` | Périodes tarifaires par domaine ; la priorité la plus haute gagne | 0001 |
 | `rate_rules` | Une grille de prix par (unité, saison) ; `season_id NULL` = tarif de base | 0001 |

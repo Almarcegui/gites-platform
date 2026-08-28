@@ -83,6 +83,64 @@ function expectLinesSumToTotal(q: ReturnType<typeof computeQuote>) {
 
 // -----------------------------------------------------------------------------
 
+describe("arrhes propres à l'hébergement (issue #75)", () => {
+  // Même séjour que le premier test ci-dessous : 4 nuits de semaine à 120 €,
+  // taxe 4 pers. × 4 nuits × 1 € → total 496 €. Seul le pourcentage change.
+  const stay = { checkin: "2026-03-02" as const, checkout: "2026-03-06" as const, adults: 4 };
+
+  it("30 % et 50 % sur le même séjour donnent deux devis distincts", () => {
+    const q30 = computeQuote(baseRequest({ ...stay, unit: { ...SCIERIE, depositPct: 30 } }));
+    const q50 = computeQuote(baseRequest({ ...stay, unit: { ...SCIERIE, depositPct: 50 } }));
+
+    expect(q30.totalCents).toBe(49600);
+    expect(q50.totalCents).toBe(49600);
+
+    // 30 % de 496 € = 148,80 € ; 50 % de 496 € = 248 €.
+    expect(q30.depositCents).toBe(14880);
+    expect(q50.depositCents).toBe(24800);
+    expect(q30.balanceCents).toBe(34720);
+    expect(q50.balanceCents).toBe(24800);
+    expect(q30.depositPct).toBe(30);
+    expect(q50.depositPct).toBe(50);
+  });
+
+  it("unité sans valeur : repli sur le pourcentage du domaine", () => {
+    // SETTINGS.depositPct = 30. null et absence de clé se comportent pareil.
+    const nul = computeQuote(baseRequest({ ...stay, unit: { ...SCIERIE, depositPct: null } }));
+    const absent = computeQuote(baseRequest({ ...stay, unit: SCIERIE }));
+
+    expect(nul.depositPct).toBe(30);
+    expect(absent.depositPct).toBe(30);
+    expect(nul.depositCents).toBe(14880);
+    expect(absent.depositCents).toBe(14880);
+  });
+
+  it("le pourcentage de l'unité prime sur celui du domaine, y compris à 0", () => {
+    // 0 est une valeur, pas une absence : réserver sans rien payer reste
+    // possible si le propriétaire le règle ainsi.
+    const q = computeQuote(baseRequest({ ...stay, unit: { ...SCIERIE, depositPct: 0 } }));
+    expect(q.depositPct).toBe(0);
+    expect(q.depositCents).toBe(0);
+    expect(q.balanceCents).toBe(49600);
+    expect(q.balanceDueDate).toBe("2026-01-31");
+  });
+
+  it("100 % sur l'unité force le paiement intégral, comme sur le domaine", () => {
+    const q = computeQuote(baseRequest({ ...stay, unit: { ...SCIERIE, depositPct: 100 } }));
+    expect(q.depositCents).toBe(q.totalCents);
+    expect(q.balanceCents).toBe(0);
+    expect(q.balanceDueDate).toBeNull();
+  });
+
+  it("le repli reste en place quand le séjour est trop proche pour un solde", () => {
+    // today >= J-30 → paiement intégral quel que soit le pourcentage.
+    const q = computeQuote(baseRequest({ ...stay, today: "2026-02-20", unit: { ...SCIERIE, depositPct: 50 } }));
+    expect(q.depositCents).toBe(q.totalCents);
+    expect(q.depositPct).toBe(50);
+    expect(q.balanceDueDate).toBeNull();
+  });
+});
+
 describe("nuits semaine / weekend", () => {
   it("4 nuits de semaine en basse saison (lun 02/03 → ven 06/03)", () => {
     // 4 × 120 € = 480 € ; taxe 4 pers. × 4 n × 1 € = 16 € ; total 496 €.
