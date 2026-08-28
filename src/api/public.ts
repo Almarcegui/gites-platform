@@ -7,9 +7,11 @@ import { apiError, json, readJson, Router } from "./router";
 import { addDays, diffDays, isIsoDate, sqlNow, todayInZone, type IsoDate } from "../core/dates";
 import { isUnitFree } from "../core/availability";
 import { rateCalendar, type UnitPricingInfo } from "../core/pricing";
+import { suggestStays, type NightOption, type StaySuggestion } from "../core/stay-options";
 import {
   audit,
   bookingsInWindow,
+  cancelBooking,
   countDirectBookingPressure,
   createBookingAtomic,
   findPaymentBySession,
@@ -19,6 +21,7 @@ import {
   getQuoteContext,
   getSettings,
   getThread,
+  getUnit,
   getUnitByIcalToken,
   insertInboundMessage,
   listLinks,
@@ -39,6 +42,7 @@ import {
 import { pullBeds24Bookings, pushCalendars, triggerBeds24Push } from "../services/beds24-sync";
 import { handlePaymentSuccess, quoteFromContext, startCheckout, type QuoteBody } from "../services/booking-flow";
 import { publicHealth } from "../services/health";
+import { clearHoldCookie, readHoldReference, setHoldCookie } from "../services/hold-session";
 import { buildIcs, exportSpansForUnit } from "../services/ical";
 import { availabilityHorizon, NON_CUMUL_NOTE, publicPromotions, weekendAvailability } from "../services/offers";
 import { logSearch } from "../services/search-log";
@@ -57,6 +61,16 @@ const MAX_ADVANCE_DAYS = 730; // réservation à 2 ans max
 export const MAX_ACTIVE_HOLDS = 3;
 /** Réservations directes tolérées sur une heure glissante. */
 export const MAX_BOOKINGS_PER_HOUR = 8;
+
+// --- suggestions de dates valides (issue #66) -------------------------------
+// Quand le séjour demandé est trop court (minimum de nuits) ou tombe un jour
+// d'arrivée interdit, la recherche regarde AUTOUR des dates demandées pour
+// proposer une plage réellement réservable. La fenêtre est volontairement
+// modeste : une suggestion à deux mois de là n'est plus une suggestion.
+const SUGGEST_DAYS_BEFORE = 7;
+const SUGGEST_DAYS_AFTER = 45;
+/** Nombre de plages proposées — « une ou deux », pas une liste à trier. */
+const SUGGEST_MAX = 2;
 
 interface StayParams {
   checkin: IsoDate;
@@ -119,6 +133,30 @@ async function cgvVersion(text: string): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
   const hex = [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
   return `sha256:${hex.slice(0, 16)}-len${text.length}`;
+}
+
+/** Réservation encore en cours de CE visiteur, d'après son cookie signé.
+ *
+ *  Trois conditions, toutes nécessaires (issue #68) : la signature doit être
+ *  valide, la réservation doit être une option de vente directe encore vivante,
+ *  et — quand un domaine est précisé — appartenir à ce domaine. Tout écart
+ *  renvoie null : le visiteur redevient un inconnu, jamais le propriétaire du
+ *  hold de quelqu'un d'autre. */
+async function ownPendingHold(
+  env: Env,
+  req: Request,
+  db: D1Database,
+  propertyId: number | null,
+  now: string,
+): Promise<BookingRow | null> {
+  const reference = await readHoldReference(env, req);
+  if (!reference) return null;
+  const booking = await getBookingByReference(db, reference);
+  if (!booking) return null;
+  if (booking.status !== "pending" || booking.source !== "direct") return null;
+  if (!booking.holdExpiresAt || booking.holdExpiresAt <= now) return null;
+  if (propertyId != null && booking.propertyId !== propertyId) return null;
+  return booking;
 }
 
 export function registerPublicRoutes(router: Router): void {
@@ -187,7 +225,7 @@ export function registerPublicRoutes(router: Router): void {
   });
 
   // --- recherche de disponibilité -------------------------------------------
-  router.get("/api/public/availability", async (_req, env, _p, url, execCtx) => {
+  router.get("/api/public/availability", async (req, env, _p, url, execCtx) => {
     const db = env.DB;
     const today = todayInZone();
     const parsed = parseStay(
@@ -201,23 +239,37 @@ export function registerPublicRoutes(router: Router): void {
     );
     if (!parsed.ok) return apiError(400, parsed.message);
     const { checkin, checkout, adults, children } = parsed.stay;
+    const nights = diffDays(checkin, checkout);
 
     const property = await getProperty(db, url.searchParams.get("property") ?? "");
     if (!property || !property.active) return apiError(404, "domaine inconnu");
 
+    // Fenêtre élargie : les suggestions (issue #66) ont besoin de voir ce qu'il
+    // y a AUTOUR du séjour demandé, et le même chargement sert aux deux usages.
+    const suggestFrom = addDays(checkin, -SUGGEST_DAYS_BEFORE) > today ? addDays(checkin, -SUGGEST_DAYS_BEFORE) : today;
+    const suggestTo = addDays(checkin, Math.max(SUGGEST_DAYS_AFTER, nights + SUGGEST_DAYS_BEFORE));
+
     const [units, links, bookings] = await Promise.all([
       listUnits(db, property.id),
       listLinks(db, property.id),
-      bookingsInWindow(db, property.id, checkin, checkout),
+      bookingsInWindow(db, property.id, suggestFrom, suggestTo),
     ]);
-    const spans = bookings.map((b) => ({
-      unitId: b.unitId,
-      checkin: b.checkin,
-      checkout: b.checkout,
-      status: b.status,
-      holdExpiresAt: b.holdExpiresAt,
-    }));
     const now = sqlNow();
+
+    // Réservation en cours de CE visiteur (issue #68) : son propre blocage ne
+    // doit pas lui interdire ses propres dates. Le cookie est signé — une
+    // référence devinée ne donne rien.
+    const own = await ownPendingHold(env, req, db, property.id, now);
+
+    const spans = bookings
+      .filter((b) => b.id !== own?.id)
+      .map((b) => ({
+        unitId: b.unitId,
+        checkin: b.checkin,
+        checkout: b.checkout,
+        status: b.status,
+        holdExpiresAt: b.holdExpiresAt,
+      }));
     const persons = adults + children;
 
     const out = [];
@@ -225,23 +277,58 @@ export function registerPublicRoutes(router: Router): void {
       const available = isUnitFree(u.id, checkin, checkout, spans, links, now);
       const fitsCapacity = persons <= u.capacityMax;
       let quote: Record<string, unknown> | null = null;
-      if (available && fitsCapacity) {
-        const ctx = await getQuoteContext(db, u.id, { from: checkin, toExclusive: checkout });
+      let suggestions: (StaySuggestion & { totalCents: number })[] = [];
+      if (fitsCapacity) {
+        const ctx = await getQuoteContext(db, u.id, { from: suggestFrom, toExclusive: suggestTo });
         if (ctx) {
-          const q = quoteFromContext(ctx, { unitId: u.id, checkin, checkout, adults, children }, today);
-          quote = {
-            ok: q.ok,
-            errors: q.errors,
-            nights: q.nights,
-            minNights: q.minNights,
-            totalCents: q.totalCents,
-            depositCents: q.depositCents,
-            // Remise déjà appliquée par le moteur : sans ces deux champs, la
-            // carte de résultat affichait un prix remisé SANS le dire, et la
-            // remise ne se découvrait qu'au devis (issue #35).
-            discountCents: q.discountCents,
-            autoDiscountApplied: q.autoDiscountApplied,
-          };
+          const q = available
+            ? quoteFromContext(ctx, { unitId: u.id, checkin, checkout, adults, children }, today)
+            : null;
+          if (q) {
+            quote = {
+              ok: q.ok,
+              errors: q.errors,
+              nights: q.nights,
+              minNights: q.minNights,
+              // La règle des jours d'arrivée était invisible : le tunnel doit
+              // pouvoir la DIRE, pas seulement refuser (issue #66).
+              checkinDays: q.checkinDays,
+              totalCents: q.totalCents,
+              depositCents: q.depositCents,
+              // Remise déjà appliquée par le moteur : sans ces deux champs, la
+              // carte de résultat affichait un prix remisé SANS le dire, et la
+              // remise ne se découvrait qu'au devis (issue #35).
+              discountCents: q.discountCents,
+              autoDiscountApplied: q.autoDiscountApplied,
+            };
+          }
+          // Rien de réservable à ces dates → on propose ce qui l'est. C'est ce
+          // qui remplace le « indisponible » sans explication (issue #66).
+          if (!q || !q.ok) {
+            const days: NightOption[] = rateCalendar(
+              ctx.pricingUnit,
+              suggestFrom,
+              suggestTo,
+              ctx.seasons,
+              ctx.rateRules,
+              ctx.rateOverrides,
+            ).map((r) => ({
+              date: r.date,
+              available: r.date >= today && isUnitFree(u.id, r.date, addDays(r.date, 1), spans, links, now),
+              minNights: r.minNights,
+              checkinDays: r.checkinDays,
+            }));
+            suggestions = suggestStays(days, { checkin, nights }, SUGGEST_MAX)
+              .map((sug) => {
+                const sq = quoteFromContext(
+                  ctx,
+                  { unitId: u.id, checkin: sug.checkin, checkout: sug.checkout, adults, children },
+                  today,
+                );
+                return { ...sug, totalCents: sq.ok ? sq.totalCents : -1 };
+              })
+              .filter((sug) => sug.totalCents >= 0);
+          }
         }
       }
       out.push({
@@ -257,6 +344,7 @@ export function registerPublicRoutes(router: Router): void {
         available,
         fitsCapacity,
         quote,
+        suggestions,
       });
     }
     // Journal des recherches (issue #36) : ce que les clients cherchent, et
@@ -273,7 +361,18 @@ export function registerPublicRoutes(router: Router): void {
       children,
       results: out.filter((u) => u.available && u.fitsCapacity && (u.quote as { ok?: boolean } | null)?.ok === true).length,
     });
-    return json({ property: property.slug, checkin, checkout, adults, children, units: out });
+    return json({
+      property: property.slug,
+      checkin,
+      checkout,
+      adults,
+      children,
+      units: out,
+      // Reprise en cours : le tunnel s'en sert pour rouvrir la bonne étape.
+      ownHold: own
+        ? { reference: own.reference, unitId: own.unitId, checkin: own.checkin, checkout: own.checkout, holdExpiresAt: own.holdExpiresAt, now }
+        : null,
+    });
   });
 
   // --- calendrier public : disponibilité + prix par nuit, par bien -----------
@@ -335,6 +434,9 @@ export function registerPublicRoutes(router: Router): void {
           available: r.date >= today && isUnitFree(u.id, r.date, addDays(r.date, 1), spans, links, now),
           priceCents: r.priceCents,
           minNights: r.minNights,
+          // Jours d'arrivée imposés — invisibles jusqu'ici, donc vécus comme
+          // un refus arbitraire une fois les dates choisies (issue #66).
+          checkinDays: r.checkinDays,
         })),
       };
     });
@@ -438,6 +540,59 @@ export function registerPublicRoutes(router: Router): void {
     if (lastName.length < 2) return apiError(400, "nom du client requis");
     if (!isEmailish(email)) return apiError(400, "email invalide");
     if (body.cgvAccepted !== true) return apiError(400, "l'acceptation des conditions générales est requise");
+
+    // --- reprise d'une réservation en cours (issue #68) ---------------------
+    // Un retour arrière depuis la page de paiement laissait le créneau gelé
+    // 30 minutes : le MÊME client qui recommençait se voyait refuser ses
+    // propres dates. On regarde donc d'abord ce que ce visiteur tient déjà.
+    //   · dates + hébergement + client + devis identiques → on REPREND le hold
+    //     (aucune ligne créée, donc aucun impact sur le plafond anti-abus) ;
+    //   · quoi que ce soit de différent → on LIBÈRE avant de recréer, sinon le
+    //     client se bloquerait lui-même sur ses nouvelles dates.
+    // Le hold n'est jamais prolongé : le décompte reste celui posé au départ,
+    // et le tunnel affiche le temps réellement restant.
+    const own = await ownPendingHold(env, req, db, null, sqlNow());
+    if (own) {
+      const sameStay =
+        own.unitId === Number(body.unitId) && own.checkin === stay.checkin && own.checkout === stay.checkout;
+      const resumeCtx = sameStay ? await getQuoteContext(db, own.unitId) : null;
+      if (resumeCtx) {
+        const q = quoteFromContext(resumeCtx, { ...body, ...stay }, today);
+        const wantsFullNow = body.paymentMode === "full";
+        const fullNow = wantsFullNow || !resumeCtx.settings.allowDeposit || q.balanceDueDate === null;
+        const dueNow = fullNow ? q.totalCents : q.depositCents;
+        const sameGuest = (own.guestEmail ?? "").toLowerCase() === email.toLowerCase();
+        if (q.ok && sameGuest && own.quoteJson === JSON.stringify(q) && own.depositCents === dueNow) {
+          // Les tentatives de paiement précédentes sont soldées, comme sur la
+          // reprise depuis le voucher (un paiement qui aboutirait quand même
+          // reste honoré par le webhook, qui travaille sur l'id de session).
+          for (const pay of (await listPayments(db, { bookingId: own.id })).filter((x) => x.status === "pending")) {
+            await markPaymentStatus(db, pay.id, "failed");
+          }
+          await audit(db, "public", "booking.hold_resumed", `booking:${own.id}`, {
+            reference: own.reference, unitId: own.unitId, checkin: stay.checkin, checkout: stay.checkout,
+          });
+          const resumed = await startCheckout(db, env, own, fullNow ? "full" : "deposit", dueNow, "public");
+          return json(
+            {
+              reference: own.reference,
+              checkoutUrl: resumed.url,
+              amountDueCents: dueNow,
+              holdMinutes: resumeCtx.settings.holdMinutes,
+              holdExpiresAt: own.holdExpiresAt,
+              now: sqlNow(),
+              resumed: true,
+            },
+            200,
+            await setHoldCookie(env, own.reference),
+          );
+        }
+      }
+      await cancelBooking(db, own.id, "hold_replaced");
+      await audit(db, "public", "booking.hold_released", `booking:${own.id}`, {
+        reference: own.reference, reason: sameStay ? "devis_modifie" : "sejour_modifie",
+      });
+    }
 
     // Anti-abus AVANT toute écriture : ni client créé, ni créneau gelé pour un
     // appelant qui a déjà saturé son quota. Le refus est journalisé — sans
@@ -544,7 +699,55 @@ export function registerPublicRoutes(router: Router): void {
         now: sqlNow(),
       },
       201,
+      // Cookie signé : c'est lui qui permettra de reconnaître ce visiteur et de
+      // lui rendre ses propres dates s'il revient en arrière (issue #68).
+      await setHoldCookie(env, created.reference),
     );
+  });
+
+  // --- réservation en cours de ce visiteur (issue #68) -----------------------
+  //     Appelé au chargement du tunnel : s'il existe une option encore vivante
+  //     posée depuis ce navigateur, le tunnel rouvre l'étape où le client s'est
+  //     arrêté avec le devis EXACT qui a été bloqué — au lieu de lui présenter
+  //     ses propres dates comme indisponibles.
+  router.get("/api/public/hold", async (req, env, _p, url) => {
+    const db = env.DB;
+    const now = sqlNow();
+    const reference = await readHoldReference(env, req);
+    if (!reference) return json({ hold: null });
+    const booking = await ownPendingHold(env, req, db, null, now);
+    // Cookie valide mais réservation confirmée, annulée ou expirée : on nettoie,
+    // sinon le tunnel interrogerait une session morte à chaque chargement.
+    if (!booking) return json({ hold: null }, 200, clearHoldCookie(env));
+
+    const property = booking.propertyId != null ? await getProperty(db, booking.propertyId) : null;
+    const wanted = url.searchParams.get("property");
+    if (wanted && property && property.slug !== wanted) return json({ hold: null });
+
+    const unit = await getUnit(db, booking.unitId);
+    let quote: unknown = null;
+    try {
+      quote = booking.quoteJson ? JSON.parse(booking.quoteJson) : null;
+    } catch {
+      quote = null;
+    }
+    return json({
+      hold: {
+        reference: booking.reference,
+        property: property?.slug ?? null,
+        unitId: booking.unitId,
+        unitSlug: unit?.slug ?? null,
+        unitName: booking.unitName ?? null,
+        checkin: booking.checkin,
+        checkout: booking.checkout,
+        adults: booking.adults,
+        children: booking.children,
+        amountDueCents: booking.depositCents,
+        holdExpiresAt: booking.holdExpiresAt,
+        now,
+        quote,
+      },
+    });
   });
 
   // --- consultation voucher (référence + email requis) -----------------------

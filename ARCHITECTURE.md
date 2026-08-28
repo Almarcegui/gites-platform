@@ -239,10 +239,11 @@ d'information, et la disponibilité finale toujours regarantie par l'INSERT atom
 |---|---|---|
 | `/api/public/properties` | GET | Liste des domaines (landing multi-biens) |
 | `/api/public/properties/:slug` | GET | Fiche domaine : unités, options, réglages, texte CGV |
-| `/api/public/availability` | GET | Unités réservables sur une période + devis joints |
-| `/api/public/calendar` | GET | Calendrier mensuel : dispo + prix « dès X € » par jour |
+| `/api/public/availability` | GET | Unités réservables sur une période + devis joints + **plages valides les plus proches** quand rien ne passe (#66) |
+| `/api/public/calendar` | GET | Calendrier mensuel : dispo, prix « dès X € », **minimum de nuits et jours d'arrivée** par jour |
 | `/api/public/quote` | POST | Devis détaillé (recalculé à chaque changement d'option) |
-| `/api/public/bookings` | POST | **Création de la réservation** + session de paiement |
+| `/api/public/hold` | GET | **Réservation en cours de ce visiteur** (cookie signé) — reprise du tunnel (#68) |
+| `/api/public/bookings` | POST | **Création de la réservation** + session de paiement, ou **reprise** du hold en cours (#68) |
 | `/api/public/bookings/:reference` | GET | Voucher — exige référence **et** email |
 | `/api/public/bookings/:reference/pay` | POST | Reprise d'un paiement interrompu |
 | `/api/public/bookings/:reference/messages` | GET/POST | Fil de conversation client |
@@ -514,6 +515,24 @@ Points d'implémentation qui surprennent au premier abord :
   **`gites-book:<slug>`** (TTL 30 jours) **et** répliqué dans l'URL via
   `history.replaceState` — l'URL est donc toujours partageable.
 - Des compteurs monotones (`searchSeq`, `quoteSeq`) écartent les réponses obsolètes.
+- **Les règles de séjour sont écrites, pas seulement appliquées** (#66) : le
+  minimum de nuits s'affiche dans chaque case du calendrier et se résume par
+  période sous la grille, les jours d'arrivée imposés hachurent les cases
+  concernées. Un séjour refusé dit pourquoi et propose une ou deux plages
+  réservables, calculées serveur sur les vraies disponibilités — plus jamais
+  un « indisponible » sec.
+- **Le hold appartient au visiteur, pas au calendrier** (#68) : à la création
+  d'une option, le serveur pose un cookie `gp_hold` HttpOnly portant la
+  référence **signée** (HMAC-SHA256, clé dérivée d'`ADMIN_TOKEN` par hachage à
+  domaine séparé — cf. `src/services/hold-session.ts`). Ce cookie sert à trois
+  choses, et à rien d'autre : la recherche ignore le propre blocage du
+  visiteur, `GET /api/public/hold` rouvre son étape avec le devis exact qui a
+  été bloqué, et un nouveau `POST /api/public/bookings` **reprend** ce hold si
+  hébergement, dates, client et devis sont identiques (aucune ligne créée,
+  donc aucun impact sur le plafond anti-abus de l'issue #6). Au moindre écart,
+  l'ancien hold est **libéré avant** la nouvelle insertion — sinon le client se
+  bloquerait lui-même. Le hold n'est jamais prolongé : le décompte reste celui
+  posé au départ. Sans `ADMIN_TOKEN`, la reprise est simplement désactivée.
 
 Pages de retour : `merci.html` (poll toutes les 1,5 s jusqu'à `confirmed`, 20 essais),
 `annule.html` (rassurance + reprise), `voucher.html` (espace client authentifié par

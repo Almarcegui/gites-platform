@@ -19,6 +19,18 @@ const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "
 const dfr = (iso) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`;
 const nightsBetween = (a, b) => Math.round((Date.parse(b) - Date.parse(a)) / 86400000);
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+const dow = (iso) => new Date(iso + "T12:00:00Z").getUTCDay(); // 0 = dimanche
+const JOURS = ["dimanche", "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi"];
+
+/** « le samedi », « le vendredi ou le samedi » — dire la règle, pas la subir. */
+function checkinDaysLabel(days) {
+  const names = [...new Set(days ?? [])].filter((d) => d >= 0 && d <= 6)
+    .sort((a, b) => ((a + 6) % 7) - ((b + 6) % 7))
+    .map((d) => JOURS[d]);
+  if (names.length === 0) return "";
+  if (names.length === 1) return `le ${names[0]}`;
+  return `le ${names.slice(0, -1).join(", le ")} ou le ${names.at(-1)}`;
+}
 
 async function api(path, body) {
   const res = await fetch(path, {
@@ -42,6 +54,7 @@ let calMonth = null; // 'YYYY-MM'
 let selIn = null;
 let selOut = null;
 let preferredUnit = params.get("unit"); // slug — consommé au 1er résultat
+let RESUMED_HOLD = null; // réservation en cours retrouvée au chargement (#68)
 const calCache = new Map();
 
 function setStep(n) {
@@ -205,17 +218,26 @@ async function renderCalendar() {
   $("calNext").disabled = calMonth >= monthShift(TODAY.slice(0, 7), 23);
 
   // agrégat par jour : dispo = au moins un hébergement libre ; prix = plancher
+  // Minimum de nuits et jours d'arrivée sont agrégés de la même façon — au plus
+  // PERMISSIF des hébergements encore libres : c'est ce qui rend une
+  // réservation possible ce jour-là, donc ce que le client doit lire (#66).
   const nbDays = data.units[0]?.days.length ?? 0;
   const days = [];
   for (let i = 0; i < nbDays; i++) {
     const perUnit = data.units.map((u) => u.days[i]);
     const date = perUnit[0].date;
     const free = perUnit.filter((d) => d.available && d.priceCents != null);
+    const restricted = free.filter((d) => d.checkinDays && d.checkinDays.length);
     days.push({
       date,
       past: perUnit[0].past,
       available: free.length > 0,
       minPrice: free.length ? Math.min(...free.map((d) => d.priceCents)) : null,
+      minNights: free.length ? Math.min(...free.map((d) => d.minNights || 1)) : null,
+      // null = aucun hébergement n'impose de jour d'arrivée
+      arrivalDays: free.length && restricted.length === free.length
+        ? [...new Set(restricted.flatMap((d) => d.checkinDays))].sort((a, b) => a - b)
+        : null,
     });
   }
 
@@ -225,15 +247,56 @@ async function renderCalendar() {
   for (const d of days) {
     const inRange = selIn && selOut && d.date > selIn && d.date < selOut;
     const isSel = d.date === selIn || d.date === selOut;
-    const cls = ["pday", d.past ? "past" : "", !d.past && !d.available ? "full" : "", isSel ? "sel" : "", inRange ? "range" : ""].join(" ");
+    const noArrival = !d.past && d.available && d.arrivalDays != null && !d.arrivalDays.includes(dow(d.date));
+    const cls = ["pday", d.past ? "past" : "", !d.past && !d.available ? "full" : "",
+      noArrival ? "noarr" : "", isSel ? "sel" : "", inRange ? "range" : ""].join(" ");
     const sub = d.past ? "" : d.available ? (d.minPrice != null ? `dès ${eurRound(d.minPrice)}` : "") : "complet";
-    html += `<button type="button" class="${cls}" data-date="${d.date}" ${d.past ? "disabled" : ""}>
-      <span class="d">${Number(d.date.slice(8, 10))}</span><span class="p">${sub}</span></button>`;
+    // Le minimum de nuits est écrit DANS la case : c'est la seule façon de le
+    // voir avant d'avoir choisi ses dates (impasse n° 5 du parcours au clic).
+    const mn = !d.past && d.available && d.minNights > 1 ? `<span class="mn">min ${d.minNights} n</span>` : "";
+    const hints = d.past || !d.available ? [] : [
+      d.minNights > 1 ? `${d.minNights} nuits minimum` : "",
+      d.arrivalDays != null ? `arrivée ${checkinDaysLabel(d.arrivalDays)}` : "",
+    ].filter(Boolean);
+    const title = hints.length ? ` title="${esc(hints.join(" · "))}"` : "";
+    html += `<button type="button" class="${cls}" data-date="${d.date}"${title} ${d.past ? "disabled" : ""}>
+      <span class="d">${Number(d.date.slice(8, 10))}</span><span class="p">${sub}</span>${mn}</button>`;
   }
   $("calGrid").innerHTML = html;
   $("calGrid").querySelectorAll(".pday[data-date]").forEach((cell) => {
     cell.addEventListener("click", () => onDayClick(cell.dataset.date, cell));
   });
+  renderCalRules(days);
+}
+
+/** Règles de séjour du mois affiché, regroupées par période contiguë (#66).
+ *  « Séjour minimum : 7 nuits du 01/07 au 31/07 » — la règle existe depuis
+ *  toujours côté moteur ; elle n'était écrite nulle part. */
+function renderCalRules(days) {
+  const zone = $("calRules");
+  if (!zone) return;
+  const segments = [];
+  for (const d of days) {
+    if (d.past || !d.available || d.minNights == null) continue;
+    const key = `${d.minNights}|${(d.arrivalDays ?? []).join(",")}`;
+    const last = segments.at(-1);
+    if (last && last.key === key && nightsBetween(last.to, d.date) === 1) last.to = d.date;
+    else segments.push({ key, minNights: d.minNights, arrivalDays: d.arrivalDays, from: d.date, to: d.date });
+  }
+  const notable = segments.filter((s) => s.minNights > 1 || s.arrivalDays != null);
+  if (notable.length === 0) {
+    zone.innerHTML = "";
+    return;
+  }
+  const period = (s) => (s.from === s.to ? `le ${dfr(s.from)}` : `du ${dfr(s.from)} au ${dfr(s.to)}`);
+  zone.innerHTML = notable
+    .map((s) => {
+      const parts = [];
+      if (s.minNights > 1) parts.push(`<b>${s.minNights} nuits minimum</b>`);
+      if (s.arrivalDays != null) parts.push(`arrivée ${esc(checkinDaysLabel(s.arrivalDays))}`);
+      return `<span class="rule">${parts.join(", ")} ${period(s)}</span>`;
+    })
+    .join(" · ");
 }
 
 function onDayClick(date, cell) {
@@ -286,9 +349,53 @@ function onSelectionChange() {
 
 // ---------------------------------------------------------------------------
 // Étape 2 — hébergements disponibles
+//
+// Issue #66 — un séjour refusé DIT pourquoi et propose une sortie. La règle
+// (minimum de nuits, jour d'arrivée imposé) vit dans le moteur de devis ; le
+// serveur renvoie désormais la règle ET une ou deux plages réservables les
+// plus proches, calculées sur les vraies disponibilités. Un « indisponible »
+// sans explication n'est plus jamais la seule réponse.
 // ---------------------------------------------------------------------------
 
 let searchSeq = 0;
+
+/** Phrase qui explique pourquoi cet hébergement n'est pas réservable. */
+function unavailableReason(u, nights) {
+  if (u.available && !u.fitsCapacity) return `Capacité maximale : ${u.capacityMax} personnes`;
+  const q = u.quote;
+  if (q && !q.ok && q.errors.includes("min_nights")) {
+    return `Séjour trop court : ${q.minNights} nuits minimum à ces dates (vous en avez demandé ${nights})`;
+  }
+  if (q && !q.ok && q.errors.includes("checkin_day")) {
+    return `Arrivée possible uniquement ${checkinDaysLabel(q.checkinDays)} à ces dates`;
+  }
+  if (q && !q.ok && q.errors.includes("no_rate")) return "Tarifs pas encore publiés pour ces dates";
+  if (q && !q.ok) return "Non réservable en ligne sur ces dates";
+  return "Déjà réservé sur ces dates";
+}
+
+/** Plages réservables les plus proches, en un clic. */
+function suggestionsBlock(u) {
+  if (!u.suggestions?.length) return "";
+  const buttons = u.suggestions
+    .map(
+      (s) => `<button type="button" class="btn o sugg-b" data-in="${s.checkin}" data-out="${s.checkout}">
+        Du ${dfr(s.checkin)} au ${dfr(s.checkout)} — ${s.nights} nuit${s.nights > 1 ? "s" : ""} · ${eur(s.totalCents)}</button>`,
+    )
+    .join("");
+  return `<div class="sugg"><span class="small muted">Ces dates fonctionnent :</span>${buttons}</div>`;
+}
+
+/** Applique une suggestion : dates pré-remplies, recherche relancée. */
+function applySuggestion(checkin, checkout) {
+  if (!ISO_DATE.test(checkin ?? "") || !ISO_DATE.test(checkout ?? "") || checkout <= checkin) return;
+  selIn = checkin;
+  selOut = checkout;
+  calMonth = checkin.slice(0, 7);
+  renderCalendar();
+  onSelectionChange();
+  $("searchCard").scrollIntoView({ behavior: "smooth", block: "start" });
+}
 
 async function search() {
   const { adults, children } = pax();
@@ -311,6 +418,10 @@ async function search() {
   if (seq !== searchSeq) return; // une sélection plus récente a relancé la recherche
   SEARCH = { checkin: selIn, checkout: selOut, adults, children };
   setStep(2);
+  if (data.ownHold && data.ownHold.checkin === selIn && data.ownHold.checkout === selOut) {
+    $("searchMsg").innerHTML =
+      `<div class="note">Nous avons retrouvé votre réservation en cours (réf. ${esc(data.ownHold.reference)}) : ces dates vous restent réservées, vous reprenez là où vous en étiez.</div>`;
+  }
 
   const nights = nightsBetween(selIn, selOut);
   const bookable = data.units.filter((u) => u.available && u.fitsCapacity && u.quote?.ok);
@@ -328,18 +439,21 @@ async function search() {
           <button class="btn" style="margin-top:6px" data-select="${u.unitId}">Réserver</button></div>
       </div>`;
     }
-    let reason = "Indisponible à ces dates";
-    if (u.available && !u.fitsCapacity) reason = `Capacité max ${u.capacityMax} personnes`;
-    else if (u.available && u.quote && !u.quote.ok && u.quote.errors.includes("min_nights"))
-      reason = `Minimum ${u.quote.minNights} nuits sur ces dates`;
-    else if (u.available && u.quote && !u.quote.ok) reason = "Non réservable en ligne sur ces dates";
     return `<div class="prop off">
       <div class="ph" ${photo}>${u.photoUrl ? "" : "photo"}</div>
-      <div class="info"><b>${esc(u.name)}</b> · ${capacity}<br><span class="tag t-bad">${esc(reason)}</span></div>
+      <div class="info"><b>${esc(u.name)}</b> · ${capacity}<br><span class="tag t-bad">${esc(unavailableReason(u, nights))}</span>
+        ${suggestionsBlock(u)}</div>
     </div>`;
   });
   $("results").innerHTML = cards.join("") || `<div class="note">Aucun hébergement.</div>`;
   document.querySelectorAll("[data-select]").forEach((b) => b.addEventListener("click", () => openBookingPanel(Number(b.dataset.select))));
+  document.querySelectorAll(".sugg-b").forEach((b) =>
+    b.addEventListener("click", () => applySuggestion(b.dataset.in, b.dataset.out)),
+  );
+  if (bookable.length === 0 && data.units.some((u) => u.suggestions?.length)) {
+    $("searchMsg").innerHTML =
+      `<div class="note">Aucun hébergement n'est réservable du ${dfr(selIn)} au ${dfr(selOut)} — les dates proposées ci-dessous fonctionnent, en un clic.</div>`;
+  }
 
   // Auto-sélection : l'unité demandée en deep-link, sinon la seule réservable.
   const wanted = preferredUnit ? bookable.find((u) => u.slug === preferredUnit) : null;
@@ -666,6 +780,31 @@ function startHoldCountdown(hold) {
   tick();
 }
 
+/** Reprise d'une réservation encore en cours, reconnue par le serveur (#68).
+ *
+ *  Le sessionStorage ne survit ni à la fermeture de l'onglet ni à un retour par
+ *  l'accueil dans une autre fenêtre. Le serveur, lui, reconnaît le visiteur à
+ *  son cookie signé et lui rend SES dates : elles ne lui sont plus affichées
+ *  comme indisponibles, et le tunnel rouvre l'étape où il s'était arrêté. */
+async function restoreOwnHold() {
+  let data;
+  try {
+    data = await api(`/api/public/hold?property=${encodeURIComponent(PROPERTY)}`);
+  } catch {
+    return false; // la reprise est un plus : son échec ne bloque pas le tunnel
+  }
+  const hold = data.hold;
+  if (!hold) return false;
+  RESUMED_HOLD = hold;
+  selIn = hold.checkin;
+  selOut = hold.checkout;
+  setPax(hold.adults, hold.children);
+  calMonth = selIn.slice(0, 7);
+  if (hold.unitSlug) preferredUnit = hold.unitSlug; // rouvre le bon hébergement
+  rememberHold({ reference: hold.reference, holdExpiresAt: hold.holdExpiresAt, now: hold.now });
+  return true;
+}
+
 /** Reprise après retour depuis la page de paiement (bouton « précédent »). */
 function restoreHold() {
   try {
@@ -736,8 +875,12 @@ async function initFlow() {
   });
 
   renderOffers(); // remises actives + disponibilité factuelle (sans bloquer)
-  restoreHold(); // une option posée juste avant ? on reprend son décompte
-  restoreSelection();
+  // Une réservation encore en cours prime sur tout le reste : c'est elle qui
+  // porte les dates réellement bloquées pour ce visiteur (#68).
+  if (!(await restoreOwnHold())) {
+    restoreHold(); // une option posée juste avant ? on reprend son décompte
+    restoreSelection();
+  }
   if (selIn && selOut) {
     calMonth = selIn.slice(0, 7);
     updateSummary();
