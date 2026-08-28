@@ -146,6 +146,32 @@ describe("minimum de nuits visible et contourné (#66)", () => {
     }
   });
 
+  it("aucune suggestion ne dépasse l'horizon de réservation (2 ans)", async () => {
+    // Saison de test posée au bord de l'horizon : une suggestion proposée
+    // au-delà serait refusée par parseStay au clic — donc rouvrirait l'impasse.
+    const bord = addDays(TODAY, 726);
+    await db
+      .prepare("INSERT INTO seasons (id, property_id, name, date_start, date_end, priority) VALUES (?1, 1, 'Bord horizon', ?2, ?3, 99)")
+      .bind(SEASON_ID, addDays(TODAY, 700), addDays(TODAY, 760))
+      .run();
+    for (const unitId of [1, 2]) {
+      await db
+        .prepare(
+          `INSERT INTO rate_rules (unit_id, season_id, price_week_cents, price_weekend_cents, holiday_pct, min_nights, checkin_days)
+           VALUES (?1, ?2, 24000, 28000, 0, 7, NULL)`,
+        )
+        .bind(unitId, SEASON_ID)
+        .run();
+    }
+    const u = scieur(await search(bord, addDays(bord, 3)));
+    const horizon = addDays(TODAY, 730);
+    expect(u.suggestions.length).toBeGreaterThan(0); // sinon le test ne prouve rien
+    for (const s of u.suggestions) {
+      expect(s.checkin <= horizon).toBe(true);
+      expect(s.checkout <= horizon).toBe(true);
+    }
+  });
+
   it("un séjour conforme ne déclenche aucune suggestion (rien à corriger)", async () => {
     await poseSaison(7, null);
     const u = scieur(await search(CHECKIN, addDays(CHECKIN, 7)));

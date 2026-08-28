@@ -246,8 +246,12 @@ export function registerPublicRoutes(router: Router): void {
 
     // Fenêtre élargie : les suggestions (issue #66) ont besoin de voir ce qu'il
     // y a AUTOUR du séjour demandé, et le même chargement sert aux deux usages.
+    // Elle est bornée par l'horizon de réservation : une plage proposée doit
+    // pouvoir être réservée telle quelle, sinon le clic rouvre l'impasse.
+    const horizon = addDays(today, MAX_ADVANCE_DAYS);
     const suggestFrom = addDays(checkin, -SUGGEST_DAYS_BEFORE) > today ? addDays(checkin, -SUGGEST_DAYS_BEFORE) : today;
-    const suggestTo = addDays(checkin, Math.max(SUGGEST_DAYS_AFTER, nights + SUGGEST_DAYS_BEFORE));
+    const wideTo = addDays(checkin, Math.max(SUGGEST_DAYS_AFTER, nights + SUGGEST_DAYS_BEFORE));
+    const suggestTo = wideTo > horizon ? horizon : wideTo;
 
     const [units, links, bookings] = await Promise.all([
       listUnits(db, property.id),
@@ -327,7 +331,9 @@ export function registerPublicRoutes(router: Router): void {
                 );
                 return { ...sug, totalCents: sq.ok ? sq.totalCents : -1 };
               })
-              .filter((sug) => sug.totalCents >= 0);
+              // Une suggestion qui ne passerait pas parseStay au clic (séjour
+              // au-delà du plafond de nuits) n'est pas une suggestion.
+              .filter((sug) => sug.totalCents >= 0 && sug.nights <= MAX_NIGHTS && sug.checkin <= horizon);
           }
         }
       }
