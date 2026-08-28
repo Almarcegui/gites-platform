@@ -87,6 +87,9 @@ export interface UnitRow {
   /** garde-fous de prix par nuit (issue #31) — null = aucune borne configurée */
   priceMinCents: number | null;
   priceMaxCents: number | null;
+  /** pourcentage d'arrhes propre à l'hébergement (issue #75) — null = repli
+   *  sur le `deposit_pct` du domaine */
+  depositPct: number | null;
 }
 
 function mapUnit(r: Raw): UnitRow {
@@ -101,6 +104,7 @@ function mapUnit(r: Raw): UnitRow {
     beds24RoomId: r.beds24_room_id == null ? null : num(r.beds24_room_id),
     priceMinCents: numOrNull(r.price_min_cents),
     priceMaxCents: numOrNull(r.price_max_cents),
+    depositPct: numOrNull(r.deposit_pct),
   };
 }
 
@@ -129,12 +133,14 @@ export async function updateUnit(
     Pick<
       UnitRow,
       | "name" | "description" | "capacityBase" | "capacityMax" | "active" | "compositePricing"
-      | "cleaningFeeCents" | "photoUrl" | "priceMinCents" | "priceMaxCents"
+      | "cleaningFeeCents" | "photoUrl" | "priceMinCents" | "priceMaxCents" | "depositPct"
     >
   >,
 ): Promise<void> {
   // Les garde-fous de prix se RETIRENT (retour à null) autant qu'ils se posent :
   // COALESCE ne suffit pas, d'où le drapeau « clé fournie » de ?10 et ?12.
+  // Même mécanique pour le pourcentage d'arrhes en ?14/?15 : vider le champ
+  // signifie « repli sur le domaine », pas « 0 % ».
   await db
     .prepare(
       `UPDATE units SET
@@ -147,7 +153,8 @@ export async function updateUnit(
          cleaning_fee_cents = COALESCE(?8, cleaning_fee_cents),
          photo_url = COALESCE(?9, photo_url),
          price_min_cents = CASE WHEN ?10 = 1 THEN ?11 ELSE price_min_cents END,
-         price_max_cents = CASE WHEN ?12 = 1 THEN ?13 ELSE price_max_cents END
+         price_max_cents = CASE WHEN ?12 = 1 THEN ?13 ELSE price_max_cents END,
+         deposit_pct = CASE WHEN ?14 = 1 THEN ?15 ELSE deposit_pct END
        WHERE id = ?1`,
     )
     .bind(
@@ -164,6 +171,8 @@ export async function updateUnit(
       fields.priceMinCents ?? null,
       fields.priceMaxCents === undefined ? 0 : 1,
       fields.priceMaxCents ?? null,
+      fields.depositPct === undefined ? 0 : 1,
+      fields.depositPct ?? null,
     )
     .run();
 }
@@ -415,6 +424,7 @@ export async function getQuoteContext(
       name: unit.name,
       compositePricing: unit.isComposite ? unit.compositePricing : "own",
       cleaningFeeCents: unit.cleaningFeeCents,
+      depositPct: unit.depositPct,
       components: unit.isComposite ? components : [],
     },
     seasons: (seasonRows as Raw[]).map(mapSeason),
