@@ -143,6 +143,10 @@ export interface Quote {
   warnings: string[];
   nights: number;
   minNights: number;
+  /** jours d'arrivée autorisés par la règle de la nuit d'arrivée (0=dim … 6=sam) ;
+   *  null = aucune contrainte. Exposé pour que le tunnel puisse DIRE la règle
+   *  au lieu d'afficher un refus sec (issue #66). */
+  checkinDays: number[] | null;
   lines: QuoteLine[];
   accommodationCents: number; // hébergement avant remises (majoration comprise)
   discountCents: number;      // remise auto + code promo (positif)
@@ -265,6 +269,10 @@ export interface DayRate {
   /** provenance du minimum de nuits, indépendante de celle du prix : une
    *  surcharge peut ne porter QUE le minimum de nuits. */
   minNightsSource: "override" | "regle" | null;
+  /** jours d'arrivée autorisés si le séjour COMMENCE ce jour-là (0=dim … 6=sam) ;
+   *  null = aucune contrainte. Composite « somme » : intersection des
+   *  composantes (la plus restrictive gagne, comme pour le devis). */
+  checkinDays: number[] | null;
   weekend: boolean;
   /** vrai si une majoration fériés a effectivement été appliquée — donc
    *  toujours faux sous une surcharge de prix, qui l'annule (§ 3) */
@@ -274,6 +282,20 @@ export interface DayRate {
   /** valeurs brutes de la surcharge, pour préremplir l'éditeur */
   overridePriceCents: number | null;
   overrideMinNights: number | null;
+}
+
+/** Intersection de deux jeux de jours d'arrivée autorisés. Un composite
+ *  « somme » n'accepte une arrivée que si TOUTES ses composantes l'acceptent.
+ *
+ *  Trois états à ne pas confondre : `null` = aucune contrainte (se laisse
+ *  absorber), une liste non vide = ces jours-là, et une liste VIDE = plus aucun
+ *  jour possible. Confondre les deux derniers effacerait une impossibilité :
+ *  deux composantes aux règles incompatibles (l'une samedi, l'autre vendredi)
+ *  redeviendraient réservables n'importe quel jour. */
+function intersectCheckinDays(a: number[] | null, b: number[] | null): number[] | null {
+  if (b == null || b.length === 0) return a;
+  if (a == null) return [...b];
+  return a.filter((d) => b.includes(d));
 }
 
 /** Tarif jour par jour d'une unité sur [from, toExclusive) — pour les
@@ -305,6 +327,7 @@ export function rateCalendar(
     let minNightsOverridden = false;
     let overridePriceCents: number | null = null;
     let overrideMinNights: number | null = null;
+    let checkinDays: number[] | null = null;
     for (const pid of partIds) {
       const r = resolveNight(pid, d, seasons, rateRules, ratedDays, overrides);
       if (!r) {
@@ -314,6 +337,7 @@ export function rateCalendar(
       price += r.baseCents + r.surchargeCents;
       fallback = fallback == null || r.fallbackCents == null ? null : fallback + r.fallbackCents;
       minNights = Math.max(minNights, r.minNights);
+      checkinDays = intersectCheckinDays(checkinDays, r.checkinDays);
       if (r.season) {
         seasonName = r.season.name;
         seasonId = r.season.id;
@@ -337,6 +361,7 @@ export function rateCalendar(
       seasonName,
       minNights: covered ? minNights : null,
       minNightsSource: !covered ? null : minNightsOverridden ? "override" : "regle",
+      checkinDays: covered ? checkinDays : null,
       weekend,
       holidayRated,
       fallbackPriceCents: covered ? fallback : null,
@@ -449,7 +474,7 @@ export function computeQuote(req: QuoteRequest): Quote {
   const errors: string[] = [];
   const warnings: string[] = [];
   const empty: Quote = {
-    ok: false, errors, warnings, nights: 0, minNights: 1, lines: [],
+    ok: false, errors, warnings, nights: 0, minNights: 1, checkinDays: null, lines: [],
     accommodationCents: 0, discountCents: 0, cleaningFeeCents: 0, optionsCents: 0, taxCents: 0,
     totalCents: 0, depositCents: 0, balanceCents: 0, balanceDueDate: null,
     cautionCents: req.settings.cautionCents,
@@ -490,12 +515,11 @@ export function computeQuote(req: QuoteRequest): Quote {
   //     'sum' : la plus exigeante des composantes)
   const minNights = Math.max(1, ...breakdowns.map((b) => b.arrivalMinNights));
   if (nights < minNights) errors.push("min_nights");
-  for (const b of breakdowns) {
-    const days = b.arrivalCheckinDays;
-    if (days && days.length > 0 && !days.includes(dayOfWeek(req.checkin))) {
-      errors.push("checkin_day");
-      break;
-    }
+  let checkinDays: number[] | null = null;
+  for (const b of breakdowns) checkinDays = intersectCheckinDays(checkinDays, b.arrivalCheckinDays);
+  // Liste vide = aucune arrivée possible : `includes` est faux, l'erreur tombe.
+  if (checkinDays != null && !checkinDays.includes(dayOfWeek(req.checkin))) {
+    errors.push("checkin_day");
   }
 
   // --- remise automatique : la meilleure seule
@@ -624,6 +648,7 @@ export function computeQuote(req: QuoteRequest): Quote {
     warnings,
     nights,
     minNights,
+    checkinDays,
     lines,
     accommodationCents,
     discountCents,
