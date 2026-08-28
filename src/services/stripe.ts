@@ -101,3 +101,28 @@ function timingSafeEqualHex(a: string, b: string): boolean {
   for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
   return diff === 0;
 }
+
+/** Expire une session de checkout CÔTÉ STRIPE.
+ *
+ *  Sans ça, marquer un paiement `failed` en base ne ferme rien du tout : la
+ *  page Stripe reste payable. Un client qui empile les onglets ou reclique
+ *  peut donc payer deux sessions du même solde, et le webhook honore les deux
+ *  — l'argent est encaissé deux fois (contre-review 2026-08-28).
+ *
+ *  Ne lève jamais : une session déjà expirée, déjà payée ou injoignable rend
+ *  `false`. Le nettoyage local, lui, a toujours lieu — c'est l'appelant qui
+ *  décide quoi faire de l'échec (ici : une ligne d'audit).
+ *
+ *  No-op en mode stub : il n'existe aucune session distante à fermer. */
+export async function expireCheckoutSession(env: Env, sessionId: string): Promise<boolean> {
+  if (!stripeEnabled(env) || !sessionId || sessionId.startsWith("stub_")) return false;
+  try {
+    const res = await fetch(`${STRIPE_API}/checkout/sessions/${encodeURIComponent(sessionId)}/expire`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${env.STRIPE_SECRET_KEY}` },
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}

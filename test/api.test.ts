@@ -547,8 +547,11 @@ describe("Lot 2 — tunnel de réservation", () => {
     const confirmed = await call("GET", `/api/public/bookings/${reference}?email=${encodeURIComponent(GUEST.email)}`);
     expect((confirmed.data.booking as { status: string }).status).toBe("confirmed");
 
-    // une résa confirmée ne peut plus repasser en paiement
-    expect((await call("POST", `/api/public/bookings/${reference}/pay`, { email: GUEST.email })).status).toBe(400);
+    // une résa confirmée ne repasse plus par l'acompte : le même endpoint
+    // bascule sur le SOLDE (issue #67), couvert en détail par solde.test.ts
+    const balance = await call("POST", `/api/public/bookings/${reference}/pay`, { email: GUEST.email });
+    expect(balance.status).toBe(200);
+    expect(balance.data.kind).toBe("balance");
     // mauvais email → introuvable
     expect((await call("POST", `/api/public/bookings/${reference}/pay`, { email: "autre@example.com" })).status).toBe(404);
   });

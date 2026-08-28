@@ -30,11 +30,22 @@ const q = new URLSearchParams(location.search);
     : b.status === "pending" ? `<span class="tag t-warn">Paiement en attente</span>` : `<span class="tag t-bad">Annulée</span>`;
   const lines = (b.quoteLines || []).map((l) => `<tr><td>${esc(l.label)}</td><td class="r ${l.amountCents < 0 ? "neg" : ""}">${eur(l.amountCents)}</td></tr>`).join("");
 
+  // Deux paiements possibles sur cette page, le même endpoint derrière :
+  // finaliser l'acompte d'une résa en attente, ou régler le solde d'une résa
+  // confirmée. Le solde est proposé à tout moment, pas seulement à l'échéance.
+  const dueNote = b.balanceDueDate
+    ? `Échéance le ${dfr(b.balanceDueDate)}${b.balanceDueDate < new Date().toISOString().slice(0, 10) ? " — dépassée" : ""}.`
+    : "";
   const payBlock = b.status === "pending" && b.holdExpiresAt
     ? `<div class="card" id="payCard"><h3>Finaliser la réservation</h3>
         <p class="small muted">Votre créneau est bloqué pour vous — terminez le paiement pour confirmer.</p>
         <div id="payMsg"></div>
         <button class="btn big" id="payNow" style="margin-top:8px">💳 Finaliser le paiement sécurisé</button></div>`
+    : b.status === "confirmed" && b.balanceCents > 0
+    ? `<div class="card" id="payCard"><h3>Solde de votre séjour</h3>
+        <p class="small muted">Il reste <b>${eur(b.balanceCents)}</b> à régler. ${esc(dueNote)} Vous pouvez payer dès maintenant, en ligne et en une fois.</p>
+        <div id="payMsg"></div>
+        <button class="btn big" id="payNow" style="margin-top:8px">💳 Payer le solde (${eur(b.balanceCents)})</button></div>`
     : "";
 
   box.innerHTML = `
@@ -54,7 +65,13 @@ const q = new URLSearchParams(location.search);
     <div class="card">
       <table class="quote">
         <tr><td>Déjà payé</td><td class="r">${eur(b.paidCents)}</td></tr>
-        <tr><td>Solde restant${b.balanceDueDate ? ` (pour le ${dfr(b.balanceDueDate)})` : ""}</td><td class="r"><b>${eur(b.balanceCents)}</b></td></tr>
+        <tr><td>Solde restant${b.balanceCents > 0 && b.balanceDueDate ? ` (pour le ${dfr(b.balanceDueDate)})` : ""}</td>
+          <td class="r">${
+            b.balanceCents > 0 ? `<b>${eur(b.balanceCents)}</b>`
+            : b.overpaidCents > 0 ? `<b>${eur(0)}</b> <span class="tag t-warn">trop-perçu de ${eur(b.overpaidCents)}</span>`
+            : `<b>${eur(0)}</b> <span class="tag t-ok">soldé</span>`
+          }</td></tr>
+        ${b.overpaidCents > 0 ? `<tr><td colspan="2" class="small muted">Nous avons reçu ${eur(b.overpaidCents)} de plus que le montant dû — nous vous recontactons pour le remboursement.</td></tr>` : ""}
         ${data.stay.cautionCents > 0 ? `<tr><td>Caution (hors total, avant l'arrivée)</td><td class="r">${eur(data.stay.cautionCents)}</td></tr>` : ""}
       </table>
       ${data.contact.email || data.contact.phone ? `<p class="small muted" style="margin-top:8px">Contact : ${esc([data.contact.email, data.contact.phone].filter(Boolean).join(" · "))}</p>` : ""}

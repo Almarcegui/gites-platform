@@ -957,6 +957,20 @@ export async function recomputePaid(db: D1Database, bookingId: number): Promise<
     .run();
 }
 
+/** Note portée par un paiement dont la session de checkout a expiré sans être
+ *  payée (issue #69). Pourquoi une NOTE et pas un statut `expired` : la colonne
+ *  `payments.status` porte un CHECK (`pending`/`succeeded`/`failed`/`refunded`)
+ *  et SQLite ne sait pas modifier un CHECK sans reconstruire la table. Le
+ *  webhook Stripe `checkout.session.expired` marquait DÉJÀ ces paiements
+ *  `failed` — on garde ce statut (une session morte n'est plus en attente) et
+ *  la note en donne la raison, exposée en `expired` pour l'affichage. */
+export const EXPIRED_SESSION_NOTE = "session de paiement expirée";
+
+/** Note d'une session fermée parce que le client en a ouvert une nouvelle pour
+ *  le même montant (reclic, second onglet). Distincte de la précédente : ce
+ *  n'est pas le temps qui l'a tuée, c'est le client lui-même. */
+export const SUPERSEDED_SESSION_NOTE = "session remplacée par une nouvelle";
+
 export interface PaymentRow {
   id: number;
   bookingId: number;
@@ -967,18 +981,31 @@ export interface PaymentRow {
   stripeSessionId: string | null;
   stripePaymentIntent: string | null;
   status: string;
+  /** Pourquoi ce paiement est `failed`. `null` = un vrai échec de paiement
+   *  (carte refusée) ; sinon la session a été abandonnée ou remplacée, ce qui
+   *  ne se lit pas du tout pareil dans la vue Paiements. */
+  outcome: "expired" | "superseded" | null;
   note: string | null;
   receivedAt: string | null;
   createdAt: string;
   bookingReference?: string;
 }
 
+function paymentOutcome(status: string, note: string | null): PaymentRow["outcome"] {
+  if (status !== "failed") return null;
+  if (note === EXPIRED_SESSION_NOTE) return "expired";
+  if (note === SUPERSEDED_SESSION_NOTE) return "superseded";
+  return null;
+}
+
 function mapPayment(r: Raw): PaymentRow {
+  const note = strOrNull(r.note);
   return {
     id: num(r.id), bookingId: num(r.booking_id), kind: str(r.kind), method: str(r.method),
     amountCents: num(r.amount_cents), currency: str(r.currency),
     stripeSessionId: strOrNull(r.stripe_session_id), stripePaymentIntent: strOrNull(r.stripe_payment_intent),
-    status: str(r.status), note: strOrNull(r.note), receivedAt: strOrNull(r.received_at), createdAt: str(r.created_at),
+    status: str(r.status), outcome: paymentOutcome(str(r.status), note),
+    note, receivedAt: strOrNull(r.received_at), createdAt: str(r.created_at),
     bookingReference: strOrNull(r.booking_reference) ?? undefined,
   };
 }
@@ -1006,18 +1033,61 @@ export async function markPaymentStatus(
   db: D1Database,
   paymentId: number,
   status: "pending" | "succeeded" | "failed" | "refunded",
-  opts: { receivedAt?: string | null; stripePaymentIntent?: string | null } = {},
+  opts: { receivedAt?: string | null; stripePaymentIntent?: string | null; note?: string | null } = {},
 ): Promise<void> {
   const payment = await db.prepare("SELECT booking_id FROM payments WHERE id = ?1").bind(paymentId).first<{ booking_id: number }>();
   await db
     .prepare(
       `UPDATE payments SET status = ?2, received_at = COALESCE(?3, received_at),
-                           stripe_payment_intent = COALESCE(?4, stripe_payment_intent)
+                           stripe_payment_intent = COALESCE(?4, stripe_payment_intent),
+                           note = COALESCE(?5, note)
         WHERE id = ?1`,
     )
-    .bind(paymentId, status, opts.receivedAt ?? null, opts.stripePaymentIntent ?? null)
+    .bind(paymentId, status, opts.receivedAt ?? null, opts.stripePaymentIntent ?? null, opts.note ?? null)
     .run();
   if (payment) await recomputePaid(db, payment.booking_id);
+}
+
+/** Sessions de checkout restées « en attente » au-delà de leur durée de vie
+ *  (issue #69). Filet de sécurité du webhook `checkout.session.expired`, qui
+ *  n'existe pas en mode stub et qui peut se perdre : sans ça, chaque tunnel
+ *  abandonné laisse une ligne « en attente » indéfiniment dans la vue Paiements.
+ *
+ *  Deux garde-fous :
+ *  - seuls les paiements `stripe` en `pending` sont touchés — un encaissement
+ *    manuel est créé directement en `succeeded`, il ne peut pas tomber ici ;
+ *  - `recomputePaid` n'est pas nécessaire : ces paiements n'ont jamais été
+ *    comptés (`paid_cents` ne somme que les `succeeded`).
+ *
+ *  Un webhook tardif reste honoré : `handlePaymentSuccess` ne sort par le haut
+ *  que sur un paiement DÉJÀ `succeeded`, jamais sur un `failed`. */
+export async function expireStalePaymentSessions(
+  db: D1Database,
+  olderThan: string,
+): Promise<{ id: number; bookingId: number; amountCents: number }[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT id, booking_id, amount_cents FROM payments
+        WHERE status = 'pending' AND method = 'stripe' AND created_at <= ?1`,
+    )
+    .bind(olderThan)
+    .all();
+  const candidates = (results as Raw[]).map((r) => ({
+    id: num(r.id), bookingId: num(r.booking_id), amountCents: num(r.amount_cents),
+  }));
+  // `meta.changes` fait foi, pas le SELECT : un webhook qui aboutit entre les
+  // deux requêtes fait passer le paiement en `succeeded`, l'UPDATE conditionnel
+  // ne le touche pas — et il ne doit pas non plus être journalisé « expiré »
+  // (contre-review 2026-08-28).
+  const expired: { id: number; bookingId: number; amountCents: number }[] = [];
+  for (const p of candidates) {
+    const res = await db
+      .prepare("UPDATE payments SET status = 'failed', note = COALESCE(note, ?2) WHERE id = ?1 AND status = 'pending'")
+      .bind(p.id, EXPIRED_SESSION_NOTE)
+      .run();
+    if (res.meta.changes > 0) expired.push(p);
+  }
+  return expired;
 }
 
 /** Déplace une résa iCal sur de nouvelles dates, avec le MÊME garde-fou
@@ -1861,6 +1931,20 @@ export async function listAudit(db: D1Database, limit = 200): Promise<AuditRow[]
   }));
 }
 
+/** Journal d'une entité précise (ex. 'booking:42') — historique de la fiche
+ *  réservation du back-office (issue #69 : « la relance doit être visible dans
+ *  l'historique, avec sa date et son auteur »). */
+export async function listAuditByEntity(db: D1Database, entity: string, limit = 50): Promise<AuditRow[]> {
+  const { results } = await db
+    .prepare("SELECT * FROM audit_log WHERE entity = ?1 ORDER BY id DESC LIMIT ?2")
+    .bind(entity, limit)
+    .all();
+  return (results as Raw[]).map((r) => ({
+    id: num(r.id), actor: str(r.actor), action: str(r.action),
+    entity: strOrNull(r.entity), detail: strOrNull(r.detail), createdAt: str(r.created_at),
+  }));
+}
+
 /** Journal filtré par préfixe d'action (ex. 'beds24.') — vue Canaux. */
 export async function listAuditByAction(db: D1Database, prefix: string, limit = 20): Promise<AuditRow[]> {
   const { results } = await db
@@ -1922,6 +2006,11 @@ export interface HealthSignals {
   /** Paiements encaissés dont la réservation n'est PAS confirmée : le client a
    *  payé et n'a pas son séjour. À traiter dans l'heure (rembourser/reloger). */
   orphanPayments: { reference: string; bookingId: number; amountCents: number; bookingStatus: string; receivedAt: string | null }[];
+  /** Réservations encaissées AU-DELÀ du total dû. Le trop-perçu ne se corrige
+   *  pas tout seul : il faut rembourser. Sans ce signal, un double paiement du
+   *  solde (deux sessions ouvertes, les deux payées) ne se voyait que dans le
+   *  journal d'audit, que personne ne lit (contre-review 2026-08-28). */
+  overpaidBookings: { reference: string; bookingId: number; overpaidCents: number; bookingStatus: string }[];
   /** Emails dont l'envoi a échoué (voucher jamais reçu, personne ne le sait). */
   failedEmails: { kind: string; toEmail: string; createdAt: string; errorDetail: string | null }[];
   /** Erreurs techniques journalisées dans les dernières 24 h. */
@@ -1949,6 +2038,18 @@ export async function healthSignals(db: D1Database, propertyId: number, now: Dat
          JOIN units u ON u.id = b.unit_id
         WHERE p.status = 'succeeded' AND b.status != 'confirmed' AND u.property_id = ?1
         ORDER BY p.id DESC LIMIT 20`,
+    )
+    .bind(propertyId)
+    .all();
+
+  const overpaid = await db
+    .prepare(
+      `SELECT b.id AS booking_id, b.reference, b.status AS booking_status,
+              b.paid_cents - b.total_cents AS overpaid_cents
+         FROM bookings b
+         JOIN units u ON u.id = b.unit_id
+        WHERE b.paid_cents > b.total_cents AND b.status != 'cancelled' AND u.property_id = ?1
+        ORDER BY b.id DESC LIMIT 20`,
     )
     .bind(propertyId)
     .all();
@@ -2008,6 +2109,12 @@ export async function healthSignals(db: D1Database, propertyId: number, now: Dat
       bookingStatus: str(r.booking_status),
       amountCents: num(r.amount_cents),
       receivedAt: r.received_at == null ? null : str(r.received_at),
+    })),
+    overpaidBookings: (overpaid.results as Raw[]).map((r) => ({
+      bookingId: num(r.booking_id),
+      reference: str(r.reference),
+      bookingStatus: str(r.booking_status),
+      overpaidCents: num(r.overpaid_cents),
     })),
     failedEmails: (emails.results as Raw[]).map((r) => ({
       kind: str(r.kind),
