@@ -63,6 +63,18 @@ export function quoteFromContext(ctx: QuoteContext, body: QuoteBody, today: IsoD
   });
 }
 
+/** Plancher d'une session de paiement Stripe (0,50 €) : en dessous, la création
+ *  de session est refusée par l'API. */
+export const MIN_CHECKOUT_CENTS = 50;
+
+/** Espace client d'une réservation : référence + email, les deux exigés côté
+ *  serveur. C'est le point d'entrée stable du solde en libre-service (#67) —
+ *  contrairement à une URL de session Stripe, il ne périme jamais. */
+export function voucherUrl(env: Env, booking: { reference: string; guestEmail?: string | null }): string {
+  const email = booking.guestEmail ? `&email=${encodeURIComponent(booking.guestEmail)}` : "";
+  return `${env.PUBLIC_BASE_URL}/book/voucher.html?ref=${encodeURIComponent(booking.reference)}${email}`;
+}
+
 /** Crée un paiement en attente + une session Stripe Checkout (ou stub) et
  *  mémorise l'id de session pour la réconciliation webhook. */
 export async function startCheckout(
@@ -84,14 +96,24 @@ export async function startCheckout(
   const label = `${labelKind} réservation ${booking.reference}${booking.unitName ? ` — ${booking.unitName}` : ""}`;
   const base = env.PUBLIC_BASE_URL;
   const emailParam = booking.guestEmail ? `&email=${encodeURIComponent(booking.guestEmail)}` : "";
+  // Le solde se paie sur une réservation DÉJÀ confirmée : le renvoyer vers
+  // merci.html (« Confirmation en cours… », qui attend un passage en
+  // `confirmed`) annoncerait une confirmation qui a eu lieu il y a des
+  // semaines. Retour sur le voucher, qui affiche le nouveau solde.
+  const returnUrls =
+    kind === "balance"
+      ? { successUrl: voucherUrl(env, booking), cancelUrl: voucherUrl(env, booking) }
+      : {
+          successUrl: `${base}/book/merci.html?ref=${encodeURIComponent(booking.reference)}${emailParam}`,
+          cancelUrl: `${base}/book/annule.html?ref=${encodeURIComponent(booking.reference)}${emailParam}`,
+        };
   const session = await createCheckoutSession(env, {
     paymentId,
     reference: booking.reference,
     label,
     amountCents,
     customerEmail: booking.guestEmail ?? null,
-    successUrl: `${base}/book/merci.html?ref=${encodeURIComponent(booking.reference)}${emailParam}`,
-    cancelUrl: `${base}/book/annule.html?ref=${encodeURIComponent(booking.reference)}${emailParam}`,
+    ...returnUrls,
   });
   await setPaymentSession(db, paymentId, session.id);
   await audit(db, actor, "payment.link_created", `booking:${booking.id}`, { kind, amountCents, session: session.id });
@@ -223,8 +245,7 @@ export async function sendVoucher(db: D1Database, env: Env, bookingId: number): 
   const property = await getProperty(db, booking.propertyId);
   if (!property) return false;
   const settings = await getSettings(db, booking.propertyId);
-  const voucherUrl = `${env.PUBLIC_BASE_URL}/book/voucher.html?ref=${encodeURIComponent(booking.reference)}&email=${encodeURIComponent(booking.guestEmail)}`;
-  const email = buildVoucherEmail({ booking, property, settings, voucherUrl });
+  const email = buildVoucherEmail({ booking, property, settings, voucherUrl: voucherUrl(env, booking) });
   await queueEmail(db, env, {
     bookingId: booking.id,
     to: booking.guestEmail,

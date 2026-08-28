@@ -37,7 +37,14 @@ import {
   type UnitRow,
 } from "../db/repo";
 import { pullBeds24Bookings, pushCalendars, triggerBeds24Push } from "../services/beds24-sync";
-import { handlePaymentSuccess, quoteFromContext, startCheckout, type QuoteBody } from "../services/booking-flow";
+import {
+  handlePaymentSuccess,
+  MIN_CHECKOUT_CENTS,
+  quoteFromContext,
+  startCheckout,
+  voucherUrl,
+  type QuoteBody,
+} from "../services/booking-flow";
 import { publicHealth } from "../services/health";
 import { buildIcs, exportSpansForUnit } from "../services/ical";
 import { availabilityHorizon, NON_CUMUL_NOTE, publicPromotions, weekendAvailability } from "../services/offers";
@@ -688,15 +695,20 @@ export function registerPublicRoutes(router: Router): void {
     const body = await readJson<{ session?: string }>(req);
     const session = String(body?.session ?? "");
     if (!session.startsWith("stub_")) return apiError(400, "session invalide");
+    // Le `kind` se lit AVANT le traitement : après, un rejeu tomberait sur la
+    // sortie idempotente et on ne saurait plus vers quelle page renvoyer.
+    const before = await findPaymentBySession(env.DB, session);
     const result = await handlePaymentSuccess(env.DB, env, session, "pi_stub");
     if (!result.handled) return apiError(404, "session inconnue");
     const booking = result.bookingId != null ? await getBooking(env.DB, result.bookingId) : null;
     const emailParam = booking?.guestEmail ? `&email=${encodeURIComponent(booking.guestEmail)}` : "";
-    return json({
-      ok: true,
-      reference: result.reference ?? "",
-      redirect: `${env.PUBLIC_BASE_URL}/book/merci.html?ref=${encodeURIComponent(result.reference ?? "")}${emailParam}`,
-    });
+    // Un solde payé ne « confirme » rien : le client revient sur son voucher,
+    // qui affiche le nouveau solde (miroir des URLs de retour Stripe).
+    const redirect =
+      before?.kind === "balance" && booking
+        ? voucherUrl(env, booking)
+        : `${env.PUBLIC_BASE_URL}/book/merci.html?ref=${encodeURIComponent(result.reference ?? "")}${emailParam}`;
+    return json({ ok: true, reference: result.reference ?? "", redirect });
   });
 
   // --- messages : les échanges clients passent par la plateforme --------------
@@ -745,27 +757,59 @@ export function registerPublicRoutes(router: Router): void {
     at: m.receivedAt,
   });
 
-  /** Reprise du paiement d'une résa en attente (retour depuis un paiement
-   *  interrompu) : nouvelle session de checkout tant que le hold court —
-   *  sinon le propre hold du client bloquerait toute nouvelle tentative. */
+  /** Paiement en libre-service depuis le voucher. Deux cas, un seul endpoint :
+   *
+   *  - résa `pending` : reprise d'un paiement interrompu (retour depuis un
+   *    abandon) — nouvelle session de checkout tant que le hold court, sinon le
+   *    propre hold du client bloquerait toute nouvelle tentative ;
+   *  - résa `confirmed` avec un solde ouvert : paiement du SOLDE (issue #67),
+   *    disponible à tout moment et pas seulement à l'échéance — un client qui
+   *    veut solder en avance ne doit pas avoir à écrire au propriétaire.
+   *
+   *  L'idempotence est celle de l'acompte, inchangée : `handlePaymentSuccess`
+   *  sort par le haut sur un paiement déjà `succeeded`, et l'index UNIQUE
+   *  partiel `idx_payments_session` interdit deux paiements sur une session.
+   *  Un webhook rejoué ne peut donc pas créditer deux fois. */
   router.post("/api/public/bookings/:reference/pay", async (req, env, p) => {
     const db = env.DB;
     const body = await readJson<{ email?: string }>(req);
     const booking = await authedBooking(db, p.reference ?? "", String(body?.email ?? "").trim());
     if (!booking) return apiError(404, "réservation introuvable");
-    if (booking.status === "confirmed") return apiError(400, "cette réservation est déjà confirmée");
+
+    const balance = booking.totalCents - booking.paidCents;
+    if (booking.status === "confirmed") {
+      if (balance <= 0) return apiError(400, "cette réservation est intégralement réglée");
+      // Plancher Stripe : une session de moins de 0,50 € est refusée à la
+      // création. Le reliquat se règle alors avec le propriétaire.
+      if (balance < MIN_CHECKOUT_CENTS) return apiError(400, "solde trop faible pour un paiement en ligne");
+      await failPendingSessions(db, booking.id);
+      const { url } = await startCheckout(db, env, booking, "balance", balance, "public");
+      return json({ checkoutUrl: url, amountCents: balance, kind: "balance", now: sqlNow() });
+    }
+
     if (booking.status !== "pending") return apiError(400, "cette réservation n'est plus active");
     if (!booking.holdExpiresAt || booking.holdExpiresAt <= sqlNow()) {
       return apiError(410, "l'option a expiré — le créneau est de nouveau ouvert, relancez une réservation");
     }
-    // On repart sur une session propre : les tentatives précédentes sont soldées
-    // (un paiement Stripe qui aboutirait quand même reste honoré par le webhook).
-    const pendings = (await listPayments(db, { bookingId: booking.id })).filter((x) => x.status === "pending");
-    for (const pay of pendings) await markPaymentStatus(db, pay.id, "failed");
+    await failPendingSessions(db, booking.id);
     const kind = booking.balanceDueDate == null ? "full" : "deposit";
     const { url } = await startCheckout(db, env, booking, kind, booking.depositCents, "public");
-    return json({ checkoutUrl: url, holdExpiresAt: booking.holdExpiresAt, now: sqlNow() });
+    return json({
+      checkoutUrl: url,
+      amountCents: booking.depositCents,
+      kind,
+      holdExpiresAt: booking.holdExpiresAt,
+      now: sqlNow(),
+    });
   });
+
+  /** On repart sur une session propre : les tentatives précédentes sont soldées
+   *  (un paiement Stripe qui aboutirait quand même reste honoré par le webhook,
+   *  qui ne s'arrête que sur un paiement déjà `succeeded`). */
+  async function failPendingSessions(db: D1Database, bookingId: number): Promise<void> {
+    const pendings = (await listPayments(db, { bookingId })).filter((x) => x.status === "pending");
+    for (const pay of pendings) await markPaymentStatus(db, pay.id, "failed");
+  }
 
   /** Fil de conversation du client (page voucher). */
   router.get("/api/public/bookings/:reference/messages", async (_req, env, p, url) => {
