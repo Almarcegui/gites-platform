@@ -6,6 +6,8 @@
 // la migration, il la TRONQUE. D'où l'assertion sur la dernière phrase du
 // texte, qui est la seule à détecter la troncature.
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { createTestDb, type TestDb } from "./helpers/d1";
 import { Router } from "../src/api/router";
 import { registerPublicRoutes } from "../src/api/public";
@@ -261,5 +263,44 @@ describe("arrhes par hébergement (issue #75)", () => {
     const res = await call("PATCH", "/api/admin/units/1", { depositPct: 140 });
     expect(res.status).toBe(400);
     expect(String(res.data.error)).toContain("pourcentage");
+  });
+});
+
+// Le pourcentage d'arrhes se règle par hébergement : une valeur figée dans une
+// page publique finit toujours par mentir. Les pages ont annoncé 30 % pendant
+// que le réglage en vigueur était 50 % — ce test empêche la rechute.
+describe("pages publiques — pourcentage d'arrhes non figé", () => {
+  const read = (rel: string): string => readFileSync(fileURLToPath(new URL(`../${rel}`, import.meta.url)), "utf8");
+  const PAGES = [
+    "public/index.html",
+    "public/la-maison-du-scieur/index.html",
+    "public/la-scierie/index.html",
+    "public/le-moulin-de-braives/index.html",
+  ];
+
+  it("aucune page n'écrit un pourcentage d'arrhes en dur", () => {
+    for (const page of PAGES) {
+      expect(read(page), page).not.toMatch(/[Aa]rrhes\s+(de\s+)?\d+\s*%/);
+    }
+  });
+
+  it("chaque mention porte les attributs d'injection et un repli lisible", () => {
+    for (const page of PAGES) {
+      const html = read(page);
+      expect(html, page).toMatch(/data-deposit-unit="[^"]+" data-deposit-property="[^"]+"/);
+      expect(html, page).toContain("selon l'hébergement");
+    }
+  });
+
+  it("le module d'injection lit le pourcentage EFFECTIF servi par la fiche domaine", async () => {
+    const js = read("public/arrhes.js");
+    expect(js).toContain("/api/public/properties/");
+    expect(js).toContain("depositPct");
+
+    // Contrat côté serveur : la fiche expose bien un depositPct par hébergement.
+    const res = await call("GET", "/api/public/properties/pre-more");
+    const units = res.data.units as { id: number; depositPct: number }[];
+    expect(units.length).toBeGreaterThan(0);
+    for (const u of units) expect(typeof u.depositPct).toBe("number");
   });
 });

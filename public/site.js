@@ -3,6 +3,8 @@
 //  · calendrier de disponibilités (le même moteur que la réservation)
 //  · formulaire de contact → boîte Messages du back-office.
 
+import "/arrhes.js";
+
 const PROPERTY = "pre-more";
 const eurRound = (c) => `${Math.round(c / 100)} €`;
 const $ = (id) => document.getElementById(id);
