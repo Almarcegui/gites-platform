@@ -2002,15 +2002,20 @@ export function registerAdminRoutes(router: Router): void {
   router.get("/api/admin/channels/overview", guard(async (_req, env, _p, url) => {
     const db = env.DB;
     const propertyId = intParam(url.searchParams.get("property"), 1);
-    const [property, units, channelBookings, events, conflicts] = await Promise.all([
+    const [property, units, channelBookings, events, openConflicts, ignoredConflicts] = await Promise.all([
       getProperty(db, propertyId),
       listUnits(db, propertyId),
       listBeds24Bookings(db),
       listAuditByAction(db, "beds24.", 15),
-      // Conflits de synchro persistés (issue #72) : ouverts d'abord, puis les
-      // ignorés (avec leur motif) — les résolus n'encombrent pas la vue.
-      listSyncConflicts(db, propertyId, { limit: 60 }),
+      // Conflits de synchro persistés (issue #72). DEUX lectures plafonnées
+      // séparément, et non une seule triée : les ouverts passant devant, un
+      // plafond commun aurait fait sortir les ignorés de la vue dès qu'ils sont
+      // nombreux — donc hors de portée du bouton « Rouvrir ». Les résolus, eux,
+      // n'ont plus rien à dire ici.
+      listSyncConflicts(db, propertyId, { status: "open", limit: 60 }),
+      listSyncConflicts(db, propertyId, { status: "ignored", limit: 40 }),
     ]);
+    const conflicts = [...openConflicts, ...ignoredConflicts];
     const lastPull = await db
       .prepare("SELECT value FROM settings WHERE property_id = ?1 AND key = 'beds24_last_pull'")
       .bind(propertyId)
@@ -2035,7 +2040,6 @@ export function registerAdminRoutes(router: Router): void {
       lastPull: lastPull?.value ?? null,
       events,
       conflicts: conflicts
-        .filter((c) => c.status !== "resolved")
         .map((c) => ({
           id: c.id, source: c.source, kind: c.kind, status: c.status,
           unitId: c.unitId, unitName: c.unitName, checkin: c.checkin, checkout: c.checkout,

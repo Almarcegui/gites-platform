@@ -104,36 +104,38 @@ export function detectStaleFeeds(feeds: readonly FeedState[], now: Date = new Da
 // 1 bis. Conflits de synchronisation ouverts (issue #72)
 // ---------------------------------------------------------------------------
 
-export interface OpenConflictState {
-  id: number;
-  label: string;
-  /** Première détection, format sqlNow — c'est l'ancienneté qui alarme. */
-  firstSeenAt: string;
+/** Un compte EXACT (pas une liste tronquée) et le plus ancien des conflits
+ *  ouverts : c'est tout ce que la carte « Santé » a à dire, la liste vit dans
+ *  la vue Canaux. */
+export interface OpenConflictSummary {
+  count: number;
+  /** Première détection du plus ancien, format sqlNow. */
+  oldestFirstSeenAt: string | null;
+  /** Libellé de ce plus ancien — le seul cas où une phrase suffit. */
+  oldestLabel: string | null;
 }
 
 /** Un conflit ouvert est un calendrier faux qui dure : la source annonce un
  *  séjour que nous n'avons pas pu refléter, donc les dates restent en vente
- *  quelque part. Le détail vit dans la vue Canaux — ici, une ligne qui dit
- *  combien et depuis quand.
+ *  quelque part. Une ligne qui dit combien et depuis quand.
  *
  *  Les conflits IGNORÉS n'entrent jamais ici : les écarter est une décision,
  *  la carte « Santé » n'a pas à la remettre en cause à chaque ouverture. */
 export function detectOpenSyncConflicts(
-  conflicts: readonly OpenConflictState[],
+  summary: OpenConflictSummary,
   now: Date = new Date(),
 ): DriftSignal[] {
-  if (conflicts.length === 0) return [];
-  const ages = conflicts.map((c) => hoursSince(c.firstSeenAt, now)).filter((h): h is number => h != null);
-  const oldest = ages.length > 0 ? Math.max(...ages) : null;
-  const since = oldest == null ? "" : ` — le plus ancien depuis ${humanAge(oldest)}`;
+  if (summary.count <= 0) return [];
+  const age = hoursSince(summary.oldestFirstSeenAt, now);
+  const since = age == null ? "" : ` — le plus ancien depuis ${humanAge(age)}`;
   return [
     {
       kind: "sync_conflict",
       label: "Synchro",
       detail:
-        conflicts.length === 1
-          ? `Un conflit de synchronisation non résolu${since} : ${conflicts[0]!.label}`
-          : `${conflicts.length} conflits de synchronisation non résolus${since}. Les dates concernées restent en vente sur un canal.`,
+        summary.count === 1
+          ? `Un conflit de synchronisation non résolu${since} : ${summary.oldestLabel ?? "voir la vue Canaux"}`
+          : `${summary.count} conflits de synchronisation non résolus${since}. Les dates concernées restent en vente sur un canal.`,
       href: "#/canaux",
     },
   ];
@@ -282,7 +284,7 @@ export function detectSilentCron(lastCronAt: string | null, now: Date = new Date
 
 export interface DriftInput {
   feeds: readonly FeedState[];
-  openConflicts: readonly OpenConflictState[];
+  openConflicts: OpenConflictSummary;
   units: readonly UnitRateTarget[];
   today: IsoDate;
   seasons: readonly Season[];

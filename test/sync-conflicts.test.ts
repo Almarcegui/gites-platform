@@ -14,7 +14,9 @@ import { beds24UnitScope, conflictFingerprint, icalScope } from "../src/core/syn
 import { detectOpenSyncConflicts } from "../src/core/drift";
 import { syncFeed } from "../src/services/ical";
 import { applyChannelBookings } from "../src/services/beds24-sync";
-import { collectDriftInput, createBookingAtomic, createFeed, getFeed, listSyncConflicts } from "../src/db/repo";
+import {
+  collectDriftInput, createBookingAtomic, createFeed, getFeed, listSyncConflicts, summarizeOpenSyncConflicts,
+} from "../src/db/repo";
 import { addDays, sqlNow, todayInZone } from "../src/core/dates";
 
 const SCIERIE = 2;
@@ -279,6 +281,54 @@ describe("canaux Beds24 — même registre, même cycle de vie", () => {
     expect(r2.resolvedConflicts).toBe(0);
     expect((await lignes())[0]).toMatchObject({ status: "open" });
   });
+
+  // Le piège du pull incrémental (contre-review 2026-08-28) : après un
+  // déblocage forcé du curseur, la résa fautive n'est plus dans la fenêtre. Si
+  // une résa SANS RAPPORT suffisait à refermer, le conflit disparaîtrait de
+  // l'écran alors que le calendrier reste faux — exactement ce que l'issue #72
+  // cherche à empêcher.
+  it("un lot PARTIEL ne referme que ce qu'il rapporte", async () => {
+    await occupeLeCreneau();
+    const autre = addDays(todayInZone(TICK1), 200);
+    const direct = await createBookingAtomic(db, {
+      unitId: SCIERIE, checkin: autre, checkout: addDays(autre, 2), adults: 2, children: 0,
+      status: "confirmed", source: "direct", now: TICK1,
+    });
+    expect(direct.ok).toBe(true);
+
+    const t1 = await applyChannelBookings(
+      db,
+      [resa(), resa({ id: 920002, arrival: autre, departure: addDays(autre, 2) })],
+      ROOM_TO_UNIT,
+      TICK1,
+    );
+    expect(t1.conflicts).toHaveLength(2);
+
+    // Passage suivant : la fenêtre ne rapporte QUE la seconde, désormais annulée.
+    const t2 = await applyChannelBookings(
+      db,
+      [resa({ id: 920002, arrival: autre, departure: addDays(autre, 2), status: "cancelled" })],
+      ROOM_TO_UNIT,
+      TICK2,
+    );
+    expect(t2.resolvedConflicts).toBe(1);
+    const rows = await lignes();
+    expect(rows.map((r) => [r.external_uid, r.status])).toEqual([
+      ["beds24:920001", "open"], // absente de la fenêtre → surtout pas refermée
+      ["beds24:920002", "resolved"],
+    ]);
+  });
+
+  it("rapatriement COMPLET : ce qui a disparu de la source est refermé", async () => {
+    await occupeLeCreneau();
+    await applyChannelBookings(db, [resa()], ROOM_TO_UNIT, TICK1);
+    // La source ne connaît plus du tout cette réservation.
+    const r2 = await applyChannelBookings(db, [resa({ id: 920003, status: "cancelled" })], ROOM_TO_UNIT, TICK2, {
+      fullSweep: true,
+    });
+    expect(r2.resolvedConflicts).toBe(1);
+    expect((await lignes())[0]).toMatchObject({ external_uid: "beds24:920001", status: "resolved" });
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -343,6 +393,30 @@ describe("décision humaine — « Ignorer » avec motif", () => {
     expect(apres.data.conflicts).toEqual([]);
   });
 
+  it("un conflit ignoré reste joignable même noyé sous les conflits ouverts", async () => {
+    await occupeLeCreneau();
+    const feed = await nouveauFlux();
+    await syncFeed(db, feed, mockFetch(ICS_CONFLIT), TICK1);
+    const [conflit] = await listSyncConflicts(db, PROPERTY);
+    await call("PATCH", `/api/admin/sync-conflicts/${conflit!.id}`, { status: "ignored", reason: "traité à la main" });
+    // 80 conflits ouverts par-dessus : l'ignoré passe après au tri, mais il ne
+    // doit pas pour autant sortir de la vue — sinon plus moyen de le rouvrir.
+    await db.batch(
+      Array.from({ length: 80 }, (_, i) =>
+        db
+          .prepare(
+            `INSERT INTO sync_conflicts (property_id, unit_id, source, scope, kind, fingerprint,
+               checkin, checkout, external_uid, label, status, first_seen_at, last_seen_at)
+             VALUES (?1, ?2, 'ical', 'ical:feed:1', 'import', ?3, '2026-10-05', '2026-10-09', ?3, 'conflit', 'open', ?4, ?4)`,
+          )
+          .bind(PROPERTY, SCIERIE, `masse-${i}`, sqlNow(TICK3)),
+      ),
+    );
+    const vue = await call("GET", `/api/admin/channels/overview?property=${PROPERTY}`);
+    const conflits = vue.data.conflicts as Record<string, unknown>[];
+    expect(conflits.some((c) => c.status === "ignored" && c.id === conflit!.id)).toBe(true);
+  });
+
   it("rouvrir un conflit ignoré le remet dans la liste", async () => {
     await occupeLeCreneau();
     const feed = await nouveauFlux();
@@ -359,15 +433,12 @@ describe("décision humaine — « Ignorer » avec motif", () => {
 
 describe("carte « Santé » — les conflits ouverts comptent comme une dérive", () => {
   it("aucun conflit ouvert → aucun signal", () => {
-    expect(detectOpenSyncConflicts([], TICK1)).toEqual([]);
+    expect(detectOpenSyncConflicts({ count: 0, oldestFirstSeenAt: null, oldestLabel: null }, TICK1)).toEqual([]);
   });
 
   it("plusieurs conflits → un seul signal, l'ancienneté du plus vieux, lien vers Canaux", () => {
     const signals = detectOpenSyncConflicts(
-      [
-        { id: 1, label: "a", firstSeenAt: sqlNow(new Date("2026-07-09T10:00:00Z")) },
-        { id: 2, label: "b", firstSeenAt: sqlNow(TICK1) },
-      ],
+      { count: 2, oldestFirstSeenAt: sqlNow(new Date("2026-07-09T10:00:00Z")), oldestLabel: "a" },
       new Date("2026-07-12T10:00:00Z"),
     );
     expect(signals).toHaveLength(1);
@@ -376,15 +447,35 @@ describe("carte « Santé » — les conflits ouverts comptent comme une dérive
     expect(signals[0]!.detail).toContain("3 jours");
   });
 
+  // Le compte est AGRÉGÉ, pas déduit d'une liste bornée : au-delà du plafond
+  // d'affichage, la carte annoncerait sinon un chiffre faux et daterait la
+  // dérive sur le mauvais conflit (contre-review 2026-08-28).
+  it("le compte reste exact au-delà de tout plafond d'affichage", async () => {
+    const rows = Array.from({ length: 120 }, (_, i) =>
+      db
+        .prepare(
+          `INSERT INTO sync_conflicts (property_id, unit_id, source, scope, kind, fingerprint,
+             checkin, checkout, external_uid, label, status, first_seen_at, last_seen_at)
+           VALUES (?1, ?2, 'ical', 'ical:feed:1', 'import', ?3, '2026-10-05', '2026-10-09', ?3, 'conflit', 'open', ?4, ?4)`,
+        )
+        .bind(PROPERTY, SCIERIE, `masse-${i}`, sqlNow(new Date(TICK1.getTime() + i * 60_000))),
+    );
+    await db.batch(rows);
+    const summary = await summarizeOpenSyncConflicts(db, PROPERTY);
+    expect(summary.count).toBe(120);
+    expect(summary.oldestFirstSeenAt).toBe(sqlNow(TICK1));
+    expect(detectOpenSyncConflicts(summary, TICK4)[0]!.detail).toContain("120 conflits");
+  });
+
   it("les conflits ignorés ne remontent pas dans la carte « Santé »", async () => {
     await occupeLeCreneau();
     const feed = await nouveauFlux();
     await syncFeed(db, feed, mockFetch(ICS_CONFLIT), TICK1);
-    expect((await collectDriftInput(db, PROPERTY, TICK4)).openConflicts).toHaveLength(1);
+    expect((await collectDriftInput(db, PROPERTY, TICK4)).openConflicts.count).toBe(1);
 
     const [conflit] = await listSyncConflicts(db, PROPERTY);
     await db.prepare("UPDATE sync_conflicts SET status = 'ignored' WHERE id = ?1").bind(conflit!.id).run();
-    expect((await collectDriftInput(db, PROPERTY, TICK4)).openConflicts).toEqual([]);
+    expect((await collectDriftInput(db, PROPERTY, TICK4)).openConflicts.count).toBe(0);
   });
 });
 

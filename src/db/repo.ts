@@ -16,7 +16,7 @@ import {
   type DriftInput,
   type FeedState,
   type MessageState,
-  type OpenConflictState,
+  type OpenConflictSummary,
   type UnitRateTarget,
 } from "../core/drift";
 import {
@@ -2187,11 +2187,10 @@ export async function collectDriftInput(
     createdAt: strOrNull(r.created_at),
   }));
 
-  // 1 bis. Conflits de synchronisation encore ouverts (issue #72). Bornés :
-  //    la carte « Santé » en affiche le compte, la vue Canaux la liste.
-  const openConflicts: OpenConflictState[] = (
-    await listSyncConflicts(db, propertyId, { status: "open", limit: 50 })
-  ).map((c) => ({ id: c.id, label: c.label, firstSeenAt: c.firstSeenAt }));
+  // 1 bis. Conflits de synchronisation encore ouverts (issue #72) : un compte
+  //    exact et l'ancienneté du plus vieux, en une requête agrégée — la vue
+  //    Canaux, elle, en dresse la liste.
+  const openConflicts = await summarizeOpenSyncConflicts(db, propertyId);
 
   // 2. Couverture tarifaire des unités actives. Le composite « somme » tire son
   //    prix de ses composantes : il lui faut la même vue que le calendrier admin.
@@ -2407,6 +2406,60 @@ export async function resolveUnseenSyncConflicts(
     .bind(scope, seenAt)
     .run();
   return res.meta.changes ?? 0;
+}
+
+/** Referme les conflits d'un périmètre dont la source vient de REPARLER sans
+ *  reproduire l'écart.
+ *
+ *  C'est la fermeture des passages PARTIELS (pull incrémental Beds24) : on ne
+ *  peut y conclure que sur ce que la fenêtre a effectivement rapporté. Refermer
+ *  tout ce qui n'a pas été revu y serait faux — après un déblocage forcé du
+ *  curseur (MAX_CURSOR_HOLD_DAYS), la résa fautive sort de la fenêtre alors que
+ *  le conflit tient toujours, et la première résa sans rapport suffirait à
+ *  effacer l'alerte (contre-review 2026-08-28). */
+export async function resolveSeenSyncConflicts(
+  db: D1Database,
+  scope: string,
+  externalUids: readonly string[],
+  seenAt: string,
+): Promise<number> {
+  const uids = [...new Set(externalUids)];
+  if (uids.length === 0) return 0;
+  const placeholders = uids.map((_, i) => `?${i + 3}`).join(", ");
+  const res = await db
+    .prepare(
+      `UPDATE sync_conflicts SET status = 'resolved', resolved_at = ?2
+        WHERE scope = ?1 AND status = 'open' AND last_seen_at < ?2
+          AND external_uid IN (${placeholders})`,
+    )
+    .bind(scope, seenAt, ...uids)
+    .run();
+  return res.meta.changes ?? 0;
+}
+
+/** Compte et ancienneté des conflits ouverts d'un domaine — ce dont la carte
+ *  « Santé » a besoin, sans charger les lignes. Une lecture bornée aurait
+ *  annoncé « 50 conflits » à partir du cinquante-et-unième, et daté la dérive
+ *  sur le mauvais (contre-review 2026-08-28). */
+export async function summarizeOpenSyncConflicts(
+  db: D1Database,
+  propertyId: number,
+): Promise<OpenConflictSummary> {
+  const row = await db
+    .prepare(
+      `SELECT COUNT(*) AS n, MIN(first_seen_at) AS oldest,
+              (SELECT label FROM sync_conflicts
+                WHERE property_id = ?1 AND status = 'open'
+                ORDER BY first_seen_at, id LIMIT 1) AS oldest_label
+         FROM sync_conflicts WHERE property_id = ?1 AND status = 'open'`,
+    )
+    .bind(propertyId)
+    .first<Raw>();
+  return {
+    count: num(row?.n),
+    oldestFirstSeenAt: strOrNull(row?.oldest),
+    oldestLabel: strOrNull(row?.oldest_label),
+  };
 }
 
 /** Conflits d'un domaine, les ouverts d'abord puis les plus récents. */
