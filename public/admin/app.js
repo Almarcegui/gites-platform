@@ -407,7 +407,8 @@ export async function refreshBadges() {
       const h = d.health || {};
       next.today +=
         (a.overdueBalances?.length || 0) + (a.feedAlerts?.length || 0) +
-        (h.orphanPayments?.length || 0) + (h.failedEmails?.length || 0) + (h.beds24Stale ? 1 : 0) +
+        (h.orphanPayments?.length || 0) + (h.overpaidBookings?.length || 0) +
+        (h.failedEmails?.length || 0) + (h.beds24Stale ? 1 : 0) +
         (h.drift?.length || 0);
       next.sales += (a.activeHolds?.length || 0) + (d.kpis?.balanceDueCount || 0);
       next.messages += a.newEmails || 0;
@@ -539,6 +540,10 @@ registerView("dash", "Tableau de bord", async (root) => {
   for (const p of h.orphanPayments || []) {
     santeRows.push(`<tr class="clickable" data-booking="${p.bookingId}"><td><span class="tag t-warn">Paiement</span></td>
       <td><b>${esc(p.reference)}</b> — encaissé ${eur(p.amountCents)} mais la réservation est « ${esc(p.bookingStatus)} ». À traiter aujourd'hui (rembourser ou reloger).</td></tr>`);
+  }
+  for (const o of h.overpaidBookings || []) {
+    santeRows.push(`<tr class="clickable" data-booking="${o.bookingId}"><td><span class="tag t-warn">Trop-perçu</span></td>
+      <td><b>${esc(o.reference)}</b> — encaissé ${eur(o.overpaidCents)} de plus que le total dû. À rembourser (deux sessions de paiement ont pu aboutir).</td></tr>`);
   }
   for (const m of h.failedEmails || []) {
     santeRows.push(`<tr><td><span class="tag t-warn">Email</span></td>
@@ -888,6 +893,7 @@ const HISTORY_FR = {
   "payment.manual": "Encaissement enregistré à la main",
   "payment.received": "Paiement reçu",
   "payment.expired": "Session de paiement expirée",
+  "payment.expire_failed": "⚠️ Session non fermée chez Stripe — à vérifier",
   "payment.orphaned": "⚠️ Paiement orphelin — à traiter",
   "payment.overpaid": "⚠️ Trop-perçu",
   "voucher.error": "⚠️ Échec d'envoi du voucher",
@@ -914,7 +920,7 @@ export async function openBooking(id) {
   const payRows = payments
     .map(
       (p) => `<tr><td>${esc((p.receivedAt || p.createdAt).slice(0, 10))}</td><td>${esc(p.kind)}</td><td>${esc(p.method)}</td>
-      <td class="r">${eur(p.amountCents)}</td><td><span class="tag ${p.status === "succeeded" ? "t-ok" : p.status === "pending" ? "t-warn" : "t-bad"}">${p.expired ? "expirée" : esc(p.status)}</span></td></tr>`,
+      <td class="r">${eur(p.amountCents)}</td><td><span class="tag ${p.status === "succeeded" ? "t-ok" : p.status === "pending" ? "t-warn" : p.outcome ? "t-mut" : "t-bad"}">${p.outcome === "expired" ? "expirée" : p.outcome === "superseded" ? "remplacée" : esc(p.status)}</span></td></tr>`,
     )
     .join("");
   // Historique : le journal d'audit de la réservation, fusionné avec les envois

@@ -621,6 +621,14 @@ par l'index UNIQUE partiel `idx_payments_session`.
 `handlePaymentSuccess()` est **idempotent** : un même `session_id` traité deux
 fois ne confirme et n'envoie le voucher qu'une seule fois.
 
+L'idempotence ne couvre qu'**une** session. Contre le risque voisin — deux
+sessions distinctes pour le même montant (multi-onglets, reclic sur « Payer le
+solde »), toutes deux payables —, `startCheckout()` ferme d'abord chez Stripe
+(`checkout/sessions/{id}/expire`) toute session encore ouverte sur la
+réservation. Si l'une aboutit malgré tout, l'argent est encaissé et le
+trop-perçu remonte dans la carte « Santé » du tableau de bord : jamais avalé
+en silence.
+
 Trois cas dégradés sont traités explicitement et tracés en `audit_log` :
 `payment.orphaned` (créneau repris pendant le paiement — argent encaissé, séjour
 impossible), `payment.overpaid`, et l'échec de voucher (qui **ne doit jamais**

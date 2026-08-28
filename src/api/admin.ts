@@ -895,6 +895,7 @@ export function registerAdminRoutes(router: Router): void {
     // faire tomber le tableau de bord — d'où le repli neutre.
     let health: Awaited<ReturnType<typeof healthSignals>> = {
       orphanPayments: [],
+      overpaidBookings: [],
       failedEmails: [],
       recentErrors: [],
       beds24LastPull: null,
@@ -969,6 +970,7 @@ export function registerAdminRoutes(router: Router): void {
         drift,
         ok:
           health.orphanPayments.length === 0 &&
+          health.overpaidBookings.length === 0 &&
           health.failedEmails.length === 0 &&
           health.recentErrors.length === 0 &&
           drift.length === 0 &&

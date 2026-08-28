@@ -66,7 +66,12 @@ const q = new URLSearchParams(location.search);
       <table class="quote">
         <tr><td>Déjà payé</td><td class="r">${eur(b.paidCents)}</td></tr>
         <tr><td>Solde restant${b.balanceCents > 0 && b.balanceDueDate ? ` (pour le ${dfr(b.balanceDueDate)})` : ""}</td>
-          <td class="r">${b.balanceCents > 0 ? `<b>${eur(b.balanceCents)}</b>` : `<b>${eur(0)}</b> <span class="tag t-ok">soldé</span>`}</td></tr>
+          <td class="r">${
+            b.balanceCents > 0 ? `<b>${eur(b.balanceCents)}</b>`
+            : b.overpaidCents > 0 ? `<b>${eur(0)}</b> <span class="tag t-warn">trop-perçu de ${eur(b.overpaidCents)}</span>`
+            : `<b>${eur(0)}</b> <span class="tag t-ok">soldé</span>`
+          }</td></tr>
+        ${b.overpaidCents > 0 ? `<tr><td colspan="2" class="small muted">Nous avons reçu ${eur(b.overpaidCents)} de plus que le montant dû — nous vous recontactons pour le remboursement.</td></tr>` : ""}
         ${data.stay.cautionCents > 0 ? `<tr><td>Caution (hors total, avant l'arrivée)</td><td class="r">${eur(data.stay.cautionCents)}</td></tr>` : ""}
       </table>
       ${data.contact.email || data.contact.phone ? `<p class="small muted" style="margin-top:8px">Contact : ${esc([data.contact.email, data.contact.phone].filter(Boolean).join(" · "))}</p>` : ""}

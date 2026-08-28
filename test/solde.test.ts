@@ -180,12 +180,16 @@ describe("issue #67 — le client paie son solde depuis le voucher", () => {
       .prepare("SELECT status, kind FROM payments WHERE booking_id = ?1 ORDER BY id")
       .bind(bookingId)
       .all<{ status: string; kind: string }>();
-    // arrhes encaissées, 1re session de solde soldée, 2e en attente
+    // arrhes encaissées, 1re session de solde fermée, 2e en attente
     expect(rows.results.map((r) => `${r.kind}:${r.status}`)).toEqual([
       "deposit:succeeded",
       "balance:failed",
       "balance:pending",
     ]);
+    // …et la fermée porte sa raison : dans l'admin, elle ne doit pas se lire
+    // comme un refus de carte.
+    const payments = (await call("GET", "/api/admin/payments")).data.payments as { outcome: string | null }[];
+    expect(payments.filter((p) => p.outcome === "superseded")).toHaveLength(1);
   });
 });
 
@@ -263,19 +267,28 @@ describe("issue #69 — relance du solde et sessions expirées", () => {
     const old = sqlNow(new Date(NOW.getTime() - (PAYMENT_SESSION_TTL_MINUTES + 10) * 60_000));
     await db.prepare("UPDATE payments SET created_at = ?2 WHERE stripe_session_id = ?1").bind(session, old).run();
 
-    const before = (await call("GET", "/api/admin/payments")).data.payments as { status: string; expired: boolean }[];
+    const before = (await call("GET", "/api/admin/payments")).data.payments as { status: string; outcome: string | null }[];
     expect(before.filter((p) => p.status === "pending")).toHaveLength(1);
 
     await runScheduled(env, NOW, (async () => new Response("", { status: 500 })) as unknown as typeof fetch);
 
-    const after = (await call("GET", "/api/admin/payments")).data.payments as { status: string; expired: boolean }[];
+    const after = (await call("GET", "/api/admin/payments")).data.payments as { status: string; outcome: string | null }[];
     expect(after.filter((p) => p.status === "pending")).toHaveLength(0);
-    expect(after.filter((p) => p.expired)).toHaveLength(1);
+    expect(after.filter((p) => p.outcome === "expired")).toHaveLength(1);
 
     // Tracée sur la fiche réservation, comme le fait le webhook Stripe.
     const fiche = await call("GET", `/api/admin/bookings/${bookingId}`);
     const history = fiche.data.history as { action: string }[];
     expect(history.some((h) => h.action === "payment.expired")).toBe(true);
+
+    // Un second passage ne rejournalise rien : seules les lignes RÉELLEMENT
+    // modifiées sont journalisées (`meta.changes`), sinon un webhook qui
+    // aboutit entre le SELECT et l'UPDATE ferait écrire un « expiré » faux.
+    await runScheduled(env, NOW, (async () => new Response("", { status: 500 })) as unknown as typeof fetch);
+    const expiredAudits = await db
+      .prepare("SELECT COUNT(*) AS n FROM audit_log WHERE action = 'payment.expired'")
+      .first<{ n: number }>();
+    expect(expiredAudits?.n).toBe(1);
 
     // Le solde reste payable : un nouveau clic ouvre une session fraîche.
     expect((await call("POST", `/api/public/bookings/${reference}/pay`, { email: GUEST.email })).status).toBe(200);
@@ -298,6 +311,60 @@ describe("issue #69 — relance du solde et sessions expirées", () => {
     await handlePaymentSuccess(db, env, session, "pi_stub");
     const twice = (await voucher(reference)).data.booking as Record<string, number>;
     expect(twice.paidCents).toBe(once.paidCents);
+  });
+
+  it("deux sessions pour le même solde : la première est fermée, et un paiement dessus ne passe pas inaperçu", async () => {
+    // Le scénario multi-onglets : le client clique deux fois « Payer le solde ».
+    const { reference, bookingId } = await bookAndPayDeposit();
+    const first = await call("POST", `/api/public/bookings/${reference}/pay`, { email: GUEST.email });
+    const second = await call("POST", `/api/public/bookings/${reference}/pay`, { email: GUEST.email });
+    const s1 = sessionOf(first.data.checkoutUrl);
+    const s2 = sessionOf(second.data.checkoutUrl);
+    expect(s1).not.toBe(s2);
+
+    // 1. La première session est fermée dès l'ouverture de la seconde. En
+    //    production, `checkout/sessions/{id}/expire` la ferme AUSSI chez
+    //    Stripe — c'est ça qui empêche réellement le second paiement ; en mode
+    //    stub il n'y a pas de session distante, seul l'état local est visible.
+    const p1 = await db
+      .prepare("SELECT status, note FROM payments WHERE stripe_session_id = ?1")
+      .bind(s1)
+      .first<{ status: string; note: string | null }>();
+    expect(p1?.status).toBe("failed");
+    expect(p1?.note).toBe("session remplacée par une nouvelle");
+    // Le simulateur refuse d'ailleurs de rejouer une session fermée sans bruit.
+    expect((await call("GET", `/api/public/dev-pay/info?session=${encodeURIComponent(s1)}`)).data.status).toBe("failed");
+
+    // 2. Le client paie la seconde : la réservation est soldée, pile.
+    await call("POST", "/api/public/dev-pay/confirm", { session: s2 });
+    const soldee = (await voucher(reference)).data.booking as Record<string, number>;
+    expect(soldee.balanceCents).toBe(0);
+    expect(soldee.overpaidCents).toBe(0);
+
+    // 3. Filet de sécurité : si la première aboutissait malgré tout (course
+    //    entre le paiement et l'expiration), l'argent est encaissé — mais le
+    //    trop-perçu est CRIÉ, pas avalé.
+    await handlePaymentSuccess(db, env, s1, "pi_stub");
+    const trop = (await voucher(reference)).data.booking as Record<string, number>;
+    expect(trop.paidCents).toBeGreaterThan(trop.totalCents);
+    expect(trop.overpaidCents).toBeGreaterThan(0);
+    expect(trop.balanceCents).toBe(0);
+
+    const audits = await db
+      .prepare("SELECT action FROM audit_log WHERE entity = ?1")
+      .bind(`booking:${bookingId}`)
+      .all<{ action: string }>();
+    expect(audits.results.map((a) => a.action)).toContain("payment.overpaid");
+
+    // …et remonté dans la carte « Santé » du tableau de bord, pas seulement
+    // dans un journal que personne ne lit.
+    const health = (await call("GET", "/api/admin/overview?property=1")).data.health as {
+      ok: boolean;
+      overpaidBookings: { reference: string; overpaidCents: number }[];
+    };
+    expect(health.ok).toBe(false);
+    expect(health.overpaidBookings.map((o) => o.reference)).toContain(reference);
+    expect(health.overpaidBookings[0]!.overpaidCents).toBeGreaterThan(0);
   });
 
   it("le nettoyage ne touche pas les encaissements manuels ni les sessions récentes", async () => {

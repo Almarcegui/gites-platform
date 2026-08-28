@@ -12,13 +12,15 @@ import {
   getProperty,
   getSettings,
   incrementPromoUse,
+  listPayments,
   markPaymentStatus,
+  SUPERSEDED_SESSION_NOTE,
   setPaymentSession,
   type BookingRow,
   type QuoteContext,
 } from "../db/repo";
 import { buildPaymentReceiptEmail, buildVoucherEmail, queueEmail } from "./email";
-import { createCheckoutSession } from "./stripe";
+import { createCheckoutSession, expireCheckoutSession, stripeEnabled } from "./stripe";
 
 export interface QuoteBody {
   unitId: number;
@@ -75,8 +77,45 @@ export function voucherUrl(env: Env, booking: { reference: string; guestEmail?: 
   return `${env.PUBLIC_BASE_URL}/book/voucher.html?ref=${encodeURIComponent(booking.reference)}${email}`;
 }
 
+/** Ferme les sessions de paiement encore ouvertes sur une réservation, CHEZ
+ *  STRIPE d'abord, en base ensuite.
+ *
+ *  Marquer `failed` en base ne fermait rien : la page Stripe restait payable.
+ *  Un client qui empile les onglets, ou qui reclique « Payer le solde », se
+ *  retrouvait avec deux sessions vivantes pour le même montant — et le webhook
+ *  honorait les deux (contre-review 2026-08-28). L'appel à
+ *  `checkout/sessions/{id}/expire` est donc la vraie protection ; le statut en
+ *  base n'en est que le reflet.
+ *
+ *  Un échec d'expiration (session déjà payée, réseau) ne bloque rien : on
+ *  journalise et on continue. Le filet de dernier recours reste le contrôle de
+ *  trop-perçu de `handlePaymentSuccess`. */
+export async function voidPendingSessions(
+  db: D1Database,
+  env: Env,
+  bookingId: number,
+  actor: "public" | "admin",
+): Promise<void> {
+  const pendings = (await listPayments(db, { bookingId })).filter((x) => x.status === "pending");
+  for (const pay of pendings) {
+    if (pay.stripeSessionId) {
+      const closed = await expireCheckoutSession(env, pay.stripeSessionId);
+      if (!closed && stripeEnabled(env)) {
+        await audit(db, actor, "payment.expire_failed", `booking:${bookingId}`, {
+          payment: pay.id,
+          session: pay.stripeSessionId,
+        });
+      }
+    }
+    await markPaymentStatus(db, pay.id, "failed", { note: SUPERSEDED_SESSION_NOTE });
+  }
+}
+
 /** Crée un paiement en attente + une session Stripe Checkout (ou stub) et
- *  mémorise l'id de session pour la réconciliation webhook. */
+ *  mémorise l'id de session pour la réconciliation webhook.
+ *
+ *  Toute session encore ouverte sur la réservation est fermée d'abord : deux
+ *  sessions vivantes pour le même montant, ce sont deux encaissements. */
 export async function startCheckout(
   db: D1Database,
   env: Env,
@@ -85,6 +124,7 @@ export async function startCheckout(
   amountCents: number,
   actor: "public" | "admin",
 ): Promise<{ url: string; paymentId: number }> {
+  await voidPendingSessions(db, env, booking.id, actor);
   const paymentId = await addPayment(db, {
     bookingId: booking.id,
     kind,

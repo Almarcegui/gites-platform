@@ -12,6 +12,7 @@ import {
   bookingsInWindow,
   countDirectBookingPressure,
   createBookingAtomic,
+  EXPIRED_SESSION_NOTE,
   findPaymentBySession,
   getBooking,
   getBookingByReference,
@@ -24,7 +25,6 @@ import {
   listLinks,
   listOptionsAdmin,
   listProperties,
-  listPayments,
   listPromotions,
   listRateRules,
   listRateOverridesForProperty,
@@ -583,6 +583,10 @@ export function registerPublicRoutes(router: Router): void {
         totalCents: booking.totalCents,
         paidCents: booking.paidCents,
         balanceCents: Math.max(0, booking.totalCents - booking.paidCents),
+        // Le solde est borné à 0 pour l'affichage ; le trop-perçu se dit à
+        // part, sinon un double paiement se lisait « soldé » comme si tout
+        // allait bien (contre-review 2026-08-28).
+        overpaidCents: Math.max(0, booking.paidCents - booking.totalCents),
         balanceDueDate: booking.balanceDueDate,
         holdExpiresAt: booking.status === "pending" ? booking.holdExpiresAt : null,
         quoteLines,
@@ -664,7 +668,7 @@ export function registerPublicRoutes(router: Router): void {
     } else if (event.type === "checkout.session.expired" && obj?.id) {
       const payment = await findPaymentBySession(env.DB, String(obj.id));
       if (payment && payment.status === "pending") {
-        await markPaymentStatus(env.DB, payment.id, "failed");
+        await markPaymentStatus(env.DB, payment.id, "failed", { note: EXPIRED_SESSION_NOTE });
         await audit(env.DB, "stripe", "payment.expired", `booking:${payment.bookingId}`, { session: String(obj.id) });
       }
     }
@@ -769,7 +773,10 @@ export function registerPublicRoutes(router: Router): void {
    *  L'idempotence est celle de l'acompte, inchangée : `handlePaymentSuccess`
    *  sort par le haut sur un paiement déjà `succeeded`, et l'index UNIQUE
    *  partiel `idx_payments_session` interdit deux paiements sur une session.
-   *  Un webhook rejoué ne peut donc pas créditer deux fois. */
+   *  Un webhook rejoué ne peut donc pas créditer deux fois. Contre le risque
+   *  voisin — DEUX sessions distinctes pour le même montant, toutes deux
+   *  payées — `startCheckout` ferme chez Stripe celles qui traînent avant d'en
+   *  ouvrir une nouvelle. */
   router.post("/api/public/bookings/:reference/pay", async (req, env, p) => {
     const db = env.DB;
     const body = await readJson<{ email?: string }>(req);
@@ -782,7 +789,6 @@ export function registerPublicRoutes(router: Router): void {
       // Plancher Stripe : une session de moins de 0,50 € est refusée à la
       // création. Le reliquat se règle alors avec le propriétaire.
       if (balance < MIN_CHECKOUT_CENTS) return apiError(400, "solde trop faible pour un paiement en ligne");
-      await failPendingSessions(db, booking.id);
       const { url } = await startCheckout(db, env, booking, "balance", balance, "public");
       return json({ checkoutUrl: url, amountCents: balance, kind: "balance", now: sqlNow() });
     }
@@ -791,7 +797,6 @@ export function registerPublicRoutes(router: Router): void {
     if (!booking.holdExpiresAt || booking.holdExpiresAt <= sqlNow()) {
       return apiError(410, "l'option a expiré — le créneau est de nouveau ouvert, relancez une réservation");
     }
-    await failPendingSessions(db, booking.id);
     const kind = booking.balanceDueDate == null ? "full" : "deposit";
     const { url } = await startCheckout(db, env, booking, kind, booking.depositCents, "public");
     return json({
@@ -802,14 +807,6 @@ export function registerPublicRoutes(router: Router): void {
       now: sqlNow(),
     });
   });
-
-  /** On repart sur une session propre : les tentatives précédentes sont soldées
-   *  (un paiement Stripe qui aboutirait quand même reste honoré par le webhook,
-   *  qui ne s'arrête que sur un paiement déjà `succeeded`). */
-  async function failPendingSessions(db: D1Database, bookingId: number): Promise<void> {
-    const pendings = (await listPayments(db, { bookingId })).filter((x) => x.status === "pending");
-    for (const pay of pendings) await markPaymentStatus(db, pay.id, "failed");
-  }
 
   /** Fil de conversation du client (page voucher). */
   router.get("/api/public/bookings/:reference/messages", async (_req, env, p, url) => {
