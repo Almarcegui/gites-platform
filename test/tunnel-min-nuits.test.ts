@@ -225,3 +225,25 @@ describe("le tunnel affiche la règle avant la sélection (#66)", () => {
     expect(JS).toMatch(/function applySuggestion/);
   });
 });
+
+describe("l'étape « Hébergement » dit la liaison et marque le choix (#45, #46)", () => {
+  const read = (rel: string): string => readFileSync(fileURLToPath(new URL(`../${rel}`, import.meta.url)), "utf8");
+  const JS = read("public/book/book.js");
+  const CSS = read("public/book/book.css");
+
+  it("#45 — l'unité liée qui occupe les nuits est NOMMÉE, et ce qui reste libre aussi", () => {
+    // le champ vient de l'API : sans lui, la carte ne peut rien expliquer
+    expect(JS).toMatch(/blockedByUnitIds/);
+    expect(JS).toMatch(/Ces nuits sont déjà prises sur \$\{frList\(blockers\)\}/);
+    expect(JS).toMatch(/reste libre/);
+    expect(JS).toMatch(/restent libres/);
+  });
+
+  it("#46 — la carte choisie porte un état visuel ET un état accessible", () => {
+    expect(JS).toMatch(/function markSelected/);
+    expect(JS).toMatch(/aria-pressed/);
+    // les autres cartes restent des boutons cliquables : aucune n'est désactivée
+    expect(JS).not.toMatch(/data-select="\$\{u\.unitId\}"[^>]*disabled/);
+    expect(CSS).toMatch(/\.prop\.sel\{/);
+  });
+});

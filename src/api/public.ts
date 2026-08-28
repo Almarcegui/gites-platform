@@ -5,7 +5,7 @@
 
 import { apiError, json, readJson, Router } from "./router";
 import { addDays, diffDays, isIsoDate, sqlNow, todayInZone, type IsoDate } from "../core/dates";
-import { blocksAsSpans, isUnitFree } from "../core/availability";
+import { blockingSourceUnitIds, blocksAsSpans, isUnitFree } from "../core/availability";
 import { rateCalendar, type UnitPricingInfo } from "../core/pricing";
 import { suggestStays, type NightOption, type StaySuggestion } from "../core/stay-options";
 import {
@@ -377,6 +377,12 @@ export function registerPublicRoutes(router: Router): void {
         photoUrl: u.photoUrl,
         cleaningFeeCents: u.cleaningFeeCents,
         available,
+        // Pourquoi cette unité n'est pas réservable : les unités LIÉES dont une
+        // occupation recouvre le séjour. Sans ce champ, le tunnel ne pouvait
+        // dire que « déjà réservé » — le visiteur ne savait pas laquelle des
+        // deux maisons faisait tomber le Domaine entier (issue #45). Vide
+        // quand l'unité est libre, ou quand c'est sa propre résa qui occupe.
+        blockedByUnitIds: available ? [] : blockingSourceUnitIds(u.id, checkin, checkout, spans, links, now),
         fitsCapacity,
         quote,
         suggestions,
