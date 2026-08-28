@@ -234,9 +234,22 @@ export function buildPaymentReceiptEmail(
   };
 }
 
-/** Rappel automatique de solde (cron, à l'échéance). */
-export function buildBalanceReminderEmail(b: BookingRow, property: PropertyRow): { subject: string; bodyText: string } {
+/** Rappel de solde — automatique (cron, à l'échéance) ou déclenché à la main
+ *  depuis la fiche réservation du back-office (issue #69).
+ *
+ *  `payUrl` est l'URL du VOUCHER, pas celle d'une session de paiement : une
+ *  session Stripe expire (30 min à 24 h), un rappel se lit parfois le
+ *  surlendemain. Le voucher, lui, ne périme jamais et porte le bouton
+ *  « Payer le solde » (issue #67), qui ouvre une session fraîche au clic. */
+export function buildBalanceReminderEmail(
+  b: BookingRow,
+  property: PropertyRow,
+  payUrl?: string | null,
+): { subject: string; bodyText: string } {
   const balance = b.totalCents - b.paidCents;
+  const closing = payUrl
+    ? [`Vous pouvez le régler en ligne, en quelques clics :`, ``, payUrl]
+    : [`Nous pouvons vous renvoyer un lien de paiement sur simple demande.`];
   return {
     subject: `Rappel — solde de votre séjour ${b.reference} (${property.name})`,
     bodyText: [
@@ -246,7 +259,7 @@ export function buildBalanceReminderEmail(b: BookingRow, property: PropertyRow):
       ``,
       `Solde : ${formatEur(balance)}${b.balanceDueDate ? ` — échéance le ${formatDateFr(b.balanceDueDate)}` : ""}`,
       ``,
-      `Nous pouvons vous renvoyer un lien de paiement sur simple demande.`,
+      ...closing,
       ``,
       `À bientôt,`,
       `${property.name}`,

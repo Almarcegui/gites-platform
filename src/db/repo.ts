@@ -957,6 +957,15 @@ export async function recomputePaid(db: D1Database, bookingId: number): Promise<
     .run();
 }
 
+/** Note portée par un paiement dont la session de checkout a expiré sans être
+ *  payée (issue #69). Pourquoi une NOTE et pas un statut `expired` : la colonne
+ *  `payments.status` porte un CHECK (`pending`/`succeeded`/`failed`/`refunded`)
+ *  et SQLite ne sait pas modifier un CHECK sans reconstruire la table. Le
+ *  webhook Stripe `checkout.session.expired` marquait DÉJÀ ces paiements
+ *  `failed` — on garde ce statut (une session morte n'est plus en attente) et
+ *  la note en donne la raison, exposée en `expired` pour l'affichage. */
+export const EXPIRED_SESSION_NOTE = "session de paiement expirée";
+
 export interface PaymentRow {
   id: number;
   bookingId: number;
@@ -967,6 +976,8 @@ export interface PaymentRow {
   stripeSessionId: string | null;
   stripePaymentIntent: string | null;
   status: string;
+  /** `failed` parce que la session a expiré, et non parce que la carte a été refusée. */
+  expired: boolean;
   note: string | null;
   receivedAt: string | null;
   createdAt: string;
@@ -974,11 +985,13 @@ export interface PaymentRow {
 }
 
 function mapPayment(r: Raw): PaymentRow {
+  const note = strOrNull(r.note);
   return {
     id: num(r.id), bookingId: num(r.booking_id), kind: str(r.kind), method: str(r.method),
     amountCents: num(r.amount_cents), currency: str(r.currency),
     stripeSessionId: strOrNull(r.stripe_session_id), stripePaymentIntent: strOrNull(r.stripe_payment_intent),
-    status: str(r.status), note: strOrNull(r.note), receivedAt: strOrNull(r.received_at), createdAt: str(r.created_at),
+    status: str(r.status), expired: str(r.status) === "failed" && note === EXPIRED_SESSION_NOTE,
+    note, receivedAt: strOrNull(r.received_at), createdAt: str(r.created_at),
     bookingReference: strOrNull(r.booking_reference) ?? undefined,
   };
 }
@@ -1018,6 +1031,42 @@ export async function markPaymentStatus(
     .bind(paymentId, status, opts.receivedAt ?? null, opts.stripePaymentIntent ?? null)
     .run();
   if (payment) await recomputePaid(db, payment.booking_id);
+}
+
+/** Sessions de checkout restées « en attente » au-delà de leur durée de vie
+ *  (issue #69). Filet de sécurité du webhook `checkout.session.expired`, qui
+ *  n'existe pas en mode stub et qui peut se perdre : sans ça, chaque tunnel
+ *  abandonné laisse une ligne « en attente » indéfiniment dans la vue Paiements.
+ *
+ *  Deux garde-fous :
+ *  - seuls les paiements `stripe` en `pending` sont touchés — un encaissement
+ *    manuel est créé directement en `succeeded`, il ne peut pas tomber ici ;
+ *  - `recomputePaid` n'est pas nécessaire : ces paiements n'ont jamais été
+ *    comptés (`paid_cents` ne somme que les `succeeded`).
+ *
+ *  Un webhook tardif reste honoré : `handlePaymentSuccess` ne sort par le haut
+ *  que sur un paiement DÉJÀ `succeeded`, jamais sur un `failed`. */
+export async function expireStalePaymentSessions(
+  db: D1Database,
+  olderThan: string,
+): Promise<{ id: number; bookingId: number; amountCents: number }[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT id, booking_id, amount_cents FROM payments
+        WHERE status = 'pending' AND method = 'stripe' AND created_at <= ?1`,
+    )
+    .bind(olderThan)
+    .all();
+  const stale = (results as Raw[]).map((r) => ({
+    id: num(r.id), bookingId: num(r.booking_id), amountCents: num(r.amount_cents),
+  }));
+  for (const p of stale) {
+    await db
+      .prepare("UPDATE payments SET status = 'failed', note = COALESCE(note, ?2) WHERE id = ?1 AND status = 'pending'")
+      .bind(p.id, EXPIRED_SESSION_NOTE)
+      .run();
+  }
+  return stale;
 }
 
 /** Déplace une résa iCal sur de nouvelles dates, avec le MÊME garde-fou
@@ -1855,6 +1904,20 @@ export interface AuditRow {
 
 export async function listAudit(db: D1Database, limit = 200): Promise<AuditRow[]> {
   const { results } = await db.prepare("SELECT * FROM audit_log ORDER BY id DESC LIMIT ?1").bind(limit).all();
+  return (results as Raw[]).map((r) => ({
+    id: num(r.id), actor: str(r.actor), action: str(r.action),
+    entity: strOrNull(r.entity), detail: strOrNull(r.detail), createdAt: str(r.created_at),
+  }));
+}
+
+/** Journal d'une entité précise (ex. 'booking:42') — historique de la fiche
+ *  réservation du back-office (issue #69 : « la relance doit être visible dans
+ *  l'historique, avec sa date et son auteur »). */
+export async function listAuditByEntity(db: D1Database, entity: string, limit = 50): Promise<AuditRow[]> {
+  const { results } = await db
+    .prepare("SELECT * FROM audit_log WHERE entity = ?1 ORDER BY id DESC LIMIT ?2")
+    .bind(entity, limit)
+    .all();
   return (results as Raw[]).map((r) => ({
     id: num(r.id), actor: str(r.actor), action: str(r.action),
     entity: strOrNull(r.entity), detail: strOrNull(r.detail), createdAt: str(r.created_at),

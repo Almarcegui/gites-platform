@@ -244,7 +244,7 @@ d'information, et la disponibilité finale toujours regarantie par l'INSERT atom
 | `/api/public/quote` | POST | Devis détaillé (recalculé à chaque changement d'option) |
 | `/api/public/bookings` | POST | **Création de la réservation** + session de paiement |
 | `/api/public/bookings/:reference` | GET | Voucher — exige référence **et** email |
-| `/api/public/bookings/:reference/pay` | POST | Reprise d'un paiement interrompu |
+| `/api/public/bookings/:reference/pay` | POST | Reprise d'un paiement interrompu, **ou paiement du solde** d'une résa confirmée (libre-service, issue #67) |
 | `/api/public/bookings/:reference/messages` | GET/POST | Fil de conversation client |
 | `/api/public/contact` | POST | Formulaire « une question avant de réserver ? » (pot de miel) |
 | `/api/public/today` | GET | Date serveur (Europe/Brussels) + drapeau `demo` |
@@ -278,8 +278,9 @@ rien quand `ADMIN_TOKEN` était absent — ce qui est la valeur par défaut de
 Les ~70 endpoints admin couvrent : comptes utilisateurs, référentiel
 (propriétés/unités/liaisons), tableau de bord, planning, réservations et vente
 manuelle, paiements, saisons et règles tarifaires, promotions, options, clients,
-statistiques + exports CSV, réglages, iCal, import elloha, messages, checklist de
-mise en route, journal d'audit, et Beds24 (status/push/pull/invite-code).
+statistiques + exports CSV, réglages, iCal, import elloha, messages, relance du solde
+(`POST /bookings/:id/balance-reminder`, issue #69), checklist de mise en route,
+journal d'audit, et Beds24 (status/push/pull/invite-code).
 
 ### 4.5 Moteurs purs — `src/core/`
 
@@ -682,9 +683,13 @@ et le même onglet du back-office.
 
 1. Expiration des holds périmés (filet — la dispo n'en dépend pas, elle teste
    `hold_expires_at > now` en direct) ;
-   1 bis. Purge des sessions admin expirées ;
+   1 bis. Sessions de **paiement** restées « en attente » au-delà de 35 min →
+   `failed` + note « session de paiement expirée » (filet du webhook
+   `checkout.session.expired`, qui n'existe pas en mode stub) ;
+   1 ter. Purge des sessions admin expirées ;
 2. Import des flux iCal actifs ;
-3. Rappels de solde à l'échéance (un seul par réservation, mode stub par défaut) ;
+3. Rappels de solde à l'échéance (un seul par réservation, mode stub par défaut) —
+   le rappel renvoie vers le voucher, qui porte le bouton « Payer le solde » ;
 4. Beds24 : **pull puis push** — l'état poussé intègre ainsi les résas qui
    viennent d'arriver.
 

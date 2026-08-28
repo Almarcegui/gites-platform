@@ -3,11 +3,15 @@
 //  2. import des flux iCal actifs
 //  3. rappels de solde à l'échéance (une seule fois par résa, mode stub par défaut)
 //  4. push Beds24 des calendriers mappés (dispo + prix — inactif sans token)
+//
+// Plus deux ménages : sessions admin périmées, et sessions de paiement restées
+// « en attente » au-delà de leur durée de vie (issue #69).
 
 import { sqlNow, todayInZone } from "../core/dates";
 import {
   audit,
   expireStaleHolds,
+  expireStalePaymentSessions,
   getProperty,
   hasEmailOfKind,
   listBookings,
@@ -18,12 +22,18 @@ import { beds24Configured } from "./beds24";
 import { purgeExpiredSessions } from "./admin-auth";
 import { pullBeds24Bookings, pushCalendars } from "./beds24-sync";
 import { runDailyDigest } from "./digest";
+import { voucherUrl } from "./booking-flow";
 import { buildBalanceReminderEmail, queueEmail } from "./email";
 import { CRON_HEARTBEAT_KEY } from "./health";
 import { syncFeed } from "./ical";
 import { runDailyReconcile } from "./reconcile";
 import { runAbandonedReminders } from "./relance";
 import { setSetting } from "./settings";
+
+/** Durée de vie d'une session de checkout (`stripe.ts` pose expires_at à +30
+ *  min, aligné sur le hold), plus une marge d'horloge : au-delà, une session
+ *  encore « en attente » est morte. */
+export const PAYMENT_SESSION_TTL_MINUTES = 35;
 
 export async function runScheduled(env: Env, now: Date = new Date(), fetcher: typeof fetch = fetch): Promise<void> {
   const db = env.DB;
@@ -53,7 +63,25 @@ export async function runScheduled(env: Env, now: Date = new Date(), fetcher: ty
     await audit(db, "cron", "holds.expire.error", undefined, { error: e instanceof Error ? e.message : String(e) });
   }
 
-  // 1 bis. Sessions du back-office expirées — simple ménage.
+  // 1 bis. Sessions de PAIEMENT abandonnées (issue #69). Le webhook
+  //    `checkout.session.expired` couvre déjà le cas nominal, mais il n'existe
+  //    pas en mode stub et peut se perdre : sans ce filet, chaque tunnel
+  //    abandonné laissait une ligne « en attente » à vie dans la vue Paiements.
+  //    Le journal est écrit par paiement (entité `booking:<id>`) pour que la
+  //    fiche réservation en garde la trace, comme le fait le webhook.
+  try {
+    const stale = await expireStalePaymentSessions(
+      db,
+      sqlNow(new Date(now.getTime() - PAYMENT_SESSION_TTL_MINUTES * 60_000)),
+    );
+    for (const p of stale) {
+      await audit(db, "cron", "payment.expired", `booking:${p.bookingId}`, { payment: p.id, amountCents: p.amountCents });
+    }
+  } catch (e) {
+    await audit(db, "cron", "payment.expire.error", undefined, { error: e instanceof Error ? e.message : String(e) });
+  }
+
+  // 1 ter. Sessions du back-office expirées — simple ménage.
   try {
     await purgeExpiredSessions(db);
   } catch (e) {
@@ -81,7 +109,9 @@ export async function runScheduled(env: Env, now: Date = new Date(), fetcher: ty
     if (await hasEmailOfKind(db, b.id, "balance_reminder")) continue;
     const property = await getProperty(db, b.propertyId ?? -1);
     if (!property) continue;
-    const email = buildBalanceReminderEmail(b, property);
+    // Depuis l'issue #67, le solde se règle en libre-service sur le voucher :
+    // le rappel y renvoie au lieu de promettre un lien « sur demande ».
+    const email = buildBalanceReminderEmail(b, property, voucherUrl(env, b));
     await queueEmail(db, env, {
       bookingId: b.id,
       to: b.guestEmail,

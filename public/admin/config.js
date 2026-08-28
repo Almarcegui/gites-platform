@@ -262,7 +262,9 @@ export function registerConfigViews() {
             <td class="mono">${esc(p.bookingReference ?? String(p.bookingId))}</td>
             <td>${KIND_FR[p.kind] || p.kind}</td><td>${METHOD_FR[p.method] || p.method}</td>
             <td class="r">${eur(p.amountCents)}</td>
-            <td><span class="tag ${p.status === "succeeded" ? "t-ok" : p.status === "pending" ? "t-warn" : "t-bad"}">${p.status === "succeeded" ? "encaissé" : p.status === "pending" ? "en attente" : p.status}</span></td></tr>`,
+            <td><span class="tag ${p.status === "succeeded" ? "t-ok" : p.status === "pending" ? "t-warn" : "t-bad"}">${
+              p.status === "succeeded" ? "encaissé" : p.status === "pending" ? "en attente" : p.expired ? "expirée" : p.status
+            }</span></td></tr>`,
           )
           .join("") || `<tr><td colspan="6" class="muted">Aucun paiement.</td></tr>`}</table>
       </div>`;

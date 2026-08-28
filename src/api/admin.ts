@@ -57,6 +57,7 @@ import {
   listAuditByAction,
   listBeds24Bookings,
   listBookings,
+  listAuditByEntity,
   listEmailLog,
   listFeeds,
   listGuests,
@@ -104,8 +105,15 @@ import {
 } from "../services/admin-auth";
 import { getSetting, setSetting } from "../services/settings";
 import { pullBeds24Bookings, pushCalendars, triggerBeds24Push, triggerBeds24PushAll } from "../services/beds24-sync";
-import { quoteFromContext, sendVoucher, startCheckout, type QuoteBody } from "../services/booking-flow";
-import { queueEmail } from "../services/email";
+import {
+  MIN_CHECKOUT_CENTS,
+  quoteFromContext,
+  sendVoucher,
+  startCheckout,
+  voucherUrl,
+  type QuoteBody,
+} from "../services/booking-flow";
+import { buildBalanceReminderEmail, queueEmail } from "../services/email";
 import { importElloha } from "../services/elloha-import";
 import { processInboundEmail, type ParsedEmail } from "../services/inbound-email";
 import { syncFeed } from "../services/ical";
@@ -1045,9 +1053,13 @@ export function registerAdminRoutes(router: Router): void {
     const id = intParam(p.id, 0);
     const booking = await getBooking(env.DB, id);
     if (!booking) return apiError(404, "réservation inconnue");
-    const [payments, emails] = await Promise.all([
+    // `history` : le journal d'audit de CETTE réservation. Sans lui, une
+    // relance de solde n'était visible nulle part sur la fiche — ni sa date,
+    // ni son auteur (issue #69).
+    const [payments, emails, history] = await Promise.all([
       listPayments(env.DB, { bookingId: id }),
       listEmailLog(env.DB, id),
+      listAuditByEntity(env.DB, `booking:${id}`),
     ]);
     let quote: unknown = null;
     try {
@@ -1055,7 +1067,7 @@ export function registerAdminRoutes(router: Router): void {
     } catch {
       quote = null;
     }
-    return json({ booking, payments, emails, quote });
+    return json({ booking, payments, emails, history, quote });
   }));
 
   // Vente manuelle (résa téléphone) : devis serveur + création directe.
@@ -1196,6 +1208,46 @@ export function registerAdminRoutes(router: Router): void {
     const kind = body?.kind === "deposit" || body?.kind === "full" ? body.kind : "balance";
     const { url } = await startCheckout(env.DB, env, booking, kind, amount, "admin");
     return json({ url, amountCents: amount });
+  }));
+
+  /** « Relancer le solde » (issue #69) : un clic, un email journalisé, une
+   *  ligne d'historique — au lieu de fabriquer un lien à la main et de
+   *  l'envoyer depuis sa propre boîte.
+   *
+   *  L'email porte l'URL du VOUCHER, pas une session de paiement : une session
+   *  Stripe expire (30 min), un rappel se lit parfois le surlendemain. Le
+   *  voucher ouvre une session fraîche au clic (issue #67) — et on n'ouvre donc
+   *  pas une session « en attente » de plus à chaque relance, ce qui reviendrait
+   *  à nourrir le problème que la même issue demande de nettoyer.
+   *
+   *  `kind = 'balance_reminder'`, comme le rappel automatique du cron : une
+   *  relance manuelle vaut rappel, et dispense donc le cron du sien. */
+  router.post("/api/admin/bookings/:id/balance-reminder", guard(async (req, env, p) => {
+    const id = intParam(p.id, 0);
+    const booking = await getBooking(env.DB, id);
+    if (!booking) return apiError(404, "réservation inconnue");
+    if (booking.status !== "confirmed") return apiError(400, "réservation non confirmée — pas de solde à relancer");
+    if (!booking.guestEmail) return apiError(400, "pas d'email client sur cette réservation");
+    const balance = booking.totalCents - booking.paidCents;
+    if (balance <= 0) return apiError(400, "cette réservation est intégralement réglée");
+    const property = booking.propertyId != null ? await getProperty(env.DB, booking.propertyId) : null;
+    if (!property) return apiError(404, "domaine inconnu");
+
+    const payUrl = voucherUrl(env, booking);
+    const email = buildBalanceReminderEmail(booking, property, payUrl);
+    await queueEmail(env.DB, env, {
+      bookingId: id,
+      to: booking.guestEmail,
+      subject: email.subject,
+      bodyText: email.bodyText,
+      kind: "balance_reminder",
+    });
+    await audit(env.DB, "admin", "email.balance_reminder", `booking:${id}`, {
+      par: currentUser(req),
+      balanceCents: balance,
+      to: booking.guestEmail,
+    });
+    return json({ ok: true, balanceCents: balance, payUrl });
   }));
 
   router.post("/api/admin/bookings/:id/resend-voucher", guard(async (_req, env, p) => {

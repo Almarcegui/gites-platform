@@ -868,8 +868,44 @@ function openEllohaImport() {
   modal.querySelector("#impReal").onclick = () => run(false).catch((e) => toast(e.message, true));
 }
 
+/** Journal d'audit → phrase lisible. Ce qui n'est pas listé ici s'affiche tel
+ *  quel : mieux vaut une ligne technique qu'une ligne manquante. */
+const HISTORY_FR = {
+  "booking.confirmed": "Réservation confirmée (paiement en ligne)",
+  "booking.confirm_manual": "Confirmée à la main",
+  "booking.confirm_conflict": "Confirmation refusée — créneau repris",
+  "booking.cancel": "Annulée",
+  "booking.create": "Réservée en ligne par le client",
+  "booking.create_manual": "Créée en vente manuelle",
+  "booking.dates_updated": "Dates déplacées",
+  "email.abandon_reminder": "Relance de réservation abandonnée",
+  "email.balance_reminder": "Relance du solde envoyée",
+  "email.inbound": "Email entrant rattaché",
+  "email.voucher_resent": "Voucher renvoyé",
+  "message.booking": "Message du client depuis son voucher",
+  "message.reply": "Réponse envoyée au client",
+  "payment.link_created": "Lien de paiement créé",
+  "payment.manual": "Encaissement enregistré à la main",
+  "payment.received": "Paiement reçu",
+  "payment.expired": "Session de paiement expirée",
+  "payment.orphaned": "⚠️ Paiement orphelin — à traiter",
+  "payment.overpaid": "⚠️ Trop-perçu",
+  "voucher.error": "⚠️ Échec d'envoi du voucher",
+  "receipt.error": "⚠️ Échec d'envoi du reçu",
+};
+
+/** « par qui » : l'auteur réel quand la route le trace (`detail.par`),
+ *  sinon l'acteur brut (cron, stripe, public…). */
+function historyWho(entry) {
+  let par = null;
+  try {
+    par = entry.detail ? JSON.parse(entry.detail).par : null;
+  } catch { /* detail non JSON : on retombe sur l'acteur */ }
+  return par || entry.actor;
+}
+
 export async function openBooking(id) {
-  const { booking: b, payments, quote } = await api(`/api/admin/bookings/${id}`);
+  const { booking: b, payments, emails, history, quote } = await api(`/api/admin/bookings/${id}`);
   const balance = Math.max(0, b.totalCents - b.paidCents);
   const quoteRows = quote?.lines
     ? quote.lines.map((l) => `<tr><td>${esc(l.label)}</td><td class="r">${eur(l.amountCents)}</td></tr>`).join("") +
@@ -878,7 +914,27 @@ export async function openBooking(id) {
   const payRows = payments
     .map(
       (p) => `<tr><td>${esc((p.receivedAt || p.createdAt).slice(0, 10))}</td><td>${esc(p.kind)}</td><td>${esc(p.method)}</td>
-      <td class="r">${eur(p.amountCents)}</td><td><span class="tag ${p.status === "succeeded" ? "t-ok" : p.status === "pending" ? "t-warn" : "t-bad"}">${esc(p.status)}</span></td></tr>`,
+      <td class="r">${eur(p.amountCents)}</td><td><span class="tag ${p.status === "succeeded" ? "t-ok" : p.status === "pending" ? "t-warn" : "t-bad"}">${p.expired ? "expirée" : esc(p.status)}</span></td></tr>`,
+    )
+    .join("");
+  // Historique : le journal d'audit de la réservation, fusionné avec les envois
+  // d'emails. Répond à « qui a relancé le solde, et quand ? » (issue #69).
+  const historyRows = [
+    ...(history || []).map((h) => ({
+      at: h.createdAt,
+      what: HISTORY_FR[h.action] || h.action,
+      who: historyWho(h),
+    })),
+    ...(emails || []).map((e) => ({
+      at: e.createdAt,
+      what: `✉️ ${e.kind} → ${e.toEmail}${e.status === "sent" ? "" : ` (${e.status})`}`,
+      who: "système",
+    })),
+  ]
+    .sort((x, y) => (x.at < y.at ? 1 : -1))
+    .map(
+      (r) => `<tr><td class="small">${esc(r.at.slice(0, 16).replace("T", " "))}</td>
+        <td>${esc(r.what)}</td><td class="small muted">${esc(r.who)}</td></tr>`,
     )
     .join("");
 
@@ -900,10 +956,13 @@ export async function openBooking(id) {
       </div>
     </div>
     <div class="mb"><label class="f">Notes internes</label><textarea id="notes" rows="2">${esc(b.internalNotes || "")}</textarea></div>
+    <div class="mb"><h3>Historique</h3>
+      <table>${historyRows || `<tr><td class="muted">Rien à afficher.</td></tr>`}</table></div>
     <div class="row">
       ${b.status === "pending" ? `<button class="btn sm" id="btnConfirm">Confirmer (paiement reçu hors ligne)</button>` : ""}
       ${b.status !== "cancelled" ? `<button class="btn o sm" id="btnPay">+ Paiement manuel</button>` : ""}
       ${b.status !== "cancelled" && balance > 0 ? `<button class="btn o sm" id="btnLink">Lien de paiement (${eur(balance)})</button>` : ""}
+      ${b.guestEmail && b.status === "confirmed" && balance > 0 ? `<button class="btn o sm" id="btnRelance">Relancer le solde (${eur(balance)})</button>` : ""}
       ${b.guestEmail && b.status === "confirmed" ? `<button class="btn o sm" id="btnVoucher">Renvoyer le voucher</button>` : ""}
       <button class="btn o sm" id="btnMsg">💬 Message au client</button>
       <button class="btn o sm" id="btnNotes">Enregistrer les notes</button>
@@ -941,6 +1000,12 @@ export async function openBooking(id) {
     toast(res.note || "Réservation annulée — le créneau est libéré");
     modal.remove();
     navigate();
+  });
+  modal.querySelector("#btnRelance")?.addEventListener("click", async () => {
+    const res = await api(`/api/admin/bookings/${id}/balance-reminder`, { method: "POST" });
+    toast(`Relance du solde (${eur(res.balanceCents)}) journalisée — envoi réel selon configuration email`);
+    modal.remove();
+    openBooking(id); // l'historique doit montrer la relance qu'on vient de faire
   });
   modal.querySelector("#btnVoucher")?.addEventListener("click", async () => {
     await api(`/api/admin/bookings/${id}/resend-voucher`, { method: "POST" });
