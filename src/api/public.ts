@@ -32,12 +32,14 @@ import {
   listRateRules,
   listRateOverridesForProperty,
   listSeasons,
+  listUnitPhotos,
   listUnits,
   manualBlocksInWindow,
   markPaymentStatus,
   recordCgvAcceptance,
   upsertGuest,
   type BookingRow,
+  type UnitPhotoRow,
   type UnitRow,
   listPayments,
 } from "../db/repo";
@@ -218,6 +220,45 @@ export function publicContact(value: string | null | undefined): string | null {
   return v === "" || /^TODO_/i.test(v) ? null : v;
 }
 
+/** Galerie publique d'un hébergement (issue #32).
+ *
+ *  Le client reçoit le chemin du JPEG et les largeurs WebP disponibles, et
+ *  reconstruit `<base>-<largeur>.webp` par convention — c'est exactement ce que
+ *  produit `scripts/optimize-images.mjs`, donc rien à stocker de plus.
+ *
+ *  `alt` et `caption` sortent BRUTS. Ce sont des données, pas du HTML : c'est au
+ *  rendu de les échapper (`esc()` côté tunnel, nœuds texte côté galerie). Les
+ *  échapper ici les casserait deux fois le jour où un texte contient « & ». */
+function publicPhoto(p: UnitPhotoRow): Record<string, unknown> {
+  return {
+    path: p.path,
+    alt: p.alt,
+    caption: p.caption,
+    webpWidths: p.webpWidths,
+    width: p.width,
+    height: p.height,
+  };
+}
+
+/** Photo principale d'un hébergement : la PREMIÈRE de sa galerie quand il en a
+ *  une, sinon `units.photo_url`. La dérivation se fait à la lecture et non par
+ *  une écriture dans `units` — réordonner la galerie depuis le back-office
+ *  change donc la photo principale sans migration ni tâche de fond. */
+function mainPhotoUrl(unit: UnitRow, photos: UnitPhotoRow[] | undefined): string | null {
+  return photos?.[0]?.path ?? unit.photoUrl;
+}
+
+/** Regroupe des photos par hébergement, en conservant l'ordre d'affichage. */
+function photosByUnit(rows: UnitPhotoRow[]): Map<number, UnitPhotoRow[]> {
+  const out = new Map<number, UnitPhotoRow[]>();
+  for (const r of rows) {
+    const list = out.get(r.unitId);
+    if (list) list.push(r);
+    else out.set(r.unitId, [r]);
+  }
+  return out;
+}
+
 export function registerPublicRoutes(router: Router): void {
   // --- liste des domaines (landing multi-biens) -------------------------------
   router.get("/api/public/properties", async (_req, env) => {
@@ -225,11 +266,14 @@ export function registerPublicRoutes(router: Router): void {
     const out = [];
     for (const p of properties) {
       const units = (await listUnits(env.DB, p.id)).filter((u) => u.active);
+      // La vignette du domaine suit la galerie : première photo du premier
+      // hébergement qui en a une, sinon l'ancienne `units.photo_url`.
+      const gal = photosByUnit(await listUnitPhotos(env.DB, units.map((u) => u.id)));
       out.push({
         slug: p.slug,
         name: p.name,
         address: p.address,
-        photoUrl: units.find((u) => u.photoUrl)?.photoUrl ?? null,
+        photoUrl: units.map((u) => mainPhotoUrl(u, gal.get(u.id))).find((v) => v) ?? null,
         unitsCount: units.filter((u) => !u.isComposite).length,
         capacityMax: Math.max(0, ...units.map((u) => u.capacityMax)),
       });
@@ -246,6 +290,9 @@ export function registerPublicRoutes(router: Router): void {
       getSettings(env.DB, property.id),
       listOptionsAdmin(env.DB, property.id),
     ]);
+    // Une seule requête pour toute la galerie du domaine : le tunnel affiche
+    // les vignettes de chaque hébergement sans aller-retour supplémentaire.
+    const gal = photosByUnit(await listUnitPhotos(env.DB, units.map((u) => u.id)));
     return json({
       property: {
         slug: property.slug,
@@ -266,7 +313,8 @@ export function registerPublicRoutes(router: Router): void {
           capacityMax: u.capacityMax,
           isComposite: u.isComposite,
           cleaningFeeCents: u.cleaningFeeCents,
-          photoUrl: u.photoUrl,
+          photoUrl: mainPhotoUrl(u, gal.get(u.id)),
+          photos: (gal.get(u.id) ?? []).map(publicPhoto),
           // Pourcentage d'arrhes EFFECTIF de l'hébergement (issue #75) : le
           // tunnel l'annonce avant même d'avoir un devis, et le repli sur le
           // domaine est résolu ici plutôt que dans le navigateur.
@@ -285,6 +333,22 @@ export function registerPublicRoutes(router: Router): void {
       },
       cgvText: settings.cgvText,
     });
+  });
+
+  // --- galerie d'un hébergement (pages de gîtes, issue #32) ------------------
+  //
+  // Endpoint dédié plutôt que la fiche complète du domaine : une page de gîte
+  // n'a besoin ni des tarifs, ni des options, ni du texte des CGV. Les pages
+  // servent déjà la galerie en HTML — cet appel ne fait que rejouer l'ordre et
+  // l'éditorial du back-office par-dessus.
+  router.get("/api/public/photos", async (_req, env, _p, url) => {
+    const property = await getProperty(env.DB, url.searchParams.get("property") ?? "");
+    if (!property || !property.active) return apiError(404, "domaine inconnu");
+    const slug = (url.searchParams.get("unit") ?? "").trim();
+    const unit = (await listUnits(env.DB, property.id)).find((u) => u.slug === slug && u.active);
+    if (!unit) return apiError(404, "hébergement inconnu");
+    const photos = await listUnitPhotos(env.DB, [unit.id]);
+    return json({ unit: unit.slug, photos: photos.map(publicPhoto) });
   });
 
   // --- recherche de disponibilité -------------------------------------------
@@ -322,6 +386,10 @@ export function registerPublicRoutes(router: Router): void {
       bookingsInWindow(db, property.id, suggestFrom, suggestTo),
       manualBlocksInWindow(db, property.id, suggestFrom, suggestTo),
     ]);
+    // Photo principale des cartes de résultat : la première de la galerie
+    // (issue #32). Les vignettes complètes, elles, viennent de la fiche du
+    // domaine déjà chargée par le tunnel — inutile de les répéter ici.
+    const gal = photosByUnit(await listUnitPhotos(db, units.map((u) => u.id)));
     const now = sqlNow();
 
     // Réservation en cours de CE visiteur (issue #68) : son propre blocage ne
@@ -419,7 +487,7 @@ export function registerPublicRoutes(router: Router): void {
         capacityBase: u.capacityBase,
         capacityMax: u.capacityMax,
         isComposite: u.isComposite,
-        photoUrl: u.photoUrl,
+        photoUrl: mainPhotoUrl(u, gal.get(u.id)),
         cleaningFeeCents: u.cleaningFeeCents,
         available,
         // Pourquoi cette unité n'est pas réservable : les unités LIÉES dont une

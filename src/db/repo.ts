@@ -252,6 +252,131 @@ export async function createUnit(
   return res.meta.last_row_id;
 }
 
+/* --------------------------------------------------------------------------
+ * Galerie de photos par hébergement (issue #32, migration 0021)
+ *
+ * Les FICHIERS restent des assets commités (public/img/gites/<gîte>/), produits
+ * par scripts/optimize-images.mjs. Cette table ne porte que le chemin et
+ * l'éditorial : ordre, texte alternatif, légende, retrait. Le back-office
+ * choisit et ordonne parmi les fichiers présents, il n'en téléverse aucun.
+ * -------------------------------------------------------------------------- */
+
+export interface UnitPhotoRow {
+  id: number;
+  unitId: number;
+  /** Chemin du JPEG de repli, ex. `/img/gites/la-scierie/facade.jpg`. */
+  path: string;
+  /** Texte alternatif — jamais vide (l'API refuse la chaîne vide). */
+  alt: string;
+  caption: string | null;
+  /** Largeurs des variantes WebP présentes, ex. `[640, 1280]`. Vide = JPEG seul. */
+  webpWidths: number[];
+  width: number | null;
+  height: number | null;
+  sortOrder: number;
+  active: boolean;
+}
+
+function mapUnitPhoto(r: Raw): UnitPhotoRow {
+  const widths = strOrNull(r.webp_widths);
+  return {
+    id: num(r.id),
+    unitId: num(r.unit_id),
+    path: str(r.path),
+    alt: str(r.alt),
+    caption: strOrNull(r.caption),
+    webpWidths: widths
+      ? widths.split(",").map((w) => Number(w.trim())).filter((w) => Number.isFinite(w) && w > 0)
+      : [],
+    width: numOrNull(r.width),
+    height: numOrNull(r.height),
+    sortOrder: num(r.sort_order),
+    active: num(r.active) === 1,
+  };
+}
+
+/** Photos d'un ou plusieurs hébergements, dans l'ordre d'affichage.
+ *  `includeInactive` n'est vrai que côté back-office : le public ne voit
+ *  jamais une photo retirée. */
+export async function listUnitPhotos(
+  db: D1Database,
+  unitIds: number[],
+  includeInactive = false,
+): Promise<UnitPhotoRow[]> {
+  const ids = [...new Set(unitIds.filter((n) => Number.isInteger(n) && n > 0))];
+  if (ids.length === 0) return [];
+  // Liste d'ids construite à partir d'entiers validés ci-dessus, jamais de
+  // texte reçu du client : pas de surface d'injection.
+  const { results } = await db
+    .prepare(
+      `SELECT * FROM unit_photos
+        WHERE unit_id IN (${ids.join(",")})${includeInactive ? "" : " AND active = 1"}
+        ORDER BY unit_id, sort_order, id`,
+    )
+    .all();
+  return (results as Raw[]).map(mapUnitPhoto);
+}
+
+/** Applique en un seul lot l'ordre, l'éditorial et l'état d'affichage des
+ *  photos d'un hébergement. Les lignes non citées sont laissées telles quelles :
+ *  la vue back-office envoie toujours la liste complète, mais une requête
+ *  partielle ne doit pas faire disparaître le reste. */
+export async function updateUnitPhotos(
+  db: D1Database,
+  unitId: number,
+  photos: { id: number; alt: string; caption: string | null; active: boolean }[],
+): Promise<void> {
+  if (photos.length === 0) return;
+  const stmts = photos.map((p, i) =>
+    db
+      .prepare(
+        `UPDATE unit_photos SET alt = ?3, caption = ?4, active = ?5, sort_order = ?6
+          WHERE id = ?1 AND unit_id = ?2`,
+      )
+      .bind(p.id, unitId, p.alt, p.caption, p.active ? 1 : 0, (i + 1) * 10),
+  );
+  await db.batch(stmts);
+}
+
+/** Rattache un fichier déjà présent dans les assets à un hébergement.
+ *  Renvoie null si le chemin est déjà pris (l'index unique le garantit) —
+ *  réactiver une photo retirée passe par updateUnitPhotos, pas par ici. */
+export async function createUnitPhoto(
+  db: D1Database,
+  p: {
+    unitId: number;
+    path: string;
+    alt: string;
+    caption: string | null;
+    webpWidths: number[];
+    width: number | null;
+    height: number | null;
+  },
+): Promise<number | null> {
+  const next = await db
+    .prepare("SELECT COALESCE(MAX(sort_order), 0) + 10 AS n FROM unit_photos WHERE unit_id = ?1")
+    .bind(p.unitId)
+    .first();
+  const res = await db
+    .prepare(
+      `INSERT OR IGNORE INTO unit_photos
+         (unit_id, path, alt, caption, webp_widths, width, height, sort_order)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)`,
+    )
+    .bind(
+      p.unitId,
+      p.path,
+      p.alt,
+      p.caption,
+      p.webpWidths.length ? p.webpWidths.join(",") : null,
+      p.width,
+      p.height,
+      num((next as Raw | null)?.n ?? 10),
+    )
+    .run();
+  return res.meta.changes > 0 ? res.meta.last_row_id : null;
+}
+
 /** Redéfinit les liaisons MUTUELLES d'une unité : toute résa de l'une bloque
  *  l'autre, dans les deux sens. Remplace l'existant pour cette unité. */
 export async function setMutualLinks(db: D1Database, unitId: number, partnerIds: number[]): Promise<void> {

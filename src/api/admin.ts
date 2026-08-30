@@ -7,6 +7,7 @@ import { addDays, dayOfWeek, diffDays, isIsoDate, rangesOverlap, sqlNow, todayIn
 import { blockingUnitIds, blocksAsSpans, isActiveBooking, isUnitFree } from "../core/availability";
 import { rateCalendar, type RateOverride, type UnitPricingInfo } from "../core/pricing";
 import { detectDrift, type DriftSignal } from "../core/drift";
+import { imageSize } from "../core/image-size";
 import {
   GUEST_ID_TYPES,
   GUEST_ID_TYPE_FR,
@@ -99,6 +100,7 @@ import {
   setRateOverrides,
   deleteRateOverrides,
   listSeasons,
+  listUnitPhotos,
   listUnits,
   updateBookingNotes,
   updateBookingStayAtomic,
@@ -111,6 +113,7 @@ import {
   updateRateRule,
   countNewMessages,
   createUnit,
+  createUnitPhoto,
   getMessage,
   getThread,
   insertOutboundMessage,
@@ -118,6 +121,7 @@ import {
   listMessages,
   markMessage,
   setMutualLinks,
+  updateUnitPhotos,
   updateSeason,
   updateSettings,
   updateUnit,
@@ -699,6 +703,124 @@ export function registerAdminRoutes(router: Router): void {
     await setMutualLinks(env.DB, id, body.partnerIds.map(Number));
     await audit(env.DB, "admin", "unit.links", `unit:${id}`, { partnerIds: body.partnerIds, par: currentUser(req) });
     return json({ ok: true });
+  }));
+
+  /* ── Galerie de photos d'un hébergement (issue #32) ───────────────────────
+   *
+   * Ce que le back-office fait : ordonner, retirer, réactiver, corriger le
+   * texte alternatif et la légende. Ce qu'il ne fait PAS : téléverser. Les
+   * fichiers restent des assets commités, produits par
+   * `scripts/optimize-images.mjs` et servis par le binding ASSETS. « Ajouter »
+   * signifie donc rattacher un fichier DÉJÀ présent, et le serveur le vérifie
+   * en allant vraiment le chercher.
+   * ------------------------------------------------------------------------ */
+
+  /** Chemins acceptés : un JPEG sous /img/, sans remontée de dossier. La liste
+   *  blanche vaut mieux qu'une chasse aux « .. » — un chemin encodé (`%2e%2e`)
+   *  ne franchit pas cette expression.
+   *
+   *  JPEG SEULEMENT, et c'est volontaire : `path` est le fichier de REPLI, celui
+   *  que reçoit un navigateur sans WebP. Accepter un `.webp` ici priverait ces
+   *  navigateurs de toute image ; accepter un `.png` donnerait un fichier dont
+   *  `imageSize()` ne sait pas lire les dimensions. */
+  const PHOTO_PATH = /^\/img\/(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_-]+\.(?:jpg|jpeg)$/;
+
+  router.get("/api/admin/units/:id/photos", guard(async (_req, env, p) => {
+    const id = intParam(p.id, 0);
+    if (!id) return apiError(400, "id d'hébergement attendu");
+    const photos = await listUnitPhotos(env.DB, [id], true);
+    return json({ photos });
+  }));
+
+  // Ordre, éditorial et affichage en une seule écriture : la vue envoie la
+  // liste complète telle qu'elle est à l'écran, l'ordre du tableau FAIT
+  // l'ordre d'affichage. Un `sort_order` saisi à la main serait un piège.
+  router.put("/api/admin/units/:id/photos", guard(async (req, env, p) => {
+    const id = intParam(p.id, 0);
+    const body = await readJson<{ photos?: unknown }>(req);
+    if (!id || !body || !Array.isArray(body.photos)) return apiError(400, "photos attendu");
+
+    const connues = new Map((await listUnitPhotos(env.DB, [id], true)).map((ph) => [ph.id, ph]));
+    const photos: { id: number; alt: string; caption: string | null; active: boolean }[] = [];
+    for (const raw of body.photos as Record<string, unknown>[]) {
+      const photoId = Math.round(Number(raw?.id));
+      if (!Number.isFinite(photoId) || !connues.has(photoId)) return apiError(400, "photo inconnue pour cet hébergement");
+      // Texte alternatif OBLIGATOIRE (issue #32) : une photo sans alt est
+      // invisible pour qui ne voit pas l'image. Le refus est net, pas un
+      // silence qui laisserait passer une chaîne vide.
+      const alt = String(raw.alt ?? "").trim();
+      if (alt.length < 3) return apiError(400, "texte alternatif obligatoire sur chaque photo (3 caractères minimum)");
+      if (alt.length > 300) return apiError(400, "texte alternatif trop long (300 caractères maximum)");
+      const caption = String(raw.caption ?? "").trim();
+      if (caption.length > 200) return apiError(400, "légende trop longue (200 caractères maximum)");
+      photos.push({ id: photoId, alt, caption: caption || null, active: raw.active !== false });
+    }
+    if (photos.length !== connues.size) return apiError(400, "la liste doit contenir toutes les photos de l'hébergement");
+    if (new Set(photos.map((ph) => ph.id)).size !== photos.length) return apiError(400, "photo citée deux fois");
+
+    await updateUnitPhotos(env.DB, id, photos);
+    await audit(env.DB, "admin", "unit.photos", `unit:${id}`, {
+      ordre: photos.map((ph) => ph.id),
+      masquees: photos.filter((ph) => !ph.active).length,
+      par: currentUser(req),
+    });
+    return json({ ok: true });
+  }));
+
+  // Rattache un fichier DÉJÀ COMMITÉ à la galerie. Le serveur le télécharge
+  // depuis son propre binding ASSETS : c'est ce qui distingue « choisir parmi
+  // les fichiers présents » d'une saisie d'URL arbitraire, et c'est aussi ce
+  // qui donne les dimensions sans les demander à personne.
+  router.post("/api/admin/units/:id/photos", guard(async (req, env, p) => {
+    const id = intParam(p.id, 0);
+    const body = await readJson<Record<string, unknown>>(req);
+    if (!id || !body) return apiError(400, "corps de requête attendu");
+    const unit = await getUnit(env.DB, id);
+    if (!unit) return apiError(404, "hébergement inconnu");
+
+    const path = String(body.path ?? "").trim();
+    if (!PHOTO_PATH.test(path)) return apiError(400, "chemin attendu sous /img/, fichier .jpg uniquement");
+    const alt = String(body.alt ?? "").trim();
+    if (alt.length < 3) return apiError(400, "texte alternatif obligatoire (3 caractères minimum)");
+    if (alt.length > 300) return apiError(400, "texte alternatif trop long (300 caractères maximum)");
+    const caption = String(body.caption ?? "").trim();
+    if (caption.length > 200) return apiError(400, "légende trop longue (200 caractères maximum)");
+
+    if (!env.ASSETS) return apiError(503, "vérification des fichiers indisponible");
+    // `PUBLIC_BASE_URL` est déclarée dans wrangler.jsonc, mais une valeur vide ou
+    // mal formée ferait lever `new URL` et répondre 500 au lieu d'un message.
+    const origine = /^https?:\/\//.test(env.PUBLIC_BASE_URL ?? "") ? env.PUBLIC_BASE_URL : "http://assets.local";
+    const lire = async (chemin: string): Promise<Uint8Array | null> => {
+      const res = await env.ASSETS.fetch(new Request(new URL(chemin, origine)));
+      if (!res.ok) return null;
+      return new Uint8Array(await res.arrayBuffer());
+    };
+    const octets = await lire(path);
+    if (!octets) return apiError(400, "fichier introuvable dans public/ — le déposer et le commiter d'abord");
+    const taille = imageSize(path, octets);
+    if (!taille) return apiError(400, "fichier illisible comme image");
+
+    // Variantes WebP déduites par convention `<base>-<largeur>.webp`, celle que
+    // produit optimize-images.mjs. On vérifie leur présence réelle plutôt que
+    // de la supposer : trois photos du site n'ont volontairement pas de WebP.
+    const base = path.replace(/\.[a-z]+$/i, "");
+    const webpWidths: number[] = [];
+    for (const w of [640, 1280]) {
+      if (await lire(`${base}-${w}.webp`)) webpWidths.push(w);
+    }
+
+    const photoId = await createUnitPhoto(env.DB, {
+      unitId: id,
+      path,
+      alt,
+      caption: caption || null,
+      webpWidths,
+      width: taille.width,
+      height: taille.height,
+    });
+    if (photoId == null) return apiError(409, "cette photo est déjà dans la galerie de cet hébergement");
+    await audit(env.DB, "admin", "unit.photo.add", `unit:${id}`, { path, par: currentUser(req) });
+    return json({ id: photoId }, 201);
   }));
 
   // Calendrier des tarifs (vue elloha) : prix calculé jour par jour, avec sa

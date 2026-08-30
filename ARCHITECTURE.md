@@ -257,6 +257,7 @@ d'information, et la disponibilité finale toujours regarantie par l'INSERT atom
 | `/api/public/properties` | GET | Liste des domaines (landing multi-biens) |
 | `/api/public/properties/:slug` | GET | Fiche domaine : unités, options, réglages, texte CGV |
 | `/api/public/availability` | GET | Unités réservables sur une période + devis joints + **plages valides les plus proches** quand rien ne passe (#66) |
+| `/api/public/photos` | GET | **Galerie d'un hébergement** (`?property=&unit=`) — les pages de gîtes la servent en HTML et rejouent l'ordre du back-office par-dessus (#32) |
 | `/api/public/calendar` | GET | Calendrier mensuel : dispo, prix « dès X € », **minimum de nuits et jours d'arrivée** par jour |
 | `/api/public/quote` | POST | Devis détaillé (recalculé à chaque changement d'option) |
 | `/api/public/hold` | GET | **Réservation en cours de ce visiteur** (cookie signé) — reprise du tunnel (#68) |
@@ -401,6 +402,7 @@ sans compte tiers et sans risquer d'écrire à un vrai client.
 | `admin_users` | Comptes du back-office (PBKDF2) | 0012 |
 | `admin_sessions` | Sessions, indexées par SHA-256 du jeton | 0012 |
 | `app_settings` | Réglages **globaux** à l'application (≠ `settings`, qui est par domaine) | 0012 |
+| `unit_photos` | Une photo de galerie : chemin de l'asset commité, texte alternatif, légende, ordre, retrait — la photo principale d'un hébergement en est dérivée à la lecture | 0021 (issue #32) |
 | `sync_conflicts` | Ce qu'un canal annonce et que nous n'avons pas pu refléter — une ligne par conflit distinct, `open` / `resolved` / `ignored` | 0017 |
 
 **Contraintes structurantes** :
