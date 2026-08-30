@@ -109,7 +109,7 @@ describe("plus aucun lien vers l'ancien WordPress (définition de fini de #57)",
   /** Les trois pages légales peuvent avoir à nommer le domaine (éditeur du
    *  site, responsable de traitement) : la mention textuelle y est tolérée,
    *  le LIEN ne l'est nulle part. */
-  const PAGES_LEGALES = ["mentions-legales/index.html", "confidentialite/index.html", "conditions-generales/index.html"];
+  const PAGES_LEGALES = ["mentions-legales", "confidentialite", "conditions-generales"].map((d) => join(d, "index.html"));
   const TEXTE = new Set([".html", ".js", ".css", ".xml", ".txt", ".json", ".svg", ".webmanifest"]);
 
   function fichiersTexte(dir: string): string[] {
