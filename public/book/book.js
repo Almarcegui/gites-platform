@@ -11,6 +11,7 @@
 // sont libres — garanti par le moteur de liaison côté serveur.
 
 import { cgvHtml } from "./cgv.js";
+import { mountPayment, paymentConfig } from "./pay-element.js";
 
 const params = new URLSearchParams(location.search);
 const PROPERTY = params.get("property");
@@ -607,6 +608,11 @@ async function openBookingPanel(unitId) {
           Réservation ferme dès paiement — pas de droit de rétractation pour les hébergements datés (art. VI.53, 12° CDE) ;
           conditions d'annulation dans les CGV.</p>
         </div>
+        <!-- Étape 4 : le formulaire de paiement s'y monte SANS quitter la page
+             (issue #26). Reste vide — et invisible — tant que le serveur n'a
+             pas ouvert d'intention de paiement, et pour toujours en mode
+             simulateur (redirection vers dev-pay.html). -->
+        <div class="card" id="payCard" hidden></div>
       </div>
       <aside class="panel-side">
         <div class="card sum">
@@ -802,10 +808,19 @@ async function submitBooking() {
     // Le créneau est bloqué à partir de maintenant : le décompte démarre ici et
     // reste visible si le visiteur revient sur le tunnel (issue #16).
     rememberHold(res);
+    // Paiement intégré (issue #26) : le client ne quitte pas la page. Sans clé
+    // Stripe, `payment.mode` vaut `redirect` et on repart sur le simulateur
+    // local — exactement comme avant.
+    if (res.payment?.mode === "element" && res.payment.clientSecret) {
+      await showPaymentElement(res.payment, res.amountDueCents);
+      return;
+    }
     $("bPay").textContent = "Redirection vers le paiement sécurisé…";
     location.href = res.checkoutUrl;
   } catch (e) {
     setStep(3);
+    $("payCard").hidden = true;
+    $("guestCard").hidden = false;
     $("bPay").disabled = false;
     payButtonRefresh();
     if (String(e.message).includes("réservé")) {
@@ -816,6 +831,33 @@ async function submitBooking() {
     }
     msg.scrollIntoView({ behavior: "smooth", block: "center" });
   }
+}
+
+/** Monte le formulaire de paiement à la place du formulaire de coordonnées.
+ *
+ *  Les coordonnées sont déjà enregistrées à ce stade (la réservation existe,
+ *  le créneau est bloqué) : les laisser modifiables laisserait croire qu'une
+ *  correction est encore possible. Le récapitulatif de droite, lui, reste.
+ *
+ *  Un échec ici (clé retirée entre-temps, `js.stripe.com` injoignable) remonte
+ *  en exception : `submitBooking` remet l'étape 3 et affiche le message, le
+ *  hold restant récupérable depuis le bandeau de décompte. */
+async function showPaymentElement(payment, amountCents) {
+  const cfg = await paymentConfig();
+  if (!cfg.enabled || !cfg.publishableKey) {
+    throw new Error("Le paiement en ligne est momentanément indisponible — nous pouvons finaliser votre réservation avec vous, écrivez-nous.");
+  }
+  const card = $("payCard");
+  await mountPayment(card, {
+    publishableKey: cfg.publishableKey,
+    clientSecret: payment.clientSecret,
+    returnUrl: payment.returnUrl,
+    amountLabel: eur(amountCents ?? payment.amountCents),
+    title: "Paiement sécurisé",
+  });
+  $("guestCard").hidden = true;
+  $("mobileBar").style.display = "none";
+  card.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 // ---------------------------------------------------------------------------
