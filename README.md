@@ -185,6 +185,11 @@ test/                  12 fichiers, 152 tests
   (décision Julien 27/07), la ligne du devis se masque toute seule.
 - **Fuseau** : toute la logique « aujourd'hui » est en Europe/Brussels ;
   montants en centimes (entiers), arrondi au centime par ligne.
+- **Prix des places de marché** : le prix conseillé est `prix direct ×
+  (1 + majoration %)`, arrondi au centime (défauts Airbnb +18 %, Booking +18 %,
+  Abritel +15 %). **Il ne s'applique que si le propriétaire choisit un canal de
+  référence** dans *Plateformes* — sinon les plateformes reçoivent le prix de
+  vente directe. Le prix direct n'est jamais modifié par ce réglage.
 
 ## Paiement (Stripe)
 
@@ -257,8 +262,9 @@ mise à jour conservée, 122 tests verts.)
 - **Mapping D1** : migration 0010 (`properties.beds24_property_id`,
   `units.beds24_room_id`).
 - **Synchro sortante** `src/services/beds24-sync.ts` : dispo (isUnitFree — liaison
-  comprise) + prix (rateCalendar, en euros) + min-nuits, jours regroupés en plages
-  compactes ; POST `/inventory/rooms/calendar`. Accrochée au **cron 15 min**
+  comprise) + prix (rateCalendar, en euros, majoré du canal de référence si un
+  canal est appliqué — cf. § *Majoration des prix poussés*) + min-nuits, jours
+  regroupés en plages compactes ; POST `/inventory/rooms/calendar`. Accrochée au **cron 15 min**
   (étape 4, inactive sans token) + push manuel `POST /api/admin/beds24/push`.
 - **Pont dev local** `scripts/beds24_push_calendar.py` (le Worker local ne sort
   pas sous VPN) : 12 mois poussés — vérifié dans l'UI Beds24 (calendrier :
@@ -310,6 +316,36 @@ minutes »)** :
 Reste au LOT 4/5 : créer les annonces OTA à la main (Airbnb/Booking — les avis
 restent attachés), les mapper aux rooms dans Beds24 (assistance Claude via la
 session Chrome), et coller l'URL du webhook dans Beds24 au déploiement.
+
+### Majoration des prix poussés (issue #31)
+
+Airbnb et Booking prennent une commission : le tarif qu'on y affiche doit être
+plus élevé que le prix de vente directe, sinon la commission sort de la poche du
+propriétaire. Le prix conseillé était calculé et affiché depuis la PR #62, mais
+rien ne permettait de **l'appliquer**.
+
+Il n'existe qu'un seul endroit où un « prix par canal » a une réalité : le
+calendrier poussé vers Beds24 (`price1`). C'est donc là que la majoration
+s'applique, à partir d'un **canal de référence** choisi par le propriétaire.
+
+- **Où** : back-office → *Plateformes*, carte « Prix envoyés aux plateformes ».
+  Le même bouton existe dans la saisie d'un prix (Calendrier → Prix), à côté du
+  prix conseillé.
+- **Effet** : `price1 = prix direct × (1 + majoration du canal)`. Le réglage est
+  global (une seule valeur, `pricing.push_channel` dans `app_settings`), donc
+  **aucune migration**, et il se retire d'un clic (« Ne plus majorer »).
+- **Par défaut : aucun canal appliqué** — les plateformes reçoivent le prix de
+  vente directe, exactement comme avant.
+- **Le prix de vente directe n'est jamais modifié.** La base ne contient qu'un
+  prix : celui du site. Le prix des plateformes est calculé au moment du push.
+- **Le plancher et le plafond de l'hébergement bornent la saisie**, pas ce prix
+  dérivé : un plafond à 210 € n'empêche pas 236 € de partir sur Airbnb, c'est
+  voulu (le plafond protège de la faute de frappe à la saisie).
+- Un canal retiré de la liste des majorations cesse de majorer — pas de
+  majoration fantôme. Poser ou retirer le réglage est journalisé
+  (`pricing.push_channel`) et **déclenche immédiatement un push**.
+
+---
 
 ## Synchro iCal (phase 3 — Airbnb Moulin)
 

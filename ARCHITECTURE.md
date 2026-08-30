@@ -712,6 +712,11 @@ La synchro est **événementielle**, pas périodique :
 - **Le cron 15 min n'est qu'un filet de sécurité** (holds expirés, échecs réseau,
   webhooks perdus).
 
+Les **prix poussés** sont ceux de la vente directe, sauf si un *canal de
+référence* est appliqué (issue #31, réglage `pricing.push_channel`) : `price1`
+est alors majoré de son pourcentage. Le prix direct en base n'est jamais touché —
+la majoration est calculée au moment du push, dans `buildCalendarPush`.
+
 Nos dates priment : un conflit venant d'un canal est **refusé et signalé**.
 
 Signalé **et gardé** (issue #72) : chaque détection écrit dans `sync_conflicts`,
