@@ -577,7 +577,12 @@ export function registerConfigViews() {
 
   // ── Canaux OTA (Beds24) — le poste de pilotage : jamais besoin d'ouvrir Beds24 ──
   registerView("canaux", "Canaux OTA", async (root) => {
-    const data = await api(`/api/admin/channels/overview?property=${currentPropertyId()}`);
+    const [data, markups] = await Promise.all([
+      api(`/api/admin/channels/overview?property=${currentPropertyId()}`),
+      // Majoration appliquée aux prix poussés (#31) : indépendante du domaine
+      // affiché, c'est un réglage global.
+      api("/api/admin/channel-markups").catch(() => null),
+    ]);
     const mapped = data.units.filter((u) => u.beds24RoomId);
     const openConflicts = (data.conflicts || []).filter((c) => c.status === "open");
     const ignoredConflicts = (data.conflicts || []).filter((c) => c.status === "ignored");
@@ -607,6 +612,28 @@ export function registerConfigViews() {
           <span class="mono" style="word-break:break-all">${esc(data.webhookUrl)}</span>
           <button class="btn o sm copyWebhook" style="margin-left:6px">Copier</button></p>` : ""}
       </div>
+
+      ${markups ? `
+      <div class="card mb"><h3>Prix envoyés aux plateformes</h3>
+        <p class="small">Les places de marché prennent une commission : le tarif qu'on y affiche est
+          volontairement majoré par rapport à la vente directe. La majoration choisie ici s'applique aux prix
+          poussés vers Beds24 — <b>le prix de vente directe n'est jamais modifié</b>.</p>
+        <p style="margin-top:8px">${markups.pushChannel
+          ? `<span class="tag t-ok">Majoration active</span> <b>${esc(markups.channels.find((c) => c.channel === markups.pushChannel)?.label ?? markups.pushChannel)}</b>
+             · +${markups.pushMarkupPct} % — un prix de ${eur(markups.example.directCents)} en direct part à <b>${eur(markups.example.pushedCents)}</b> sur les plateformes.`
+          : `<span class="tag">Aucune majoration</span> les plateformes reçoivent le prix de vente directe, commission non compensée.`}</p>
+        <table style="margin-top:10px"><tr><th>Plateforme</th><th>Majoration</th><th class="r">Appliquer</th></tr>
+          ${markups.channels.map((c) => `<tr>
+            <td>${esc(c.label)}</td>
+            <td>+${c.markupPct} %<span class="muted small"> · ${eur(markups.example.directCents)} → ${eur(markups.examples.find((e) => e.channel === c.channel)?.suggestedCents ?? markups.example.directCents)}</span></td>
+            <td class="r">${c.channel === markups.pushChannel
+              ? `<span class="tag t-ok">appliquée</span>`
+              : `<button class="btn o sm chanApply" data-chan="${esc(c.channel)}">Appliquer</button>`}</td></tr>`).join("")}
+        </table>
+        <p class="small" style="margin-top:10px">
+          ${markups.pushChannel ? `<button class="btn o sm" id="chanClear">Ne plus majorer</button> ` : ""}
+          <span class="muted">${esc(markups.formula || "")} — le changement est poussé aux plateformes immédiatement.</span></p>
+      </div>` : ""}
 
       ${data.configured ? "" : `
       <div class="card mb" style="border-left:4px solid #b45309">
@@ -677,6 +704,32 @@ export function registerConfigViews() {
 
     const note = root.querySelector("#chanNote");
     root.querySelectorAll(".copyWebhook").forEach((b) => (b.onclick = () => copyText(data.webhookUrl)));
+
+    // Majoration des prix poussés (#31) : un clic pose le réglage ET renvoie
+    // les calendriers, sinon le propriétaire croirait l'avoir appliqué.
+    const setPushChannel = async (channel, button) => {
+      const chan = markups?.channels.find((c) => c.channel === channel);
+      // Le compte Beds24 est réel : on annonce l'effet avant de pousser.
+      const ok = chan
+        ? confirm(`Majorer de +${chan.markupPct} % tous les prix envoyés aux plateformes (référence ${chan.label}) ?\n\n`
+            + `Les prix de vente directe ne changent pas. Les calendriers repartent aux plateformes tout de suite.`)
+        : confirm("Ne plus majorer : les plateformes recevront le prix de vente directe. Confirmer ?");
+      if (!ok) return;
+      // Verrou anti double-clic : chaque appel repousse 400 jours de calendrier.
+      root.querySelectorAll(".chanApply, #chanClear").forEach((b) => { b.disabled = true; });
+      try {
+        await api("/api/admin/channel-markups/apply", { method: "POST", body: { channel } });
+        // Pas de toast avant un rechargement, il ne serait jamais lu : c'est la
+        // carte rechargée qui dit l'état, en toutes lettres.
+        location.reload();
+      } catch (e) {
+        root.querySelectorAll(".chanApply, #chanClear").forEach((b) => { b.disabled = false; });
+        toast(e.message, true);
+      }
+    };
+    root.querySelectorAll(".chanApply").forEach((b) => (b.onclick = () => setPushChannel(b.dataset.chan, b)));
+    const clearChan = root.querySelector("#chanClear");
+    if (clearChan) clearChan.onclick = () => setPushChannel(null, clearChan);
 
     // Conflits de synchro (issue #72) : le planning à la bonne date, et la
     // décision d'ignorer — jamais sans motif, c'est lui qui rend la décision

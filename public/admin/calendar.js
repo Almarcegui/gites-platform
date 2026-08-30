@@ -522,6 +522,10 @@ function renderEditor({ holder, anchorCell, unit, cal, days, from, to, markups, 
 
   // --- prix conseillé par plateforme (#31) : la formule est affichée telle
   //     que l'API la donne, pour que le calcul reste refaisable de tête.
+  //     Le bouton « Appliquer » branche la majoration de ce canal sur les prix
+  //     envoyés aux plateformes (via Beds24) — le prix de vente directe, lui,
+  //     ne bouge pas. C'est un réglage global, pas une écriture sur la plage :
+  //     le bouton le dit, et l'état courant reste affiché.
   let chanTimer = null;
   const refreshChannels = async () => {
     const cents = toCents(priceInput.value);
@@ -529,12 +533,60 @@ function renderEditor({ holder, anchorCell, unit, cal, days, from, to, markups, 
     if (!cents || cents < 1) { box.innerHTML = ""; return; }
     try {
       const s = await api(`/api/admin/suggested-prices?priceCents=${cents}`);
-      box.innerHTML = `<b>Prix conseillé sur les places de marché</b><ul>${s.channels
-        .map((c) => `<li>${esc(c.label)} <b>${eur(c.suggestedCents)}</b> <span class="muted">(+${c.markupPct} %)</span></li>`)
-        .join("")}</ul><span class="muted">${esc(s.formula || markups.formula || "")}</span>`;
+      renderChannels(box, s);
     } catch {
       box.innerHTML = "";
     }
+  };
+
+  const renderChannels = (box, s) => {
+    const applied = s.pushChannel ?? null;
+    box.innerHTML =
+      `<b>Prix conseillé sur les places de marché</b><ul>${s.channels
+        .map((c) => `<li>${esc(c.label)} <b>${eur(c.suggestedCents)}</b> <span class="muted">(+${c.markupPct} %)</span> ${
+          c.channel === applied
+            ? `<span class="tag t-ok">appliqué aux plateformes</span>`
+            : `<button type="button" class="btn o sm chanApply" data-chan="${esc(c.channel)}" data-label="${esc(c.label)}" data-pct="${c.markupPct}">Appliquer aux plateformes</button>`
+        }</li>`)
+        .join("")}</ul>` +
+      (applied
+        ? `<p class="small"><button type="button" class="btn o sm" id="chanClear">Ne plus majorer</button>
+             <span class="muted">les plateformes reçoivent alors le prix de vente directe</span></p>`
+        : "") +
+      `<p class="small muted">Réglage <b>global</b> (tous les biens, toutes les dates) : il majore les prix envoyés aux
+        plateformes par Beds24. Ni ce prix-ci, ni aucun prix de vente directe n'est modifié.</p>
+      <span class="muted">${esc(s.formula || markups.formula || "")}</span>`;
+
+    const setChannel = async (channel, button) => {
+      // Ce bouton ne touche pas la saisie en cours : il change un réglage
+      // global ET renvoie les calendriers aux plateformes. Le dire avant, pas
+      // après — le compte Beds24 est réel, sans bac à sable.
+      const ok = channel
+        ? confirm(
+            `Majorer de +${button.dataset.pct} % TOUS les prix envoyés aux plateformes (référence ${button.dataset.label}) ?\n\n` +
+              `Réglage global, appliqué à tous les biens et toutes les dates, et renvoyé aux plateformes tout de suite. ` +
+              `Les prix de vente directe ne changent pas.`,
+          )
+        : confirm("Ne plus majorer : les plateformes recevront le prix de vente directe. Confirmer ?");
+      if (!ok) return;
+      // Verrou anti double-clic : chaque appel repousse 400 jours de calendrier.
+      box.querySelectorAll("button").forEach((b) => { b.disabled = true; });
+      try {
+        const res = await api("/api/admin/channel-markups/apply", { method: "POST", body: { channel } });
+        toast(
+          channel
+            ? `Prix des plateformes majorés de +${res.pushMarkupPct} % (${eur(res.example.directCents)} en direct → ${eur(res.example.pushedCents)})`
+            : "Les plateformes reçoivent de nouveau le prix de vente directe",
+        );
+        await refreshChannels();
+      } catch (e) {
+        box.querySelectorAll("button").forEach((b) => { b.disabled = false; });
+        toast(e.message, true);
+      }
+    };
+    box.querySelectorAll(".chanApply").forEach((b) => (b.onclick = () => setChannel(b.dataset.chan, b)));
+    const clear = box.querySelector("#chanClear");
+    if (clear) clear.onclick = () => setChannel(null, clear);
   };
   priceInput.addEventListener("input", () => {
     clearErr();
