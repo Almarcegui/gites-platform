@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Les recettes — Les Gîtes du Pré Moré</title>
+<meta name="description" content="Les dix recettes de la maison : truites de nos rivières, cuissons lentes au four à pain, waterzooi et carbonnade flamande. Reprises telles quelles de l'ancien site.">
+<!-- SITE DE TEST : tarifs placeholders, CGV provisoires, contact faux.
+     Retirer cette balise robots AU LANCEMENT REEL (issue #1), en meme temps que
+     le « Disallow: / » de /robots.txt. Tant qu'elle est la, la page n'est pas indexee. -->
+<meta name="robots" content="noindex">
+<!-- Canonical + apercus de partage (issue #30).
+     ATTENTION : l'URL de base est celle de la production ACTUELLE. Elle est a
+     remplacer partout par le domaine definitif quand il sera tranche (issue #12),
+     ici, dans /sitemap.xml et dans la ligne Sitemap de /robots.txt — les trois
+     doivent toujours dire la meme chose, sinon les moteurs recoivent deux
+     adresses concurrentes pour la meme page. -->
+<link rel="canonical" href="https://gites-platform.j-decartier.workers.dev/recettes/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Les Gîtes du Pré Moré">
+<meta property="og:locale" content="fr_BE">
+<meta property="og:url" content="https://gites-platform.j-decartier.workers.dev/recettes/">
+<meta property="og:title" content="Les recettes — Les Gîtes du Pré Moré">
+<meta property="og:description" content="Dix recettes de famille : les truites de nos rivières, les cuissons lentes du four à pain, le waterzooi et la carbonnade flamande.">
+<meta property="og:image" content="https://gites-platform.j-decartier.workers.dev/img/og-pre-more.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Les deux maisons du Pré Moré, entre les arbres, au bord du ruisseau">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Les recettes — Les Gîtes du Pré Moré">
+<meta name="twitter:description" content="Dix recettes de famille : les truites de nos rivières, les cuissons lentes du four à pain, le waterzooi et la carbonnade flamande.">
+<meta name="twitter:image" content="https://gites-platform.j-decartier.workers.dev/img/og-pre-more.jpg">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="alternate icon" href="/favicon.ico" sizes="32x32">
+<link rel="stylesheet" href="../site.css">
+</head>
+<body>
+
+<nav class="top">
+  <div class="wrap">
+    <a class="logo" href="/">Les Gîtes du Pré Moré</a>
+    <button class="burger" id="navToggle" type="button"
+            aria-expanded="false" aria-controls="navPanel" aria-label="Ouvrir le menu">
+      <span aria-hidden="true"></span>
+    </button>
+    <div class="nav-links" id="navPanel">
+      <a href="/#gites">Les gîtes</a>
+      <span class="nav-sub-title" aria-hidden="true">Nos hébergements</span>
+      <a class="sub" href="/la-maison-du-scieur/">La Maison du Scieur</a>
+      <a class="sub" href="/la-scierie/">La Scierie</a>
+      <a class="sub" href="/le-moulin-de-braives/">Le Moulin de Braives</a>
+      <a href="/la-propriete/">La propriété</a>
+      <a href="/histoire/">Histoire</a>
+      <a href="/que-faire/">Que faire</a>
+      <a href="/que-manger/">Que manger</a>
+      <a class="sub" href="/recettes/" aria-current="page">Les recettes</a>
+      <a href="/infos-pratiques/">Infos pratiques</a>
+      <a href="/#dispo">Disponibilités</a>
+      <a href="/#tarifs">Tarifs</a>
+      <a href="/#contact">Contact</a>
+      <span class="nav-sub-title" aria-hidden="true">Sur le domaine</span>
+      <a class="sub" href="/le-bain-chaud/">Le bain chaud</a>
+      <a class="sub" href="/le-sauna/">Le sauna</a>
+      <a class="sub" href="/le-four-a-pain/">Le four à pain</a>
+      <a class="sub" href="/les-promenades/">Les promenades</a>
+    </div>
+    <a class="cta" href="/book/?property=pre-more">Réserver</a>
+  </div>
+</nav>
+
+<header class="page-hero">
+  <div class="wrap">
+    <span class="eyebrow">Terroir &amp; produits locaux</span>
+    <h1>Les recettes</h1>
+    <p class="lead">Dix recettes de la maison, recopiées telles quelles du carnet familial : les truites de nos rivières, les cuissons lentes du four à pain, et deux classiques belges.</p>
+    <div class="anchor-nav">
+      <a href="#truites">Les truites</a>
+      <a href="#four">Au four, lentement</a>
+      <a href="#belges">Classiques belges</a>
+    </div>
+  </div>
+</header>
+
+<section class="activites" id="sommaire">
+  <div class="wrap">
+    <p class="lead">Toutes se cuisinent avec ce qu'on trouve à côté : la boucherie de la ferme à Pondrôme, les truites de Freux, le magasin bio de Redu. Les cuissons lentes et les viandes en croûte se font au four à pain du domaine.</p>
+    <ul>
+      <li><b><a href="#truites-en-papillotes">Filets de truites en papillotes sur lit de légumes</a></b>Plat pour 4 personnes</li>
+      <li><b><a href="#truite-au-vin-jaune">Truite au vin jaune</a></b>Entrée pour 6 personnes</li>
+      <li><b><a href="#tartare-de-truite">Tartare de truite au brési</a></b>Entrée pour 6 personnes</li>
+      <li><b><a href="#truite-au-barbecue">Truite en papillote au barbecue</a></b>Plat pour 2 personnes</li>
+      <li><b><a href="#truite-farcie">Truite farcie</a></b>Plat pour 4 personnes</li>
+      <li><b><a href="#viandes-en-croute">Recettes de viandes en croûte</a></b>Jambon au gros sel, canard en croûte de pâte</li>
+      <li><b><a href="#agneau">Agneau | 6 heures à 85 °C</a></b>Pour 6 à 8 personnes</li>
+      <li><b><a href="#dinde-en-daube">Dinde en daube</a></b>Une recette de nos aïeux</li>
+      <li><b><a href="#waterzooi">Waterzooi</a></b>Poulet, légumes, crème et riz</li>
+      <li><b><a href="#carbonnade-flamande">La carbonnade flamande</a></b>Pour 4 personnes</li>
+    </ul>
+  </div>
+</section>
+
+<section id="truites">
+  <div class="wrap prose">
+    <h2>Les truites de nos rivières</h2>
+    <p>Cinq recettes de truite Fario, comme celles de la pisciculture de Freux, à quelques kilomètres du domaine.</p>
+
+    <h3 id="truites-en-papillotes">Filets de truites en papillotes sur lit de légumes</h3>
+    <p><b>Plat pour 4 personnes</b></p>
+    <h4>Ingrédients</h4>
+    <p>4 filets de truites de 250 g chacun, 1 noix de beurre, 4 poireaux, 10 tomates cerises, 4 grosses échalotes, 1 pincée de cannelle, 1 citron, 4 feuilles de laurier, crème, sel, poivre 5 baies, vin blanc sec, 4 feuilles d'aluminium.</p>
+    <h4>Préparation</h4>
+    <ul>
+      <li>Lavez les légumes.</li>
+      <li>Coupez finement les poireaux et les échalotes ; coupez les tomates cerises en 2 ; coupez le citron en 2, coupez-en 4 tranches fines et pressez le reste.</li>
+      <li>Dans un fait-tout, faites revenir les poireaux, les échalotes et les tomates dans une noix de beurre.</li>
+      <li>En fin de cuisson, ajoutez une pincée de cannelle ; salez, poivrez et remuez.</li>
+      <li>Préchauffez votre four à 180°.</li>
+      <li>Lorsque les légumes sont cuits, déposez-les au milieu des 4 feuilles d'aluminium.</li>
+      <li>Déposez les filets de truite sur ces légumes puis salez et poivrez le poisson.</li>
+      <li>Déposez une tranche de citron et une feuille de laurier sur chaque filet.</li>
+      <li>Fermez les papillotes en laissant une petite ouverture.</li>
+      <li>Versez un filet de citron, un filet de vin blanc sec et un filet de crème puis fermez les papillotes.</li>
+      <li>ATTENTION : il faut éviter que l'aluminium ne touche le poisson au-dessus.</li>
+      <li>Mettez au four environ 20 minutes.</li>
+    </ul>
+    <h4>Vin</h4>
+    <p>Choisissez un vin blanc sec comme un Châteauneuf-du-Pape ou un Saint-Péray.</p>
+    <h4>Astuces</h4>
+    <p>Saisissez les papillotes entières dans l'assiette et ouvrez légèrement pour deviner le poisson. Mettez le riz dans des ramequins que vous retournerez sur les assiettes. Ajoutez 1 ou 2 feuilles de persil sur le riz pour la décoration.</p>
+
+    <h3 id="truite-au-vin-jaune">Truite au vin jaune</h3>
+    <p><b>Entrée pour 6 personnes</b></p>
+    <h4>Ingrédients</h4>
+    <p>6 belles truites Fario de 200 g vidées chacune, 15 cl de vin jaune, 6 c. à s. de crème, beurre, échalotes, sel, poivre, persil.</p>
+    <h4>Préparation</h4>
+    <ul>
+      <li>Faites griller tout doucement les truites au beurre et salez-les.</li>
+      <li>Lorsqu'elles sont cuites et dorées, réservez-les dans un plat en porcelaine.</li>
+      <li>Remettre une noix de beurre dans la poêle et faites fondre une c. à c. d'échalote.</li>
+      <li>Ajoutez 15 cl de vin jaune et remuez pour déplacer le jus ainsi obtenu.</li>
+      <li>Laissez cuire à petit feu pendant 5 minutes.</li>
+      <li>Ajoutez 1 c. à s. de crème par personne et remuez bien pour lier le tout.</li>
+      <li>Rectifiez l'assaisonnement.</li>
+      <li>Napper les truites de cette sauce passée au chinois et saupoudrez de persil finement haché.</li>
+    </ul>
+    <h4>Vin</h4>
+    <p>Choisissez un vin blanc sec : vin jaune, Arbois.</p>
+
+    <h3 id="tartare-de-truite">Tartare de truite au brési</h3>
+    <p><b>Entrée pour 6 personnes</b></p>
+    <h4>Ingrédients</h4>
+    <p>500 g de filets de truites Fario, 150 g de brési en tranches fines, 2 échalotes, 1 petit bouquet de ciboulette, 1 petit bouquet de cerfeuil, 1 branche d'estragon, 1 betterave rouge cuite, 1 c. à c. de moutarde douce, 1 c. à soupe de vinaigre de Xérès, 1 c. à soupe de vinaigre balsamique, 2 dl d'huile d'olive, sel et poivre, Tabasco.</p>
+    <h4>Préparation</h4>
+    <ul>
+      <li>Hachez finement la chair de truite au couteau et réservez-la au frais.</li>
+      <li>Tapissez 6 ramequins légèrement huilés de fines tranches de brési.</li>
+      <li>Hachez le reste de brési.</li>
+      <li>Passez la betterave dans une centrifugeuse pour en extraire le jus.</li>
+      <li>Ciselez les échalotes.</li>
+      <li>Mélangez la chair de truites, le brési haché, les échalotes, le sel et le poivre, deux gouttes de Tabasco, la c. à c. de moutarde, l'huile d'olive, le vinaigre de Xérès et la moitié des herbes ciselées.</li>
+      <li>Rectifiez l'assaisonnement et garnissez les ramequins.</li>
+      <li>Émulsionnez le jus de betterave avec 1 dl d'huile d'olive et 1 c. à c. de vinaigre balsamique.</li>
+      <li>Au moment de servir, démoulez sur les assiettes, disposez la vinaigrette de betterave rouge autour du tartare et le reste des herbes dessus.</li>
+    </ul>
+    <h4>Vin</h4>
+    <p>Accompagnez cette recette d'un vin blanc sec, tel un Sancerre.</p>
+    <h4>Astuce</h4>
+    <p>Pour ajouter de la fraîcheur et du croquant à vos tartares de poisson, vous pouvez ajouter du radis et du concombre en dés.</p>
+
+    <h3 id="truite-au-barbecue">Truite en papillote au barbecue</h3>
+    <p><b>Plat pour 2 personnes</b></p>
+    <h4>Ingrédients</h4>
+    <p>2 belles truites Fario vidées de 400 g, 1/2 oignon, thym, laurier, citron, sel, poivre.</p>
+    <h4>Préparation</h4>
+    <ul>
+      <li>Placez vos 2 truites sur deux feuilles d'aluminium.</li>
+      <li>Étalez le 1/2 oignon sur les truites.</li>
+      <li>Ajoutez le thym et le laurier, salez et poivrez et déposez quelques tranches de citron.</li>
+      <li>Repliez le papier aluminium.</li>
+      <li>Cuisez les truites sur un feu vif.</li>
+    </ul>
+    <h4>Vin</h4>
+    <p>Choisissez un vin blanc sec, comme un Côtes du Marmandais.</p>
+
+    <h3 id="truite-farcie">Truite farcie</h3>
+    <p><b>Plat pour 4 personnes</b></p>
+    <h4>Ingrédients</h4>
+    <p>2 truites Fario vidées de 600 g chacune, 80 g de beurre, 200 g de carottes, 100 g de poireaux, 200 g de champignons, 60 g de farine, 50 g d'oignons, sel, poivre, 1 jaune d'œuf, 5 cl de porto blanc, 5 cl de vin blanc, 0,5 l de crème liquide.</p>
+    <h4>Préparation</h4>
+    <ul>
+      <li>Enlevez, si vous savez le faire, l'arête des truites sans détacher les côtés des poissons.</li>
+      <li>Dans 20 g de beurre, faites revenir les poireaux et la moitié des carottes en émincé très fin, puis assaisonnez.</li>
+      <li>Lorsque tout est bien fondu, ajoutez les champignons coupés très fins.</li>
+      <li>Lorsque c'est cuit, ajoutez 20 g de farine et mélangez bien, puis ajoutez le jaune d'œuf.</li>
+      <li>Salez et poivrez les truites intérieur et extérieur, puis farcissez-les avec la fondue de légumes.</li>
+      <li>Dans un plat allant au four, faites revenir les oignons émincés et le reste des carottes coupées en rondelles, puis ajoutez le porto blanc et le vin blanc.</li>
+      <li>Déposez les truites dans le plat.</li>
+      <li>Couvrez-les de papier aluminium et mettez-les au four à 170° pendant 10 minutes environ.</li>
+      <li>Réservez les truites au chaud.</li>
+      <li>Dans une casserole, faites fondre le reste de beurre, puis ajoutez le reste de la farine en remuant bien.</li>
+      <li>Ajoutez la crème liquide en mélangeant.</li>
+      <li>Lorsque la sauce est épaissie, passez-la au chinois.</li>
+      <li>Servez les truites nappées de cette sauce.</li>
+    </ul>
+    <h4>Vin</h4>
+    <p>Cette recette s'accompagne très bien d'un vin blanc sec, par exemple un Pouilly Fumé.</p>
+
+    <p class="note-src">Les cinq recettes de truite viennent du carnet de la maison. <a href="http://www.latruitedefreux.com/" target="_blank" rel="noopener">Pour plus de recettes, allez voir sur le site de la pisciculture de Freux.</a></p>
+  </div>
+</section>
+
+<section class="alt" id="four">
+  <div class="wrap prose">
+    <h2>Au four, à basse température</h2>
+    <p>Trois cuissons longues, à faire au <a href="/le-four-a-pain/">four à pain du domaine</a> comme au four de la cuisine.</p>
+    <figure>
+      <picture>
+        <source type="image/webp" srcset="/img/four-a-pain-640.webp 640w, /img/four-a-pain-1200.webp 1200w" sizes="(max-width: 800px) 100vw, 760px">
+        <img src="/img/four-a-pain.jpg" alt="Le four à pain en pierre du domaine, gueule ouverte sous la voûte, la pelle de bois posée contre le manteau" loading="lazy" width="1200" height="900">
+      </picture>
+      <figcaption>Le four à pain du domaine, où se font les cuissons longues</figcaption>
+    </figure>
+
+    <h3 id="viandes-en-croute">Recettes de viandes en croûte</h3>
+    <h4>Jambon de porc ou selle de porc en croûte de gros sel | 6 h de 95° à 75°</h4>
+    <p>Très simple : quelques épices sur la viande puis couvrir de gros sel et puis dans le four.</p>
+    <p>Bien nettoyer le gros sel avant de découper.</p>
+    <div class="statement">Ou, plus facile !</div>
+    <h4>Canard de Barbarie en croûte de pâte | 5 h de 90° à 75°</h4>
+    <p>Demander à la boucherie de désosser le canard de l'intérieur et le farcir.</p>
+    <p>Cette astuce facilite grandement le service…</p>
+    <p>Sans désosser, on peut aussi prendre de l'argile et entourer le canard à la place de la pâte. Cela permet que la graisse migre vers la terre qui entoure le canard durant la cuisson.</p>
+
+    <h3 id="agneau">Agneau | 6 heures à 85 °C</h3>
+    <p>Voici la version testée pour ce grand classique de la lenteur… Accompagné ici de petits navets glacés et d'une purée de pommes de terre à la Robuchon, à laquelle nous avons ajouté de l'ail.</p>
+    <h4>Ingrédients (pour 6-8 pers.)</h4>
+    <p>Pour l'agneau : 1 gigot d'agneau de 2,5 kg, désossé et recousu avec l'os par le boucher, 500 g de ragoût d'agneau, 30 cl de vin blanc sec, 2 oignons, 4 petites carottes, 1 bouquet garni (1 feuille de laurier, 2 brins de thym, 1 brin de romarin, quelques tiges de persil, 2 petites feuilles de sauge, 3 clous de girofle, une dizaine de grains de poivre noir, quelques graines de coriandre), 3 tomates, 1 tête d'ail, 30 cl de fond de veau maison allongé pour obtenir 1 l de bouillon, beurre, huile végétale.</p>
+    <p>Pour la pâte à luter : 100 g de farine, 6 c. à s. d'eau.</p>
+    <h4>Préparation</h4>
+    <ul>
+      <li>Frotter le gigot avec l'ail et la fleur de sel. Le faire revenir dans une cocotte dans de l'huile et du beurre sur toutes ses faces. Quand il est bien doré (et qu'il s'est formée une pellicule croustillante), réserver le gigot.</li>
+      <li>Dans la même cocotte, de laquelle on aura ôté l'excédent d'huile, faire revenir les carottes et les oignons coupés grossièrement. Ajouter le ragoût d'agneau et bien faire revenir. Saler et poivrer. Ajouter le vin blanc, faire réduire 5 min., puis verser le bouillon. Laisser encore réduire sur feu vif pendant 5 min.</li>
+      <li>Dans une autre cocotte, déposer le ragoût et les légumes. Placer le gigot par-dessus. Ajouter les tomates coupées en dés, la tête d'ail et le bouquet garni placé dans une mousseline. Couvrir avec le bouillon et remettre le couvercle.</li>
+      <li>Préparer la pâte à luter en mélangeant la farine et l'eau. Fermer hermétiquement la cocotte et cuire au four préchauffé à env. 85 °C pendant 6 heures.</li>
+      <li>Sortir le gigot et le laisser reposer au chaud dans le four pendant au moins une demi-heure.</li>
+      <li>Pendant ce temps, préparer la purée et les navets et passer le bouillon au chinois. En faire réduire quelques louches dans une casserole afin d'obtenir la sauce.</li>
+      <li>Découper de belles tranches de gigot, servir avec la purée, les navets et la sauce.</li>
+    </ul>
+
+    <h3 id="dinde-en-daube">Dinde en daube</h3>
+    <p>Nos aïeux cuisinaient beaucoup de gibier et de volailles. Voici une de leurs recettes : ce n'est qu'à la condition de disposer d'une grosse dinde, plutôt vieille que jeune, qu'on peut obtenir une bonne daube.</p>
+    <h4>Préparation</h4>
+    <p>Flambez et videz la dinde ; épluchez-la avec soin, divisez-la en deux parties, en coupant transversalement les reins sur le milieu. Séparez les 2 cuisses de la carcasse, lardez-les sur les parties les plus épaisses, avec des filets de jambon, entrelardés, puis ficelez-les ; coupez le restant de carcasse adhérant à l'estomac, divisez celui-ci en deux parties sur sa longueur ; lardez les chairs des 2 filets avec du jambon cru, assaisonnez les viandes avec sel et épices.</p>
+    <p>Faites fondre, dans une marmite 3 à 400 grammes de lard haché, ajoutez les morceaux de dinde, c'est-à-dire les cuisses, l'estomac, la carcasse, le cou, les pattes et le gésier (celui-ci ouvert et divisé) ; faites-les roussir pendant 20 minutes sur feu modéré, en les sautant ; assaisonnez, additionnez un os de jambon cru, un bouquet d'aromates, une gousse d'ail, 2 oignons, une grosse carotte et enfin un pied de veau désossé et blanchi. Les carcasses de la dinde et les légumes doivent se trouver au fond, l'estomac en haut ; les cuisses et les autres parties de la dinde, le pied de veau et le jambon autour de l'estomac ; couvrez celui-ci avec 2 larges bardes de lard ; mouillez les viandes aux trois quarts de hauteur, avec du vin blanc et un peu d'eau de vie ; faites bouillir le liquide, retirez aussitôt la marmite sur des cendres chaudes, en l'entourant jusqu'à moitié de sa hauteur ; couvrez l'ouverture avec un rond de papier et celui-ci avec une assiette ordinaire, à moitié pleine d'eau ; mettez un poids sur l'assiette, afin de concentrer la vapeur et cuisez la dinde tout doucement pendant 4 heures, selon sa grosseur ; aux trois quarts de cuisson, ajoutez 3 douzaines de petits oignons crus, légèrement colorés. Continuez l'ébullition modérée.</p>
+    <p>Au moment de servir, égouttez l'estomac et les cuisses de dinde ; dressez celles-ci l'une à côté de l'autre, sur un grand plat chaud ; posez l'estomac sur les cuisses ; dressez les abatis et les petits oignons autour ; passez la cuisson, dégraissez-la avec soin, mêlez-lui quelques cuillerées de sauce tomate, un petit morceau de beurre manié ; versez-la dans le plat.</p>
+    <div class="statement">Oyez ! Oyez ! braves gens ; l'heure du festin a sonné</div>
+  </div>
+</section>
+
+<section id="belges">
+  <div class="wrap prose">
+    <h2>Deux classiques belges</h2>
+
+    <h3 id="waterzooi">Waterzooi</h3>
+    <h4>Ingrédients</h4>
+    <ul>
+      <li>1 poulet (ou poule) de 1,500 kg</li>
+      <li>3 carottes — 1 petit céleri</li>
+      <li>3 poireaux — 3 gros oignons</li>
+      <li>1 bouquet garni</li>
+      <li>1 gousse d'ail</li>
+      <li>1/4 litre de crème fraîche</li>
+      <li>sel — poivre</li>
+      <li>3 jaunes d'œufs.</li>
+      <li>1 1/2 tasse de riz (comme accompagnement)</li>
+    </ul>
+    <h4>Préparation</h4>
+    <p>Nettoyer et laver les légumes et les couper en morceaux.</p>
+    <p>Faire bouillir 2 l d'eau et ajouter les légumes avec l'assaisonnement.</p>
+    <p>Laver le poulet (ou la poule), le couper en morceaux et les ajouter au bouillon de légumes.</p>
+    <p>Entre-temps, faire cuire le riz dans 3 tasses d'eau avec une c. à café de sel. Porter à ébullition sans couvercle.</p>
+    <p>Couvrez et laissez gonfler le riz à feu doux.</p>
+    <p>Verser le riz sur un tamis et le passer sous le robinet.</p>
+    <p>Prélever quelques c. à soupe de bouillon pour délayer les jaunes d'œufs et la crème en tournant vivement.</p>
+    <p>Retirer le waterzooi du feu et ajouter la crème en tournant (le waterzooi ne peut plus bouillir pour éviter que la sauce ne tourne).</p>
+    <p>Verser le waterzooi dans un grand plat. Servir avec le riz.</p>
+    <div class="statement">« Allei ça est bon pour la dalle »</div>
+
+    <h3 id="carbonnade-flamande">La carbonnade flamande (4 personnes)</h3>
+    <p>Recette belge !</p>
+    <h4>Préparation</h4>
+    <p>Pour 4 pers. prendre 1 kg de viande de bœuf coupé en dés. Faire revenir avec deux oignons, une carotte, et une gousse d'ail (le tout émincé). Sel et poivre selon vos goûts. Ajouter un peu de pain d'épice émietté et deux feuilles de laurier, verser 33 cl de bière belge (brune), et deux cuillères à soupe de sucre brun + deux tranches de pain tartinées avec de la moutarde, fermer la cocotte et laisser mijoter au four pendant 2 h 1/2 en remuant quelques fois. Préparer les frites et déguster avec une bonne bière belge (Maredsous, Orval, Chimay ou Rochefort…).</p>
+    <div class="statement">Bon appétit une fois !</div>
+  </div>
+</section>
+
+<section class="alt">
+  <div class="wrap prose">
+    <h2>Où trouver les ingrédients</h2>
+    <p>La page <a href="/que-manger/">Que manger</a> rassemble les producteurs du coin : la boucherie de la ferme à Pondrôme, les truites de Freux, le magasin bio de Redu et la ferme Arc-en-Ciel à Wellin.</p>
+    <p class="note-src">Voir aussi : <a href="/le-four-a-pain/">le mode d'emploi du four à pain</a> · <a href="/que-faire/">tout ce qu'il y a à faire sur le domaine</a>.</p>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <span>© 2026 Les Gîtes du Pré Moré — Moulin de Daverdisse</span>
+    <span>Gîtes ruraux · Gîtes PANDA (WWF)</span>
+    <a href="https://moulindebraives.be/" target="_blank" rel="noopener">Notre autre gîte : Le Moulin de Braives</a>
+    <a href="/book/?property=pre-more" style="margin-left:auto">Réserver en ligne</a>
+  </div>
+  <div class="wrap foot-pages">
+    <span>Nos gîtes :</span>
+    <a href="/la-maison-du-scieur/">La Maison du Scieur</a>
+    <a href="/la-scierie/">La Scierie</a>
+    <a href="/le-moulin-de-braives/">Le Moulin de Braives</a>
+  </div>
+  <div class="wrap foot-pages">
+    <a href="/la-propriete/">La propriété</a>
+    <a href="/histoire/">Un peu d'histoire</a>
+    <a href="/que-faire/">Que faire</a>
+    <a href="/que-manger/">Que manger</a>
+    <a href="/recettes/">Les recettes</a>
+    <a href="/infos-pratiques/">Ce qu'il faut savoir</a>
+  </div>
+  <div class="wrap foot-pages">
+    <span>Sur le domaine :</span>
+    <a href="/le-bain-chaud/">Le bain chaud</a>
+    <a href="/le-sauna/">Le sauna</a>
+    <a href="/le-four-a-pain/">Le four à pain</a>
+    <a href="/les-promenades/">Les promenades</a>
+  </div>
+  <div class="wrap foot-pages foot-legal">
+    <a href="/mentions-legales/">Mentions légales</a>
+    <a href="/confidentialite/">Confidentialité</a>
+    <a href="/conditions-generales/">Conditions générales</a>
+  </div>
+</footer>
+
+<script src="/nav.js" defer></script>
+</body>
+</html>

@@ -53,6 +53,16 @@
     <priority>0.7</priority>
   </url>
 
+  <!-- Recettes rapatriees de l'ancien WordPress (issue #57) : une seule page,
+       les dix textes tiennent en 12 Ko. -->
+
+  <url>
+    <loc>https://gites-platform.j-decartier.workers.dev/recettes/</loc>
+    <lastmod>2026-08-30</lastmod>
+    <changefreq>yearly</changefreq>
+    <priority>0.5</priority>
+  </url>
+
   <url>
     <loc>https://gites-platform.j-decartier.workers.dev/infos-pratiques/</loc>
     <lastmod>2026-08-10</lastmod>
