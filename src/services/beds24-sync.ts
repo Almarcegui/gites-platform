@@ -6,7 +6,9 @@
 //               donc reflétée automatiquement (Domaine réservé chez nous →
 //               les deux rooms Beds24 passent à 0 sans configuration Beds24) ;
 //   price1    = notre prix nuit (rateCalendar, surcharges par jour comprises),
-//               en euros ; jamais poussé s'il est nul ou négatif ;
+//               en euros, MAJORÉE de la majoration du canal de référence quand
+//               le propriétaire en a choisi un (issue #31) ; jamais poussé si
+//               le prix direct est nul ou négatif ;
 //   minStay   = notre min-nuits du jour.
 // Les jours consécutifs identiques sont regroupés en plages (payload compact).
 //
@@ -38,6 +40,14 @@ import {
   upsertGuest,
   type UnitRow,
 } from "../db/repo";
+import {
+  CHANNEL_MARKUPS_KEY,
+  parseChannelMarkups,
+  parsePushChannel,
+  pushedPriceCents,
+  pushMarkupPct,
+  PUSH_CHANNEL_KEY,
+} from "../core/price-guardrails";
 import { beds24UnitScope } from "../core/sync-conflicts";
 import { beds24Configured, beds24Fetch } from "./beds24";
 import { closeSeenSyncConflicts, closeUnseenSyncConflicts, noteSyncConflict } from "./sync-conflicts";
@@ -49,6 +59,26 @@ export interface CalendarSpan {
   numAvail: number;
   price1?: number;
   minStay?: number;
+}
+
+/** Canal de référence dont la majoration s'applique aux prix poussés, et son
+ *  taux. `channel: null` = on pousse le prix de vente directe (état par défaut,
+ *  et comportement historique). Résolu au moment du push, jamais mis en cache :
+ *  un changement de réglage doit se voir au push suivant. */
+export interface PushMarkup {
+  channel: string | null;
+  label: string | null;
+  pct: number;
+}
+
+export async function resolvePushMarkup(db: D1Database): Promise<PushMarkup> {
+  const channels = parseChannelMarkups(await getSetting(db, CHANNEL_MARKUPS_KEY));
+  const channel = parsePushChannel(await getSetting(db, PUSH_CHANNEL_KEY), channels);
+  return {
+    channel,
+    label: channels.find((c) => c.channel === channel)?.label ?? null,
+    pct: pushMarkupPct(channels, channel),
+  };
 }
 
 /** Jours → plages compactes aux valeurs identiques. */
@@ -79,8 +109,12 @@ export async function buildCalendarPush(
   propertyId: number,
   from: IsoDate,
   days: number,
+  /** Majoration déjà résolue par l'appelant — évite de relire le réglage deux
+   *  fois quand le push la connaît déjà. */
+  known?: PushMarkup,
 ): Promise<{ roomId: number; unitName: string; calendar: CalendarSpan[] }[]> {
   const to = addDays(from, days);
+  const markup = known ?? (await resolvePushMarkup(db));
   const [units, links, seasons, rules, overrides, rows, blocks] = await Promise.all([
     listUnits(db, propertyId),
     listLinks(db, propertyId),
@@ -128,7 +162,13 @@ export async function buildCalendarPush(
       // poussé. Les écritures sont bornées côté API (issue #50), mais une
       // règle héritée du temps où le POST tolérait 0 traverserait sinon
       // jusqu'à Airbnb et Booking. Sans price1, Beds24 garde le prix en place.
-      price1: r.priceCents != null && r.priceCents > 0 ? r.priceCents / 100 : undefined,
+      // La majoration s'applique APRÈS ce filet, sur un prix déjà validé : elle
+      // ne peut donc ni ressusciter un prix nul, ni en inventer un. Elle n'est
+      // pas non plus bornée par units.price_max_cents — ce plafond borne ce que
+      // le propriétaire SAISIT en vente directe, pas le prix dérivé qu'on
+      // affiche sur une place de marché.
+      price1:
+        r.priceCents != null && r.priceCents > 0 ? pushedPriceCents(r.priceCents, markup.pct) / 100 : undefined,
       minStay: r.minNights ?? undefined,
     }));
     out.push({ roomId: u.beds24RoomId, unitName: u.name, calendar: compactSpans(days_) });
@@ -142,15 +182,18 @@ export async function pushCalendars(
   env: Env,
   propertyId: number,
   days = 400,
-): Promise<{ pushed: { roomId: number; unitName: string; spans: number }[]; }> {
+): Promise<{ pushed: { roomId: number; unitName: string; spans: number }[]; markup: PushMarkup }> {
   if (!(await beds24Configured(env))) throw new Error("Beds24 non configuré");
   const today = todayInZone();
-  const rooms = await buildCalendarPush(db, propertyId, today, days);
+  const markup = await resolvePushMarkup(db);
+  const rooms = await buildCalendarPush(db, propertyId, today, days, markup);
   const body = rooms.map((r) => ({ roomId: r.roomId, calendar: r.calendar }));
   if (body.length > 0) {
     await beds24Fetch(env, "/inventory/rooms/calendar", { method: "POST", body });
   }
-  return { pushed: rooms.map((r) => ({ roomId: r.roomId, unitName: r.unitName, spans: r.calendar.length })) };
+  // `markup` est remonté pour que l'écran « Plateformes » puisse dire, après un
+  // push manuel, CE QUI a été envoyé — le prix direct ou le prix majoré.
+  return { pushed: rooms.map((r) => ({ roomId: r.roomId, unitName: r.unitName, spans: r.calendar.length })), markup };
 }
 
 // ---------------------------------------------------------------------------

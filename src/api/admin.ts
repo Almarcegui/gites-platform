@@ -23,7 +23,13 @@ import {
   checkPrice,
   normalizeChannelMarkups,
   parseChannelMarkups,
+  parsePushChannel,
+  pushedPriceCents,
+  pushMarkupPct,
+  PUSH_CHANNEL_KEY,
   suggestForChannels,
+  type ChannelMarkup,
+  type ChannelSuggestion,
   type PriceBounds,
 } from "../core/price-guardrails";
 import {
@@ -267,6 +273,10 @@ function intParam(v: string | null | undefined, fallback: number): number {
 /** Plage maximale d'un calendrier ou d'une écriture de surcharge (un peu plus
  *  d'un an — la vue année en a besoin, au-delà c'est une erreur de saisie). */
 const MAX_RANGE_DAYS = 370;
+
+/** Prix de référence des exemples chiffrés du back-office (200,00 €) : un
+ *  ordre de grandeur réel pour ces gîtes, et un nombre rond à vérifier de tête. */
+const EXAMPLE_PRICE_CENTS = 20000;
 
 /** Bornes de prix d'un hébergement (issue #31). Lues à chaque écriture
  *  tarifaire : règle de saison comme surcharge de jour, même garde-fou. */
@@ -882,29 +892,126 @@ export function registerAdminRoutes(router: Router): void {
   // volontairement majoré par rapport à la vente directe. Le calcul est
   // délibérément sans magie — prix direct × (1 + majoration %) — pour que le
   // propriétaire puisse le refaire de tête et rester maître de ses prix.
-  router.get("/api/admin/channel-markups", guard(async (_req, env) => {
-    const channels = parseChannelMarkups(await getSetting(env.DB, CHANNEL_MARKUPS_KEY));
-    return json({ channels, formula: CHANNEL_PRICE_FORMULA });
-  }));
+  /** Valide le canal de référence demandé — AVANT toute écriture, pour qu'une
+   *  demande refusée ne laisse pas la moitié du réglage posée en base.
+   *  Chaîne vide (ou `null`) = retour au prix de vente directe. */
+  function checkPushChannel(
+    raw: unknown,
+    channels: readonly ChannelMarkup[],
+  ): { ok: true; value: string } | { ok: false; response: Response } {
+    if (raw !== null && raw !== undefined && typeof raw !== "string") {
+      return { ok: false, response: apiError(400, "canal invalide — attendu son identifiant, ou null pour ne rien majorer") };
+    }
+    const wanted = typeof raw === "string" ? raw.trim().toLowerCase() : "";
+    if (wanted && !channels.some((c) => c.channel === wanted)) {
+      const known = channels.map((c) => c.channel).join(", ") || "aucun";
+      return { ok: false, response: apiError(400, `canal « ${wanted} » inconnu — canaux configurés : ${known}`) };
+    }
+    return { ok: true, value: wanted };
+  }
 
-  router.put("/api/admin/channel-markups", guard(async (req, env) => {
-    const body = await readJson<{ channels?: unknown }>(req);
+  /** Écrit le canal de référence et le journalise. Le push est décidé par
+   *  l'appelant : toute écriture ne change pas forcément le prix poussé. */
+  async function writePushChannel(
+    env: Env,
+    req: Request,
+    value: string,
+    channels: readonly ChannelMarkup[],
+  ): Promise<void> {
+    await setSetting(env.DB, PUSH_CHANNEL_KEY, value);
+    await audit(env.DB, "admin", "pricing.push_channel", "app", {
+      channel: value || null,
+      markupPct: pushMarkupPct(channels, value || null),
+      par: currentUser(req),
+    });
+  }
+
+  // Réponse commune aux trois routes de majoration : les canaux configurés,
+  // la formule en toutes lettres, et LEQUEL sert de référence au push.
+  async function channelMarkupState(db: D1Database): Promise<{
+    channels: ChannelMarkup[];
+    examples: ChannelSuggestion[];
+    formula: string;
+    pushChannel: string | null;
+    pushMarkupPct: number;
+    example: { directCents: number; pushedCents: number };
+  }> {
+    const channels = parseChannelMarkups(await getSetting(db, CHANNEL_MARKUPS_KEY));
+    const pushChannel = parsePushChannel(await getSetting(db, PUSH_CHANNEL_KEY), channels);
+    const pct = pushMarkupPct(channels, pushChannel);
+    return {
+      channels,
+      // Un exemple chiffré vaut mieux qu'un pourcentage seul : c'est lui qui
+      // permet au propriétaire de vérifier d'un coup d'œil ce qui part. Il est
+      // calculé ICI, avec l'arrondi du moteur — le back-office l'affiche, il
+      // ne le recalcule pas (deux arrondis finiraient par diverger).
+      examples: suggestForChannels(EXAMPLE_PRICE_CENTS, channels),
+      formula: CHANNEL_PRICE_FORMULA,
+      pushChannel,
+      pushMarkupPct: pct,
+      example: { directCents: EXAMPLE_PRICE_CENTS, pushedCents: pushedPriceCents(EXAMPLE_PRICE_CENTS, pct) },
+    };
+  }
+
+  router.get("/api/admin/channel-markups", guard(async (_req, env) => json(await channelMarkupState(env.DB))));
+
+  router.put("/api/admin/channel-markups", guard(async (req, env, _p, _url, execCtx) => {
+    const body = await readJson<{ channels?: unknown; pushChannel?: unknown }>(req);
     const channels = normalizeChannelMarkups(body?.channels);
     if (!channels) return apiError(400, "canaux invalides — attendu une liste { channel, label, markupPct 0 à 100 }");
+    // Le canal de référence est facultatif ici : on ne le touche que s'il est
+    // fourni. Sinon, un simple ajustement de pourcentage le remettrait à zéro.
+    const wanted = body && "pushChannel" in body ? checkPushChannel(body.pushChannel, channels) : null;
+    if (wanted && !wanted.ok) return wanted.response;
+
+    const before = await channelMarkupState(env.DB);
     await setSetting(env.DB, CHANNEL_MARKUPS_KEY, JSON.stringify(channels));
     await audit(env.DB, "admin", "pricing.channel_markups", "app", { channels, par: currentUser(req) });
-    return json({ ok: true, channels, formula: CHANNEL_PRICE_FORMULA });
+    if (wanted?.ok) await writePushChannel(env, req, wanted.value, channels);
+
+    const after = await channelMarkupState(env.DB);
+    // Changer un pourcentage, ou retirer le canal appliqué de la liste, change
+    // le prix qui part aux plateformes : sans ce push, Airbnb et Booking
+    // garderaient l'ancien prix jusqu'au prochain cron.
+    if (after.pushMarkupPct !== before.pushMarkupPct) await triggerBeds24PushAll(env.DB, env, execCtx);
+    return json(after);
+  }));
+
+  // « Appliquer le prix conseillé au canal » (issue #31). Un prix par canal ne
+  // se stocke nulle part — et n'aurait de sens nulle part ailleurs : le SEUL
+  // endroit où un prix part vers une place de marché est le calendrier poussé
+  // à Beds24. On y applique donc la majoration du canal choisi ; le prix de
+  // vente directe, lui, n'est jamais modifié.
+  router.post("/api/admin/channel-markups/apply", guard(async (req, env, _p, _url, execCtx) => {
+    const body = await readJson<{ channel?: unknown }>(req);
+    if (!body) return apiError(400, "corps JSON attendu");
+    const channels = parseChannelMarkups(await getSetting(env.DB, CHANNEL_MARKUPS_KEY));
+    const wanted = checkPushChannel(body.channel, channels);
+    if (!wanted.ok) return wanted.response;
+    await writePushChannel(env, req, wanted.value, channels);
+    // Geste explicite du propriétaire : on renvoie les calendriers sans se
+    // demander si la valeur a changé — c'est ce qu'il vient de demander.
+    await triggerBeds24PushAll(env.DB, env, execCtx);
+    return json(await channelMarkupState(env.DB));
   }));
 
   // Prix conseillé, sur un prix isolé (`?priceCents=`, pour l'éditeur de
   // cellule) ou jour par jour sur une plage (`?unit=&from=&to=`).
   router.get("/api/admin/suggested-prices", guard(async (_req, env, _p, url) => {
     const channels = parseChannelMarkups(await getSetting(env.DB, CHANNEL_MARKUPS_KEY));
+    // Le canal actuellement appliqué au push, pour que l'interface montre ce
+    // qui est déjà en place au lieu de reproposer de l'appliquer.
+    const pushChannel = parsePushChannel(await getSetting(env.DB, PUSH_CHANNEL_KEY), channels);
     const rawPrice = url.searchParams.get("priceCents");
     if (rawPrice != null) {
       const cents = Math.round(Number(rawPrice));
       if (!Number.isFinite(cents) || cents < 1) return apiError(400, "priceCents invalide");
-      return json({ directCents: cents, channels: suggestForChannels(cents, channels), formula: CHANNEL_PRICE_FORMULA });
+      return json({
+        directCents: cents,
+        channels: suggestForChannels(cents, channels),
+        formula: CHANNEL_PRICE_FORMULA,
+        pushChannel,
+      });
     }
 
     const unitId = intParam(url.searchParams.get("unit"), 0);
@@ -920,6 +1027,7 @@ export function registerAdminRoutes(router: Router): void {
       from: range.from,
       to: range.to,
       formula: CHANNEL_PRICE_FORMULA,
+      pushChannel,
       days: days.map((d) => ({
         date: d.date,
         directCents: d.priceCents,
