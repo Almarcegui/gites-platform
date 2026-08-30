@@ -21,9 +21,31 @@ const ONE_YEAR = 31_536_000;
  *  pour qu'une correction se propage sans purge de cache. */
 const ONE_DAY = 86_400;
 
+/** Origines Stripe autorisées, et rien de plus (issue #26).
+ *
+ *  Le Payment Element a besoin d'exactement deux choses : charger
+ *  `js.stripe.com/v3/` (script) et les iframes qu'il y monte (frame), puis
+ *  parler à `api.stripe.com` (connect). Aucune autre origine n'est ouverte —
+ *  ni CDN de police, ni domaine de télémétrie.
+ *
+ *  > [!warning]
+ *  > **À ajouter AVANT de passer la CSP en mode bloquant** :
+ *  > `frame-src https://hooks.stripe.com` — c'est là que Stripe héberge le
+ *  > challenge 3-D Secure (DSP2). Sans lui, tout paiement par carte demandant
+ *  > une authentification bancaire échouerait (contre-review Gemini
+ *  > 2026-08-30). Aucun effet aujourd'hui : la politique est en Report-Only,
+ *  > et l'ouvrir maintenant élargirait la liste au-delà des deux origines
+ *  > arbitrées. Le passage en mode bloquant est une décision séparée
+ *  > (cf. commentaire d'en-tête de ce fichier) : c'est là que la ligne se
+ *  > pose, avec un test de bout en bout sur un paiement 3DS réel. */
+const STRIPE_SCRIPT_SRC = "https://js.stripe.com";
+const STRIPE_FRAME_SRC = "https://js.stripe.com";
+const STRIPE_CONNECT_SRC = "https://api.stripe.com";
+
 /** Politique de sécurité du contenu, en observation. Elle décrit la cible :
  *  tout vient du site, sauf les images (le contenu WordPress importé pointe
- *  encore vers i0.wp.com) et la carte Google Maps intégrée sur « la propriété ».
+ *  encore vers i0.wp.com), la carte Google Maps intégrée sur « la propriété »
+ *  et le formulaire de paiement Stripe du tunnel.
  *  Les `'unsafe-inline'` sont le constat de l'existant, pas un choix. */
 const CSP_REPORT_ONLY = [
   "default-src 'self'",
@@ -33,10 +55,10 @@ const CSP_REPORT_ONLY = [
   "form-action 'self'",
   "img-src 'self' data: https:",
   "style-src 'self' 'unsafe-inline'",
-  "script-src 'self' 'unsafe-inline'",
+  `script-src 'self' 'unsafe-inline' ${STRIPE_SCRIPT_SRC}`,
   "font-src 'self' data:",
-  "connect-src 'self'",
-  "frame-src https://www.google.com",
+  `connect-src 'self' ${STRIPE_CONNECT_SRC}`,
+  `frame-src https://www.google.com ${STRIPE_FRAME_SRC}`,
 ].join("; ");
 
 /** Permissions-Policy volontairement minimale : on coupe les trois capteurs

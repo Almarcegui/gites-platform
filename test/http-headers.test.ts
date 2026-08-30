@@ -54,6 +54,35 @@ describe("en-têtes de sécurité", () => {
     expect(res.headers.get("content-security-policy")).toBeNull();
   });
 
+  it("ouvre Stripe — et Stripe seulement — pour le paiement intégré (issue #26)", async () => {
+    const csp = (await call("https://test.local/book/")).headers.get("content-security-policy-report-only")!;
+    // Le Payment Element a besoin d'exactement trois choses.
+    expect(csp).toContain("script-src 'self' 'unsafe-inline' https://js.stripe.com");
+    expect(csp).toContain("connect-src 'self' https://api.stripe.com");
+    expect(csp).toContain("frame-src https://www.google.com https://js.stripe.com");
+  });
+
+  it("n'ouvre AUCUNE autre origine : la liste des hôtes autorisés est fermée", async () => {
+    const csp = (await call("https://test.local/")).headers.get("content-security-policy-report-only")!;
+    // Toutes les origines http(s) citées dans la politique, quelle que soit la
+    // directive. Le jour où quelqu'un ajoute un CDN de police ou un domaine de
+    // télémétrie « juste pour essayer », ce test tombe.
+    const origins = [...new Set(csp.match(/https?:\/\/[^\s;]+/g) ?? [])].sort();
+    expect(origins).toEqual([
+      "https://api.stripe.com",   // PaymentIntent : confirmation depuis le navigateur
+      "https://js.stripe.com",    // script + iframes du Payment Element
+      "https://www.google.com",   // carte intégrée de « la propriété »
+    ]);
+    // Les directives non liées à Stripe sont inchangées.
+    expect(csp).toContain("default-src 'self'");
+    expect(csp).toContain("object-src 'none'");
+    expect(csp).toContain("frame-ancestors 'none'");
+    expect(csp).toContain("form-action 'self'");
+    expect(csp).toContain("style-src 'self' 'unsafe-inline'");
+    expect(csp).toContain("font-src 'self' data:");
+    expect(csp).toContain("img-src 'self' data: https:");
+  });
+
   it("n'annonce pas HSTS en clair (http local) — les navigateurs l'ignorent de toute façon", async () => {
     const res = await call("http://localhost:8788/");
     expect(res.headers.get("strict-transport-security")).toBeNull();
