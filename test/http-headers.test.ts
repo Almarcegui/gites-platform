@@ -69,11 +69,12 @@ describe("en-têtes de sécurité", () => {
     // télémétrie « juste pour essayer », ce test tombe.
     const origins = [...new Set(csp.match(/https?:\/\/[^\s;]+/g) ?? [])].sort();
     expect(origins).toEqual([
-      "https://api.stripe.com",   // PaymentIntent : confirmation depuis le navigateur
-      "https://js.stripe.com",    // script + iframes du Payment Element
-      "https://www.google.com",   // carte intégrée de « la propriété »
+      "https://api.stripe.com",             // PaymentIntent : confirmation depuis le navigateur
+      "https://challenges.cloudflare.com",  // widget anti-robot Turnstile du tunnel (issue #6)
+      "https://js.stripe.com",              // script + iframes du Payment Element
+      "https://www.google.com",             // carte intégrée de « la propriété »
     ]);
-    // Les directives non liées à Stripe sont inchangées.
+    // Les directives non liées à Stripe ni à Turnstile sont inchangées.
     expect(csp).toContain("default-src 'self'");
     expect(csp).toContain("object-src 'none'");
     expect(csp).toContain("frame-ancestors 'none'");

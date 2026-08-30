@@ -5,8 +5,9 @@
 // vente directe. On plafonne donc les holds en attente et la cadence de
 // création, par email ET par IP appelante.
 //
-// (La vérification Turnstile est traitée séparément : elle exige une clé du
-// compte Cloudflare de Julien — cf. issue #6, second point.)
+// (Le second volet de l'issue #6 — la vérification Turnstile — vit dans
+// test/turnstile.test.ts : il est optionnel et éteint sans clés, ces
+// plafonds-ci sont inconditionnels.)
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { D1Database } from "@cloudflare/workers-types";
 import { createTestDb, type TestDb } from "./helpers/d1";

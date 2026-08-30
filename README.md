@@ -368,6 +368,85 @@ elloha, paiements déjà encaissés repris, mêmes garde-fous anti-conflit.
 `TODO_FORMAT_ELLOHA` : demander l'export réel à Julien au moment venu
 (mapping d'en-têtes à ajuster dans `src/services/elloha-import.ts`).
 
+## Anti-robot du formulaire de réservation (Cloudflare Turnstile)
+
+Le formulaire public pose un blocage de 30 minutes sur des dates **avant tout
+paiement**. Deux protections se complètent (issue #6) :
+
+1. **Plafonds serveur** — 3 options de paiement simultanées et 8 réservations
+   par heure glissante, par email **et** par IP. Toujours actifs, rien à
+   configurer.
+2. **Turnstile** — le captcha invisible de Cloudflare, gratuit et sans cookie
+   de pistage. **Éteint par défaut.**
+
+### Ce qui se passe sans clés (état actuel)
+
+Rien. Aucun script tiers n'est chargé dans le tunnel, aucun jeton n'est demandé
+au visiteur, aucune vérification n'est faite côté serveur. C'est volontaire :
+le développement local, la suite de tests et le parcours de réservation
+fonctionnent à l'identique sans compte Cloudflare.
+
+### Créer la paire de clés (5 minutes, action propriétaire)
+
+1. Tableau de bord Cloudflare → menu **Turnstile** → **Add widget**.
+2. Nom : `gites-platform` ; **Hostnames** : le domaine public du site — et
+   `localhost` en plus si tu veux tester en local avec les vraies clés.
+3. **Widget Mode : Managed** (le mode recommandé : invisible pour un visiteur
+   normal, défi seulement en cas de doute).
+4. Cloudflare affiche alors deux valeurs :
+   - **Site Key** (publique, `0x4AAAA…`) — elle est servie au navigateur, elle
+     n'a pas à être protégée ;
+   - **Secret Key** (`0x4AAAA…`) — elle ne doit **jamais** sortir du Worker ni
+     du dépôt.
+
+### Poser les clés
+
+En local, dans `.dev.vars` (gitignoré) :
+
+```
+TURNSTILE_SITE_KEY=0x4AAAAAAA…
+TURNSTILE_SECRET_KEY=0x4AAAAAAA…
+```
+
+En production :
+
+```bash
+wrangler secret put TURNSTILE_SITE_KEY --env production
+wrangler secret put TURNSTILE_SECRET_KEY --env production
+```
+
+> [!important]
+> **Les deux clés vont ensemble.** Une seule des deux = configuration
+> incomplète : le code considère alors la fonctionnalité éteinte plutôt que de
+> faire échouer toutes les réservations. Pour désactiver Turnstile, il suffit de
+> retirer un des deux secrets (`wrangler secret delete …`) et de redéployer.
+
+### Tester sans compte
+
+Cloudflare publie des clés de test qui ne valident rien mais font tourner le
+vrai widget. Utiles pour vérifier le parcours :
+
+| Cas | `TURNSTILE_SITE_KEY` | `TURNSTILE_SECRET_KEY` |
+|---|---|---|
+| Passe toujours | `1x00000000000000000000AA` | `1x0000000000000000000000000000000AA` |
+| Échoue toujours (widget bloqué) | `2x00000000000000000000AB` | `2x0000000000000000000000000000000AA` |
+| Jeton valide, vérification refusée | `1x00000000000000000000AA` | `2x0000000000000000000000000000000AA` |
+
+### Ce que voit le visiteur
+
+Le widget s'affiche à l'étape 3, entre l'acceptation des CGV et le bouton de
+paiement. Un jeton absent ou refusé arrête la réservation **avant toute
+écriture** (ni client créé, ni créneau gelé) avec un message qui dit quoi faire.
+Si le service Cloudflare est injoignable, la réservation est refusée en 503 avec
+la sortie de secours (nous contacter) : la protection ne se désarme pas toute
+seule.
+
+**Le jeton n'est jamais journalisé** — ni dans `audit_log`, ni dans la réponse.
+Seuls les codes d'erreur de Cloudflare (`invalid-input-response`,
+`timeout-or-duplicate`…) sont tracés, sous l'action `booking.captcha_refused`.
+
+---
+
 ## Déploiement (⚠️ RIEN n'est déployé — décision de Julien)
 
 Runbook à exécuter LE MOMENT VENU, jamais sans son accord explicite.
@@ -389,6 +468,9 @@ liens de paiement et des URLs iCal pointant sur la production.
    `RESEND_API_KEY` (+ `EMAILS_ENABLED=true`
    seulement sur GO), `BEDS24_REFRESH_TOKEN`, `BEDS24_WEBHOOK_KEY`,
    et **`ADMIN_TOKEN` — obligatoire, la garde admin est fail-closed**.
+   Optionnel mais recommandé : `TURNSTILE_SITE_KEY` + `TURNSTILE_SECRET_KEY`
+   (anti-robot du formulaire public — cf. § Anti-robot ci-dessus ; les deux
+   ensemble ou aucune des deux).
 6. `wrangler deploy --env production`, puis webhook Stripe →
    `https://…/api/webhooks/stripe`, avec **quatre** événements activés :
    `payment_intent.succeeded`, `payment_intent.payment_failed` (paiement
@@ -582,5 +664,8 @@ restauration une fois : une procédure jamais exécutée n'est pas une procédur
 - CSP (report-only) : `js.stripe.com` (script + frame) et `api.stripe.com`
   (connect) sont les **seules** origines ouvertes pour le paiement.
 - Simulateur dev-pay : automatiquement désactivé dès qu'une clé Stripe existe.
+- Formulaire public : plafonds de holds et de cadence toujours actifs, plus
+  Turnstile quand les deux clés sont configurées (jeton vérifié avant toute
+  écriture, jamais journalisé).
 - Jamais de DELETE sur les résas (annulation = statut), `audit_log` sur toutes
   les écritures significatives.

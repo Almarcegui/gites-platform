@@ -651,6 +651,10 @@ Sans `ADMIN_TOKEN` ni compte en base : **503, tout est refusé**.
 - **XSS** — chaque fichier front définit son `esc()` et toute donnée serveur
   interpolée y passe.
 - **Pot de miel** sur le formulaire de contact public.
+- **Formulaire de réservation** — plafonds de holds et de cadence (par email et
+  par IP) toujours actifs, plus **Turnstile** quand les deux clés sont
+  configurées (`src/services/turnstile.ts`, éteint sans clés). Le jeton est
+  vérifié avant toute écriture et n'est jamais journalisé.
 
 ---
 

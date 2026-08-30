@@ -42,6 +42,86 @@ function checkinDaysLabel(days) {
   return `le ${names.slice(0, -1).join(", le ")} ou le ${names.at(-1)}`;
 }
 
+// ---------------------------------------------------------------------------
+// Anti-robot Turnstile (issue #6) — entièrement optionnel
+//
+// La clé publique arrive de /api/public/today. Sans elle, RIEN de ce bloc ne
+// s'exécute : aucun script tiers n'est chargé, aucun widget n'est affiché,
+// aucun jeton n'est envoyé — le tunnel est exactement celui d'avant.
+// ---------------------------------------------------------------------------
+
+const TURNSTILE_SRC = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+let TURNSTILE_KEY = null;
+let turnstileWidget = null;
+let turnstileScript = null;
+
+/** Charge le script Cloudflare une seule fois (rendu explicite : le formulaire
+ *  est construit dynamiquement, l'auto-rendu ne verrait jamais le conteneur). */
+function loadTurnstile() {
+  if (!turnstileScript) {
+    turnstileScript = new Promise((resolve, reject) => {
+      const el = document.createElement("script");
+      el.src = TURNSTILE_SRC;
+      el.async = true;
+      el.defer = true;
+      el.onload = resolve;
+      el.onerror = () => {
+        // Sans cette remise à zéro, la promesse rejetée resterait en cache :
+        // une micro-coupure au chargement de la page condamnerait le widget
+        // jusqu'au rechargement complet, alors qu'un second essai suffit.
+        turnstileScript = null;
+        el.remove();
+        reject(new Error("script indisponible"));
+      };
+      document.head.appendChild(el);
+    });
+  }
+  return turnstileScript;
+}
+
+/** Affiche le widget dans l'étape 3. Rejoué à chaque rendu du panneau : le
+ *  conteneur est recréé, l'ancien widget n'existe plus. */
+async function mountTurnstile() {
+  const box = $("turnstileBox");
+  if (!TURNSTILE_KEY || !box) return;
+  try {
+    await loadTurnstile();
+  } catch {
+    // Le contrôle est indispensable : le dire tout de suite plutôt que de
+    // laisser découvrir le refus après avoir rempli tout le formulaire.
+    box.innerHTML = `<div class="note bad">Le contrôle anti-robot n'a pas pu se charger. Rechargez la page, ou contactez-nous : nous réservons pour vous.</div>`;
+    return;
+  }
+  // Script chargé mais API absente : bloqueur de contenu, extension de vie
+  // privée… Le dire tout de suite, sinon le visiteur attend un widget qui ne
+  // viendra jamais et ne comprend pas le refus au moment de payer.
+  if (!window.turnstile) {
+    box.innerHTML = `<div class="note bad">Le contrôle anti-robot est bloqué par votre navigateur (extension de blocage ?). Autorisez challenges.cloudflare.com, ou contactez-nous : nous réservons pour vous.</div>`;
+    return;
+  }
+  try { if (turnstileWidget !== null) window.turnstile.remove(turnstileWidget); } catch { /* widget déjà retiré avec son conteneur */ }
+  turnstileWidget = null;
+  try {
+    // `action` est scellée dans le jeton et revérifiée par le serveur
+    // (TURNSTILE_ACTION dans src/services/turnstile.ts) : les deux chaînes
+    // doivent rester identiques.
+    turnstileWidget = window.turnstile.render(box, { sitekey: TURNSTILE_KEY, action: "reservation" });
+  } catch { /* clé invalide : le refus viendra du serveur, avec sa phrase */ }
+}
+
+/** Jeton courant, ou "" si la vérification n'est pas encore passée. */
+function turnstileToken() {
+  if (!TURNSTILE_KEY) return null;
+  if (!window.turnstile || turnstileWidget === null) return "";
+  try { return window.turnstile.getResponse(turnstileWidget) || ""; } catch { return ""; }
+}
+
+/** Un jeton ne sert qu'une fois : après un refus, il faut en refaire un. */
+function resetTurnstile() {
+  if (!TURNSTILE_KEY || !window.turnstile || turnstileWidget === null) return;
+  try { window.turnstile.reset(turnstileWidget); } catch { /* rien à réarmer */ }
+}
+
 async function api(path, body) {
   const res = await fetch(path, {
     method: body ? "POST" : "GET",
@@ -602,6 +682,7 @@ async function openBookingPanel(unitId) {
           <div id="cgvMsg" class="field-msg" role="alert"></div>
           <div id="cgvBox" class="cgv-box" style="display:none"></div>
           <label class="small optin"><input type="checkbox" id="gOptin"> Tenez-moi au courant des disponibilités et offres par email <span class="muted">(facultatif, désinscription à tout moment)</span></label></div>
+          ${TURNSTILE_KEY ? `<div id="turnstileBox" class="turnstile"></div><div id="turnstileMsg" class="field-msg" role="alert"></div>` : ""}
           <div id="bookMsg" role="alert" aria-live="assertive"></div>
           <button class="btn big" id="bPay" style="margin-top:14px" disabled>Payer et réserver</button>
           <p class="reassure">Votre créneau est bloqué <b id="holdMin">30</b> minutes le temps du paiement.
@@ -671,6 +752,7 @@ async function openBookingPanel(unitId) {
   // un utilisateur de lecteur d'écran qu'il est arrivé sur le formulaire.
   $("step3Title").focus({ preventScroll: true });
   $("bookingPanel").scrollIntoView({ behavior: "smooth" });
+  mountTurnstile(); // sans clé publique : ne fait rien, et ne charge rien
   await refreshQuote();
 }
 
@@ -775,6 +857,16 @@ async function submitBooking() {
     $("cgvLabel").scrollIntoView({ behavior: "smooth", block: "center" });
     return;
   }
+  const tsMsg = $("turnstileMsg");
+  if (tsMsg) tsMsg.textContent = "";
+  const captcha = turnstileToken();
+  if (captcha === "") {
+    // Le widget est là mais la vérification n'a pas (encore) abouti : inutile
+    // d'envoyer la requête, le serveur la refuserait avec la même raison.
+    if (tsMsg) tsMsg.textContent = "Le contrôle anti-robot n'est pas encore validé — patientez un instant, puis relancez la réservation.";
+    $("turnstileBox")?.scrollIntoView({ behavior: "smooth", block: "center" });
+    return;
+  }
   const lastName = $("gLast").value.trim();
   const email = $("gEmail").value.trim();
   const phone = $("gPhone").value.trim();
@@ -803,11 +895,17 @@ async function submitBooking() {
       notes: $("gNotes").value,
       cgvAccepted: true,
       marketingOptIn: $("gOptin").checked,
+      // Jeton anti-robot — absent quand la fonctionnalité n'est pas configurée
+      ...(captcha ? { turnstileToken: captcha } : {}),
     });
     try { localStorage.removeItem(storeKey()); } catch { /* au pire la reprise re-proposera les dates */ }
     // Le créneau est bloqué à partir de maintenant : le décompte démarre ici et
     // reste visible si le visiteur revient sur le tunnel (issue #16).
     rememberHold(res);
+    // Le jeton vient d'être consommé. Depuis le paiement intégré (#26) la page
+    // ne navigue plus : un retour au formulaire renverrait un jeton mort, et le
+    // visiteur se verrait refuser sans comprendre. On réarme tout de suite.
+    resetTurnstile();
     // Paiement intégré (issue #26) : le client ne quitte pas la page. Sans clé
     // Stripe, `payment.mode` vaut `redirect` et on repart sur le simulateur
     // local — exactement comme avant.
@@ -823,6 +921,9 @@ async function submitBooking() {
     $("guestCard").hidden = false;
     $("bPay").disabled = false;
     payButtonRefresh();
+    // Un jeton Turnstile ne vaut qu'une fois : sans réarmement, un second essai
+    // serait refusé en `timeout-or-duplicate` alors que le visiteur est humain.
+    resetTurnstile();
     if (String(e.message).includes("réservé")) {
       msg.innerHTML = `<div class="note bad">😔 ${esc(e.message)} — le calendrier vient d'être mis à jour, relancez une recherche.</div>`;
       calCache.clear();
@@ -1003,6 +1104,10 @@ async function initFlow() {
   const t = await api("/api/public/today");
   TODAY = t.today;
   calMonth = TODAY.slice(0, 7);
+  // Anti-robot : la clé publique n'existe que si le propriétaire l'a
+  // configurée. Sans elle, aucun script tiers n'est demandé (issue #6).
+  TURNSTILE_KEY = t.turnstileSiteKey || null;
+  if (TURNSTILE_KEY) loadTurnstile().catch(() => { /* signalé au montage du widget */ });
   if (t.demo) {
     const banner = document.createElement("div");
     banner.className = "note";

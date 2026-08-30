@@ -43,3 +43,12 @@ BEDS24_REFRESH_TOKEN=
 # la même valeur se colle dans Beds24 au déploiement — URL complète affichée
 # dans le back-office, vue Canaux OTA).
 BEDS24_WEBHOOK_KEY=
+
+# Anti-robot Cloudflare Turnstile du formulaire public (issue #6). Les DEUX
+# clés ensemble, ou aucune : une seule = fonctionnalité considérée éteinte.
+# Vides = aucun script tiers chargé, aucune vérification — c'est le mode local.
+# Création de la paire : tableau de bord Cloudflare > Turnstile > Add widget
+# (mode « Managed »). Détail et clés de test dans le README § Anti-robot.
+# En prod : `wrangler secret put TURNSTILE_SECRET_KEY --env production`.
+TURNSTILE_SITE_KEY=
+TURNSTILE_SECRET_KEY=
