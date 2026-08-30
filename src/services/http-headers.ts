@@ -42,10 +42,19 @@ const STRIPE_SCRIPT_SRC = "https://js.stripe.com";
 const STRIPE_FRAME_SRC = "https://js.stripe.com";
 const STRIPE_CONNECT_SRC = "https://api.stripe.com";
 
+/** Widget anti-robot Turnstile du tunnel de réservation (issue #6) : script,
+ *  iframe du défi et ses propres appels partent tous de la même origine.
+ *  Autorisée en dur plutôt que conditionnée à la présence des clés — la CSP est
+ *  une constante servie sur TOUTES les réponses, la rendre variable
+ *  demanderait de la recalculer par requête pour un gain nul. En Report-Only,
+ *  une directive de plus n'autorise rien : elle décrit la cible. Et le script
+ *  n'est de toute façon chargé que si la clé publique existe. */
+const TURNSTILE_SRC = "https://challenges.cloudflare.com";
+
 /** Politique de sécurité du contenu, en observation. Elle décrit la cible :
  *  tout vient du site, sauf les images (le contenu WordPress importé pointe
  *  encore vers i0.wp.com), la carte Google Maps intégrée sur « la propriété »
- *  et le formulaire de paiement Stripe du tunnel.
+ *  le formulaire de paiement Stripe du tunnel et son widget anti-robot.
  *  Les `'unsafe-inline'` sont le constat de l'existant, pas un choix. */
 const CSP_REPORT_ONLY = [
   "default-src 'self'",
@@ -55,10 +64,10 @@ const CSP_REPORT_ONLY = [
   "form-action 'self'",
   "img-src 'self' data: https:",
   "style-src 'self' 'unsafe-inline'",
-  `script-src 'self' 'unsafe-inline' ${STRIPE_SCRIPT_SRC}`,
+  `script-src 'self' 'unsafe-inline' ${STRIPE_SCRIPT_SRC} ${TURNSTILE_SRC}`,
   "font-src 'self' data:",
-  `connect-src 'self' ${STRIPE_CONNECT_SRC}`,
-  `frame-src https://www.google.com ${STRIPE_FRAME_SRC}`,
+  `connect-src 'self' ${STRIPE_CONNECT_SRC} ${TURNSTILE_SRC}`,
+  `frame-src https://www.google.com ${STRIPE_FRAME_SRC} ${TURNSTILE_SRC}`,
 ].join("; ");
 
 /** Permissions-Policy volontairement minimale : on coupe les trois capteurs

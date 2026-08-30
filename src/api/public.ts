@@ -64,6 +64,7 @@ import {
   stripePublishableKey,
   verifyStripeSignature,
 } from "../services/stripe";
+import { turnstileSiteKey, verifyTurnstile } from "../services/turnstile";
 
 const MAX_NIGHTS = 60;
 const MAX_ADVANCE_DAYS = 730; // réservation à 2 ans max
@@ -169,6 +170,9 @@ interface CreateBookingBody extends QuoteBody {
   notes?: string;
   cgvAccepted?: boolean;
   marketingOptIn?: boolean;
+  /** Jeton du widget Turnstile (issue #6). Absent tant que la fonctionnalité
+   *  n'est pas configurée — il n'est alors pas non plus vérifié. */
+  turnstileToken?: string;
 }
 
 /** Version courte des CGV acceptées : sha256 hex tronqué + longueur du texte.
@@ -632,6 +636,23 @@ export function registerPublicRoutes(router: Router): void {
     if (!isEmailish(email)) return apiError(400, "email invalide");
     if (body.cgvAccepted !== true) return apiError(400, "l'acceptation des conditions générales est requise");
 
+    // --- anti-robot Turnstile (issue #6, second volet) ----------------------
+    // AVANT toute écriture ET avant la reprise d'un hold : un script qui rejoue
+    // la requête ne doit pouvoir déclencher ni création, ni nouvelle session de
+    // paiement. Sans clés configurées, verifyTurnstile() répond ok sans appel
+    // réseau — le parcours est alors strictement celui d'aujourd'hui.
+    // Le jeton n'est jamais journalisé : seuls les codes d'erreur de Cloudflare
+    // sont tracés, ils n'ont aucune valeur rejouable.
+    const captcha = await verifyTurnstile(env, body.turnstileToken, req.headers.get("cf-connecting-ip"));
+    if (!captcha.ok) {
+      await audit(db, "public", "booking.captcha_refused", null, {
+        code: captcha.code,
+        codes: captcha.codes,
+        ip: req.headers.get("cf-connecting-ip"),
+      });
+      return apiError(captcha.status, captcha.message, { code: captcha.code });
+    }
+
     // --- reprise d'une réservation en cours (issue #68) ---------------------
     // Un retour arrière depuis la page de paiement laissait le créneau gelé
     // 30 minutes : le MÊME client qui recommençait se voyait refuser ses
@@ -701,8 +722,9 @@ export function registerPublicRoutes(router: Router): void {
     // Anti-abus AVANT toute écriture : ni client créé, ni créneau gelé pour un
     // appelant qui a déjà saturé son quota. Le refus est journalisé — sans
     // trace, une attaque de gel de calendrier resterait invisible.
-    // (Turnstile — second volet de l'issue #6 — reste à câbler : il exige une
-    //  paire de clés du compte Cloudflare, cf. PR.)
+    // (Turnstile, le second volet de l'issue #6, est vérifié plus haut : il
+    //  arrête le script qui varie ses emails et ses IP, que ces plafonds-ci
+    //  ne verraient pas.)
     const ip = req.headers.get("cf-connecting-ip");
     const pressure = await countDirectBookingPressure(db, { email, ip });
     if (pressure.activeHolds >= MAX_ACTIVE_HOLDS) {
@@ -1195,7 +1217,14 @@ export function registerPublicRoutes(router: Router): void {
 
   // petite aide au front public : date du jour (Bruxelles) + mode démo
   router.get("/api/public/today", async (_req, env) =>
-    json({ today: todayInZone(), maxAdvanceDays: MAX_ADVANCE_DAYS, demo: !stripeEnabled(env) }));
+    json({
+      today: todayInZone(),
+      maxAdvanceDays: MAX_ADVANCE_DAYS,
+      demo: !stripeEnabled(env),
+      // Clé PUBLIQUE du widget anti-robot, ou null quand la fonctionnalité est
+      // éteinte (issue #6) : le tunnel ne charge alors AUCUN script tiers.
+      turnstileSiteKey: turnstileSiteKey(env),
+    }));
 
   // Contrôle de santé pour une sonde EXTERNE (issue #21) : deux champs, une
   // seule lecture en base, aucune donnée client. 503 si la base est illisible,

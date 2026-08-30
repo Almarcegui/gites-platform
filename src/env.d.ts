@@ -21,6 +21,12 @@ interface Env {
   BEDS24_REFRESH_TOKEN?: string;
   /** Clé secrète du webhook entrant Beds24 (/api/webhooks/beds24?key=…). */
   BEDS24_WEBHOOK_KEY?: string;
+  /** Clé PUBLIQUE du widget Cloudflare Turnstile (issue #6). Exposée telle
+   *  quelle par /api/public/today. Absente = anti-robot désactivé. */
+  TURNSTILE_SITE_KEY?: string;
+  /** Clé SECRÈTE Turnstile (`wrangler secret put`). Absente = anti-robot
+   *  désactivé : les deux clés vont ensemble, cf. services/turnstile.ts. */
+  TURNSTILE_SECRET_KEY?: string;
   /** Autorise les ÉCRITURES vers Beds24 (compte réel, pas de bac à sable).
    *  Déduit sinon de PUBLIC_BASE_URL en https:// — cf. beds24WritesAllowed(). */
   BEDS24_WRITE_ENABLED?: string;
