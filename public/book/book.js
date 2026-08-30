@@ -902,6 +902,10 @@ async function submitBooking() {
     // Le créneau est bloqué à partir de maintenant : le décompte démarre ici et
     // reste visible si le visiteur revient sur le tunnel (issue #16).
     rememberHold(res);
+    // Le jeton vient d'être consommé. Depuis le paiement intégré (#26) la page
+    // ne navigue plus : un retour au formulaire renverrait un jeton mort, et le
+    // visiteur se verrait refuser sans comprendre. On réarme tout de suite.
+    resetTurnstile();
     // Paiement intégré (issue #26) : le client ne quitte pas la page. Sans clé
     // Stripe, `payment.mode` vaut `redirect` et on repart sur le simulateur
     // local — exactement comme avant.
