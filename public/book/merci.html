@@ -22,6 +22,11 @@
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 const q = new URLSearchParams(location.search);
 const ref = q.get("ref"), email = q.get("email");
+// Retour d'un moyen de paiement à redirection (Bancontact, issue #26). Cet
+// indice ne prouve rien : c'est le webhook qui confirme. Il sert seulement à
+// dire la vérité pendant l'attente, au lieu d'un « Confirmation en cours… »
+// qui laisserait croire à un simple délai d'affichage.
+const redirectStatus = q.get("redirect_status");
 const voucherUrl = `/book/voucher.html?ref=${encodeURIComponent(ref || "")}&email=${encodeURIComponent(email || "")}`;
 
 async function poll(attempt = 0) {
@@ -30,6 +35,18 @@ async function poll(attempt = 0) {
     box.innerHTML = `<div class="big-check">✅</div><h3>Paiement reçu</h3>
       <p class="muted small">Votre confirmation arrive par email.</p>`;
     return;
+  }
+  if (attempt === 0 && redirectStatus === "failed") {
+    box.innerHTML = `<div class="big-check">⚠️</div><h3>Paiement non abouti</h3>
+      <p class="muted small">Aucun montant n'a été débité. Votre créneau reste bloqué quelques minutes :
+      vous pouvez réessayer depuis votre réservation.</p>
+      <p style="margin-top:10px"><a class="btn" href="${voucherUrl}">Reprendre le paiement</a></p>`;
+    return;
+  }
+  if (attempt === 0 && redirectStatus === "processing") {
+    box.innerHTML = `<div class="big-check">🕐</div><h3>Paiement en cours de traitement</h3>
+      <p class="muted small">Votre banque traite le paiement (Bancontact met parfois quelques minutes).
+      Cette page se met à jour toute seule dès que la confirmation nous parvient.</p>`;
   }
   try {
     const res = await fetch(`/api/public/bookings/${encodeURIComponent(ref)}?email=${encodeURIComponent(email)}`);

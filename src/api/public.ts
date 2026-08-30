@@ -43,11 +43,13 @@ import {
 } from "../db/repo";
 import { pullBeds24Bookings, pushCalendars, triggerBeds24Push } from "../services/beds24-sync";
 import {
+  handlePaymentFailure,
   handlePaymentSuccess,
   MIN_CHECKOUT_CENTS,
   quoteFromContext,
-  startCheckout,
+  startPayment,
   voucherUrl,
+  type PaymentStart,
   type QuoteBody,
 } from "../services/booking-flow";
 import { publicHealth } from "../services/health";
@@ -56,7 +58,12 @@ import { buildIcs, exportSpansForUnit } from "../services/ical";
 import { availabilityHorizon, NON_CUMUL_NOTE, publicPromotions, weekendAvailability } from "../services/offers";
 import { logSearch } from "../services/search-log";
 import { getSetting } from "../services/settings";
-import { stripeEnabled, verifyStripeSignature } from "../services/stripe";
+import {
+  paymentElementEnabled,
+  stripeEnabled,
+  stripePublishableKey,
+  verifyStripeSignature,
+} from "../services/stripe";
 
 const MAX_NIGHTS = 60;
 const MAX_ADVANCE_DAYS = 730; // réservation à 2 ans max
@@ -127,6 +134,26 @@ function safeEqualKey(a: string, b: string): boolean {
 
 function isEmailish(s: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(s);
+}
+
+/** Forme publique d'un démarrage de paiement (issue #26).
+ *
+ *  `checkoutUrl` est conservé tel quel — c'est le contrat que connaissent le
+ *  tunnel, le voucher et les tests : en mode intégré il vaut simplement `null`,
+ *  et le front bascule alors sur `payment.clientSecret`. Un navigateur resté
+ *  sur une ancienne version du JS voit `checkoutUrl: null` et affiche son
+ *  message d'erreur, il ne part pas sur une page vide. */
+function publicPayment(start: PaymentStart) {
+  return {
+    checkoutUrl: start.url,
+    payment: {
+      mode: start.mode,
+      clientSecret: start.clientSecret,
+      returnUrl: start.returnUrl,
+      amountCents: start.amountCents,
+      kind: start.kind,
+    },
+  };
 }
 
 interface CreateBookingBody extends QuoteBody {
@@ -638,20 +665,22 @@ export function registerPublicRoutes(router: Router): void {
               { code: "too_many_resumes" },
             );
           }
-          // Les tentatives de paiement précédentes sont soldées, comme sur la
-          // reprise depuis le voucher (un paiement qui aboutirait quand même
-          // reste honoré par le webhook, qui travaille sur l'id de session).
-          for (const pay of attempts.filter((x) => x.status === "pending")) {
-            await markPaymentStatus(db, pay.id, "failed");
-          }
+          // Les tentatives de paiement précédentes sont soldées par
+          // `startPayment` → `voidPendingSessions`, un peu plus bas : c'est LUI
+          // qui ferme aussi la tentative chez Stripe et qui refuse d'en ouvrir
+          // une seconde quand la première est déjà partie chez la banque du
+          // client. La boucle qui marquait ces lignes `failed` ici faisait
+          // exactement l'inverse : elle vidait la liste des « pending » avant
+          // le contrôle, donc la garde ne voyait plus rien à protéger
+          // (contre-review Gemini 2026-08-30).
           await audit(db, "public", "booking.hold_resumed", `booking:${own.id}`, {
             reference: own.reference, unitId: own.unitId, checkin: stay.checkin, checkout: stay.checkout,
           });
-          const resumed = await startCheckout(db, env, own, fullNow ? "full" : "deposit", dueNow, "public");
+          const resumed = await startPayment(db, env, own, fullNow ? "full" : "deposit", dueNow, "public");
           return json(
             {
               reference: own.reference,
-              checkoutUrl: resumed.url,
+              ...publicPayment(resumed),
               amountDueCents: dueNow,
               holdMinutes: resumeCtx.settings.holdMinutes,
               holdExpiresAt: own.holdExpiresAt,
@@ -761,11 +790,11 @@ export function registerPublicRoutes(router: Router): void {
 
     triggerBeds24Push(db, env, execCtx, ctx.property.id);
     const booking = (await getBooking(db, created.id)) as BookingRow;
-    const { url: checkoutUrl } = await startCheckout(db, env, booking, full ? "full" : "deposit", amountDue, "public");
+    const start = await startPayment(db, env, booking, full ? "full" : "deposit", amountDue, "public");
     return json(
       {
         reference: created.reference,
-        checkoutUrl,
+        ...publicPayment(start),
         amountDueCents: amountDue,
         holdMinutes: ctx.settings.holdMinutes,
         // Fin de blocage ET heure serveur : le tunnel décompte sur l'écart des
@@ -954,6 +983,26 @@ export function registerPublicRoutes(router: Router): void {
       if (!outcome.handled) {
         await audit(env.DB, "stripe", "webhook.unmatched", null, { session: String(obj.id) });
       }
+    } else if (event.type === "payment_intent.succeeded" && obj?.id) {
+      // Paiement intégré (issue #26). MÊME chemin de crédit que Checkout : la
+      // référence Stripe (`pi_…`) est écrite dans la même colonne de
+      // réconciliation, donc la même idempotence — un rejeu ne crédite rien de
+      // plus, et le contrôle de trop-perçu reste en dernier recours.
+      // C'est cette notification qui fait foi, jamais le retour navigateur :
+      // Bancontact ramène le client avec `redirect_status=processing` bien
+      // avant que la banque n'ait tranché.
+      const intentId = String(obj.id);
+      const outcome = await handlePaymentSuccess(env.DB, env, intentId, intentId);
+      if (!outcome.handled) {
+        await audit(env.DB, "stripe", "webhook.unmatched", null, { intent: intentId });
+      }
+    } else if (event.type === "payment_intent.payment_failed" && obj?.id) {
+      // Carte refusée, Bancontact abandonné : la TENTATIVE échoue, la
+      // réservation ne bouge pas. Le blocage de 30 min continue de courir et
+      // reste récupérable (formulaire ou POST /bookings/:ref/pay).
+      const err = obj.last_payment_error as { message?: unknown; code?: unknown } | undefined;
+      const reason = String(err?.code ?? err?.message ?? "").slice(0, 200) || null;
+      await handlePaymentFailure(env.DB, String(obj.id), reason);
     } else if (event.type === "checkout.session.expired" && obj?.id) {
       const payment = await findPaymentBySession(env.DB, String(obj.id));
       if (payment && payment.status === "pending") {
@@ -962,6 +1011,20 @@ export function registerPublicRoutes(router: Router): void {
       }
     }
     return json({ received: true });
+  });
+
+  /** Configuration publique du paiement (issue #26).
+   *
+   *  Le tunnel ne charge `js.stripe.com` QUE si cet endpoint annonce une clé
+   *  publique : sans clé, aucune requête ne part vers Stripe et le simulateur
+   *  local reste seul à l'écran. La clé publiable est faite pour être publique
+   *  (elle ne permet ni de lire ni de créer quoi que ce soit côté compte) ; la
+   *  clé secrète, elle, ne sort jamais du Worker. */
+  router.get("/api/public/payment-config", async (_req, env) => {
+    const publishableKey = paymentElementEnabled(env) ? stripePublishableKey(env) : null;
+    return publishableKey
+      ? json({ enabled: true, ui: "element", publishableKey, locale: "fr" })
+      : json({ enabled: false });
   });
 
   // --- simulateur de paiement — MODE STUB UNIQUEMENT (pas de clé Stripe) -----
@@ -1078,8 +1141,8 @@ export function registerPublicRoutes(router: Router): void {
       // Plancher Stripe : une session de moins de 0,50 € est refusée à la
       // création. Le reliquat se règle alors avec le propriétaire.
       if (balance < MIN_CHECKOUT_CENTS) return apiError(400, "solde trop faible pour un paiement en ligne");
-      const { url } = await startCheckout(db, env, booking, "balance", balance, "public");
-      return json({ checkoutUrl: url, amountCents: balance, kind: "balance", now: sqlNow() });
+      const start = await startPayment(db, env, booking, "balance", balance, "public");
+      return json({ ...publicPayment(start), amountCents: balance, kind: "balance", now: sqlNow() });
     }
 
     if (booking.status !== "pending") return apiError(400, "cette réservation n'est plus active");
@@ -1087,9 +1150,9 @@ export function registerPublicRoutes(router: Router): void {
       return apiError(410, "l'option a expiré — le créneau est de nouveau ouvert, relancez une réservation");
     }
     const kind = booking.balanceDueDate == null ? "full" : "deposit";
-    const { url } = await startCheckout(db, env, booking, kind, booking.depositCents, "public");
+    const start = await startPayment(db, env, booking, kind, booking.depositCents, "public");
     return json({
-      checkoutUrl: url,
+      ...publicPayment(start),
       amountCents: booking.depositCents,
       kind,
       holdExpiresAt: booking.holdExpiresAt,

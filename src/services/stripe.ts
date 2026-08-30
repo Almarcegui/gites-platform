@@ -1,17 +1,59 @@
-// Intégration Stripe Checkout — par API REST directe (fetch), sans SDK.
+// Intégration Stripe — par API REST directe (fetch), sans SDK.
 //
 // ⚠️ MODE TEST UNIQUEMENT (clé sk_test_…) tant que l'entité juridique qui
 // encaisse n'est pas tranchée (question ouverte n° 1 du plan v1).
 //
-// Sans STRIPE_SECRET_KEY : MODE STUB — createCheckoutSession renvoie une URL
-// locale /book/dev-pay.html qui simule le paiement (dev uniquement, la page
-// appelle /api/public/dev-pay/confirm qui rejoue le chemin du webhook).
+// Trois modes, décidés par les seules variables d'environnement — le code du
+// tunnel est le même dans les trois cas :
+//
+//  1. AUCUNE clé            → MODE STUB : `createCheckoutSession` renvoie une
+//     URL locale /book/dev-pay.html qui simule le paiement (la page appelle
+//     /api/public/dev-pay/confirm, qui rejoue le chemin du webhook).
+//  2. sk_ + pk_             → PAYMENT ELEMENT (défaut, issue #26) : formulaire
+//     intégré dans la page, carte + Bancontact + Apple/Google Pay. Le client ne
+//     quitte jamais le site (sauf redirection bancaire de Bancontact).
+//  3. sk_ seule, ou STRIPE_UI=checkout → CHECKOUT hébergé : le flux historique,
+//     conservé comme repli et comme support des liens de paiement envoyés par
+//     email depuis le back-office (un email a besoin d'une URL, pas d'un
+//     `client_secret`).
 
 const STRIPE_API = "https://api.stripe.com/v1";
 
 export function stripeEnabled(env: Env): boolean {
   return !!env.STRIPE_SECRET_KEY && env.STRIPE_SECRET_KEY.trim() !== "";
 }
+
+/** Clé publique à confier au navigateur, ou `null` si le paiement intégré ne
+ *  peut pas fonctionner. Les deux clés vont ensemble : une clé publique sans
+ *  clé secrète monterait un formulaire qu'aucun PaymentIntent n'alimente. */
+export function stripePublishableKey(env: Env): string | null {
+  const key = (env.STRIPE_PUBLISHABLE_KEY ?? "").trim();
+  return stripeEnabled(env) && key !== "" ? key : null;
+}
+
+/** Interface de paiement retenue. `element` par défaut ; `STRIPE_UI=checkout`
+ *  force le repli sur la page hébergée, sans redéploiement de code. */
+export function stripeUiMode(env: Env): "element" | "checkout" {
+  return (env.STRIPE_UI ?? "").trim().toLowerCase() === "checkout" ? "checkout" : "element";
+}
+
+/** Vrai quand le Payment Element est réellement montable : clé secrète (pour
+ *  créer le PaymentIntent), clé publique (pour le monter), et mode `element`.
+ *  Toute réponse négative renvoie au flux Checkout / stub — jamais à une page
+ *  de paiement vide. */
+export function paymentElementEnabled(env: Env): boolean {
+  return stripePublishableKey(env) !== null && stripeUiMode(env) === "element";
+}
+
+/** Moyens de paiement déclarés explicitement (décision propriétaire
+ *  2026-08-30) : la carte — qui porte aussi Apple Pay et Google Pay dans le
+ *  Payment Element — et **Bancontact**, ~60 % du commerce en ligne belge.
+ *
+ *  Pourquoi une liste explicite plutôt qu'`automatic_payment_methods` : ce
+ *  dernier délègue la liste au tableau de bord Stripe, donc à un réglage
+ *  invisible depuis le dépôt. Ici, ce qui est proposé au client est lisible
+ *  dans le code et couvert par un test. */
+export const PAYMENT_METHOD_TYPES = ["card", "bancontact"] as const;
 
 export interface CheckoutParams {
   paymentId: number;      // notre payments.id — la clé de réconciliation du webhook
@@ -125,4 +167,148 @@ export async function expireCheckoutSession(env: Env, sessionId: string): Promis
   } catch {
     return false;
   }
+}
+
+
+// ---------------------------------------------------------------------------
+// Payment Element — PaymentIntent (issue #26)
+// ---------------------------------------------------------------------------
+
+export interface PaymentIntentParams {
+  paymentId: number;      // notre payments.id
+  reference: string;      // PM-2026-001
+  kind: string;           // deposit | balance | full — l'étape payée
+  label: string;          // « Arrhes réservation PM-2026-001 — La Scierie »
+  amountCents: number;    // figé depuis le devis serveur, jamais reçu du client
+  customerEmail?: string | null;
+}
+
+/** Clé d'idempotence Stripe : réservation + étape + montant + tentative.
+ *
+ *  Les trois premiers composants sont ceux demandés (« idempotence par
+ *  réservation+étape ») ; la tentative (`payments.id`) est indispensable et
+ *  n'affaiblit rien. Sans elle, une seconde tentative après un refus de carte
+ *  se verrait rendre le MÊME PaymentIntent, dont l'identifiant devrait alors
+ *  être écrit sur deux lignes de `payments` — ce qu'interdit l'index UNIQUE
+ *  partiel `idx_payments_session`, la clé de réconciliation du webhook. La
+ *  protection contre le double encaissement ne vient donc pas d'ici : elle
+ *  vient de l'annulation des intentions précédentes (`voidRemotePayment`) et
+ *  de l'idempotence de `handlePaymentSuccess`. */
+export function paymentIntentIdempotencyKey(p: PaymentIntentParams): string {
+  return `gp-pi-${p.reference}-${p.kind}-${p.amountCents}-${p.paymentId}`;
+}
+
+/** Crée un PaymentIntent et rend de quoi monter le Payment Element.
+ *
+ *  Le `client_secret` est fait pour vivre dans le navigateur : il ne permet que
+ *  de confirmer CE paiement, pour CE montant, qui est fixé ici, côté serveur. */
+export async function createPaymentIntent(
+  env: Env,
+  p: PaymentIntentParams,
+): Promise<{ id: string; clientSecret: string }> {
+  if (!stripeEnabled(env)) throw new Error("Stripe non configuré");
+  const body = new URLSearchParams({
+    amount: String(p.amountCents),
+    currency: "eur",
+    description: `${p.reference} — ${p.label}`,
+    "metadata[payment_id]": String(p.paymentId),
+    "metadata[reference]": p.reference,
+    "metadata[kind]": p.kind,
+  });
+  PAYMENT_METHOD_TYPES.forEach((type, i) => body.set(`payment_method_types[${i}]`, type));
+  // PAS de `receipt_email` (contre-review Gemini 2026-08-30) : ce champ fait
+  // envoyer un reçu par Stripe lui-même, hors de tout contrôle de la
+  // plateforme — donc en doublon de notre `payment_receipt`, et en contournant
+  // la discipline `EMAILS_ENABLED`. L'email du client part en métadonnée, pour
+  // la réconciliation dans le tableau de bord Stripe, sans déclencher d'envoi.
+  if (p.customerEmail) body.set("metadata[guest_email]", p.customerEmail);
+
+  const res = await fetch(`${STRIPE_API}/payment_intents`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${env.STRIPE_SECRET_KEY}`,
+      "content-type": "application/x-www-form-urlencoded",
+      "idempotency-key": paymentIntentIdempotencyKey(p),
+    },
+    body: body.toString(),
+  });
+  if (!res.ok) {
+    throw new Error(`Stripe payment_intent ${res.status}: ${(await res.text()).slice(0, 300)}`);
+  }
+  const intent = (await res.json()) as { id?: string; client_secret?: string };
+  if (!intent.id || !intent.client_secret) throw new Error("Stripe payment_intent : réponse inexploitable");
+  return { id: intent.id, clientSecret: intent.client_secret };
+}
+
+/** Annule un PaymentIntent CÔTÉ STRIPE — le pendant exact de
+ *  `expireCheckoutSession` pour le paiement intégré.
+ *
+ *  Ne lève jamais : une intention déjà payée, déjà annulée ou en cours de
+ *  traitement (Bancontact parti chez la banque) rend `false`. Le filet de
+ *  dernier recours reste le contrôle de trop-perçu de `handlePaymentSuccess`. */
+export async function cancelPaymentIntent(env: Env, intentId: string): Promise<boolean> {
+  if (!stripeEnabled(env) || !intentId.startsWith("pi_")) return false;
+  try {
+    const res = await fetch(`${STRIPE_API}/payment_intents/${encodeURIComponent(intentId)}/cancel`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${env.STRIPE_SECRET_KEY}`,
+        "content-type": "application/x-www-form-urlencoded",
+      },
+      body: "cancellation_reason=abandoned",
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+/** Statuts dans lesquels un PaymentIntent NE PEUT PAS être annulé : l'argent
+ *  est parti, ou il est en route. `processing` est le cas Bancontact — le
+ *  client a validé chez sa banque, Stripe attend la confirmation. */
+const UNCANCELLABLE_INTENT_STATUSES = new Set(["processing", "succeeded", "requires_capture"]);
+
+/** Statut courant d'un PaymentIntent, ou `null` si Stripe est injoignable ou
+ *  ne connaît pas cette intention. */
+export async function paymentIntentStatus(env: Env, intentId: string): Promise<string | null> {
+  if (!stripeEnabled(env) || !intentId.startsWith("pi_")) return null;
+  try {
+    const res = await fetch(`${STRIPE_API}/payment_intents/${encodeURIComponent(intentId)}`, {
+      headers: { authorization: `Bearer ${env.STRIPE_SECRET_KEY}` },
+    });
+    if (!res.ok) return null;
+    const intent = (await res.json()) as { status?: string };
+    return intent.status ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** Une tentative de paiement est-elle DÉJÀ partie chez la banque du client ?
+ *
+ *  Le cas qui coûte de l'argent (contre-review Gemini 2026-08-30) : un client
+ *  paie le solde par Bancontact, revient sur son voucher pendant que sa banque
+ *  traite l'ordre, et reclique « Payer ». `payment_intents/{id}/cancel` refuse
+ *  d'annuler une intention `processing` — on marquait pourtant la ligne locale
+ *  `failed` et on en ouvrait une seconde. Les deux aboutissaient : double
+ *  débit, rattrapé seulement a posteriori par l'alerte de trop-perçu.
+ *
+ *  Stripe injoignable rend `null` → `false` : on ne bloque pas un client sur un
+ *  incident réseau, on retombe sur le comportement d'avant (annulation tentée,
+ *  échec journalisé, alerte de trop-perçu en dernier recours). */
+export async function remotePaymentInFlight(env: Env, ref: string): Promise<boolean> {
+  if (!stripeEnabled(env) || !ref.startsWith("pi_")) return false;
+  const status = await paymentIntentStatus(env, ref);
+  return status !== null && UNCANCELLABLE_INTENT_STATUSES.has(status);
+}
+
+/** Ferme chez Stripe la tentative de paiement `ref`, quelle qu'en soit la
+ *  forme : PaymentIntent (`pi_…`), session Checkout (`cs_…`) ou simulateur
+ *  (`stub_…`, sans contrepartie distante). Un seul point d'appel pour
+ *  `voidPendingSessions`, qui n'a pas à connaître le mode en cours — une
+ *  réservation peut très bien porter les deux, si le mode a changé entre deux
+ *  tentatives. */
+export async function voidRemotePayment(env: Env, ref: string): Promise<boolean> {
+  if (!stripeEnabled(env) || !ref || ref.startsWith("stub_")) return false;
+  return ref.startsWith("pi_") ? cancelPaymentIntent(env, ref) : expireCheckoutSession(env, ref);
 }

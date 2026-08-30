@@ -20,7 +20,14 @@ import {
   type QuoteContext,
 } from "../db/repo";
 import { buildPaymentReceiptEmail, buildVoucherEmail, queueEmail } from "./email";
-import { createCheckoutSession, expireCheckoutSession, stripeEnabled } from "./stripe";
+import {
+  createCheckoutSession,
+  createPaymentIntent,
+  paymentElementEnabled,
+  remotePaymentInFlight,
+  stripeEnabled,
+  voidRemotePayment,
+} from "./stripe";
 
 export interface QuoteBody {
   unitId: number;
@@ -90,6 +97,19 @@ export function voucherUrl(env: Env, booking: { reference: string; guestEmail?: 
  *  Un échec d'expiration (session déjà payée, réseau) ne bloque rien : on
  *  journalise et on continue. Le filet de dernier recours reste le contrôle de
  *  trop-perçu de `handlePaymentSuccess`. */
+/** Refus d'ouvrir une nouvelle tentative alors qu'une précédente est déjà
+ *  partie chez la banque du client. Mappée en 409 par `src/index.ts` — c'est
+ *  une situation normale et temporaire, pas une panne. */
+export class PaymentInFlightError extends Error {
+  constructor() {
+    super(
+      "Un paiement est déjà en cours de traitement pour cette réservation (Bancontact met parfois quelques minutes). " +
+        "Attendez sa confirmation avant d'en lancer un autre — vous recevrez un email dès qu'il aboutit.",
+    );
+    this.name = "PaymentInFlightError";
+  }
+}
+
 export async function voidPendingSessions(
   db: D1Database,
   env: Env,
@@ -99,7 +119,15 @@ export async function voidPendingSessions(
   const pendings = (await listPayments(db, { bookingId })).filter((x) => x.status === "pending");
   for (const pay of pendings) {
     if (pay.stripeSessionId) {
-      const closed = await expireCheckoutSession(env, pay.stripeSessionId);
+      // Garde-fou AVANT toute écriture : une intention déjà en route chez la
+      // banque du client ne s'annule pas. Marquer la ligne `failed` et en
+      // ouvrir une seconde produirait deux débits (contre-review 2026-08-30).
+      if (await remotePaymentInFlight(env, pay.stripeSessionId)) throw new PaymentInFlightError();
+      // `voidRemotePayment` reconnaît la forme de la référence : session
+      // Checkout (`cs_…`), PaymentIntent (`pi_…`) ou simulateur (`stub_…`).
+      // Une même réservation peut porter les deux si le mode a changé entre
+      // deux tentatives — d'où l'aiguillage plutôt qu'un appel en dur.
+      const closed = await voidRemotePayment(env, pay.stripeSessionId);
       if (!closed && stripeEnabled(env)) {
         await audit(db, actor, "payment.expire_failed", `booking:${bookingId}`, {
           payment: pay.id,
@@ -116,11 +144,39 @@ export async function voidPendingSessions(
  *
  *  Toute session encore ouverte sur la réservation est fermée d'abord : deux
  *  sessions vivantes pour le même montant, ce sont deux encaissements. */
+export type PaymentKind = "deposit" | "full" | "balance";
+
+/** Libellé lisible d'une étape de paiement — repris tel quel dans le descriptif
+ *  Stripe et sur le relevé bancaire du client. */
+export function paymentLabel(booking: BookingRow, kind: PaymentKind): string {
+  const labelKind = kind === "deposit" ? "Arrhes" : kind === "balance" ? "Solde" : "Paiement";
+  return `${labelKind} réservation ${booking.reference}${booking.unitName ? ` — ${booking.unitName}` : ""}`;
+}
+
+/** URLs de retour après paiement.
+ *
+ *  Le solde se paie sur une réservation DÉJÀ confirmée : le renvoyer vers
+ *  merci.html (« Confirmation en cours… », qui attend un passage en
+ *  `confirmed`) annoncerait une confirmation qui a eu lieu il y a des semaines.
+ *  Retour sur le voucher, qui affiche le nouveau solde.
+ *
+ *  Ces mêmes URLs servent de `return_url` au Payment Element : Bancontact part
+ *  chez la banque du client et le ramène ici. */
+export function paymentReturnUrls(env: Env, booking: BookingRow, kind: PaymentKind): { successUrl: string; cancelUrl: string } {
+  const base = env.PUBLIC_BASE_URL;
+  const emailParam = booking.guestEmail ? `&email=${encodeURIComponent(booking.guestEmail)}` : "";
+  if (kind === "balance") return { successUrl: voucherUrl(env, booking), cancelUrl: voucherUrl(env, booking) };
+  return {
+    successUrl: `${base}/book/merci.html?ref=${encodeURIComponent(booking.reference)}${emailParam}`,
+    cancelUrl: `${base}/book/annule.html?ref=${encodeURIComponent(booking.reference)}${emailParam}`,
+  };
+}
+
 export async function startCheckout(
   db: D1Database,
   env: Env,
   booking: BookingRow,
-  kind: "deposit" | "full" | "balance",
+  kind: PaymentKind,
   amountCents: number,
   actor: "public" | "admin",
 ): Promise<{ url: string; paymentId: number }> {
@@ -132,21 +188,8 @@ export async function startCheckout(
     amountCents,
     status: "pending",
   });
-  const labelKind = kind === "deposit" ? "Arrhes" : kind === "balance" ? "Solde" : "Paiement";
-  const label = `${labelKind} réservation ${booking.reference}${booking.unitName ? ` — ${booking.unitName}` : ""}`;
-  const base = env.PUBLIC_BASE_URL;
-  const emailParam = booking.guestEmail ? `&email=${encodeURIComponent(booking.guestEmail)}` : "";
-  // Le solde se paie sur une réservation DÉJÀ confirmée : le renvoyer vers
-  // merci.html (« Confirmation en cours… », qui attend un passage en
-  // `confirmed`) annoncerait une confirmation qui a eu lieu il y a des
-  // semaines. Retour sur le voucher, qui affiche le nouveau solde.
-  const returnUrls =
-    kind === "balance"
-      ? { successUrl: voucherUrl(env, booking), cancelUrl: voucherUrl(env, booking) }
-      : {
-          successUrl: `${base}/book/merci.html?ref=${encodeURIComponent(booking.reference)}${emailParam}`,
-          cancelUrl: `${base}/book/annule.html?ref=${encodeURIComponent(booking.reference)}${emailParam}`,
-        };
+  const label = paymentLabel(booking, kind);
+  const returnUrls = paymentReturnUrls(env, booking, kind);
   const session = await createCheckoutSession(env, {
     paymentId,
     reference: booking.reference,
@@ -158,6 +201,94 @@ export async function startCheckout(
   await setPaymentSession(db, paymentId, session.id);
   await audit(db, actor, "payment.link_created", `booking:${booking.id}`, { kind, amountCents, session: session.id });
   return { url: session.url, paymentId };
+}
+
+/** Résultat d'un démarrage de paiement, quel que soit le mode.
+ *
+ *  `redirect` : le client quitte la page (Checkout hébergé, ou simulateur en
+ *  local). `element` : le formulaire se monte dans la page avec le
+ *  `clientSecret`, et `returnUrl` sert de point de retour aux moyens de
+ *  paiement à redirection (Bancontact). */
+export interface PaymentStart {
+  paymentId: number;
+  mode: "redirect" | "element";
+  /** Renseigné en mode `redirect` uniquement. */
+  url: string | null;
+  /** Renseigné en mode `element` uniquement. Conçu pour vivre côté navigateur :
+   *  il ne confirme que CE paiement, pour le montant fixé ici. */
+  clientSecret: string | null;
+  returnUrl: string;
+  amountCents: number;
+  kind: PaymentKind;
+}
+
+/** Point d'entrée unique du paiement côté client (issue #26).
+ *
+ *  Avec les deux clés Stripe et le mode `element` (le défaut) : un
+ *  PaymentIntent, monté dans la page — carte, Bancontact, Apple/Google Pay.
+ *  Sinon : le flux Checkout / simulateur historique, inchangé.
+ *
+ *  Dans les deux cas le montant vient du devis serveur, jamais du navigateur,
+ *  et l'identifiant Stripe (`pi_…` ou `cs_…`) est écrit dans la MÊME colonne de
+ *  réconciliation `payments.stripe_session_id` : le webhook, l'idempotence de
+ *  `handlePaymentSuccess` et l'index UNIQUE partiel qui la garantit restent
+ *  exactement ceux du flux Checkout — aucune migration, aucun second chemin de
+ *  crédit à maintenir. */
+export async function startPayment(
+  db: D1Database,
+  env: Env,
+  booking: BookingRow,
+  kind: PaymentKind,
+  amountCents: number,
+  actor: "public" | "admin",
+): Promise<PaymentStart> {
+  const returnUrl = paymentReturnUrls(env, booking, kind).successUrl;
+  if (!paymentElementEnabled(env)) {
+    const legacy = await startCheckout(db, env, booking, kind, amountCents, actor);
+    return {
+      paymentId: legacy.paymentId,
+      mode: "redirect",
+      url: legacy.url,
+      clientSecret: null,
+      returnUrl,
+      amountCents,
+      kind,
+    };
+  }
+
+  // Même précaution que pour Checkout : deux intentions vivantes pour le même
+  // montant, ce sont deux encaissements possibles.
+  await voidPendingSessions(db, env, booking.id, actor);
+  const paymentId = await addPayment(db, {
+    bookingId: booking.id,
+    kind,
+    method: "stripe",
+    amountCents,
+    status: "pending",
+  });
+  const intent = await createPaymentIntent(env, {
+    paymentId,
+    reference: booking.reference,
+    kind,
+    label: paymentLabel(booking, kind),
+    amountCents,
+    customerEmail: booking.guestEmail ?? null,
+  });
+  await setPaymentSession(db, paymentId, intent.id);
+  await audit(db, actor, "payment.intent_created", `booking:${booking.id}`, {
+    kind,
+    amountCents,
+    intent: intent.id,
+  });
+  return {
+    paymentId,
+    mode: "element",
+    url: null,
+    clientSecret: intent.clientSecret,
+    returnUrl,
+    amountCents,
+    kind,
+  };
 }
 
 /** Chemin commun webhook Stripe / simulateur stub. Idempotent : un même
@@ -242,6 +373,39 @@ export async function handlePaymentSuccess(
     });
   }
   return { handled: true, bookingId: booking.id, reference: booking.reference };
+}
+
+/** Échec de paiement signalé par Stripe (`payment_intent.payment_failed`).
+ *
+ *  Ce qu'on fait : marquer CETTE tentative `failed`, pour qu'elle cesse
+ *  d'apparaître « en attente » dans la vue Paiements, et laisser une ligne
+ *  d'audit avec le motif rendu par Stripe.
+ *
+ *  Ce qu'on ne fait SURTOUT pas : toucher à la réservation. Une carte refusée
+ *  n'annule rien — le blocage de 30 minutes continue de courir, le client
+ *  réessaie dans le formulaire (le même PaymentIntent accepte une nouvelle
+ *  tentative) ou reprend depuis son voucher. Annuler ici, ce serait détruire un
+ *  hold que le client est en train d'utiliser.
+ *
+ *  Idempotent par construction : une tentative déjà `succeeded` ou déjà
+ *  `failed` n'est pas retouchée — un `payment_failed` arrivé APRÈS un
+ *  `succeeded` (retry Stripe désordonné) ne peut donc pas décrémenter un
+ *  encaissement acquis. */
+export async function handlePaymentFailure(
+  db: D1Database,
+  intentId: string,
+  reason?: string | null,
+): Promise<{ handled: boolean; bookingId?: number }> {
+  const payment = await findPaymentBySession(db, intentId);
+  if (!payment) return { handled: false };
+  if (payment.status !== "pending") return { handled: true, bookingId: payment.bookingId };
+  await markPaymentStatus(db, payment.id, "failed");
+  await audit(db, "stripe", "payment.failed", `booking:${payment.bookingId}`, {
+    intent: intentId,
+    kind: payment.kind,
+    reason: reason ?? null,
+  });
+  return { handled: true, bookingId: payment.bookingId };
 }
 
 /** Journalise (ou envoie, si activé) le reçu d'un encaissement.

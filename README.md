@@ -63,7 +63,7 @@ Pré Moré se louent **seules ou ensemble** (« Domaine entier »).
 | Runtime | Cloudflare Workers (TypeScript strict, zéro dépendance runtime) |
 | Base | Cloudflare D1 (SQLite) — migrations dans `migrations/` |
 | Front | HTML/CSS/JS vanilla servis en assets (`public/admin/`, `public/book/`) |
-| Paiement | Stripe Checkout par API REST — **mode TEST uniquement** tant que l'entité n'est pas tranchée ; **mode stub** intégré sans clé |
+| Paiement | Stripe par API REST — **Payment Element intégré** (carte, Bancontact, Apple/Google Pay) dès que les deux clés sont posées, sinon Checkout hébergé ; **mode stub** intégré sans clé. **Mode TEST uniquement** tant que l'entité n'est pas tranchée |
 | Emails | Resend — **mode stub par défaut** : tout est journalisé dans `email_log`, rien ne part sans `EMAILS_ENABLED=true` + accord Julien |
 | OTA | iCal export par unité + import cron 15 min (Airbnb Moulin, phase 3) |
 | Tests | Vitest (pool Node) + **Miniflare direct** pour la vraie D1 |
@@ -86,6 +86,8 @@ npm run typecheck
 - Back-office : http://localhost:8788/admin/
 - Page publique : http://localhost:8788/book/
 - Sans clé Stripe : le paiement passe par `/book/dev-pay.html` (simulateur local).
+  Avec `STRIPE_SECRET_KEY` **et** `STRIPE_PUBLISHABLE_KEY` : formulaire de paiement
+  intégré au tunnel (§ Stripe ci-dessous), sans redirection hors du site.
 - Secrets locaux : copier `.dev.vars.example` → `.dev.vars`. **`ADMIN_TOKEN` y est
   désormais obligatoire** (garde fail-closed) : format `identifiant:motdepasse`,
   plusieurs paires séparées par des virgules. Le gabarit livre `dev:dev`, qui
@@ -183,6 +185,48 @@ test/                  12 fichiers, 152 tests
   (décision Julien 27/07), la ligne du devis se masque toute seule.
 - **Fuseau** : toute la logique « aujourd'hui » est en Europe/Brussels ;
   montants en centimes (entiers), arrondi au centime par ligne.
+
+## Paiement (Stripe)
+
+Trois modes, décidés par les seules variables d'environnement — aucun code à
+changer pour passer de l'un à l'autre.
+
+| Variables posées | Ce que voit le client | Pour quoi |
+|---|---|---|
+| aucune | `/book/dev-pay.html`, le simulateur local | développement, tests |
+| `STRIPE_SECRET_KEY` + `STRIPE_PUBLISHABLE_KEY` | **Payment Element intégré** à l'étape 4 du tunnel et sur le voucher | le mode cible (issue #26) |
+| `STRIPE_SECRET_KEY` seule, ou `STRIPE_UI=checkout` | redirection vers Checkout hébergé | repli, et liens de paiement envoyés par email depuis le back-office |
+
+**Moyens de paiement proposés** : carte (qui porte aussi **Apple Pay** et
+**Google Pay** dans le Payment Element) et **Bancontact** — déclarés
+explicitement dans `src/services/stripe.ts` (`PAYMENT_METHOD_TYPES`), pas
+délégués à un réglage du tableau de bord Stripe. Apple Pay et Google Pay
+supposent en plus l'enregistrement du domaine dans Stripe (*Settings → Payment
+methods → Apple Pay → Add domain*) : sans lui, le formulaire fonctionne, les
+deux boutons de portefeuille n'apparaissent simplement pas.
+
+**Clés à poser** (mode test d'abord — `sk_test_` / `pk_test_`) :
+
+```
+STRIPE_SECRET_KEY=sk_test_…        # secret, ne sort jamais du Worker
+STRIPE_PUBLISHABLE_KEY=pk_test_…   # confiée au navigateur (endpoint /api/public/payment-config)
+STRIPE_WEBHOOK_SECRET=whsec_…      # vérification HMAC du webhook
+```
+
+**Événements du webhook à activer** sur `https://…/api/webhooks/stripe` :
+
+- `payment_intent.succeeded` — **c'est lui qui crédite**, jamais le retour navigateur ;
+- `payment_intent.payment_failed` — solde la tentative, ne touche pas à la réservation ;
+- `checkout.session.completed` et `checkout.session.expired` — flux hébergé, toujours utilisé par les liens de paiement du back-office.
+
+**Bancontact redirige** vers la banque du client et le ramène sur `merci.html`
+(acompte) ou sur le voucher (solde) avec un `redirect_status`. Ce paramètre est
+affiché honnêtement (« paiement en cours de traitement ») et **ne crédite
+rien** : la page attend le webhook.
+
+**Un échec de paiement n'annule pas la réservation.** Le blocage de 30 minutes
+continue de courir, le formulaire propose « Réessayer », et le voucher rouvre un
+paiement à tout moment (`POST /api/public/bookings/:reference/pay`).
 
 ## Beds24 (canal OTA — API v2, branché le 2026-07-28)
 
@@ -340,13 +384,18 @@ liens de paiement et des URLs iCal pointant sur la production.
 4. `env.production.vars.PUBLIC_BASE_URL` → URL publique réelle (décision D5).
 5. Secrets de production (`--env production` sur chaque commande) :
    `wrangler secret put STRIPE_SECRET_KEY --env production` (**sk_test_** d'abord),
-   puis `STRIPE_WEBHOOK_SECRET`, `RESEND_API_KEY` (+ `EMAILS_ENABLED=true`
+   puis `STRIPE_PUBLISHABLE_KEY` (**pk_test_** correspondante — sans elle le
+   paiement retombe sur Checkout hébergé), `STRIPE_WEBHOOK_SECRET`,
+   `RESEND_API_KEY` (+ `EMAILS_ENABLED=true`
    seulement sur GO), `BEDS24_REFRESH_TOKEN`, `BEDS24_WEBHOOK_KEY`,
    et **`ADMIN_TOKEN` — obligatoire, la garde admin est fail-closed**.
 6. `wrangler deploy --env production`, puis webhook Stripe →
-   `https://…/api/webhooks/stripe` (événements `checkout.session.completed`
-   + `checkout.session.expired`), et webhook Beds24 → URL affichée dans la vue
-   Canaux OTA du back-office.
+   `https://…/api/webhooks/stripe`, avec **quatre** événements activés :
+   `payment_intent.succeeded`, `payment_intent.payment_failed` (paiement
+   intégré) **et** `checkout.session.completed`, `checkout.session.expired`
+   (Checkout hébergé, toujours utilisé par les liens de paiement du
+   back-office). Puis webhook Beds24 → URL affichée dans la vue Canaux OTA du
+   back-office.
 7. Protéger `/admin` **ET `/api/admin/*`** par **Cloudflare Access** — ce sont
    deux surfaces distinctes, et une règle posée seulement sur `/admin` laisse
    les endpoints de données ouverts. Désactiver aussi la route
@@ -530,6 +579,8 @@ restauration une fois : une procédure jamais exécutée n'est pas une procédur
 - Exports CSV : neutralisation de l'injection de formule Excel (`=`, `+`, `-`, `@`).
 - Voucher public : accessible uniquement avec référence **et** email du client.
 - Webhook Stripe : signature HMAC vérifiée (tolérance 5 min, comparaison temps constant).
+- CSP (report-only) : `js.stripe.com` (script + frame) et `api.stripe.com`
+  (connect) sont les **seules** origines ouvertes pour le paiement.
 - Simulateur dev-pay : automatiquement désactivé dès qu'une clé Stripe existe.
 - Jamais de DELETE sur les résas (annulation = statut), `audit_log` sur toutes
   les écritures significatives.

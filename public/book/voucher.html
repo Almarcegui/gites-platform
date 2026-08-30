@@ -18,6 +18,7 @@
 <script type="module">
 import { cgvHtml } from "./cgv.js";
 import { icsFile } from "./ics.js";
+import { mountPayment, paymentConfig } from "./pay-element.js";
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 const eur = (c) => (c / 100).toLocaleString("fr-BE", { style: "currency", currency: "EUR" });
 const dfr = (iso) => iso ? `${iso.slice(8,10)}/${iso.slice(5,7)}/${iso.slice(0,4)}` : "—";
@@ -33,6 +34,11 @@ const lineLabel = (l) => (l?.publicLabel && l.unitPriceCents != null
 (async () => {
   const box = document.getElementById("box");
   const ref = q.get("ref"), email = q.get("email");
+  // Retour d'un moyen de paiement à redirection (Bancontact, issue #26).
+  // Stripe ramène le client avec `redirect_status` — un simple indice, JAMAIS
+  // une preuve : seul le webhook crédite. On l'affiche donc tel qu'il est,
+  // sans promettre un encaissement que le serveur n'a pas encore vu.
+  const redirectStatus = q.get("redirect_status");
   if (!ref || !email) { box.innerHTML = `<div class="card"><div class="note bad">Lien incomplet — utilisez le lien reçu par email.</div></div>`; return; }
   const res = await fetch(`/api/public/bookings/${encodeURIComponent(ref)}?email=${encodeURIComponent(email)}`);
   const data = await res.json();
@@ -68,7 +74,21 @@ const lineLabel = (l) => (l?.publicLabel && l.unitPriceCents != null
     return min >= 1 ? `${min} minute${min > 1 ? "s" : ""}` : "moins d'une minute";
   };
 
-  const payBlock = holdAlive
+  // Placé au-dessus du bloc de paiement : un client revenu de sa banque doit
+  // lire l'état de SON paiement avant de se voir reproposer de payer.
+  const processingBlock = redirectStatus === "processing"
+    ? `<div class="card"><h3>Paiement en cours de traitement</h3>
+        <p class="small">Votre banque a bien pris votre paiement en charge. La confirmation nous parvient sous quelques minutes —
+        cette page et votre email refléteront le nouveau solde dès que ce sera fait. Aucune action de votre part.</p></div>`
+    : redirectStatus === "failed"
+    ? `<div class="card"><div class="note bad">Le paiement n'a pas abouti — aucun montant n'a été débité. Vous pouvez réessayer ci-dessous.</div></div>`
+    : "";
+
+  // Pendant qu'un paiement est en route chez la banque (Bancontact), le bloc de
+  // paiement disparaît : reproposer « Payer » ici, c'est inviter au double
+  // débit (contre-review Gemini 2026-08-30). Le serveur refuse d'ailleurs en
+  // 409, mais l'utilisateur ne doit pas avoir à découvrir l'erreur.
+  const payBlock = redirectStatus === "processing" ? "" : holdAlive
     ? `<div class="card" id="payCard"><h3>Finaliser la réservation</h3>
         <p class="small muted">Votre créneau vous est bloqué encore
           <b id="holdLeft">${holdLabel(holdMsLeft)}</b>
@@ -104,6 +124,7 @@ const lineLabel = (l) => (l?.publicLabel && l.unitPriceCents != null
 
   box.innerHTML = `
     <div class="brand"><h1>${esc(b.propertyName)}</h1><p>Voucher de réservation</p></div>
+    ${processingBlock}
     ${payBlock}
     <div class="card">
       <table class="quote">
@@ -160,6 +181,32 @@ const lineLabel = (l) => (l?.publicLabel && l.unitPriceCents != null
     setTimeout(tick, Math.min(20000, Math.max(1000, holdMsLeft)));
   }
 
+  // Retour Bancontact : la page annonce qu'elle reflétera le paiement « dès que
+  // ce sera fait ». Sans ce sondage, elle restait figée indéfiniment et la
+  // promesse était fausse (contre-review Gemini 2026-08-30). On recharge la
+  // page — sans `redirect_status` — dès que le montant payé bouge.
+  if (redirectStatus === "processing") {
+    const paidAtLoad = b.paidCents;
+    const clean = new URL(location.href);
+    clean.searchParams.delete("redirect_status");
+    clean.searchParams.delete("payment_intent");
+    clean.searchParams.delete("payment_intent_client_secret");
+    let tries = 0;
+    const watch = async () => {
+      if (tries++ >= 30) return; // ~2 min : au-delà, le voucher reste consultable
+      try {
+        const r = await fetch(`/api/public/bookings/${encodeURIComponent(ref)}?email=${encodeURIComponent(email)}`);
+        const d = await r.json();
+        if (r.ok && d.booking && d.booking.paidCents !== paidAtLoad) {
+          location.replace(clean.toString());
+          return;
+        }
+      } catch { /* réseau : on retentera */ }
+      setTimeout(watch, 4000);
+    };
+    setTimeout(watch, 4000);
+  }
+
   const icsBtn = document.getElementById("icsBtn");
   if (icsBtn) {
     // Blob local : aucun aller-retour serveur, aucune dépendance.
@@ -176,6 +223,34 @@ const lineLabel = (l) => (l?.publicLabel && l.unitPriceCents != null
         body: JSON.stringify({ email }),
       });
       const d = await r.json();
+      // Paiement intégré (issue #26) : le formulaire remplace le bouton, dans
+      // cette page. Le montant vient du serveur — le voucher ne fait que
+      // l'afficher.
+      if (r.ok && d.payment?.mode === "element" && d.payment.clientSecret) {
+        try {
+          const cfg = await paymentConfig();
+          if (!cfg.enabled || !cfg.publishableKey) throw new Error("paiement indisponible");
+          await mountPayment(document.getElementById("payCard"), {
+            publishableKey: cfg.publishableKey,
+            clientSecret: d.payment.clientSecret,
+            returnUrl: d.payment.returnUrl,
+            amountLabel: eur(d.amountCents),
+            title: d.kind === "balance" ? "Paiement du solde" : "Finaliser la réservation",
+          });
+        } catch (e) {
+          // `mountPayment` réécrit tout le contenu de #payCard : selon l'endroit
+          // où ça casse, #payMsg peut avoir disparu au profit de #peMsg. On vise
+          // celui qui est encore là — sinon l'échec se terminait en TypeError et
+          // le client restait devant une carte vide (contre-review 2026-08-30).
+          const zone = document.getElementById("peMsg") || document.getElementById("payMsg");
+          if (zone) zone.innerHTML = `<div class="note bad">${esc(e.message || "paiement indisponible")}</div>`;
+          if (document.body.contains(payBtn)) {
+            payBtn.disabled = false;
+            payBtn.textContent = "💳 Réessayer le paiement";
+          }
+        }
+        return;
+      }
       if (r.ok) { location.href = d.checkoutUrl; return; }
       payBtn.style.display = "none";
       document.getElementById("payMsg").innerHTML = `<div class="note bad">${esc(d.error || "paiement indisponible")}</div>`;

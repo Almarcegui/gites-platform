@@ -3,8 +3,19 @@
 # (paiement simulé, emails uniquement journalisés dans email_log).
 
 # Stripe — MODE TEST UNIQUEMENT (sk_test_…) tant que l'entité juridique n'est pas tranchée.
+# Les DEUX clés vont ensemble : avec la seule clé secrète, le paiement retombe
+# sur Checkout hébergé (redirection) ; avec les deux, le formulaire de paiement
+# est intégré au tunnel — carte, Bancontact, Apple Pay, Google Pay (issue #26).
+# La clé publique est faite pour être publique : elle est servie au navigateur
+# par GET /api/public/payment-config. La clé secrète ne sort jamais du Worker.
 STRIPE_SECRET_KEY=
+STRIPE_PUBLISHABLE_KEY=
+# Webhook : activer payment_intent.succeeded, payment_intent.payment_failed,
+# checkout.session.completed et checkout.session.expired.
 STRIPE_WEBHOOK_SECRET=
+# Repli d'urgence : STRIPE_UI=checkout force la page de paiement hébergée sans
+# toucher au code. Toute autre valeur (ou l'absence) = formulaire intégré.
+STRIPE_UI=
 
 # Resend (emails transactionnels). EMAILS_ENABLED reste "false" sans accord explicite de Julien.
 RESEND_API_KEY=

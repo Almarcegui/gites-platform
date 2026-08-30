@@ -6,6 +6,7 @@ import { registerAdminRoutes } from "./api/admin";
 import { runScheduled } from "./services/cron";
 import { withStandardHeaders } from "./services/http-headers";
 import { buildReplyMime, parseRawEmail, processInboundEmail } from "./services/inbound-email";
+import { PaymentInFlightError } from "./services/booking-flow";
 import { wpRedirect } from "./services/redirects";
 
 const router = new Router();
@@ -29,6 +30,9 @@ export default {
       const response = await router.handle(request, env, ctx);
       if (response) return finish(response);
     } catch (e) {
+      // Refus métier, pas panne : un paiement est déjà parti chez la banque du
+      // client. 409 avec un message lisible, aucune trace d'erreur à ouvrir.
+      if (e instanceof PaymentInFlightError) return finish(apiError(409, e.message, { code: "payment_in_flight" }));
       console.error("Erreur API:", e instanceof Error ? e.stack : e);
       // Les logs Workers ne sont pas retenus par défaut : sans trace en base,
       // un webhook Stripe qui plante ne laisse rien de consultable au

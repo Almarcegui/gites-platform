@@ -110,9 +110,13 @@ flowchart TB
 4. `POST /api/public/bookings` → **c'est ici que tout se joue** : `createBookingAtomic`
    revérifie la disponibilité *et* insère la réservation dans **une seule instruction SQL**.
    Statut `pending`, option (« hold ») de 30 minutes.
-5. Redirection vers Stripe Checkout (ou vers `/book/dev-pay.html` en local sans clé).
+5. Paiement à l'étape 4 : formulaire Stripe **intégré à la page** (Payment
+   Element) si les deux clés sont posées, sinon redirection vers Checkout — ou
+   vers `/book/dev-pay.html` en local sans clé.
 6. Le webhook Stripe confirme la résa (`confirmBookingAtomic`), journalise le voucher,
-   et déclenche un push Beds24.
+   et déclenche un push Beds24. **C'est lui qui fait foi, jamais le retour
+   navigateur** — Bancontact ramène le client avant même que sa banque n'ait
+   tranché.
 
 ---
 
@@ -654,11 +658,28 @@ Sans `ADMIN_TOKEN` ni compte en base : **503, tout est refusé**.
 
 ### Stripe
 
-Checkout par API REST directe, sans SDK. Session éphémère alignée sur le hold de
-30 minutes. Le `payments.id` sert de clé de réconciliation du webhook, protégée
-par l'index UNIQUE partiel `idx_payments_session`.
-`handlePaymentSuccess()` est **idempotent** : un même `session_id` traité deux
-fois ne confirme et n'envoie le voucher qu'une seule fois.
+API REST directe, sans SDK. **Deux interfaces de paiement, un seul chemin de
+crédit** (issue #26) :
+
+- **Payment Element** (défaut dès que `STRIPE_SECRET_KEY` **et**
+  `STRIPE_PUBLISHABLE_KEY` existent) : un `PaymentIntent` est créé côté serveur,
+  le formulaire se monte dans la page — carte, Bancontact, Apple/Google Pay.
+  `js.stripe.com` n'est chargé que si `GET /api/public/payment-config` annonce
+  une clé publique.
+- **Checkout hébergé** (`STRIPE_UI=checkout`, ou clé publique absente) : le flux
+  historique par redirection. Toujours utilisé par les **liens de paiement** que
+  le back-office envoie par email — un email a besoin d'une URL, pas d'un
+  `client_secret`.
+
+Les deux écrivent leur identifiant Stripe (`pi_…` ou `cs_…`) dans **la même**
+colonne de réconciliation `payments.stripe_session_id`, protégée par l'index
+UNIQUE partiel `idx_payments_session`. D'où : aucune migration, et une seule
+idempotence à maintenir. `handlePaymentSuccess()` est **idempotent** : un même
+identifiant traité deux fois ne confirme et n'envoie le voucher qu'une seule
+fois. `payment_intent.payment_failed` solde la tentative **sans toucher à la
+réservation** — le hold de 30 minutes reste payable.
+
+Session Checkout éphémère alignée sur le hold de 30 minutes.
 
 L'idempotence ne couvre qu'**une** session. Contre le risque voisin — deux
 sessions distinctes pour le même montant (multi-onglets, reclic sur « Payer le
