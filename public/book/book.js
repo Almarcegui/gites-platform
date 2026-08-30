@@ -12,6 +12,7 @@
 
 import { cgvHtml } from "./cgv.js";
 import { mountPayment, paymentConfig } from "./pay-element.js";
+import { visionneuse } from "/galerie.js";
 
 const params = new URLSearchParams(location.search);
 const PROPERTY = params.get("property");
@@ -523,6 +524,57 @@ function applySuggestion(checkin, checkout) {
   $("searchCard").scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
+/** Galerie d'un hébergement, telle qu'elle est arrivée avec la fiche du domaine
+ *  (issue #32). Le tunnel ne la redemande pas au serveur : `PROP` la porte déjà. */
+function photosOf(unitId) {
+  return PROP?.units?.find((u) => u.id === unitId)?.photos ?? [];
+}
+
+/** Bouton d'ouverture de la galerie sur une carte d'hébergement. Rien quand il
+ *  n'y a qu'une photo — la vignette de la carte la montre déjà. */
+function galleryButton(unitId) {
+  const n = photosOf(unitId).length;
+  if (n < 2) return "";
+  return `<div class="gal-row"><button type="button" class="btn o sm gal" data-gal="${unitId}">Voir les ${n} photos</button></div>`;
+}
+
+/** Visionneuse ouverte depuis les cartes de résultat, et l'hébergement qu'elle
+ *  montre. Une seule à la fois : la liste des résultats est réécrite à CHAQUE
+ *  recherche, et une visionneuse par carte empilerait des `<dialog>` invisibles
+ *  dans l'arbre d'accessibilité au fil des changements de dates. */
+let galVue = null;
+let galUnit = 0;
+
+/** Ouvre la galerie d'un hébergement, en remplaçant celle qui traîne. */
+function openGallery(unitId) {
+  if (galUnit !== unitId) {
+    galVue?.detruire();
+    galVue = visionneuse(
+      photosOf(unitId).map((p) => ({ src: p.path, alt: p.alt, legende: p.caption })),
+    );
+    galUnit = unitId;
+  }
+  galVue?.ouvrir(0);
+  return galVue !== null;
+}
+
+/** Câble les boutons de galerie présents dans `root`. La visionneuse n'est
+ *  construite qu'au premier clic : en fabriquer une par carte qu'on ne
+ *  regardera peut-être jamais serait du gaspillage. */
+function wireGalleries(root) {
+  galVue?.detruire();
+  galVue = null;
+  galUnit = 0;
+  root.querySelectorAll("[data-gal]").forEach((btn) =>
+    btn.addEventListener("click", () => {
+      // Navigateur sans <dialog> modale : la galerie de la page du gîte reste
+      // le chemin de repli, on n'invente pas de visionneuse dégradée ici — et
+      // un bouton qui n'ouvre rien vaut moins que pas de bouton du tout.
+      if (!openGallery(Number(btn.dataset.gal))) btn.remove();
+    }),
+  );
+}
+
 async function search() {
   const { adults, children } = pax();
   $("searchMsg").innerHTML = "";
@@ -562,7 +614,8 @@ async function search() {
       return `<div class="prop" data-unit="${u.unitId}">
         <div class="ph" ${photo}>${u.photoUrl ? "" : "photo"}</div>
         <div class="info"><b>${esc(u.name)}</b> · ${capacity}<br>
-          <span class="muted small">${esc(u.description ?? "")}</span></div>
+          <span class="muted small">${esc(u.description ?? "")}</span>
+          ${galleryButton(u.unitId)}</div>
         <div class="price">${strikeThrough(u.quote.totalCents, u.quote.discountCents)}<b>${eur(u.quote.totalCents)}</b><br>
           <span class="per">${nights} nuit${nights > 1 ? "s" : ""}, ménage et charges compris</span>
           ${u.quote.autoDiscountApplied ? `<br><span class="savings">${esc(u.quote.autoDiscountApplied)} déduite</span>` : ""}<br>
@@ -581,6 +634,7 @@ async function search() {
   // La liste est complète : la région redevient « au repos » et c'est ce
   // basculement qui déclenche l'annonce, une seule fois (issue #47-6).
   $("results").setAttribute("aria-busy", "false");
+  wireGalleries($("results"));
   document.querySelectorAll("[data-select]").forEach((b) => b.addEventListener("click", () => openBookingPanel(Number(b.dataset.select))));
   document.querySelectorAll(".sugg-b").forEach((b) =>
     b.addEventListener("click", () => applySuggestion(b.dataset.in, b.dataset.out)),
