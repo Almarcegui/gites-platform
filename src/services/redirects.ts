@@ -20,7 +20,7 @@
 // exporter la liste des pages indexées depuis la Search Console de l'ancien
 // site et compléter WP_REDIRECTS. Les correspondances ci-dessous couvrent ce
 // qui est établi (les deux pages renommées, les quatre sous-pages et les
-// recettes rapatriées) ; l'export est le seul inventaire exhaustif.
+// dix recettes de /recettes/) ; l'export est le seul inventaire exhaustif.
 
 /** Hôtes sur lesquels les redirections deviennent actives — c'est-à-dire les
  *  hôtes de l'ancien WordPress, qui pointeront un jour sur ce Worker.
@@ -51,12 +51,25 @@ export const WP_REDIRECTS: Readonly<Record<string, string>> = {
   "/les-activites/le-four-a-pain": "/le-four-a-pain/",
   "/les-activites/les-promenades": "/les-promenades/",
 
-  // --- les trois pages de recettes ----------------------------------------
-  // Elles n'ont pas de page dédiée dans le nouveau site : leur contenu a été
-  // fondu dans « Que manger » et « Le four à pain ». On renvoie donc vers la
-  // page qui porte réellement l'information, jamais vers l'accueil.
-  "/recettes": "/que-manger/",
-  "/les-recettes": "/que-manger/",
+  // --- les recettes (issue #57) -------------------------------------------
+  // Les dix articles du WordPress vivent maintenant sur /recettes/, une page
+  // unique à ancres. Chaque ancienne adresse tombe donc sur SA recette, pas en
+  // haut de page — c'est le seul intérêt d'une 301 sur un article.
+  // `/recettes` n'est PAS listée ici : c'est désormais une page du site, elle
+  // doit répondre 200. Trois articles n'avaient pour adresse que leur
+  // identifiant WordPress (`/450`, `/448`, `/446`) — vérifié sur l'API REST du
+  // site le 30/08/2026, c'est bien leur permalien public.
+  "/les-recettes": "/recettes/",
+  "/waterzooi": "/recettes/#waterzooi",
+  "/la-carbonnade-flamande": "/recettes/#carbonnade-flamande",
+  "/dinde-en-daube": "/recettes/#dinde-en-daube",
+  "/agneau": "/recettes/#agneau",
+  "/recettes-de-viandes-en-croute": "/recettes/#viandes-en-croute",
+  "/filets-de-truites-en-papillotes-sur-lit-de-legumes": "/recettes/#truites-en-papillotes",
+  "/450": "/recettes/#truite-au-vin-jaune",
+  "/448": "/recettes/#tartare-de-truite",
+  "/446": "/recettes/#truite-au-barbecue",
+  "/truite-farcie": "/recettes/#truite-farcie",
   "/le-pain": "/le-four-a-pain/",
   "/la-pizza": "/le-four-a-pain/",
 
@@ -74,8 +87,8 @@ export const WP_REDIRECTS: Readonly<Record<string, string>> = {
 export const WP_PREFIX_REDIRECTS: readonly { prefix: string; to: string }[] = [
   // archives de catégories : les slugs connus du WordPress vers leur page
   { prefix: "/category/activites", to: "/que-faire/" },
-  { prefix: "/category/recettes", to: "/que-manger/" },
-  { prefix: "/category/cuisine", to: "/que-manger/" },
+  { prefix: "/category/recettes", to: "/recettes/" },
+  { prefix: "/category/cuisine", to: "/recettes/" },
   { prefix: "/category/promenades", to: "/les-promenades/" },
   { prefix: "/category/histoire", to: "/histoire/" },
   // toute autre archive (catégorie, étiquette, auteur, archive mensuelle) :
@@ -86,7 +99,9 @@ export const WP_PREFIX_REDIRECTS: readonly { prefix: string; to: string }[] = [
   { prefix: "/author", to: "/" },
   // sous-pages d'activités non listées ci-dessus
   { prefix: "/les-activites", to: "/que-faire/" },
-  { prefix: "/recettes", to: "/que-manger/" },
+  // PAS de règle sur « /recettes » : c'est maintenant une page du site, et une
+  // règle par préfixe attraperait aussi le chemin exact — la page se
+  // redirigerait vers elle-même à travers /que-manger/.
 ];
 
 /** Anciennes adresses SOUPÇONNÉES mais non confirmées : elles attendent

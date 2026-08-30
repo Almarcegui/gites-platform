@@ -7,7 +7,7 @@
 //     domaine définitif. C'est ce qui empêche une 301 fausse de se graver dans
 //     les caches pendant la phase de test.
 import { describe, expect, it } from "vitest";
-import { readdirSync, existsSync } from "node:fs";
+import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import {
   FINAL_HOSTS,
@@ -66,7 +66,7 @@ describe("mode actif — le Worker répond à la place du WordPress", () => {
   });
 
   it("renvoie les archives WordPress vers la page la plus proche", () => {
-    expect(wpRedirect(at(FINAL_HOST, "/category/recettes/"))?.headers.get("location")).toBe("/que-manger/");
+    expect(wpRedirect(at(FINAL_HOST, "/category/recettes/"))?.headers.get("location")).toBe("/recettes/");
     expect(wpRedirect(at(FINAL_HOST, "/category/activites/page/2/"))?.headers.get("location")).toBe("/que-faire/");
     // archive sans équivalent thématique : l'accueil, pas une page inventée
     expect(wpRedirect(at(FINAL_HOST, "/tag/ardenne/"))?.headers.get("location")).toBe("/");
@@ -85,9 +85,38 @@ describe("mode actif — le Worker répond à la place du WordPress", () => {
   });
 
   it("laisse l'accueil et les pages actuelles répondre 200", () => {
-    for (const path of ["/", "/que-faire/", "/infos-pratiques/", "/le-sauna/", "/histoire/"]) {
+    for (const path of ["/", "/que-faire/", "/infos-pratiques/", "/le-sauna/", "/histoire/", "/recettes/"]) {
       expect(wpRedirect(at(FINAL_HOST, path))).toBeNull();
     }
+  });
+
+  it("chaque article de recette tombe sur SON ancre, jamais en haut de page (#57)", () => {
+    // Trois articles n'avaient pour permalien que leur identifiant WordPress.
+    for (const [ancienne, nouvelle] of [
+      ["/waterzooi/", "/recettes/#waterzooi"],
+      ["/la-carbonnade-flamande/", "/recettes/#carbonnade-flamande"],
+      ["/dinde-en-daube/", "/recettes/#dinde-en-daube"],
+      ["/agneau/", "/recettes/#agneau"],
+      ["/recettes-de-viandes-en-croute/", "/recettes/#viandes-en-croute"],
+      ["/filets-de-truites-en-papillotes-sur-lit-de-legumes/", "/recettes/#truites-en-papillotes"],
+      ["/450/", "/recettes/#truite-au-vin-jaune"],
+      ["/448/", "/recettes/#tartare-de-truite"],
+      ["/446/", "/recettes/#truite-au-barbecue"],
+      ["/truite-farcie/", "/recettes/#truite-farcie"],
+    ] as const) {
+      expect(wpRedirect(at(FINAL_HOST, ancienne))?.headers.get("location")).toBe(nouvelle);
+    }
+  });
+
+  it("chaque ancre de redirection existe vraiment dans la page des recettes", () => {
+    // Une 301 vers une ancre absente atterrit en haut de page sans rien dire :
+    // le lien serait « vivant » et pourtant faux.
+    const html = readFileSync(`${publicDir}/recettes/index.html`, "utf8");
+    const ancres = Object.values(WP_REDIRECTS)
+      .filter((t) => t.startsWith("/recettes/#"))
+      .map((t) => t.slice("/recettes/#".length));
+    expect(ancres.length).toBe(10);
+    for (const ancre of ancres) expect({ ancre, present: html.includes(`id="${ancre}"`) }).toEqual({ ancre, present: true });
   });
 });
 
@@ -107,9 +136,13 @@ describe("normalisation des anciennes adresses", () => {
 describe("cohérence de la table (définition de fini de l'issue)", () => {
   const targets = [...Object.values(WP_REDIRECTS), ...WP_PREFIX_REDIRECTS.map((r) => r.to)];
 
+  // Depuis #57, certaines cibles portent une ancre (`/recettes/#waterzooi`) :
+  // c'est le chemin, pas le fragment, qui se compare à la table.
+  const chemin = (target: string): string => target.split("#")[0]!;
+
   it("aucune chaîne de redirections : une cible n'est jamais elle-même une source", () => {
     for (const target of targets) {
-      expect(resolveWpRedirect(target)).toBeNull();
+      expect(resolveWpRedirect(chemin(target))).toBeNull();
     }
   });
 
@@ -121,7 +154,7 @@ describe("cohérence de la table (définition de fini de l'issue)", () => {
     );
     pages.add("/"); // public/index.html
     for (const target of new Set(targets)) {
-      expect({ target, existe: pages.has(target) }).toEqual({ target, existe: true });
+      expect({ target, existe: pages.has(chemin(target)) }).toEqual({ target, existe: true });
     }
   });
 
