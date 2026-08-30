@@ -7,7 +7,13 @@ interface Env {
   // Secrets (.dev.vars en local, wrangler secret en prod) — tous optionnels :
   // absents = mode stub (paiement simulé, emails journalisés uniquement).
   STRIPE_SECRET_KEY?: string;
+  /** Clé publique Stripe (pk_test_… / pk_live_…) — confiée au navigateur pour
+   *  monter le Payment Element. Absente = repli sur Checkout hébergé. */
+  STRIPE_PUBLISHABLE_KEY?: string;
   STRIPE_WEBHOOK_SECRET?: string;
+  /** `checkout` force le retour à la page de paiement hébergée. Toute autre
+   *  valeur (ou l'absence) = Payment Element intégré, le défaut. */
+  STRIPE_UI?: string;
   RESEND_API_KEY?: string;
   RESEND_FROM?: string;
   ADMIN_TOKEN?: string;
