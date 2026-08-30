@@ -16,6 +16,119 @@ const MODE_FR = {
   per_unit_qty: "à la quantité",
 };
 
+/* ---------------------------------------------------------------------------
+ * Galerie de photos d'un hébergement (issue #32)
+ *
+ * Ce que cette boîte fait : ordonner, retirer, réactiver, corriger le texte
+ * alternatif et la légende. Ce qu'elle ne fait PAS : téléverser un fichier.
+ * Les photos sont des assets commités, produits par scripts/optimize-images.mjs
+ * (WebP, variantes, plafond de 300 Ko) et servis par le Worker — un téléversement
+ * depuis le navigateur court-circuiterait toute cette chaîne. « Ajouter » veut
+ * donc dire « rattacher un fichier déjà déposé dans public/img/ », et le serveur
+ * vérifie qu'il existe vraiment avant d'accepter.
+ *
+ * L'ORDRE DES LIGNES FAIT L'ORDRE D'AFFICHAGE. Aucun numéro à saisir : ce qui
+ * est en haut est en premier sur le site. C'est la seule règle à retenir.
+ * ------------------------------------------------------------------------- */
+async function openPhotos(unitId, unitName) {
+  const { photos } = await api(`/api/admin/units/${unitId}/photos`);
+
+  const ligne = (p) => `
+    <tr data-photo="${p.id}">
+      <td style="width:96px"><img src="${esc(p.path)}" alt="" width="88" height="66"
+        style="display:block;width:88px;height:66px;object-fit:cover;border-radius:5px;background:#eee"></td>
+      <td>
+        <label class="f">Texte alternatif (obligatoire)</label>
+        <input class="phAlt" value="${esc(p.alt)}" maxlength="300">
+        <label class="f" style="margin-top:6px">Légende affichée</label>
+        <input class="phCap" value="${esc(p.caption ?? "")}" maxlength="200">
+        <span class="small muted mono">${esc(p.path)}</span>
+      </td>
+      <td class="n" style="white-space:nowrap;vertical-align:middle">
+        <label class="small"><input type="checkbox" class="phOn" ${p.active ? "checked" : ""}> affichée</label><br>
+        <button type="button" class="btn o sm phUp" aria-label="Monter ${esc(p.caption || p.alt)}">↑</button>
+        <button type="button" class="btn o sm phDown" aria-label="Descendre ${esc(p.caption || p.alt)}">↓</button>
+      </td>
+    </tr>`;
+
+  const bg = openModal(`
+    <h2>Photos — ${esc(unitName)} <button class="x">×</button></h2>
+    <p class="small muted">L'ordre des lignes est l'ordre d'affichage sur le site et dans le tunnel. La <b>première photo affichée</b> sert aussi de vignette de l'hébergement. Le texte alternatif décrit la photo pour qui ne la voit pas — il est obligatoire ; la légende, visible sous la vignette, ne l'est pas.</p>
+    <table class="mb"><tbody id="phList">${photos.map(ligne).join("")}</tbody></table>
+    ${photos.length === 0 ? `<div class="note">Aucune photo pour cet hébergement.</div>` : ""}
+    <div class="row mb"><button class="btn sm" id="phSave">Enregistrer l'ordre et les textes</button></div>
+    <h3>Rattacher un fichier déjà présent</h3>
+    <p class="small muted">Le fichier doit d'abord être produit par <span class="mono">scripts/optimize-images.mjs</span> puis commité dans <span class="mono">public/img/</span>. Les variantes WebP sont détectées toutes seules.</p>
+    <div class="row">
+      <div style="min-width:280px"><label class="f">Chemin</label><input id="phPath" placeholder="/img/gites/la-scierie/jardin.jpg"></div>
+      <div style="min-width:240px"><label class="f">Texte alternatif</label><input id="phNewAlt" maxlength="300"></div>
+      <div style="min-width:180px"><label class="f">Légende</label><input id="phNewCap" maxlength="200"></div>
+      <div class="n"><button class="btn o sm" id="phAdd">Rattacher</button></div>
+    </div>`);
+
+  const liste = bg.querySelector("#phList");
+  liste.querySelectorAll("[data-photo]").forEach((tr) => {
+    // `previousElementSibling` / `nextElementSibling` : déplacer une ligne, ce
+    // n'est pas renuméroter — c'est la bouger. La numérotation est refaite par
+    // le serveur à l'enregistrement.
+    const deplacer = (voisin, poser) => (e) => {
+      if (!voisin()) return;
+      poser();
+      // Déplacer une ligne la DÉTACHE puis la réinsère : le navigateur rend
+      // alors le focus au <body>, et la navigation au clavier repart du haut.
+      // On le remet sur le bouton, qui vient de bouger avec sa ligne.
+      e.currentTarget.focus();
+    };
+    tr.querySelector(".phUp").onclick = deplacer(
+      () => tr.previousElementSibling,
+      () => tr.previousElementSibling.before(tr),
+    );
+    tr.querySelector(".phDown").onclick = deplacer(
+      () => tr.nextElementSibling,
+      () => tr.nextElementSibling.after(tr),
+    );
+  });
+
+  /** Enregistre l'ordre et les textes tels qu'ils sont à l'écran.
+   *  Renvoie false si la saisie est incomplète — l'appelant s'arrête là. */
+  const enregistrer = async () => {
+    const corps = [...liste.querySelectorAll("[data-photo]")].map((tr) => ({
+      id: Number(tr.dataset.photo),
+      alt: tr.querySelector(".phAlt").value.trim(),
+      caption: tr.querySelector(".phCap").value.trim(),
+      active: tr.querySelector(".phOn").checked,
+    }));
+    // Contrôle côté navigateur AVANT l'appel : le serveur refuse de toute façon,
+    // mais dire lequel manque évite d'aller chercher dans un message d'erreur.
+    if (corps.some((p) => p.alt.length < 3)) {
+      toast("Texte alternatif obligatoire sur chaque photo", true);
+      return false;
+    }
+    await api(`/api/admin/units/${unitId}/photos`, { method: "PUT", body: { photos: corps } });
+    return true;
+  };
+
+  bg.querySelector("#phSave").onclick = async () => {
+    if (await enregistrer()) toast("Galerie enregistrée");
+  };
+
+  bg.querySelector("#phAdd").onclick = async () => {
+    const path = bg.querySelector("#phPath").value.trim();
+    const alt = bg.querySelector("#phNewAlt").value.trim();
+    if (!path || alt.length < 3) return toast("Chemin et texte alternatif requis", true);
+    // La boîte est reconstruite juste après : sans cet enregistrement, un ordre
+    // ou un texte modifié mais pas encore sauvegardé disparaîtrait en silence.
+    if (!(await enregistrer())) return;
+    await api(`/api/admin/units/${unitId}/photos`, {
+      method: "POST",
+      body: { path, alt, caption: bg.querySelector("#phNewCap").value.trim() },
+    });
+    toast("Photo rattachée");
+    bg.remove();
+    openPhotos(unitId, unitName);
+  };
+}
+
 export function registerConfigViews() {
   // -------------------------------------------------------------------------
   // Promotions
@@ -429,10 +542,12 @@ export function registerConfigViews() {
               <option value="sum" ${u.compositePricing === "sum" ? "selected" : ""}>Somme des biens liés</option>
               <option value="own" ${u.compositePricing === "own" ? "selected" : ""}>Tarif propre</option></select></div>` : ""}
             <div class="n"><label class="f">Actif</label><input class="uActive" type="checkbox" ${u.active ? "checked" : ""}></div>
+            <div class="n"><button class="btn o sm uPhotos" type="button">📷 Photos</button></div>
             <div class="n"><button class="btn sm uSave">💾</button></div>
             </div>
             <div class="row" style="margin-top:6px">
-            <div style="min-width:280px"><label class="f">Photo (URL)</label><input class="uPhoto" value="${esc(u.photoUrl ?? "")}" placeholder="https://…jpg"></div>
+            <div style="min-width:280px"><label class="f">Photo (URL)</label><input class="uPhoto" value="${esc(u.photoUrl ?? "")}" placeholder="https://…jpg">
+              <span class="small muted">Repli seulement : dès qu'une galerie existe, c'est sa <b>première photo affichée</b> qui sert de vignette.</span></div>
             <div style="min-width:220px"><label class="f">Liaisons (résa de l'un ⇒ bloque l'autre)</label>
               <span style="display:inline-flex;gap:10px;flex-wrap:wrap;padding-top:6px">
               ${others.map((o) => `<label class="small"><input type="checkbox" class="uLink" data-target="${o.id}" ${partners.has(o.id) ? "checked" : ""}> ${esc(o.name)}</label>`).join("")}
@@ -547,6 +662,8 @@ export function registerConfigViews() {
         });
         toast("Hébergement enregistré");
       };
+      row.querySelector(".uPhotos").onclick = () =>
+        openPhotos(Number(row.dataset.unit), row.querySelector(".uName").value);
       row.querySelector(".uLinksSave").onclick = async () => {
         const partnerIds = [...row.querySelectorAll(".uLink:checked")].map((c) => Number(c.dataset.target));
         await api(`/api/admin/units/${row.dataset.unit}/links`, { method: "PUT", body: { partnerIds } });
