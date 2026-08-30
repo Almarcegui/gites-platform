@@ -12,7 +12,12 @@
     "  node scripts/optimize-images.mjs --in /tmp/src --out public/img/gites/la-scierie --galerie",
     "",
     "Le champ alt est une donnée d'accessibilité, pas une légende : il décrit ce que",
-    "montre l'image pour qui ne la voit pas. La légende (visible) peut être plus courte."
+    "montre l'image pour qui ne la voit pas. La légende (visible) peut être plus courte.",
+    "",
+    "Ce fichier est aussi la SOURCE DU SEED de la migration 0021 (table unit_photos) :",
+    "chemin, alt, légende et ordre y ont été recopiés tels quels. Le back-office peut",
+    "ensuite réordonner, retirer ou corriger — la base fait alors foi pour l'API, et ce",
+    "fichier reste la trace de la provenance et de l'état initial."
   ],
   "gites": {
     "maison-du-scieur": {

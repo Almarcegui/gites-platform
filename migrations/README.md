@@ -115,6 +115,8 @@ commandes interdites sans accord explicite du propriétaire — voir
 | `0017` | conflits de synchronisation persistés (`sync_conflicts`, issue #72) |
 | `0018` | blocages manuels (`manual_blocks`) — travaux, usage personnel |
 | `0019` | conditions générales de location v3, taxe de séjour à 0 sur les deux domaines |
+| `0020` | registre des personnes hébergées |
+| `0021` | galerie de photos par hébergement (`unit_photos`, seed depuis `scripts/photos-sources.json`, issue #32) |
 
 Le détail des règles métier qu'elles encodent est dans le
 [`README.md`](../README.md) racine.
