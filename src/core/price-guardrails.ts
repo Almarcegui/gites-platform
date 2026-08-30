@@ -141,3 +141,42 @@ export interface ChannelSuggestion extends ChannelMarkup {
 export function suggestForChannels(directCents: number, channels: readonly ChannelMarkup[]): ChannelSuggestion[] {
   return channels.map((c) => ({ ...c, suggestedCents: suggestedPriceCents(directCents, c.markupPct) }));
 }
+
+// ---------------------------------------------------------------------------
+// Appliquer le prix conseillé au canal (issue #31, dernier point)
+// ---------------------------------------------------------------------------
+
+// Le prix conseillé était calculé et affiché, mais rien ne permettait de
+// l'APPLIQUER : le connecteur Beds24 poussait le prix de vente directe tel
+// quel, donc Airbnb et Booking affichaient le prix direct — commission non
+// compensée, exactement ce que le propriétaire veut éviter.
+//
+// Il n'existe qu'UN endroit où un « prix par canal » a une réalité : le
+// calendrier poussé vers Beds24. On y applique donc la majoration d'un canal
+// de référence, choisi par le propriétaire. Une valeur, pas une table : aucune
+// migration, et le réglage se retire aussi vite qu'il se pose.
+
+/** Clé du réglage qui dit QUEL canal sert de référence au push Beds24.
+ *  Absente ou vide = on pousse le prix de vente directe, comme avant. */
+export const PUSH_CHANNEL_KEY = "pricing.push_channel";
+
+/** Canal de référence effectif : celui qui est stocké, s'il existe toujours
+ *  dans la configuration. Un canal supprimé de la liste ne majore plus rien —
+ *  on retombe sur le prix direct plutôt que sur une majoration fantôme. */
+export function parsePushChannel(stored: string | null, channels: readonly ChannelMarkup[]): string | null {
+  const wanted = (stored ?? "").trim().toLowerCase();
+  if (!wanted) return null;
+  return channels.some((c) => c.channel === wanted) ? wanted : null;
+}
+
+/** Majoration à appliquer au push, en %. 0 quand aucun canal n'est retenu. */
+export function pushMarkupPct(channels: readonly ChannelMarkup[], pushChannel: string | null): number {
+  if (!pushChannel) return 0;
+  return channels.find((c) => c.channel === pushChannel)?.markupPct ?? 0;
+}
+
+/** Prix effectivement poussé aux plateformes, à partir du prix direct.
+ *  Sans canal de référence, c'est le prix direct — inchangé, au centime. */
+export function pushedPriceCents(directCents: number, markupPct: number): number {
+  return markupPct === 0 ? directCents : suggestedPriceCents(directCents, markupPct);
+}
