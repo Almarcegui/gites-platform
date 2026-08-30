@@ -277,7 +277,13 @@ section[id],h2[id],h3[id]{scroll-margin-top:74px}
 .map-embed iframe{width:100%;height:460px;border:0;border-radius:10px;display:block}
 .photo-row{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:26px 0}
 @media(max-width:680px){.photo-row{grid-template-columns:1fr}}
-.photo-row img,.prose figure img{display:block;width:100%;border-radius:10px}
+/* `height:auto` n'est pas décoratif. Les attributs width/height du HTML sont
+   des indications de présentation : `width:100%` écrase la première, la seconde
+   restait appliquée telle quelle. Une photo 1200x900 déclarée `height="900"`
+   s'affichait donc en 720x900 — déformée de 66 % en hauteur, sur toutes les
+   pages de contenu. `.galerie img` portait déjà la ligne ; celle-ci manquait.
+   Mesuré au navigateur le 30/08/2026 (issue #57). */
+.photo-row img,.prose figure img{display:block;width:100%;height:auto;border-radius:10px}
 .photo-row figcaption,.prose figcaption{font-size:12.5px;color:var(--muted);margin-top:6px;text-align:center}
 .preparer li{padding:0}
 .preparer li a{display:block;height:100%;padding:16px 18px;color:inherit;text-decoration:none}
