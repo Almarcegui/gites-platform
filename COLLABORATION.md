@@ -32,7 +32,8 @@ c'est qu'il fallait trois issues.
 
 1. Prendre une issue et se l'assigner (sinon on se marche dessus).
 2. Brancher depuis `main` à jour.
-3. Coder. `npm run typecheck` et `npm test` doivent rester verts en local.
+3. Coder. `make check` doit être vert en local (typecheck, tests, images) — lancé
+   seul, jamais dans un tube (`make check | tail` masque un échec).
 4. Ouvrir la PR. La CI rejoue typecheck + tests sur chaque PR.
 5. Relecture par l'autre frère, puis merge en squash.
 
@@ -82,7 +83,19 @@ nouvelle. Les migrations sont numérotées et se jouent dans l'ordre. Tester en 
 
 ## Déploiement
 
-Réservé à Julien, sur décision explicite, runbook dans le `README.md`. Un contributeur n'a
+Réservé à Julien, sur décision explicite : `make livrer` (production, depuis `main`,
+sauvegarde de la base avant toute migration) ; `make livrer-essai` envoie une
+branche sur l'environnement d'essai (https://gites-platform-essai.j-decartier.workers.dev),
+base à part, pour essayer avant la production. Détail dans le `README.md`
+(§ Les commandes du dépôt).
+
+La base de production est sauvegardée chaque nuit sur le Mac de Julien
+(`com.julien.gites-sauvegarde`, 3 h 30). Les décisions de Julien sont tenues dans
+`docs/decisions.md`, les séances dans `docs/journal-des-seances.md`.
+
+Le dépôt doit passer du compte `jdecartier-glitch` au compte `Almarcegui`
+(`Almarcegui/gites-platform`) : transfert en attente d'un geste de Julien. Après
+le transfert, chacun met à jour son remote (`git remote set-url origin …`). Un contributeur n'a
 pas besoin des identifiants de production pour travailler : tout le développement se fait en
 local contre une base D1 locale, avec Stripe en mode simulé et les emails journalisés sans
 être envoyés.

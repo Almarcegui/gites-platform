@@ -7,6 +7,7 @@
 // la majoration s'applique — le prix de vente directe n'est jamais modifié.
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { createTestDb, type TestDb } from "./helpers/d1";
+import { horsSaisonsDuSeed } from "./helpers/dates";
 import { Router } from "../src/api/router";
 import { registerAdminRoutes } from "../src/api/admin";
 import { buildCalendarPush } from "../src/services/beds24-sync";
@@ -20,8 +21,8 @@ const ADMIN_USER = "julie";
 const ADMIN = `${ADMIN_USER}:motdepasse-test`;
 const SCIEUR = 1; // La Maison du Scieur — mappée sur une room Beds24 dans le seed
 
-// Fenêtre très en avant : aucune saison du seed, aucune dépendance à la date.
-const FROM = addDays(todayInZone(), 300);
+// Fenêtre très en avant, après les saisons datées du seed (test/helpers/dates.ts).
+const FROM = horsSaisonsDuSeed(300);
 
 let t: TestDb;
 let env: Env;

@@ -5,6 +5,7 @@
 // vérifie ce que le SERVEUR accepte, refuse, écrit et renvoie.
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { createTestDb, type TestDb } from "./helpers/d1";
+import { horsSaisonsDuSeed } from "./helpers/dates";
 import { Router } from "../src/api/router";
 import { registerAdminRoutes } from "../src/api/admin";
 import { buildCalendarPush } from "../src/services/beds24-sync";
@@ -147,7 +148,7 @@ describe("issue #50 — un tarif à 0 € n'est jamais publiable", () => {
     // Règle héritée du temps où le POST tolérait 0 : elle contourne l'API.
     const id = await baseRuleId(1);
     await t.db.prepare("UPDATE rate_rules SET price_week_cents = 0, price_weekend_cents = 0 WHERE id = ?1").bind(id).run();
-    const from = addDays(todayInZone(), 300);
+    const from = horsSaisonsDuSeed(300);
     const rooms = await buildCalendarPush(t.db, 1, from, 3);
     const scieur = rooms.find((r) => r.unitName.includes("Scieur"));
     expect(scieur).toBeDefined();
