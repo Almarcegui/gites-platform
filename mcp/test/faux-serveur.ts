@@ -20,8 +20,11 @@ export interface FakeState {
   blocks: any[];
   messages: any[];
   nextId: number;
-  /** Pour simuler une panne réseau sur une route donnée. */
+  /** Pour simuler une panne réseau sur une route donnée (avant traitement). */
   dropPaths: Set<string>;
+  /** Route traitée PUIS réponse en erreur : "500" ou "garbage" (corps non JSON). */
+  afterCommit: Map<string, "500" | "garbage">;
+  nightPriceCents: number;
 }
 
 export const UNITS = [
@@ -70,14 +73,14 @@ function conflicts(st: FakeState, unitId: number, checkin: string, checkout: str
   return out;
 }
 
-function quote(unitId: number, checkin: string, checkout: string): any {
+function quote(unitId: number, checkin: string, checkout: string, night = 15000): any {
   const n = Math.round((Date.parse(checkout) - Date.parse(checkin)) / 86_400_000);
   const errors = n < 2 ? ["min_nights"] : [];
-  const total = n * 15000 + 8000;
+  const total = n * night + 8000;
   return {
     ok: errors.length === 0, errors, warnings: [], nights: n, minNights: 2, checkinDays: null,
-    lines: [{ kind: "accommodation", label: "nuits", amountCents: n * 15000 }],
-    accommodationCents: n * 15000, discountCents: 0, cleaningFeeCents: 8000, optionsCents: 0, taxCents: 0,
+    lines: [{ kind: "accommodation", label: "nuits", amountCents: n * night }],
+    accommodationCents: n * night, discountCents: 0, cleaningFeeCents: 8000, optionsCents: 0, taxCents: 0,
     totalCents: total, depositCents: total / 2, depositPct: 50, balanceCents: total / 2, balanceDueDate: "2026-11-01",
     cautionCents: 50000, autoDiscountApplied: null, promoApplied: null, unitId,
   };
@@ -93,14 +96,20 @@ async function readBody(req: IncomingMessage): Promise<unknown> {
 export async function startFake(init: Partial<FakeState> = {}): Promise<{ url: string; state: FakeState; close: () => Promise<void>; server: Server }> {
   const st: FakeState = {
     sessionMode: "session", validSessions: new Set(), logins: 0, requests: [], bookings: [], blocks: [], messages: [],
-    nextId: 100, dropPaths: new Set(), ...init,
+    nextId: 100, dropPaths: new Set(), afterCommit: new Map(), nightPriceCents: 15000, ...init,
   };
   const server = createServer(async (req, res) => {
     const url = new URL(req.url ?? "/", "http://x");
     const body = await readBody(req);
     const auth = req.headers.authorization ?? null;
     st.requests.push({ method: req.method ?? "", path: url.pathname + url.search, auth, body });
+    const after = st.afterCommit.get(`${req.method} ${url.pathname}`);
     const send = (status: number, data: unknown) => {
+      if (after && status < 400) {
+        res.writeHead(after === "500" ? 500 : 200, { "content-type": "text/html" });
+        res.end(after === "500" ? "<html>Worker exception</html>" : "<html>oups");
+        return;
+      }
       res.writeHead(status, { "content-type": "application/json" });
       res.end(JSON.stringify(data));
     };
@@ -156,7 +165,7 @@ export async function startFake(init: Partial<FakeState> = {}): Promise<{ url: s
       const unit = UNITS.find((u) => u.id === b.unitId);
       if (!unit) return send(404, { error: "hébergement inconnu" });
       const c = conflicts(st, unit.id, b.checkin, b.checkout);
-      return send(200, { unit: { id: unit.id, name: unit.name }, quote: quote(unit.id, b.checkin, b.checkout), availability: { available: c.length === 0, conflicts: c } });
+      return send(200, { unit: { id: unit.id, name: unit.name }, quote: quote(unit.id, b.checkin, b.checkout, st.nightPriceCents), availability: { available: c.length === 0, conflicts: c } });
     }
     if (m === "GET" && p === "/api/admin/blocks") {
       const prop = Number(q.get("property") ?? 1);
@@ -200,7 +209,7 @@ export async function startFake(init: Partial<FakeState> = {}): Promise<{ url: s
       const b = body as any;
       const unit = UNITS.find((u) => u.id === b.unitId)!;
       if (conflicts(st, unit.id, b.checkin, b.checkout).length) return send(409, { error: "créneau indisponible (conflit avec une autre réservation)" });
-      const qq = quote(unit.id, b.checkin, b.checkout);
+      const qq = quote(unit.id, b.checkin, b.checkout, st.nightPriceCents);
       const nb = booking({
         id: st.nextId++, reference: `PM-2026-${st.nextId}`, unitId: unit.id, unitName: unit.name, checkin: b.checkin, checkout: b.checkout,
         guestName: b.guest.lastName, guestEmail: b.guest.email ?? null, status: b.confirmNow ? "confirmed" : "pending",

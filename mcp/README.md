@@ -29,9 +29,27 @@ disponibilité, les liaisons entre logements et les refus restent ceux du Worker
 
 ✎ = écriture. **Toute écriture se fait en deux appels** : le premier (sans
 `confirmer`) ne touche à rien et renvoie un récapitulatif et un jeton ; le second,
-avec **exactement les mêmes paramètres**, `confirmer: true` et ce jeton, écrit. Le
-jeton est lié au contenu de la demande (une date ou un mot changé l'invalide), à
-usage unique, valable 10 minutes. Un `confirmer: true` envoyé d'emblée est refusé.
+avec **exactement les mêmes paramètres**, `confirmer: true` et ce jeton, écrit.
+
+Garde-fous du second appel :
+
+- le jeton est à usage unique, valable 10 minutes, et un nouveau récapitulatif
+  révoque le précédent (deux jetons ne peuvent pas envoyer deux fois le même e-mail) ;
+- il est lié aux paramètres : une date ou un mot changé l'invalide ;
+- le récapitulatif est **recalculé** juste avant d'écrire : si le prix, la cible
+  (blocage, réservation), le destinataire ou la disponibilité ont bougé, rien n'est
+  écrit et le nouvel état est montré ;
+- si l'hôte sait demander une validation à l'humain (**élicitation MCP**), la
+  confirmation passe aussi par cette boîte de dialogue : un refus n'écrit rien
+  (`GITES_MCP_ELICITATION=0` pour la couper sur un hôte qui l'annonce sans l'afficher) ;
+- une coupure réseau, une réponse illisible ou une erreur 5xx pendant l'écriture est
+  annoncée comme « état inconnu » — jamais « rien n'a été écrit » — et n'est jamais
+  rejouée automatiquement.
+
+**Le jeton prouve qu'un récapitulatif a été produit, pas qu'un humain l'a lu.** Le
+dernier verrou est l'hôte : dans Claude Code et Claude Desktop, ne **jamais**
+autoriser d'office les cinq outils d'écriture (chaque appel reste soumis à
+approbation) ; dans Jarvis, les écritures passent par la confirmation vocale.
 
 ### Ce que le connecteur ne fait pas (volontairement)
 
@@ -48,7 +66,7 @@ usage unique, valable 10 minutes. Un `confirmer: true` envoyé d'emblée est ref
 cd mcp
 npm ci
 npm run build        # produit dist/index.js
-npm test             # 24 tests contre un faux serveur HTTP
+npm test             # 33 tests contre un faux serveur HTTP
 ```
 
 Node 20 ou plus récent.
@@ -57,12 +75,13 @@ Node 20 ou plus récent.
 
 | Variable | Rôle |
 |---|---|
-| `GITES_URL` | `https://gites-platform.j-decartier.workers.dev` (prod) ou `http://localhost:8788` (dev). `http://` n'est accepté que pour localhost. |
+| `GITES_URL` | `https://gites-platform.j-decartier.workers.dev` (prod) ou `http://localhost:8788` (dev). Une origine seule (ni chemin, ni identifiant, ni requête) ; `http://` n'est accepté que pour localhost. |
 | `GITES_ID` | Identifiant admin : un compte de la page Utilisateurs (session de 30 jours, renouvelée seule), ou un couple de secours de `ADMIN_TOKEN`. |
 | `GITES_MDP` | Son mot de passe. |
 | `GITES_MDP_TROUSSEAU` | À la place de `GITES_MDP` : nom d'un service du trousseau macOS (compte = `GITES_ID`). Évite le mot de passe en clair dans un fichier de configuration. |
 | `GITES_TIMEOUT_MS` | Délai par requête (défaut 20 000). |
 | `GITES_MCP_SILENCE` | `1` = aucun journal sur stderr. |
+| `GITES_MCP_ELICITATION` | `0` = ne pas demander la confirmation par la boîte de dialogue de l'hôte. |
 
 Ranger le mot de passe dans le trousseau (une fois) :
 
@@ -149,6 +168,21 @@ question, pas dans un fichier.
   connecteur ne rejoue jamais une écriture tout seul ; vérifier au back-office.
 - Le connecteur fait confiance au Worker pour l'atomicité : le récapitulatif annonce,
   l'écriture tranche (un créneau pris entre-temps est refusé avec son motif).
+- Fenêtre résiduelle : entre le recalcul du récapitulatif et l'écriture (quelques
+  millisecondes), le Worker recalcule lui-même le prix et ne vérifie ni la capacité
+  ni le statut actif de l'hébergement ; voir « À prévoir côté Worker ».
+- `vente_telephone` : le Worker enregistre la fiche client avant de tenter la
+  réservation ; un refus (créneau pris) peut donc laisser une fiche client créée
+  ou mise à jour.
+
+## À prévoir côté Worker (non fait ici)
+
+1. `POST /api/admin/bookings` : accepter un `expectedTotalCents` (et refuser 409 si
+   le devis recalculé diffère), vérifier `capacity_max` et `active`, et créer ou
+   mettre à jour le client dans la même transaction que la réservation.
+2. Clé d'idempotence (`Idempotency-Key`) sur les routes d'écriture (blocages, vente,
+   messages, relance) pour qu'un nouvel essai après coupure ne double rien.
+3. `GET /api/admin/blocks/:id` (aujourd'hui, retrouver un blocage passe par la liste).
 
 ## Développement
 

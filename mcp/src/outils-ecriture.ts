@@ -8,9 +8,10 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
-import { NetworkError, qs } from "./client.js";
+import { ApiError, NetworkError, qs } from "./client.js";
+import { stateDigest } from "./confirmation.js";
 import {
-  checkStay, type Ctx, describeError, fail, findBooking, guestLabel, text, today, UsageError, wrap, zDate, zDomaine,
+  checkStay, type Ctx, describeError, fail, findBooking, guestLabel, quoteError, text, today, UsageError, wrap, zDate, zDomaine,
   zHebergement, zReservation,
 } from "./commun.js";
 import { addDays, euros, frDate, nights } from "./dates.js";
@@ -27,45 +28,66 @@ const zJeton = z.string().max(32).optional().describe("Jeton renvoyé par le ré
 const RAPPEL =
   "Ne jamais passer confirmer: true sans avoir lu ce récapitulatif à l'utilisateur et obtenu son accord explicite.";
 
-interface Preview {
+interface Preview<D> {
   /** Texte du récapitulatif, ou du refus si `blocked`. */
   text: string;
   blocked?: boolean;
+  /** Ce que l'humain approuve au-delà des paramètres : cible résolue,
+   *  destinataire, montants. Recalculé à la confirmation et comparé. */
+  state?: unknown;
+  /** Données résolues transmises à l'exécution (celles du récapitulatif recalculé). */
+  data?: D;
 }
 
-async function twoStep(
+async function twoStep<D>(
   ctx: Ctx,
   tool: string,
   args: Record<string, unknown> & { confirmer?: boolean; jeton?: string },
-  preview: () => Promise<Preview>,
-  execute: () => Promise<string>,
+  preview: () => Promise<Preview<D>>,
+  execute: (data: D) => Promise<string>,
 ): Promise<CallToolResult> {
   if (args.confirmer !== true) {
     const p = await preview();
     if (p.blocked) return fail(`${p.text}\n\nRien n'a été écrit.`);
-    const jeton = ctx.confirmations.issue(tool, args);
+    const jeton = ctx.confirmations.issue(tool, args, p.state);
     return text(
       `RÉCAPITULATIF — rien n'a encore été écrit.\n\n${p.text}\n\n` +
         `Pour exécuter : relire ce récapitulatif à l'utilisateur ; s'il est d'accord, rappeler ${tool} avec exactement ` +
         `les mêmes paramètres, plus confirmer: true et jeton: "${jeton}" (valable 10 minutes, usage unique).`,
     );
   }
-  const refus = ctx.confirmations.consume(tool, args, args.jeton);
-  if (refus) {
-    return fail(`Refusé : ${refus}. Rien n'a été écrit. Rappeler ${tool} sans « confirmer » pour obtenir un récapitulatif et un nouveau jeton.`);
+  const c = ctx.confirmations.consume(tool, args, args.jeton);
+  if ("refus" in c) {
+    return fail(`Refusé : ${c.refus}. Rien n'a été écrit. Rappeler ${tool} sans « confirmer » pour obtenir un récapitulatif et un nouveau jeton.`);
+  }
+  // Récapitulatif recalculé sur des données fraîches : si quoi que ce soit a
+  // bougé depuis (prix, cible, destinataire, disponibilité), on n'écrit pas.
+  ctx.ref.invalidate();
+  const fresh = await preview();
+  if (fresh.blocked) return fail(`${fresh.text}\n\nRien n'a été écrit (la situation a changé depuis le récapitulatif).`);
+  if (stateDigest(fresh.state) !== c.state) {
+    return fail(
+      `Refusé : la situation a changé depuis le récapitulatif. Rien n'a été écrit. Nouvel état :\n\n${fresh.text}\n\n` +
+        `Rappeler ${tool} sans « confirmer » pour obtenir un nouveau récapitulatif.`,
+    );
+  }
+  if (ctx.elicit) {
+    const ok = await ctx.elicit(`${fresh.text}\n\nConfirmer cette écriture sur la plateforme des gîtes ?`);
+    if (ok === false) return fail("Annulé par l'utilisateur : rien n'a été écrit.");
   }
   try {
-    const done = await execute();
+    const done = await execute(fresh.data as D);
     logEvent("ecriture", { nom: tool, issue: "ok" });
     return text(done);
   } catch (e) {
     logEvent("ecriture", { nom: tool, issue: "echec" });
-    if (e instanceof NetworkError) {
+    // Coupure, réponse illisible ou erreur serveur : la requête a pu aboutir.
+    if (e instanceof NetworkError || (e instanceof ApiError && e.status >= 500)) {
       return fail(
-        `${e.message}. L'écriture a PEUT-ÊTRE eu lieu : vérifier dans le back-office (planning, fiche réservation ou messages) avant de recommencer.`,
+        `${describeError(e)}\nL'écriture a PEUT-ÊTRE eu lieu : vérifier dans le back-office (planning, fiche réservation ou messages) avant de recommencer.`,
       );
     }
-    return fail(`${describeError(e)}\nRien n'a été écrit.`);
+    return fail(`${describeError(e)}\nRien n'a été écrit par cette action.`);
   }
 }
 
@@ -91,7 +113,7 @@ export function registerWriteTools(server: McpServer, ctx: Ctx): void {
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
     },
     wrap("bloquer_dates", async (args) =>
-      twoStep(
+      twoStep<{ unitId: number; unitName: string }>(
         ctx,
         "bloquer_dates",
         args,
@@ -109,14 +131,15 @@ export function registerWriteTools(server: McpServer, ctx: Ctx): void {
               `Bloquer ${unit.name} du ${frDate(args.arrivee)} au ${frDate(args.depart)} (${nights(args.arrivee, args.depart)} nuits) — motif : « ${args.motif.trim()} ».`,
               `Effet : ${impacted.map((u) => u.name).join(", ")} ${impacted.length > 1 ? "deviennent indisponibles" : "devient indisponible"} sur ces dates (site, iCal, Beds24).`,
             ].join("\n"),
+            state: { unitId: unit.id, impacted: impacted.map((u) => u.id) },
+            data: { unitId: unit.id, unitName: unit.name },
           };
         },
-        async () => {
-          const unit = await ctx.ref.unit(args.hebergement);
+        async (d) => {
           const { block } = await ctx.client.post<{ block: ManualBlock }>("/api/admin/blocks", {
-            unitId: unit.id, checkin: args.arrivee, checkout: args.depart, reason: args.motif.trim(),
+            unitId: d.unitId, checkin: args.arrivee, checkout: args.depart, reason: args.motif.trim(),
           });
-          return `Fait : blocage n° ${block.id} posé sur ${unit.name} du ${frDate(block.checkin)} au ${frDate(block.checkout)}. Pour le lever : debloquer_dates avec blocage_id ${block.id}.`;
+          return `Fait : blocage n° ${block.id} posé sur ${d.unitName} du ${frDate(block.checkin)} au ${frDate(block.checkout)}. Pour le lever : debloquer_dates avec blocage_id ${block.id}.`;
         },
       ),
     ),
@@ -130,7 +153,8 @@ export function registerWriteTools(server: McpServer, ctx: Ctx): void {
       description:
         "Lève un blocage manuel (posé par bloquer_dates ou par le back-office) : les nuits redeviennent vendables. " +
         "Désigner le blocage par `blocage_id`, ou par `hebergement` (+ `arrivee`/`depart` pour choisir parmi plusieurs). " +
-        "Ne touche jamais une réservation. Deux appels : récapitulatif, puis confirmer: true + jeton. " +
+        "Seuls les blocages en cours ou à venir sont visés. Ne touche jamais une réservation. Deux appels : " +
+        "récapitulatif, puis confirmer: true + jeton. " +
         RAPPEL,
       inputSchema: {
         blocage_id: z.number().int().positive().optional(),
@@ -142,45 +166,45 @@ export function registerWriteTools(server: McpServer, ctx: Ctx): void {
       },
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
     },
-    wrap("debloquer_dates", async (args) => {
-      const find = async (): Promise<ManualBlock> => {
-        if (args.blocage_id === undefined && args.hebergement === undefined) throw new UsageError("donner `blocage_id` ou `hebergement`");
-        const t = today(ctx);
-        const unit = args.hebergement !== undefined ? await ctx.ref.unit(args.hebergement) : null;
-        const props = unit ? [{ id: unit.propertyId }] : await ctx.ref.propertiesFor(undefined);
-        const all: ManualBlock[] = [];
-        for (const p of props) {
-          const { blocks } = await ctx.client.get<{ blocks: ManualBlock[] }>(`/api/admin/blocks${qs({ property: p.id, from: t, to: addDays(t, 800) })}`);
-          all.push(...blocks);
-        }
-        let hits = all;
-        if (args.blocage_id !== undefined) hits = hits.filter((k) => k.id === args.blocage_id);
-        if (unit) hits = hits.filter((k) => k.unitId === unit.id);
-        if (args.arrivee) hits = hits.filter((k) => k.checkout > args.arrivee!);
-        if (args.depart) hits = hits.filter((k) => k.checkin < args.depart!);
-        if (!hits.length) throw new UsageError("aucun blocage actif à venir ne correspond");
-        if (hits.length > 1) {
-          throw new UsageError(
-            `plusieurs blocages correspondent — préciser blocage_id :\n${hits.map((k) => `- n° ${k.id} : ${k.unitName ?? k.unitId} du ${frDate(k.checkin)} au ${frDate(k.checkout)} (« ${k.reason} »)`).join("\n")}`,
-          );
-        }
-        return hits[0]!;
-      };
-      return twoStep(
+    wrap("debloquer_dates", async (args) =>
+      twoStep<ManualBlock>(
         ctx,
         "debloquer_dates",
         args,
         async () => {
-          const k = await find();
-          return { text: `Lever le blocage n° ${k.id} : ${k.unitName ?? k.unitId} du ${frDate(k.checkin)} au ${frDate(k.checkout)} — motif « ${k.reason} », posé par ${k.createdBy}. Ces nuits redeviendront vendables.` };
+          if (args.blocage_id === undefined && args.hebergement === undefined) throw new UsageError("donner `blocage_id` ou `hebergement`");
+          const t = today(ctx);
+          const unit = args.hebergement !== undefined ? await ctx.ref.unit(args.hebergement) : null;
+          const props = unit ? [{ id: unit.propertyId }] : await ctx.ref.propertiesFor(undefined);
+          const all: ManualBlock[] = [];
+          for (const p of props) {
+            const { blocks } = await ctx.client.get<{ blocks: ManualBlock[] }>(`/api/admin/blocks${qs({ property: p.id, from: t, to: "2099-12-31" })}`);
+            all.push(...blocks);
+          }
+          let hits = all;
+          if (args.blocage_id !== undefined) hits = hits.filter((k) => k.id === args.blocage_id);
+          if (unit) hits = hits.filter((k) => k.unitId === unit.id);
+          if (args.arrivee) hits = hits.filter((k) => k.checkout > args.arrivee!);
+          if (args.depart) hits = hits.filter((k) => k.checkin < args.depart!);
+          if (!hits.length) throw new UsageError("aucun blocage en cours ou à venir ne correspond");
+          if (hits.length > 1) {
+            throw new UsageError(
+              `plusieurs blocages correspondent — préciser blocage_id :\n${hits.map((k) => `- n° ${k.id} : ${k.unitName ?? k.unitId} du ${frDate(k.checkin)} au ${frDate(k.checkout)} (« ${k.reason} »)`).join("\n")}`,
+            );
+          }
+          const k = hits[0]!;
+          return {
+            text: `Lever le blocage n° ${k.id} : ${k.unitName ?? k.unitId} du ${frDate(k.checkin)} au ${frDate(k.checkout)} — motif « ${k.reason} », posé par ${k.createdBy}. Ces nuits redeviendront vendables.`,
+            state: { id: k.id, unitId: k.unitId, checkin: k.checkin, checkout: k.checkout },
+            data: k,
+          };
         },
-        async () => {
-          const k = await find();
+        async (k) => {
           await ctx.client.delete<{ ok: boolean }>(`/api/admin/blocks/${k.id}`);
           return `Fait : blocage n° ${k.id} levé (${k.unitName ?? k.unitId}, ${frDate(k.checkin)} → ${frDate(k.checkout)}).`;
         },
-      );
-    }),
+      ),
+    ),
   );
 
   // --- repondre_client --------------------------------------------------------------
@@ -208,25 +232,24 @@ export function registerWriteTools(server: McpServer, ctx: Ctx): void {
       if ((args.message_id === undefined) === (args.reservation === undefined)) {
         throw new UsageError("donner soit `message_id` (réponse), soit `reservation` (nouveau message) — pas les deux");
       }
-      const target = async (): Promise<{ to: string | null; subject: string; ref: string; path: string }> => {
-        if (args.message_id !== undefined) {
-          const { message: m } = await ctx.client.get<{ message: Message }>(`/api/admin/messages/${args.message_id}/thread`);
-          return {
-            to: m.direction === "in" ? m.fromEmail : m.toEmail,
-            subject: m.subject.startsWith("Re:") ? m.subject : `Re: ${m.subject}`,
-            ref: m.bookingReference ? `réservation ${m.bookingReference}` : "sans réservation liée",
-            path: `/api/admin/messages/${m.id}/reply`,
-          };
-        }
-        const { booking: b } = await findBooking(ctx, args.reservation!);
-        return { to: b.guestEmail ?? null, subject: `Votre réservation ${b.reference}`, ref: `réservation ${b.reference} (${guestLabel(b)})`, path: `/api/admin/bookings/${b.id}/messages` };
-      };
-      return twoStep(
+      return twoStep<{ path: string }>(
         ctx,
         "repondre_client",
         args,
         async () => {
-          const t = await target();
+          let t: { to: string | null; subject: string; ref: string; path: string };
+          if (args.message_id !== undefined) {
+            const { message: m } = await ctx.client.get<{ message: Message }>(`/api/admin/messages/${args.message_id}/thread`);
+            t = {
+              to: m.direction === "in" ? m.fromEmail : m.toEmail,
+              subject: m.subject.startsWith("Re:") ? m.subject : `Re: ${m.subject}`,
+              ref: m.bookingReference ? `réservation ${m.bookingReference}` : "sans réservation liée",
+              path: `/api/admin/messages/${m.id}/reply`,
+            };
+          } else {
+            const { booking: b } = await findBooking(ctx, args.reservation!);
+            t = { to: b.guestEmail ?? null, subject: `Votre réservation ${b.reference}`, ref: `réservation ${b.reference} (${guestLabel(b)})`, path: `/api/admin/bookings/${b.id}/messages` };
+          }
           const lines = [
             `Destinataire : ${t.to ?? "aucune adresse — le message sera seulement visible dans le fil et sur le voucher"} (${t.ref})`,
             `Objet : ${t.subject}`,
@@ -234,11 +257,10 @@ export function registerWriteTools(server: McpServer, ctx: Ctx): void {
             args.texte.trim(),
           ];
           if (args.message_id !== undefined) lines.push("", "Le message reçu passera en « traité ».");
-          return { text: lines.join("\n") };
+          return { text: lines.join("\n"), state: { to: t.to, subject: t.subject, path: t.path }, data: { path: t.path } };
         },
-        async () => {
-          const t = await target();
-          const r = await ctx.client.post<{ ok: boolean; id: number; delivery: string }>(t.path, { body: args.texte.trim() });
+        async (d) => {
+          const r = await ctx.client.post<{ ok: boolean; id: number; delivery: string }>(d.path, { body: args.texte.trim() });
           const how =
             r.delivery === "sent" ? "e-mail envoyé" : r.delivery === "stub" ? "envoi d'e-mail simulé (envoi réel désactivé sur la plateforme) — visible dans le fil" : "pas d'e-mail (aucune adresse) — visible dans le fil";
           return `Fait : message n° ${r.id} enregistré (${how}).`;
@@ -254,10 +276,10 @@ export function registerWriteTools(server: McpServer, ctx: Ctx): void {
       title: "Vente par téléphone",
       description:
         "Crée une réservation saisie par l'équipe (vente au téléphone ou en direct), au prix du moteur tarifaire, après " +
-        "vérification de la disponibilité et des règles de séjour. `statut` : « confirmee » (réservation ferme, paiement " +
-        "hors ligne attendu) ou « option » (dates retenues pour une durée limitée, à confirmer au back-office). Peut " +
-        "générer un lien de paiement Stripe à transmettre. N'envoie aucun e-mail au client. Deux appels : récapitulatif, " +
-        "puis confirmer: true + jeton. " +
+        "vérification de la disponibilité, de la capacité et des règles de séjour. `statut` : « confirmee » (réservation " +
+        "ferme, paiement hors ligne attendu) ou « option » (dates retenues pour une durée limitée, à confirmer au " +
+        "back-office). Peut générer un lien de paiement Stripe à transmettre. N'envoie aucun e-mail au client. Deux " +
+        "appels : récapitulatif, puis confirmer: true + jeton. " +
         RAPPEL,
       inputSchema: {
         hebergement: zHebergement,
@@ -274,7 +296,7 @@ export function registerWriteTools(server: McpServer, ctx: Ctx): void {
             adresse: z.string().max(200).optional(),
             pays: z.string().max(60).optional(),
           })
-          .describe("Coordonnées du client (le nom est obligatoire)."),
+          .describe("Coordonnées du client (le nom est obligatoire). Si l'e-mail existe déjà, la fiche client correspondante est mise à jour."),
         statut: z.enum(["confirmee", "option"]).describe("confirmee = ferme tout de suite ; option = retenue temporaire."),
         duree_option_heures: z.number().int().min(1).max(336).optional().describe("Durée de l'option (défaut 72 h). Ignoré si statut = confirmee."),
         paiement: z.enum(["arrhes", "total"]).default("arrhes").describe("Montant attendu d'abord : les arrhes ou le total."),
@@ -287,7 +309,7 @@ export function registerWriteTools(server: McpServer, ctx: Ctx): void {
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
     },
     wrap("vente_telephone", async (args) =>
-      twoStep(
+      twoStep<{ unitId: number; unitName: string }>(
         ctx,
         "vente_telephone",
         args,
@@ -295,6 +317,7 @@ export function registerWriteTools(server: McpServer, ctx: Ctx): void {
           checkStay(args.arrivee, args.depart);
           if (args.arrivee < today(ctx)) throw new UsageError("la date d'arrivée est passée");
           const unit = await ctx.ref.unit(args.hebergement);
+          if (!unit.active) return { blocked: true, text: `${unit.name} est désactivé : pas de vente possible.` };
           const persons = args.adultes + (args.enfants ?? 0);
           if (persons > unit.capacityMax) {
             return { blocked: true, text: `${unit.name} accueille ${unit.capacityMax} personnes au plus — demande pour ${persons}.` };
@@ -308,40 +331,55 @@ export function registerWriteTools(server: McpServer, ctx: Ctx): void {
           const full = args.paiement === "total" || q.balanceDueDate === null;
           const first = full ? q.totalCents : q.depositCents;
           const c = args.client;
+          const contact = [c.email ? `<${c.email}>` : "(sans e-mail)", c.telephone && `tél. ${c.telephone}`, c.adresse && `adresse : ${c.adresse}`, c.pays && `pays : ${c.pays}`]
+            .filter(Boolean)
+            .join(", ");
+          const lines = [
+            `Réservation ${args.statut === "confirmee" ? "CONFIRMÉE d'office" : `en OPTION pendant ${args.duree_option_heures ?? 72} h`} : ${unit.name}, du ${frDate(args.arrivee)} au ${frDate(args.depart)} (${q.nights} nuits), ${args.adultes} adulte(s) + ${args.enfants ?? 0} enfant(s).`,
+            `Client : ${[c.prenom, c.nom].filter(Boolean).join(" ")} ${contact}.`,
+            `Prix : ${euros(q.totalCents)}${q.promoApplied ? ` (code ${q.promoApplied})` : ""}${q.discountCents ? `, remises comprises (−${euros(q.discountCents)})` : ""}.`,
+            full
+              ? `Paiement attendu : le total, ${euros(q.totalCents)}.`
+              : `Paiement attendu : arrhes ${euros(first)} maintenant, solde ${euros(q.totalCents - first)} avant le ${frDate(q.balanceDueDate!)}.`,
+            args.lien_paiement ? `Un lien de paiement Stripe de ${euros(first)} sera généré (à transmettre au client).` : "Pas de lien de paiement.",
+          ];
+          if (args.notes_internes) lines.push(`Notes internes : ${args.notes_internes}`);
+          if (q.warnings.length) lines.push(`Avertissement : ${q.warnings.map(quoteError).join(", ")}.`);
+          lines.push("Aucun e-mail n'est envoyé au client par cette action.");
           return {
-            text: [
-              `Réservation ${args.statut === "confirmee" ? "CONFIRMÉE d'office" : `en OPTION pendant ${args.duree_option_heures ?? 72} h`} : ${unit.name}, du ${frDate(args.arrivee)} au ${frDate(args.depart)} (${q.nights} nuits), ${args.adultes} adulte(s) + ${args.enfants ?? 0} enfant(s).`,
-              `Client : ${[c.prenom, c.nom].filter(Boolean).join(" ")}${c.email ? ` <${c.email}>` : " (sans e-mail)"}${c.telephone ? `, tél. ${c.telephone}` : ""}.`,
-              `Prix : ${euros(q.totalCents)}${q.promoApplied ? ` (code ${q.promoApplied})` : ""}${q.discountCents ? `, remises comprises (−${euros(q.discountCents)})` : ""}.`,
-              full
-                ? `Paiement attendu : le total, ${euros(q.totalCents)}.`
-                : `Paiement attendu : arrhes ${euros(first)} maintenant, solde ${euros(q.totalCents - first)} avant le ${frDate(q.balanceDueDate!)}.`,
-              args.lien_paiement ? `Un lien de paiement Stripe de ${euros(first)} sera généré (à transmettre au client).` : "Pas de lien de paiement.",
-              q.warnings.length ? `Avertissement : ${q.warnings.join(", ")}.` : "",
-              "Aucun e-mail n'est envoyé au client par cette action.",
-            ].filter(Boolean).join("\n"),
+            text: lines.join("\n"),
+            state: { unitId: unit.id, capacityMax: unit.capacityMax, total: q.totalCents, first, balanceDueDate: q.balanceDueDate, promo: q.promoApplied },
+            data: { unitId: unit.id, unitName: unit.name },
           };
         },
-        async () => {
-          const unit = await ctx.ref.unit(args.hebergement);
+        async (d) => {
           const c = args.client;
-          const r = await ctx.client.post<{ booking: Booking; paymentUrl: string | null }>("/api/admin/bookings", {
-            unitId: unit.id,
-            checkin: args.arrivee,
-            checkout: args.depart,
-            adults: args.adultes,
-            children: args.enfants ?? 0,
-            promoCode: args.code_promo || null,
-            guest: { firstName: c.prenom, lastName: c.nom, email: c.email, phone: c.telephone, address: c.adresse, country: c.pays },
-            confirmNow: args.statut === "confirmee",
-            holdMinutes: args.statut === "option" ? (args.duree_option_heures ?? 72) * 60 : undefined,
-            paymentMode: args.paiement === "total" ? "full" : "deposit",
-            generatePaymentLink: args.lien_paiement === true,
-            internalNotes: args.notes_internes,
-          });
+          let r: { booking: Booking; paymentUrl: string | null };
+          try {
+            r = await ctx.client.post<{ booking: Booking; paymentUrl: string | null }>("/api/admin/bookings", {
+              unitId: d.unitId,
+              checkin: args.arrivee,
+              checkout: args.depart,
+              adults: args.adultes,
+              children: args.enfants ?? 0,
+              promoCode: args.code_promo || null,
+              guest: { firstName: c.prenom, lastName: c.nom, email: c.email, phone: c.telephone, address: c.adresse, country: c.pays },
+              confirmNow: args.statut === "confirmee",
+              holdMinutes: args.statut === "option" ? (args.duree_option_heures ?? 72) * 60 : undefined,
+              paymentMode: args.paiement === "total" ? "full" : "deposit",
+              generatePaymentLink: args.lien_paiement === true,
+              internalNotes: args.notes_internes,
+            });
+          } catch (e) {
+            // Le Worker enregistre la fiche client AVANT de tenter la réservation.
+            if (e instanceof ApiError && e.status === 409) {
+              throw new UsageError(`${describeError(e)}\nAucune réservation créée ; la fiche client a pu être créée ou mise à jour.`);
+            }
+            throw e;
+          }
           const b = r.booking;
           return [
-            `Fait : réservation ${b.reference} (id ${b.id}) ${b.status === "confirmed" ? "confirmée" : "en option"} — ${b.unitName ?? unit.name}, ${frDate(b.checkin)} → ${frDate(b.checkout)}, total ${euros(b.totalCents)}.`,
+            `Fait : réservation ${b.reference} (id ${b.id}) ${b.status === "confirmed" ? "confirmée" : "en option"} — ${b.unitName ?? d.unitName}, ${frDate(b.checkin)} → ${frDate(b.checkout)}, total ${euros(b.totalCents)}.`,
             r.paymentUrl ? `Lien de paiement : ${r.paymentUrl}` : args.lien_paiement ? "Lien de paiement non généré (montant trop faible ou paiement indisponible)." : "",
           ].filter(Boolean).join("\n");
         },
@@ -363,7 +401,7 @@ export function registerWriteTools(server: McpServer, ctx: Ctx): void {
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
     },
     wrap("relancer_solde", async (args) =>
-      twoStep(
+      twoStep<{ id: number; reference: string }>(
         ctx,
         "relancer_solde",
         args,
@@ -379,12 +417,13 @@ export function registerWriteTools(server: McpServer, ctx: Ctx): void {
               `Envoyer à ${b.guestEmail} (${guestLabel(b)}) un rappel de solde de ${euros(balance)} pour ${b.reference} — ${b.unitName ?? b.unitId}, arrivée ${frDate(b.checkin)}${b.balanceDueDate ? `, échéance ${frDate(b.balanceDueDate)}` : ""}.`,
               last ? `Dernière relance manuelle : ${last.createdAt.slice(0, 16)} UTC.` : "Aucune relance manuelle à ce jour.",
             ].join("\n"),
+            state: { id: b.id, to: b.guestEmail, balance, lastReminder: last?.createdAt ?? null },
+            data: { id: b.id, reference: b.reference },
           };
         },
-        async () => {
-          const { booking: b } = await findBooking(ctx, args.reservation);
-          const r = await ctx.client.post<{ ok: boolean; balanceCents: number }>(`/api/admin/bookings/${b.id}/balance-reminder`, {});
-          return `Fait : rappel de solde (${euros(r.balanceCents)}) mis en file d'envoi pour ${b.reference}.`;
+        async (d) => {
+          const r = await ctx.client.post<{ ok: boolean; balanceCents: number }>(`/api/admin/bookings/${d.id}/balance-reminder`, {});
+          return `Fait : rappel de solde (${euros(r.balanceCents)}) mis en file d'envoi pour ${d.reference}.`;
         },
       ),
     ),

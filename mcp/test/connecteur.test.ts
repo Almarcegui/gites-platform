@@ -1,4 +1,5 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { ElicitRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { loadConfig } from "../src/client.js";
@@ -121,6 +122,9 @@ describe("authentification", () => {
     expect(() => loadConfig({ GITES_URL: "http://exemple.be", GITES_ID: "a", GITES_MDP: "b" })).toThrow(/https/);
     expect(loadConfig({ GITES_URL: "http://localhost:8787/", GITES_ID: "a", GITES_MDP: "b" }).baseUrl).toBe("http://localhost:8787");
     expect(() => loadConfig({ GITES_URL: "https://x.dev" })).toThrow(/GITES_ID, GITES_MDP/);
+    for (const bad of ["https://u:p@x.dev", "https://x.dev/api", "https://x.dev/?k=1", "https://x.dev/#f"]) {
+      expect(() => loadConfig({ GITES_URL: bad, GITES_ID: "a", GITES_MDP: "b" })).toThrow(/simple origine/);
+    }
   });
 });
 
@@ -307,6 +311,112 @@ describe("écritures en deux temps", () => {
     expect(r.isError).toBe(true);
     expect(r.text).toMatch(/PEUT-ÊTRE eu lieu/);
     expect(writes("POST", "/api/admin/blocks")).toHaveLength(1);
+  });
+});
+
+describe("écritures : courses et états inconnus (contre-review Codex)", () => {
+  const args = { hebergement: "La Scierie", arrivee: "2026-12-01", depart: "2026-12-04", motif: "travaux" };
+  const vente = {
+    hebergement: "La Scierie", arrivee: "2026-12-01", depart: "2026-12-04", adultes: 2,
+    client: { nom: "Durand", adresse: "Rue du Test 1, 6890 Redu", pays: "BE" }, statut: "confirmee", notes_internes: "arrive en vélo",
+  };
+
+  it("un second récapitulatif révoque le premier jeton (pas de double envoi)", async () => {
+    const a = { reservation: "MB-2026-001" };
+    const j1 = jetonOf((await call("relancer_solde", a)).text);
+    const j2 = jetonOf((await call("relancer_solde", a)).text);
+    expect((await call("relancer_solde", { ...a, confirmer: true, jeton: j1 })).isError).toBe(true);
+    expect((await call("relancer_solde", { ...a, confirmer: true, jeton: j2 })).isError).toBe(false);
+    expect(writes("POST", "/api/admin/bookings/4/balance-reminder")).toHaveLength(1);
+  });
+
+  it("prix modifié entre le récapitulatif et la confirmation : refus, rien d'écrit", async () => {
+    const p = await call("vente_telephone", vente);
+    expect(p.text).toContain("adresse : Rue du Test 1, 6890 Redu");
+    expect(p.text).toContain("pays : BE");
+    expect(p.text).toContain("Notes internes : arrive en vélo");
+    fake.state.nightPriceCents = 20000;
+    const r = await call("vente_telephone", { ...vente, confirmer: true, jeton: jetonOf(p.text) });
+    expect(r.isError).toBe(true);
+    expect(r.text).toMatch(/la situation a changé/);
+    expect(r.text).toContain("680,00 €"); // nouveau prix montré
+    expect(writes("POST", "/api/admin/bookings")).toHaveLength(0);
+  });
+
+  it("créneau pris entre-temps : refus au recalcul, rien d'écrit", async () => {
+    const p = await call("bloquer_dates", args);
+    fake.state.bookings.push(booking({ id: 9, reference: "PM-2026-009", unitId: 3, unitName: "Le Domaine entier", checkin: "2026-12-02", checkout: "2026-12-03" }));
+    const r = await call("bloquer_dates", { ...args, confirmer: true, jeton: jetonOf(p.text) });
+    expect(r.isError).toBe(true);
+    expect(r.text).toContain("PM-2026-009");
+    expect(writes("POST", "/api/admin/blocks")).toHaveLength(0);
+  });
+
+  it("destinataire changé entre-temps : refus", async () => {
+    const p = await call("relancer_solde", { reservation: "MB-2026-001" });
+    fake.state.bookings.find((b) => b.id === 4).guestEmail = "autre@example.test";
+    const r = await call("relancer_solde", { reservation: "MB-2026-001", confirmer: true, jeton: jetonOf(p.text) });
+    expect(r.isError).toBe(true);
+    expect(r.text).toContain("autre@example.test");
+    expect(writes("POST", "/api/admin/bookings/4/balance-reminder")).toHaveLength(0);
+  });
+
+  it.each(["500", "garbage"] as const)("réponse %s APRÈS traitement : état inconnu, pas « rien n'a été écrit »", async (mode) => {
+    const p = await call("bloquer_dates", args);
+    fake.state.afterCommit.set("POST /api/admin/blocks", mode);
+    const r = await call("bloquer_dates", { ...args, confirmer: true, jeton: jetonOf(p.text) });
+    expect(r.isError).toBe(true);
+    expect(r.text).toMatch(/PEUT-ÊTRE eu lieu/);
+    expect(r.text).not.toMatch(/Rien n'a été écrit/);
+    expect(fake.state.blocks).toHaveLength(1); // le faux Worker a bien écrit
+  });
+
+  it("élicitation : si l'hôte sait demander, l'humain tranche (refus = rien d'écrit)", async () => {
+    await client.close();
+    const server = buildServer({ baseUrl: fake.url, user: "julien", password: "mdp-test" }, { now: () => NOW });
+    const [a, b] = InMemoryTransport.createLinkedPair();
+    client = new Client({ name: "hote", version: "1" }, { capabilities: { elicitation: {} } });
+    let answer: "accept" | "decline" = "decline";
+    const seen: string[] = [];
+    client.setRequestHandler(ElicitRequestSchema, async (req) => {
+      seen.push(String(req.params.message));
+      return answer === "accept" ? { action: "accept", content: { confirmer: true } } : { action: "decline" };
+    });
+    await Promise.all([server.connect(a), client.connect(b)]);
+    let p = await call("bloquer_dates", args);
+    let r = await call("bloquer_dates", { ...args, confirmer: true, jeton: jetonOf(p.text) });
+    expect(r.text).toMatch(/Annulé par l'utilisateur/);
+    expect(seen[0]).toContain("Bloquer La Scierie");
+    expect(writes("POST", "/api/admin/blocks")).toHaveLength(0);
+    answer = "accept";
+    p = await call("bloquer_dates", args);
+    r = await call("bloquer_dates", { ...args, confirmer: true, jeton: jetonOf(p.text) });
+    expect(r.isError).toBe(false);
+    expect(writes("POST", "/api/admin/blocks")).toHaveLength(1);
+  });
+
+  it("vente sur un hébergement désactivé : refus", async () => {
+    const { UNITS } = await import("./faux-serveur.js");
+    UNITS[1]!.active = false;
+    try {
+      const r = await call("vente_telephone", vente);
+      expect(r.isError).toBe(true);
+      expect(r.text).toMatch(/désactivé/);
+    } finally {
+      UNITS[1]!.active = true;
+    }
+  });
+
+  it("sante : la sonde publique répond même si la connexion admin échoue", async () => {
+    await client.close();
+    const server = buildServer({ baseUrl: fake.url, user: "julien", password: "faux" }, { now: () => NOW });
+    const [a, b] = InMemoryTransport.createLinkedPair();
+    client = new Client({ name: "t", version: "1" });
+    await Promise.all([server.connect(a), client.connect(b)]);
+    const r = await call("sante", {});
+    expect(r.text).toContain("Plateforme : en ligne");
+    expect(r.text).toMatch(/Back-office : inaccessible/);
+    expect(r.text).not.toContain("http://"); // hôte seul, jamais l'URL
   });
 });
 

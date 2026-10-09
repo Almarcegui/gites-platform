@@ -45,6 +45,11 @@ export class Referentiel {
     private readonly ttlMs = 5 * 60_000,
   ) {}
 
+  /** Oublie le cache : la confirmation d'une écriture relit capacité et statut. */
+  invalidate(): void {
+    this.#data = null;
+  }
+
   async load(): Promise<{ properties: Property[]; units: Unit[]; links: Link[] }> {
     if (this.#data && Date.now() - this.#at < this.ttlMs) return this.#data;
     const { properties } = await this.client.get<{ properties: Property[] }>("/api/admin/properties");

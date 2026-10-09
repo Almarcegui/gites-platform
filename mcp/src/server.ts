@@ -25,6 +25,22 @@ export function buildServer(cfg: GitesConfig, opts: { fetchImpl?: typeof fetch; 
     now: opts.now ?? (() => new Date()),
   };
   const server = new McpServer({ name: "gites", version: "0.1.0" }, { instructions: INSTRUCTIONS });
+  // Quand l'hôte sait demander une validation à l'humain (élicitation MCP),
+  // la confirmation passe par lui : le modèle seul ne peut plus dire « oui ».
+  ctx.elicit = async (message) => {
+    if (process.env.GITES_MCP_ELICITATION === "0") return null;
+    if (!server.server.getClientCapabilities()?.elicitation) return null;
+    const r = await server.server.elicitInput({
+      mode: "form",
+      message,
+      requestedSchema: {
+        type: "object",
+        properties: { confirmer: { type: "boolean", title: "Confirmer cette écriture", description: "Cocher pour exécuter." } },
+        required: ["confirmer"],
+      },
+    });
+    return r.action === "accept" && r.content?.confirmer === true;
+  };
   registerReadTools(server, ctx);
   registerWriteTools(server, ctx);
   return server;

@@ -4,7 +4,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { qs } from "./client.js";
 import {
-  bookingLine, checkStay, checkinDaysLabel, type Ctx, findBooking, guestLabel, quoteError, sqlNow, text, today,
+  bookingLine, checkStay, checkinDaysLabel, type Ctx, describeError, findBooking, guestLabel, quoteError, sqlNow, text, today,
   UsageError, wrap, zDate, zDomaine, zHebergement, zReservation,
 } from "./commun.js";
 import { addDays, euros, frDate, nights, type Periode, periodWindow } from "./dates.js";
@@ -369,17 +369,30 @@ export function registerReadTools(server: McpServer, ctx: Ctx): void {
     wrap("sante", async ({ domaine }) => {
       const out: string[] = [];
       try {
-        const pub = await ctx.client.get<{ ok: boolean; lastCronAt: string | null; cronAgeMinutes: number | null }>("/api/public/health");
-        const age = pub.cronAgeMinutes;
+        const { status, body: pub } = await ctx.client.publicGet<{ ok: boolean; lastCronAt: string | null; cronAgeMinutes: number | null }>("/api/public/health");
+        const age = pub?.cronAgeMinutes ?? null;
         out.push(
-          `Plateforme : ${pub.ok ? "en ligne" : "EN PANNE (base injoignable)"} — ${ctx.client.baseUrl}`,
-          `Dernier passage du cron : ${pub.lastCronAt ? `${pub.lastCronAt} UTC (il y a ${age} min)${age != null && age > 30 ? " — EN RETARD" : ""}` : "jamais enregistré"}`,
+          `Plateforme : ${status === 200 && pub?.ok ? "en ligne" : `EN PANNE (sonde publique HTTP ${status})`} — ${ctx.client.host}`,
+          `Dernier passage du cron : ${pub?.lastCronAt ? `${pub.lastCronAt} UTC (il y a ${age} min)${age != null && age > 30 ? " — EN RETARD" : ""}` : "jamais enregistré"}`,
         );
       } catch (e) {
         out.push(`Plateforme : sonde publique en échec (${e instanceof Error ? e.message : String(e)})`);
       }
-      for (const p of await ctx.ref.propertiesFor(domaine)) {
-        const o = await ctx.client.get<Overview>(`/api/admin/overview${qs({ property: p.id })}`);
+      let props: Awaited<ReturnType<typeof ctx.ref.propertiesFor>>;
+      try {
+        props = await ctx.ref.propertiesFor(domaine);
+      } catch (e) {
+        out.push("", `Back-office : inaccessible — ${describeError(e)}`);
+        return text(out.join("\n"));
+      }
+      for (const p of props) {
+        let o: Overview;
+        try {
+          o = await ctx.client.get<Overview>(`/api/admin/overview${qs({ property: p.id })}`);
+        } catch (e) {
+          out.push("", `${p.name} : santé illisible — ${describeError(e)}`);
+          continue;
+        }
         const h = o.health;
         out.push("", `${o.property.name} : ${h.ok ? "santé OK" : "à surveiller"}`);
         if (h.orphanPayments.length) out.push(`- paiements reçus sur réservation non confirmée : ${h.orphanPayments.map((x) => `${x.reference} ${euros(x.amountCents)}`).join(", ")}`);

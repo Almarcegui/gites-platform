@@ -28,7 +28,8 @@ export class ApiError extends Error {
   }
 }
 
-/** Erreur réseau ou délai dépassé : pour une écriture, l'état réel est INCONNU. */
+/** Erreur réseau, délai dépassé, réponse coupée ou illisible : pour une
+ *  écriture, l'état réel est INCONNU (la requête a pu être traitée). */
 export class NetworkError extends Error {}
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): GitesConfig {
@@ -47,13 +48,16 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): GitesConfig {
   } catch {
     throw new Error("GITES_URL invalide (attendu : https://… ou http://localhost:PORT)");
   }
+  if (url.username || url.password || url.search || url.hash || (url.pathname !== "/" && url.pathname !== "")) {
+    throw new Error("GITES_URL doit être une simple origine (https://hôte[:port]), sans identifiant, chemin, requête ni fragment");
+  }
   const local = ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname);
   // Le mot de passe admin ne voyage jamais en clair hors de la machine.
   if (url.protocol !== "https:" && !(url.protocol === "http:" && local)) {
     throw new Error("GITES_URL doit être en https:// (http:// accepté seulement pour localhost)");
   }
   const timeoutMs = Number(env.GITES_TIMEOUT_MS ?? "") || undefined;
-  return { baseUrl, user, password, timeoutMs };
+  return { baseUrl: url.origin, user, password, timeoutMs };
 }
 
 function readKeychain(service: string, account: string): string {
@@ -82,6 +86,17 @@ export class GitesClient {
 
   get baseUrl(): string {
     return this.cfg.baseUrl;
+  }
+
+  /** Nom d'hôte seul — c'est tout ce qu'on affiche ou journalise de l'URL. */
+  get host(): string {
+    return new URL(this.cfg.baseUrl).host;
+  }
+
+  /** GET non authentifié (sonde publique) : ne dépend pas de la connexion. */
+  async publicGet<T>(path: string): Promise<{ status: number; body: T }> {
+    const r = await this.#raw("GET", path, undefined, null);
+    return { status: r.status, body: r.body as T };
   }
 
   async #doLogin(): Promise<void> {
@@ -132,14 +147,22 @@ export class GitesClient {
       });
     } catch (e) {
       const reason = e instanceof Error && e.name === "TimeoutError" ? "délai dépassé" : "plateforme injoignable";
-      throw new NetworkError(`${reason} (${this.cfg.baseUrl})`);
+      throw new NetworkError(`${reason} (${this.host})`);
     }
-    const text = await res.text();
-    let parsed: unknown = null;
+    let text: string;
     try {
-      parsed = text ? JSON.parse(text) : null;
+      text = await res.text();
     } catch {
-      parsed = null;
+      throw new NetworkError(`réponse interrompue (${this.host}, HTTP ${res.status})`);
+    }
+    let parsed: unknown = null;
+    if (text) {
+      try {
+        parsed = JSON.parse(text);
+      } catch {
+        // Une réponse 2xx illisible ne prouve ni succès ni échec.
+        if (res.status < 400) throw new NetworkError(`réponse illisible (${this.host}, HTTP ${res.status})`);
+      }
     }
     return { status: res.status, body: parsed };
   }

@@ -14,6 +14,9 @@ export interface Ctx {
   ref: Referentiel;
   confirmations: Confirmations;
   now: () => Date;
+  /** Demande à l'humain, par l'hôte MCP (élicitation), de valider le
+   *  récapitulatif. null = l'hôte ne sait pas le faire. */
+  elicit?: (message: string) => Promise<boolean | null>;
 }
 
 export class UsageError extends Error {}
