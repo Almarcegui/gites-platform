@@ -47,8 +47,12 @@ from pathlib import Path
 RACINE = Path(__file__).resolve().parent.parent
 JOURNAL = Path.home() / "Library" / "Logs" / "gites-sauvegarde.log"
 BASES = {"prod": "gites-platform", "essai": "gites-platform-essai"}
-# Ce qu'une sauvegarde doit contenir pour être prise pour bonne.
-TABLES_ATTENDUES = ("d1_migrations", "properties", "units", "bookings", "guests", "payments", "admin_users")
+# Le plancher de toute sauvegarde ; le reste se déduit des migrations appliquées
+# (tables_attendues) : chaque table créée par une migration que la base dit avoir
+# jouée doit être dans l'export.
+TABLES_TOUJOURS = ("d1_migrations", "properties", "units", "bookings")
+# Un export d'une base sans aucune table tient en quelques octets (PRAGMA).
+TAILLE_MAX_BASE_VIDE = 4096
 GARDER_TOUJOURS = 7
 DELAI_EXPORT_S = 600
 # launchd ne lit ni .zshrc ni .bash_profile : npm et node sont chez Homebrew.
@@ -125,6 +129,33 @@ def exporter(cible: str, fichier: Path) -> None:
         raise Echec(f"wrangler d1 export, code {p.returncode} : {motif}")
 
 
+def tables_attendues(migrations_appliquees: set[str]) -> set[str]:
+    """Les tables qu'ont laissées les migrations appliquées, lues dans migrations/
+    (CREATE TABLE, DROP TABLE, ALTER TABLE … RENAME TO, dans l'ordre des fichiers)."""
+    tables: set[str] = set()
+    nom = r'"?([A-Za-z_][A-Za-z0-9_]*)"?'
+    motif = re.compile(
+        r"CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?" + nom
+        + r"|DROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?" + nom
+        + r"|ALTER\s+TABLE\s+" + nom + r"\s+RENAME\s+TO\s+" + nom,
+        re.IGNORECASE,
+    )
+    for f in sorted((RACINE / "migrations").glob("*.sql")):
+        if f.name not in migrations_appliquees:
+            continue
+        sql = re.sub(r"--[^\n]*", "", f.read_text(encoding="utf-8"))
+        for m in motif.finditer(sql):
+            cree, supprimee, avant, apres = m.groups()
+            if cree:
+                tables.add(cree)
+            elif supprimee:
+                tables.discard(supprimee)
+            else:
+                tables.discard(avant)
+                tables.add(apres)
+    return tables
+
+
 def verifier(fichier: Path, base_vide_admise: bool) -> str:
     """Rejoue l'export dans une base en mémoire. Rend un résumé ; lève Echec sinon."""
     taille = fichier.stat().st_size
@@ -142,13 +173,21 @@ def verifier(fichier: Path, base_vide_admise: bool) -> str:
     if integrite != "ok":
         raise Echec(f"export incohérent ({taille} octets) : integrity_check = {integrite[:200]}")
     tables.discard("sqlite_sequence")
-    if not tables and base_vide_admise:
+    if not tables and base_vide_admise and taille <= TAILLE_MAX_BASE_VIDE and "CREATE" not in texte.upper():
         return f"{taille} octets, base vide (aucune table)"
-    manquantes = [t for t in TABLES_ATTENDUES if t not in tables]
+    if not texte.rstrip().endswith(";"):
+        raise Echec(f"export incomplet ({taille} octets) : la dernière instruction n'est pas terminée")
+    manquantes = sorted(set(TABLES_TOUJOURS) - tables)
     if manquantes:
         raise Echec(f"export incomplet ({taille} octets) : tables absentes {', '.join(manquantes)}")
+    appliquees = {r[0] for r in c.execute("SELECT name FROM d1_migrations")}
+    if not appliquees:
+        raise Echec(f"export incomplet ({taille} octets) : aucune migration dans d1_migrations")
+    manquantes = sorted(tables_attendues(appliquees) - tables)
+    if manquantes:
+        raise Echec(f"export incomplet ({taille} octets) : tables des migrations absentes {', '.join(manquantes)}")
     resas = c.execute("SELECT COUNT(*) FROM bookings").fetchone()[0]
-    return f"{taille} octets, {len(tables)} tables, {resas} réservation(s)"
+    return f"{taille} octets, {len(tables)} tables, {len(appliquees)} migrations, {resas} réservation(s)"
 
 
 def mettre_en_place(temporaire: Path, base: str) -> Path:
@@ -172,6 +211,19 @@ def mettre_en_place(temporaire: Path, base: str) -> Path:
     finally:
         os.close(descripteur)
     return final
+
+
+def proteger_le_dossier() -> None:
+    """Sous le verrou : les temporaires d'un passage tué (données de production,
+    que la rotation ne voit pas) sont effacés ; chaque dump n'est lisible que du
+    propriétaire. Les liens symboliques ne sont jamais suivis."""
+    for chemin in DOSSIER.iterdir():
+        if chemin.is_symlink() or not chemin.is_file():
+            continue
+        if chemin.name.startswith(".export-") and chemin.suffix == ".sql":
+            chemin.unlink()
+        elif chemin.suffix == ".sql":
+            os.chmod(chemin, 0o600)
 
 
 def rotation(base: str, garder_jours: int, aujourd_hui: dt.date) -> list[str]:
@@ -201,11 +253,13 @@ def sauvegarder(cible: str, garder_jours: int, base_vide_admise: bool) -> tuple[
     if not (RACINE / "node_modules" / ".bin" / "wrangler").exists():
         raise Echec("node_modules/.bin/wrangler absent : make installer d'abord (aucun wrangler global n'est admis)")
     DOSSIER.mkdir(mode=0o700, exist_ok=True)
+    os.chmod(DOSSIER, 0o700)  # mkdir ne corrige pas un dossier existant
     with (DOSSIER / ".verrou").open("w") as verrou:
         try:
             fcntl.flock(verrou, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError as e:
             raise Echec("une autre sauvegarde tourne déjà") from e
+        proteger_le_dossier()
         descripteur, nom = tempfile.mkstemp(prefix=".export-", suffix=".sql", dir=DOSSIER)
         os.close(descripteur)
         temporaire = Path(nom)
