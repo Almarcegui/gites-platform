@@ -12,6 +12,7 @@ import { registerAdminRoutes } from "../src/api/admin";
 import { buildCalendarPush } from "../src/services/beds24-sync";
 import { CHANNEL_MARKUPS_KEY, PUSH_CHANNEL_KEY } from "../src/core/price-guardrails";
 import { addDays, todayInZone } from "../src/core/dates";
+import { zeroUnitRules } from "./helpers/rate-rules";
 
 const router = new Router();
 registerAdminRoutes(router);
@@ -20,7 +21,8 @@ const ADMIN_USER = "julie";
 const ADMIN = `${ADMIN_USER}:motdepasse-test`;
 const SCIEUR = 1; // La Maison du Scieur — mappée sur une room Beds24 dans le seed
 
-// Fenêtre très en avant : aucune saison du seed, aucune dépendance à la date.
+// Fenêtre très en avant. Elle peut tomber dans une saison du seed selon le
+// jour : les tests y posent une surcharge, qui prime sur toute saison.
 const FROM = addDays(todayInZone(), 300);
 
 let t: TestDb;
@@ -199,20 +201,14 @@ describe("cohérence avec le reste de la tarification", () => {
 
   it("la majoration ne ressuscite pas un prix nul : rien n'est poussé", async () => {
     await call("POST", "/api/admin/channel-markups/apply", { channel: "airbnb" });
-    const id = (await t.db
-      .prepare("SELECT id FROM rate_rules WHERE unit_id = ?1 ORDER BY id LIMIT 1")
-      .bind(SCIEUR)
-      .first<{ id: number }>())!.id;
-    const before = await t.db
-      .prepare("SELECT price_week_cents AS w, price_weekend_cents AS we FROM rate_rules WHERE id = ?1")
-      .bind(id)
-      .first<{ w: number; we: number }>();
-    await t.db.prepare("UPDATE rate_rules SET price_week_cents = 0, price_weekend_cents = 0 WHERE id = ?1").bind(id).run();
-    for (const price of await prixPousses()) expect(price).toBeUndefined();
-    await t.db
-      .prepare("UPDATE rate_rules SET price_week_cents = ?2, price_weekend_cents = ?3 WHERE id = ?1")
-      .bind(id, before!.w, before!.we)
-      .run();
+    // Toutes les règles de l'unité, saisons comprises : FROM (J+300) peut
+    // tomber dans une saison du seed selon le jour (août 2027 vu du 09/10/2026).
+    const restore = await zeroUnitRules(t.db, SCIEUR);
+    try {
+      for (const price of await prixPousses()) expect(price).toBeUndefined();
+    } finally {
+      await restore();
+    }
   });
 
   it("le prix conseillé dit lequel des canaux est appliqué", async () => {
