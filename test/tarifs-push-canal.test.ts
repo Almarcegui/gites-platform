@@ -236,3 +236,124 @@ describe("cohérence avec le reste de la tarification", () => {
     await call("PATCH", `/api/admin/units/${SCIEUR}`, { priceMinCents: null, priceMaxCents: null });
   });
 });
+
+// ---------------------------------------------------------------------------
+// Issue #97 — régler les pourcentages depuis l'écran. Le `PUT` existait sans
+// écran ; il porte désormais une borne de saisie (50 %) et doit repousser les
+// calendriers quand le taux du canal APPLIQUÉ change, et seulement alors.
+// ---------------------------------------------------------------------------
+
+describe("écran des pourcentages (#97)", () => {
+  /** Appelle une route avec un ExecutionContext qui collecte les push différés,
+   *  et un Beds24 simulé qui enregistre les calendriers reçus. */
+  async function callWithBeds24(method: string, path: string, body?: unknown) {
+    const pushes: { calendar: { from: string; to?: string; price1?: number }[] }[][] = [];
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input instanceof Request ? input.url : input);
+      if (url.includes("api.beds24.com")) {
+        if (url.includes("/authentication/token")) {
+          return new Response(JSON.stringify({ token: "tok_test", expiresIn: 86400 }), { status: 200 });
+        }
+        if (url.includes("/inventory/rooms/calendar") && init?.method === "POST") {
+          pushes.push(JSON.parse(String(init.body)));
+        }
+        return new Response(JSON.stringify([{ success: true }]), { status: 200 });
+      }
+      return realFetch(input as RequestInfo, init);
+    }) as typeof fetch;
+    const deferred: Promise<unknown>[] = [];
+    const ctx = {
+      waitUntil: (p: Promise<unknown>) => { deferred.push(p); },
+      passThroughOnException: () => {},
+    } as unknown as ExecutionContext;
+    const beds24Env = { ...env, BEDS24_REFRESH_TOKEN: "refresh_test", BEDS24_WRITE_ENABLED: "true" } as Env;
+    try {
+      const req = new Request(`http://test.local${path}`, {
+        method,
+        headers: { authorization: `Bearer ${ADMIN}`, ...(body ? { "content-type": "application/json" } : {}) },
+        body: body ? JSON.stringify(body) : undefined,
+      });
+      const res = await router.handle(req, beds24Env, ctx);
+      if (!res) throw new Error(`route ${method} ${path} introuvable`);
+      await Promise.all(deferred);
+      return { status: res.status, data: (await res.json()) as Record<string, unknown>, pushes };
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  }
+
+  /** Prix poussés (en euros) le premier jour posé, toutes chambres confondues :
+   *  seule la Maison du Scieur porte la surcharge à 200 €. */
+  function prixPoussesAuJour(push: { calendar: { from: string; to?: string; price1?: number }[] }[]): (number | undefined)[] {
+    return push.flatMap((room) => room.calendar.filter((c) => c.from <= FROM && FROM <= (c.to ?? c.from)).map((c) => c.price1));
+  }
+
+  it("expose la borne de saisie, pour que l'écran ne la recopie pas", async () => {
+    const { data } = await call("GET", "/api/admin/channel-markups");
+    expect(data.maxPct).toBe(50);
+  });
+
+  it("refuse au-delà de 50 % à l'écriture, sans rien écraser", async () => {
+    const res = await call("PUT", "/api/admin/channel-markups", {
+      channels: [{ channel: "airbnb", label: "Airbnb", markupPct: 60 }],
+    });
+    expect(res.status).toBe(400);
+    expect(String(res.data.error ?? JSON.stringify(res.data))).toContain("50");
+    const state = await call("GET", "/api/admin/channel-markups");
+    expect((state.data.channels as { markupPct: number }[])[0]?.markupPct).toBe(18);
+  });
+
+  it("50 % pile est accepté", async () => {
+    const res = await call("PUT", "/api/admin/channel-markups", {
+      channels: [{ channel: "airbnb", label: "Airbnb", markupPct: 50 }],
+    });
+    expect(res.status).toBe(200);
+  });
+
+  it("une valeur stockée au-delà de 50 % reste lue telle quelle (pas de retour silencieux aux défauts)", async () => {
+    await t.db
+      .prepare("INSERT INTO app_settings (key, value) VALUES (?1, ?2)")
+      .bind(CHANNEL_MARKUPS_KEY, JSON.stringify([{ channel: "airbnb", label: "Airbnb", markupPct: 70 }]))
+      .run();
+    const { data } = await call("GET", "/api/admin/channel-markups");
+    expect(data.channels).toEqual([{ channel: "airbnb", label: "Airbnb", markupPct: 70 }]);
+  });
+
+  it("changer le taux du canal appliqué → prix conseillé à jour ET calendriers repoussés au nouveau prix", async () => {
+    await poseCentDeuxCents();
+    await call("POST", "/api/admin/channel-markups/apply", { channel: "airbnb" });
+    const res = await callWithBeds24("PUT", "/api/admin/channel-markups", {
+      channels: [
+        { channel: "airbnb", label: "Airbnb", markupPct: 25 },
+        { channel: "booking", label: "Booking.com", markupPct: 18 },
+        { channel: "abritel", label: "Abritel / Vrbo", markupPct: 15 },
+      ],
+    });
+    expect(res.status).toBe(200);
+    expect(res.data.pushMarkupPct).toBe(25);
+    expect(res.data.example).toEqual({ directCents: 20000, pushedCents: 25000 });
+    expect((res.data.examples as { channel: string; suggestedCents: number }[])[0]).toMatchObject({
+      channel: "airbnb",
+      suggestedCents: 25000,
+    });
+    expect(res.pushes.length).toBe(1); // une seule propriété mappée dans le seed
+    expect(prixPoussesAuJour(res.pushes[0]!)).toContain(250); // 200 € × 1,25
+  });
+
+  it("changer le taux d'un canal NON appliqué ne repousse rien", async () => {
+    await call("POST", "/api/admin/channel-markups/apply", { channel: "airbnb" });
+    const res = await callWithBeds24("PUT", "/api/admin/channel-markups", {
+      channels: [
+        { channel: "airbnb", label: "Airbnb", markupPct: 18 },
+        { channel: "booking", label: "Booking.com", markupPct: 22 },
+        { channel: "abritel", label: "Abritel / Vrbo", markupPct: 15 },
+      ],
+    });
+    expect(res.status).toBe(200);
+    expect(res.pushes).toEqual([]);
+    const { data } = await call("GET", "/api/admin/suggested-prices?priceCents=20000");
+    expect((data.channels as { channel: string; suggestedCents: number }[]).find((c) => c.channel === "booking"))
+      .toMatchObject({ markupPct: 22, suggestedCents: 24400 });
+  });
+});

@@ -18,6 +18,7 @@ import {
   type GuestRegisterEntry,
 } from "../core/guest-register";
 import {
+  CHANNEL_MARKUP_MAX_PCT,
   CHANNEL_MARKUPS_KEY,
   CHANNEL_PRICE_FORMULA,
   checkBounds,
@@ -1054,6 +1055,7 @@ export function registerAdminRoutes(router: Router): void {
     channels: ChannelMarkup[];
     examples: ChannelSuggestion[];
     formula: string;
+    maxPct: number;
     pushChannel: string | null;
     pushMarkupPct: number;
     example: { directCents: number; pushedCents: number };
@@ -1069,6 +1071,8 @@ export function registerAdminRoutes(router: Router): void {
       // ne le recalcule pas (deux arrondis finiraient par diverger).
       examples: suggestForChannels(EXAMPLE_PRICE_CENTS, channels),
       formula: CHANNEL_PRICE_FORMULA,
+      // Borne de saisie, donnée par le serveur pour que l'écran ne la recopie pas.
+      maxPct: CHANNEL_MARKUP_MAX_PCT,
       pushChannel,
       pushMarkupPct: pct,
       example: { directCents: EXAMPLE_PRICE_CENTS, pushedCents: pushedPriceCents(EXAMPLE_PRICE_CENTS, pct) },
@@ -1079,8 +1083,10 @@ export function registerAdminRoutes(router: Router): void {
 
   router.put("/api/admin/channel-markups", guard(async (req, env, _p, _url, execCtx) => {
     const body = await readJson<{ channels?: unknown; pushChannel?: unknown }>(req);
-    const channels = normalizeChannelMarkups(body?.channels);
-    if (!channels) return apiError(400, "canaux invalides — attendu une liste { channel, label, markupPct 0 à 100 }");
+    const channels = normalizeChannelMarkups(body?.channels, CHANNEL_MARKUP_MAX_PCT);
+    if (!channels) {
+      return apiError(400, `canaux invalides — attendu une liste { channel, label, markupPct 0 à ${CHANNEL_MARKUP_MAX_PCT} }`);
+    }
     // Le canal de référence est facultatif ici : on ne le touche que s'il est
     // fourni. Sinon, un simple ajustement de pourcentage le remettrait à zéro.
     const wanted = body && "pushChannel" in body ? checkPushChannel(body.pushChannel, channels) : null;

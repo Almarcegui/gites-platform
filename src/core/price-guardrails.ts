@@ -99,8 +99,16 @@ export const CHANNEL_MARKUPS_KEY = "pricing.channel_markups";
  *  l'afficher au lieu de laisser croire à un calcul opaque. */
 export const CHANNEL_PRICE_FORMULA = "prix direct × (1 + majoration %), arrondi au centime";
 
-/** Majoration valide : 0 à 100 %, sur un canal identifié. */
-export function normalizeChannelMarkups(raw: unknown): ChannelMarkup[] | null {
+/** Borne de SAISIE d'une majoration (issue #97). Les commissions des places
+ *  de marché tournent autour de 15-20 % : au-delà de 50 %, c'est une faute de
+ *  frappe, pas une politique tarifaire. La borne ne s'applique qu'à l'écriture
+ *  (`PUT /api/admin/channel-markups`) — la relecture garde la borne large de
+ *  100 %, pour qu'une valeur déjà stockée ne retombe jamais en silence sur les
+ *  valeurs de départ. */
+export const CHANNEL_MARKUP_MAX_PCT = 50;
+
+/** Majoration valide : 0 à `maxPct` % (100 par défaut), sur un canal identifié. */
+export function normalizeChannelMarkups(raw: unknown, maxPct = 100): ChannelMarkup[] | null {
   if (!Array.isArray(raw)) return null;
   const out: ChannelMarkup[] = [];
   const seen = new Set<string>();
@@ -110,7 +118,7 @@ export function normalizeChannelMarkups(raw: unknown): ChannelMarkup[] | null {
     const channel = String(r.channel ?? "").trim().toLowerCase();
     const pct = Number(r.markupPct);
     if (!/^[a-z0-9_-]{1,32}$/.test(channel) || seen.has(channel)) return null;
-    if (!Number.isFinite(pct) || pct < 0 || pct > 100) return null;
+    if (!Number.isFinite(pct) || pct < 0 || pct > maxPct) return null;
     seen.add(channel);
     out.push({ channel, label: String(r.label ?? "").trim() || channel, markupPct: pct });
   }
