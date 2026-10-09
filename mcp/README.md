@@ -33,23 +33,26 @@ avec **exactement les mêmes paramètres**, `confirmer: true` et ce jeton, écri
 
 Garde-fous du second appel :
 
-- le jeton est à usage unique, valable 10 minutes, et un nouveau récapitulatif
-  révoque le précédent (deux jetons ne peuvent pas envoyer deux fois le même e-mail) ;
+- **validation humaine par l'hôte** : par défaut (`GITES_MCP_CONFIRMATION=hote`),
+  l'écriture n'a lieu que si l'hôte affiche le récapitulatif à l'utilisateur dans une
+  boîte de dialogue et qu'il accepte (**élicitation MCP** — Claude Code la gère). Le
+  modèle seul ne peut donc pas dire oui. Un hôte qui ne sait pas le faire voit ses
+  écritures refusées ;
+- `GITES_MCP_CONFIRMATION=jeton` se contente du double appel : à réserver à un hôte qui
+  fait lui-même approuver **chaque** appel d'écriture par l'humain (Jarvis et sa
+  confirmation vocale ; Claude Desktop sans élicitation, écritures jamais
+  auto-approuvées) ;
+- le jeton est à usage unique, valable 10 minutes, et **un seul jeton vit par outil** :
+  un nouveau récapitulatif révoque le précédent (pas de double envoi) ;
 - il est lié aux paramètres : une date ou un mot changé l'invalide ;
-- le récapitulatif est **recalculé** juste avant d'écrire : si le prix, la cible
-  (blocage, réservation), le destinataire ou la disponibilité ont bougé, rien n'est
-  écrit et le nouvel état est montré ;
-- si l'hôte sait demander une validation à l'humain (**élicitation MCP**), la
-  confirmation passe aussi par cette boîte de dialogue : un refus n'écrit rien
-  (`GITES_MCP_ELICITATION=0` pour la couper sur un hôte qui l'annonce sans l'afficher) ;
-- une coupure réseau, une réponse illisible ou une erreur 5xx pendant l'écriture est
-  annoncée comme « état inconnu » — jamais « rien n'a été écrit » — et n'est jamais
-  rejouée automatiquement.
-
-**Le jeton prouve qu'un récapitulatif a été produit, pas qu'un humain l'a lu.** Le
-dernier verrou est l'hôte : dans Claude Code et Claude Desktop, ne **jamais**
-autoriser d'office les cinq outils d'écriture (chaque appel reste soumis à
-approbation) ; dans Jarvis, les écritures passent par la confirmation vocale.
+- le récapitulatif est **recalculé** avant la validation et encore juste avant
+  d'écrire ; si quoi que ce soit de ce qui a été montré a bougé (prix, cible,
+  destinataire, dates, échéance, disponibilité), rien n'est écrit et le nouvel état
+  est montré ;
+- une coupure réseau, une réponse illisible ou de forme inattendue, une erreur 5xx
+  pendant l'écriture est annoncée comme « état inconnu » — jamais « rien n'a été
+  écrit » ; la même demande est ensuite refusée 30 minutes tant qu'on n'a pas vérifié
+  au back-office et ajouté `apres_verification: true`.
 
 ### Ce que le connecteur ne fait pas (volontairement)
 
@@ -66,7 +69,7 @@ approbation) ; dans Jarvis, les écritures passent par la confirmation vocale.
 cd mcp
 npm ci
 npm run build        # produit dist/index.js
-npm test             # 33 tests contre un faux serveur HTTP
+npm test             # 39 tests contre un faux serveur HTTP
 ```
 
 Node 20 ou plus récent.
@@ -81,7 +84,8 @@ Node 20 ou plus récent.
 | `GITES_MDP_TROUSSEAU` | À la place de `GITES_MDP` : nom d'un service du trousseau macOS (compte = `GITES_ID`). Évite le mot de passe en clair dans un fichier de configuration. |
 | `GITES_TIMEOUT_MS` | Délai par requête (défaut 20 000). |
 | `GITES_MCP_SILENCE` | `1` = aucun journal sur stderr. |
-| `GITES_MCP_ELICITATION` | `0` = ne pas demander la confirmation par la boîte de dialogue de l'hôte. |
+| `GITES_MCP_CONFIRMATION` | `hote` (défaut) : écriture seulement après validation dans la boîte de dialogue de l'hôte ; `jeton` : double appel seul (voir plus haut). |
+| `GITES_MCP_ELICITATION` | `0` = ne jamais ouvrir la boîte de dialogue (avec `hote`, toute écriture est alors refusée). |
 
 Ranger le mot de passe dans le trousseau (une fois) :
 
@@ -147,7 +151,9 @@ Redémarrer Claude Desktop après modification.
 Jarvis passe par le SDK Agent de Claude avec les réglages du vault : il voit donc
 le serveur `gites` dès qu'il figure dans le `.mcp.json` du vault. Il reste à
 pré-autoriser les lectures et à faire confirmer les écritures à voix haute —
-exemple dans [`exemples/jarvis.py`](exemples/jarvis.py).
+exemple dans [`exemples/jarvis.py`](exemples/jarvis.py). Si les écritures de Jarvis
+sont refusées faute d'élicitation, lui déclarer sa propre entrée avec
+`GITES_MCP_CONFIRMATION=jeton` (sa confirmation vocale tient lieu de validation).
 
 ## Journal et données personnelles
 
@@ -181,8 +187,12 @@ question, pas dans un fichier.
    le devis recalculé diffère), vérifier `capacity_max` et `active`, et créer ou
    mettre à jour le client dans la même transaction que la réservation.
 2. Clé d'idempotence (`Idempotency-Key`) sur les routes d'écriture (blocages, vente,
-   messages, relance) pour qu'un nouvel essai après coupure ne double rien.
-3. `GET /api/admin/blocks/:id` (aujourd'hui, retrouver un blocage passe par la liste).
+   messages, relance) pour qu'un nouvel essai après coupure ne double rien (le
+   connecteur ne fait que freiner : refus 30 minutes sans `apres_verification`).
+3. Préconditions vérifiées dans la même transaction que l'écriture (destinataire et
+   solde attendus pour la relance, version de la réservation) : le recalcul du
+   connecteur laisse une fenêtre de quelques millisecondes.
+4. `GET /api/admin/blocks/:id` (aujourd'hui, retrouver un blocage passe par la liste).
 
 ## Développement
 

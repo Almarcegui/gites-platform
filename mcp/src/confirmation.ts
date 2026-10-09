@@ -8,14 +8,21 @@
 //    montant…). À la confirmation, le récapitulatif est recalculé : si l'état a
 //    bougé entre-temps (prix modifié, autre blocage visé, adresse changée),
 //    l'écriture est refusée.
-// Usage unique, 10 minutes, et un seul jeton vivant par demande identique : un
-// second récapitulatif révoque le premier (pas de double envoi par deux jetons).
+// Usage unique, 10 minutes, et UN SEUL jeton vivant par outil : tout nouveau
+// récapitulatif du même outil révoque le précédent (pas de double envoi par deux
+// jetons, même pour deux textes qui ne diffèrent que d'un espace).
+//
+// Une écriture dont l'issue est inconnue (coupure, 5xx) est mémorisée 30 minutes :
+// un nouveau récapitulatif de la même demande est refusé tant que l'utilisateur
+// n'a pas vérifié au back-office et ajouté `apres_verification: true`.
 
 import { createHash, randomBytes } from "node:crypto";
 
+const CONTROL_KEYS = new Set(["confirmer", "jeton", "apres_verification"]);
+
 export function digest(tool: string, params: Record<string, unknown>): string {
   const clean = Object.fromEntries(
-    Object.entries(params).filter(([k, v]) => k !== "confirmer" && k !== "jeton" && v !== undefined),
+    Object.entries(params).filter(([k, v]) => !CONTROL_KEYS.has(k) && v !== undefined),
   );
   return createHash("sha256").update(tool).update("\0").update(canonical(clean)).digest("hex");
 }
@@ -38,6 +45,7 @@ function canonical(v: unknown): string {
 }
 
 interface Pending {
+  tool: string;
   digest: string;
   state: string;
   expires: number;
@@ -45,15 +53,16 @@ interface Pending {
 
 export class Confirmations {
   #pending = new Map<string, Pending>();
+  #unknown = new Map<string, number>(); // empreinte → horodatage de l'issue inconnue
 
   constructor(private readonly ttlMs = 10 * 60_000) {}
 
   issue(tool: string, params: Record<string, unknown>, state: unknown): string {
     this.#sweep();
     const d = digest(tool, params);
-    for (const [k, v] of this.#pending) if (v.digest === d) this.#pending.delete(k);
+    for (const [k, v] of this.#pending) if (v.tool === tool) this.#pending.delete(k);
     const jeton = randomBytes(6).toString("hex");
-    this.#pending.set(jeton, { digest: d, state: stateDigest(state), expires: Date.now() + this.ttlMs });
+    this.#pending.set(jeton, { tool, digest: d, state: stateDigest(state), expires: Date.now() + this.ttlMs });
     return jeton;
   }
 
@@ -68,6 +77,21 @@ export class Confirmations {
     if (entry.digest !== digest(tool, params)) return { refus: "les paramètres ne sont plus ceux du récapitulatif" };
     this.#pending.delete(jeton);
     return { state: entry.state };
+  }
+
+  markUnknown(tool: string, params: Record<string, unknown>): void {
+    this.#unknown.set(digest(tool, params), Date.now());
+  }
+
+  /** Heure (ms) d'une tentative identique à l'issue inconnue, dans les 30 dernières minutes. */
+  unknownSince(tool: string, params: Record<string, unknown>): number | null {
+    const at = this.#unknown.get(digest(tool, params));
+    if (at === undefined) return null;
+    if (Date.now() - at > 30 * 60_000) {
+      this.#unknown.delete(digest(tool, params));
+      return null;
+    }
+    return at;
   }
 
   #sweep(): void {

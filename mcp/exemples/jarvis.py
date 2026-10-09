@@ -15,6 +15,17 @@ OUTILS_MCP_LECTURE_GITES = {
 }
 # OUTILS_MCP_LECTURE = OUTILS_MCP_LECTURE | OUTILS_MCP_LECTURE_GITES
 
+# 1 bis) Si le SDK de Jarvis ne relaie pas l'élicitation MCP, le connecteur refuse
+#    ses écritures (mode « hote » par défaut). Lui donner alors sa propre entrée,
+#    en mode « jeton » — la confirmation vocale ci-dessous tient lieu de validation :
+#
+#    ClaudeAgentOptions(..., mcp_servers={"gites": {
+#        "command": "/opt/homebrew/bin/node",
+#        "args": ["/Users/almarcegui/Documents/ClaudeVault/🔧 Dev/Gites Platform/mcp/dist/index.js"],
+#        "env": {"GITES_URL": "https://gites-platform.j-decartier.workers.dev", "GITES_ID": "jarvis",
+#                "GITES_MDP_TROUSSEAU": "gites-platform", "GITES_MCP_CONFIRMATION": "jeton"}}})
+#    (à vérifier : priorité de cette entrée sur celle du .mcp.json du vault)
+
 # 2) cerveau.py — les écritures restent hors de allowed_tools : `_permission`
 #    les voit passer (préfixe mcp__) et répond « ask », donc Jarvis demande à voix
 #    haute. Le connecteur ajoute son propre garde-fou : le premier appel ne rend

@@ -38,6 +38,9 @@ function writes(method: string, path: string) {
 }
 
 beforeEach(async () => {
+  // Le client de test ne sait pas faire d'élicitation : mode « jeton » par
+  // défaut ici ; le mode « hote » (défaut réel) a ses propres tests.
+  process.env.GITES_MCP_CONFIRMATION = "jeton";
   fake = await startFake();
   fake.state.bookings.push(
     booking({ id: 1, reference: "PM-2026-001", unitId: 2, unitName: "La Scierie", checkin: "2026-10-09", checkout: "2026-10-12", guestName: "Dupont" }),
@@ -59,6 +62,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  delete process.env.GITES_MCP_CONFIRMATION;
   vi.restoreAllMocks();
   await client.close();
   await fake.close();
@@ -371,7 +375,17 @@ describe("écritures : courses et états inconnus (contre-review Codex)", () => 
     expect(fake.state.blocks).toHaveLength(1); // le faux Worker a bien écrit
   });
 
+  it("mode par défaut (hote) : sans élicitation, aucune écriture", async () => {
+    delete process.env.GITES_MCP_CONFIRMATION;
+    const p = await call("bloquer_dates", args);
+    const r = await call("bloquer_dates", { ...args, confirmer: true, jeton: jetonOf(p.text) });
+    expect(r.isError).toBe(true);
+    expect(r.text).toMatch(/élicitation/);
+    expect(writes("POST", "/api/admin/blocks")).toHaveLength(0);
+  });
+
   it("élicitation : si l'hôte sait demander, l'humain tranche (refus = rien d'écrit)", async () => {
+    delete process.env.GITES_MCP_CONFIRMATION;
     await client.close();
     const server = buildServer({ baseUrl: fake.url, user: "julien", password: "mdp-test" }, { now: () => NOW });
     const [a, b] = InMemoryTransport.createLinkedPair();
@@ -393,6 +407,57 @@ describe("écritures : courses et états inconnus (contre-review Codex)", () => 
     r = await call("bloquer_dates", { ...args, confirmer: true, jeton: jetonOf(p.text) });
     expect(r.isError).toBe(false);
     expect(writes("POST", "/api/admin/blocks")).toHaveLength(1);
+  });
+
+  it("un seul jeton vivant par outil : deux textes presque identiques ne partent pas deux fois", async () => {
+    const j1 = jetonOf((await call("repondre_client", { message_id: 50, texte: "Bonjour" })).text);
+    const j2 = jetonOf((await call("repondre_client", { message_id: 50, texte: " Bonjour " })).text);
+    expect((await call("repondre_client", { message_id: 50, texte: "Bonjour", confirmer: true, jeton: j1 })).isError).toBe(true);
+    expect((await call("repondre_client", { message_id: 50, texte: " Bonjour ", confirmer: true, jeton: j2 })).isError).toBe(false);
+    expect(writes("POST", "/api/admin/messages/50/reply")).toHaveLength(1);
+  });
+
+  it("tout champ montré au récapitulatif fait partie de l'accord (arrivée déplacée → refus)", async () => {
+    const p = await call("relancer_solde", { reservation: "MB-2026-001" });
+    fake.state.bookings.find((b) => b.id === 4).checkin = "2026-11-21";
+    const r = await call("relancer_solde", { reservation: "MB-2026-001", confirmer: true, jeton: jetonOf(p.text) });
+    expect(r.isError).toBe(true);
+    expect(writes("POST", "/api/admin/bookings/4/balance-reminder")).toHaveLength(0);
+  });
+
+  it("après une issue inconnue, la même demande exige apres_verification", async () => {
+    const a = { reservation: "MB-2026-001" };
+    const p = await call("relancer_solde", a);
+    fake.state.afterCommit.set("POST /api/admin/bookings/4/balance-reminder", "500");
+    expect((await call("relancer_solde", { ...a, confirmer: true, jeton: jetonOf(p.text) })).text).toMatch(/PEUT-ÊTRE/);
+    fake.state.afterCommit.clear();
+    const again = await call("relancer_solde", a);
+    expect(again.isError).toBe(true);
+    expect(again.text).toMatch(/issue INCONNUE/);
+    const p2 = await call("relancer_solde", { ...a, apres_verification: true });
+    expect(p2.isError).toBe(false);
+    const ok = await call("relancer_solde", { ...a, apres_verification: true, confirmer: true, jeton: jetonOf(p2.text) });
+    expect(ok.isError).toBe(false);
+    expect(writes("POST", "/api/admin/bookings/4/balance-reminder")).toHaveLength(2);
+  });
+
+  it("réponse 2xx de forme inattendue : état inconnu", async () => {
+    fake.state.blocks.push({ id: 7, unitId: 2, unitName: "La Scierie", propertyId: 1, checkin: "2026-12-01", checkout: "2026-12-04", reason: "travaux", createdBy: "julien" });
+    const pv = await call("debloquer_dates", { blocage_id: 7 });
+    fake.state.afterCommit.set("DELETE /api/admin/blocks/7", "vide");
+    const r = await call("debloquer_dates", { blocage_id: 7, confirmer: true, jeton: jetonOf(pv.text) });
+    expect(r.text).toMatch(/forme inattendue[\s\S]*PEUT-ÊTRE/);
+    expect(fake.state.blocks).toHaveLength(0); // le faux Worker a bien levé le blocage
+  });
+
+  it("vente refusée (409) : message d'écriture partielle, sans « rien n'a été écrit »", async () => {
+    const p = await call("vente_telephone", vente);
+    // Créneau pris APRÈS le recalcul : seul le Worker le voit (409).
+    fake.state.conflictOnCreate = true;
+    const r = await call("vente_telephone", { ...vente, confirmer: true, jeton: jetonOf(p.text) });
+    expect(r.isError).toBe(true);
+    expect(r.text).toMatch(/fiche client a pu être créée/);
+    expect(r.text).not.toMatch(/Rien n'a été écrit/);
   });
 
   it("vente sur un hébergement désactivé : refus", async () => {

@@ -25,6 +25,27 @@ const zConfirmer = z
   .describe("Laisser vide au premier appel (récapitulatif). true seulement après accord explicite de l'utilisateur sur le récapitulatif.");
 const zJeton = z.string().max(32).optional().describe("Jeton renvoyé par le récapitulatif ; obligatoire avec confirmer: true.");
 
+const zApres = z
+  .boolean()
+  .optional()
+  .describe("Seulement après une tentative à l'issue inconnue : true une fois vérifié au back-office qu'elle n'a pas abouti.");
+
+/** Réponse 2xx d'une écriture qui n'a pas la forme attendue : l'écriture a pu
+ *  avoir lieu, on ne peut pas le dire. */
+function expectShape(ok: boolean): void {
+  if (!ok) throw new NetworkError("réponse de la plateforme de forme inattendue");
+}
+
+/** Écriture partiellement faite côté Worker (ex. fiche client créée, réservation refusée). */
+class EcriturePartielle extends Error {}
+
+/** Mode de confirmation : « hote » (défaut) exige la boîte de dialogue de l'hôte
+ *  (élicitation MCP) — le modèle seul ne peut pas valider ; « jeton » se contente du
+ *  double appel, pour un hôte qui demande lui-même à l'humain (Jarvis). */
+function confirmationMode(): "hote" | "jeton" {
+  return process.env.GITES_MCP_CONFIRMATION === "jeton" ? "jeton" : "hote";
+}
+
 const RAPPEL =
   "Ne jamais passer confirmer: true sans avoir lu ce récapitulatif à l'utilisateur et obtenu son accord explicite.";
 
@@ -42,14 +63,25 @@ interface Preview<D> {
 async function twoStep<D>(
   ctx: Ctx,
   tool: string,
-  args: Record<string, unknown> & { confirmer?: boolean; jeton?: string },
+  args: Record<string, unknown> & { confirmer?: boolean; jeton?: string; apres_verification?: boolean },
   preview: () => Promise<Preview<D>>,
   execute: (data: D) => Promise<string>,
 ): Promise<CallToolResult> {
+  // L'empreinte d'état couvre aussi le TEXTE du récapitulatif : tout ce qui est
+  // montré à l'humain (hébergement, dates, échéance…) fait partie de ce qu'il approuve.
+  const snapshot = (p: Preview<D>) => ({ state: p.state ?? null, text: p.text });
+
   if (args.confirmer !== true) {
+    const since = ctx.confirmations.unknownSince(tool, args);
+    if (since && args.apres_verification !== true) {
+      return fail(
+        `Une demande identique a eu une issue INCONNUE à ${new Date(since).toISOString().slice(11, 16)} UTC : elle a peut-être abouti. ` +
+          `Vérifier au back-office (planning, fiche réservation, messages) ; si elle n'a pas abouti, rappeler ${tool} avec apres_verification: true. Rien n'a été écrit.`,
+      );
+    }
     const p = await preview();
     if (p.blocked) return fail(`${p.text}\n\nRien n'a été écrit.`);
-    const jeton = ctx.confirmations.issue(tool, args, p.state);
+    const jeton = ctx.confirmations.issue(tool, args, snapshot(p));
     return text(
       `RÉCAPITULATIF — rien n'a encore été écrit.\n\n${p.text}\n\n` +
         `Pour exécuter : relire ce récapitulatif à l'utilisateur ; s'il est d'accord, rappeler ${tool} avec exactement ` +
@@ -62,31 +94,52 @@ async function twoStep<D>(
   }
   // Récapitulatif recalculé sur des données fraîches : si quoi que ce soit a
   // bougé depuis (prix, cible, destinataire, disponibilité), on n'écrit pas.
-  ctx.ref.invalidate();
-  const fresh = await preview();
-  if (fresh.blocked) return fail(`${fresh.text}\n\nRien n'a été écrit (la situation a changé depuis le récapitulatif).`);
-  if (stateDigest(fresh.state) !== c.state) {
+  const recheck = async (): Promise<Preview<D> | CallToolResult> => {
+    ctx.ref.invalidate();
+    const fresh = await preview();
+    if (fresh.blocked) return fail(`${fresh.text}\n\nRien n'a été écrit (la situation a changé depuis le récapitulatif).`);
+    if (stateDigest(snapshot(fresh)) !== c.state) {
+      return fail(
+        `Refusé : la situation a changé depuis le récapitulatif. Rien n'a été écrit. Nouvel état :\n\n${fresh.text}\n\n` +
+          `Rappeler ${tool} sans « confirmer » pour obtenir un nouveau récapitulatif.`,
+      );
+    }
+    return fresh;
+  };
+  let fresh = await recheck();
+  if ("content" in fresh) return fresh;
+
+  // Validation humaine par l'hôte (élicitation MCP) quand elle est disponible ;
+  // exigée par défaut.
+  const ok = ctx.elicit ? await ctx.elicit(`${fresh.text}\n\nConfirmer cette écriture sur la plateforme des gîtes ?`) : null;
+  if (ok === false) return fail("Annulé par l'utilisateur : rien n'a été écrit.");
+  if (ok === null && confirmationMode() === "hote") {
     return fail(
-      `Refusé : la situation a changé depuis le récapitulatif. Rien n'a été écrit. Nouvel état :\n\n${fresh.text}\n\n` +
-        `Rappeler ${tool} sans « confirmer » pour obtenir un nouveau récapitulatif.`,
+      "Refusé : cet hôte ne sait pas demander la validation à l'utilisateur (élicitation MCP), et le connecteur l'exige par défaut. " +
+        "Rien n'a été écrit. Faire l'écriture au back-office, ou configurer GITES_MCP_CONFIRMATION=jeton pour un hôte qui fait lui-même approuver chaque appel (voir README).",
     );
   }
-  if (ctx.elicit) {
-    const ok = await ctx.elicit(`${fresh.text}\n\nConfirmer cette écriture sur la plateforme des gîtes ?`);
-    if (ok === false) return fail("Annulé par l'utilisateur : rien n'a été écrit.");
+  if (ok === true) {
+    // La validation a pu prendre du temps : dernier contrôle juste avant d'écrire.
+    fresh = await recheck();
+    if ("content" in fresh) return fresh;
   }
+
   try {
     const done = await execute(fresh.data as D);
     logEvent("ecriture", { nom: tool, issue: "ok" });
     return text(done);
   } catch (e) {
-    logEvent("ecriture", { nom: tool, issue: "echec" });
-    // Coupure, réponse illisible ou erreur serveur : la requête a pu aboutir.
+    // Coupure, réponse illisible ou de forme inattendue, erreur serveur : la requête a pu aboutir.
     if (e instanceof NetworkError || (e instanceof ApiError && e.status >= 500)) {
+      logEvent("ecriture", { nom: tool, issue: "inconnue" });
+      ctx.confirmations.markUnknown(tool, args);
       return fail(
         `${describeError(e)}\nL'écriture a PEUT-ÊTRE eu lieu : vérifier dans le back-office (planning, fiche réservation ou messages) avant de recommencer.`,
       );
     }
+    logEvent("ecriture", { nom: tool, issue: "echec" });
+    if (e instanceof EcriturePartielle) return fail(e.message);
     return fail(`${describeError(e)}\nRien n'a été écrit par cette action.`);
   }
 }
@@ -109,6 +162,7 @@ export function registerWriteTools(server: McpServer, ctx: Ctx): void {
         motif: z.string().min(2).max(200).describe("Motif court : « travaux », « usage familial »…"),
         confirmer: zConfirmer,
         jeton: zJeton,
+        apres_verification: zApres,
       },
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
     },
@@ -136,9 +190,11 @@ export function registerWriteTools(server: McpServer, ctx: Ctx): void {
           };
         },
         async (d) => {
-          const { block } = await ctx.client.post<{ block: ManualBlock }>("/api/admin/blocks", {
+          const r = await ctx.client.post<{ block?: ManualBlock }>("/api/admin/blocks", {
             unitId: d.unitId, checkin: args.arrivee, checkout: args.depart, reason: args.motif.trim(),
           });
+          expectShape(!!r && typeof r.block?.id === "number" && typeof r.block.checkin === "string");
+          const block = r.block!;
           return `Fait : blocage n° ${block.id} posé sur ${d.unitName} du ${frDate(block.checkin)} au ${frDate(block.checkout)}. Pour le lever : debloquer_dates avec blocage_id ${block.id}.`;
         },
       ),
@@ -163,6 +219,7 @@ export function registerWriteTools(server: McpServer, ctx: Ctx): void {
         depart: zDate.optional(),
         confirmer: zConfirmer,
         jeton: zJeton,
+        apres_verification: zApres,
       },
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
     },
@@ -178,7 +235,7 @@ export function registerWriteTools(server: McpServer, ctx: Ctx): void {
           const props = unit ? [{ id: unit.propertyId }] : await ctx.ref.propertiesFor(undefined);
           const all: ManualBlock[] = [];
           for (const p of props) {
-            const { blocks } = await ctx.client.get<{ blocks: ManualBlock[] }>(`/api/admin/blocks${qs({ property: p.id, from: t, to: "2099-12-31" })}`);
+            const { blocks } = await ctx.client.get<{ blocks: ManualBlock[] }>(`/api/admin/blocks${qs({ property: p.id, from: t, to: "9999-12-31" })}`);
             all.push(...blocks);
           }
           let hits = all;
@@ -200,7 +257,8 @@ export function registerWriteTools(server: McpServer, ctx: Ctx): void {
           };
         },
         async (k) => {
-          await ctx.client.delete<{ ok: boolean }>(`/api/admin/blocks/${k.id}`);
+          const r = await ctx.client.delete<{ ok?: boolean }>(`/api/admin/blocks/${k.id}`);
+          expectShape(r?.ok === true);
           return `Fait : blocage n° ${k.id} levé (${k.unitName ?? k.unitId}, ${frDate(k.checkin)} → ${frDate(k.checkout)}).`;
         },
       ),
@@ -225,6 +283,7 @@ export function registerWriteTools(server: McpServer, ctx: Ctx): void {
         texte: z.string().min(2).max(5000).describe("Texte exact du message, signé comme l'utilisateur le souhaite."),
         confirmer: zConfirmer,
         jeton: zJeton,
+        apres_verification: zApres,
       },
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
     },
@@ -260,7 +319,8 @@ export function registerWriteTools(server: McpServer, ctx: Ctx): void {
           return { text: lines.join("\n"), state: { to: t.to, subject: t.subject, path: t.path }, data: { path: t.path } };
         },
         async (d) => {
-          const r = await ctx.client.post<{ ok: boolean; id: number; delivery: string }>(d.path, { body: args.texte.trim() });
+          const r = await ctx.client.post<{ ok?: boolean; id?: number; delivery?: string }>(d.path, { body: args.texte.trim() });
+          expectShape(r?.ok === true && typeof r.id === "number");
           const how =
             r.delivery === "sent" ? "e-mail envoyé" : r.delivery === "stub" ? "envoi d'e-mail simulé (envoi réel désactivé sur la plateforme) — visible dans le fil" : "pas d'e-mail (aucune adresse) — visible dans le fil";
           return `Fait : message n° ${r.id} enregistré (${how}).`;
@@ -305,6 +365,7 @@ export function registerWriteTools(server: McpServer, ctx: Ctx): void {
         notes_internes: z.string().max(1000).optional(),
         confirmer: zConfirmer,
         jeton: zJeton,
+        apres_verification: zApres,
       },
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
     },
@@ -373,10 +434,11 @@ export function registerWriteTools(server: McpServer, ctx: Ctx): void {
           } catch (e) {
             // Le Worker enregistre la fiche client AVANT de tenter la réservation.
             if (e instanceof ApiError && e.status === 409) {
-              throw new UsageError(`${describeError(e)}\nAucune réservation créée ; la fiche client a pu être créée ou mise à jour.`);
+              throw new EcriturePartielle(`${describeError(e)}\nAucune réservation créée ; la fiche client a pu être créée ou mise à jour au passage.`);
             }
             throw e;
           }
+          expectShape(!!r && typeof r.booking?.reference === "string" && typeof r.booking.totalCents === "number");
           const b = r.booking;
           return [
             `Fait : réservation ${b.reference} (id ${b.id}) ${b.status === "confirmed" ? "confirmée" : "en option"} — ${b.unitName ?? d.unitName}, ${frDate(b.checkin)} → ${frDate(b.checkout)}, total ${euros(b.totalCents)}.`,
@@ -397,7 +459,7 @@ export function registerWriteTools(server: McpServer, ctx: Ctx): void {
         "(le voucher). La relance est journalisée et vaut rappel automatique. Deux appels : récapitulatif (montant, " +
         "destinataire, dernière relance), puis confirmer: true + jeton. " +
         RAPPEL,
-      inputSchema: { reservation: zReservation, confirmer: zConfirmer, jeton: zJeton },
+      inputSchema: { reservation: zReservation, confirmer: zConfirmer, jeton: zJeton, apres_verification: zApres },
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
     },
     wrap("relancer_solde", async (args) =>
@@ -422,8 +484,9 @@ export function registerWriteTools(server: McpServer, ctx: Ctx): void {
           };
         },
         async (d) => {
-          const r = await ctx.client.post<{ ok: boolean; balanceCents: number }>(`/api/admin/bookings/${d.id}/balance-reminder`, {});
-          return `Fait : rappel de solde (${euros(r.balanceCents)}) mis en file d'envoi pour ${d.reference}.`;
+          const r = await ctx.client.post<{ ok?: boolean; balanceCents?: number }>(`/api/admin/bookings/${d.id}/balance-reminder`, {});
+          expectShape(r?.ok === true && typeof r.balanceCents === "number");
+          return `Fait : rappel de solde (${euros(r.balanceCents!)}) mis en file d'envoi pour ${d.reference}.`;
         },
       ),
     ),

@@ -23,8 +23,11 @@ export interface FakeState {
   /** Pour simuler une panne réseau sur une route donnée (avant traitement). */
   dropPaths: Set<string>;
   /** Route traitée PUIS réponse en erreur : "500" ou "garbage" (corps non JSON). */
-  afterCommit: Map<string, "500" | "garbage">;
+  afterCommit: Map<string, "500" | "garbage" | "vide">;
   nightPriceCents: number;
+  /** POST /bookings répond 409 (créneau pris entre-temps) après avoir « upserté » le client. */
+  conflictOnCreate: boolean;
+  guestsUpserted: number;
 }
 
 export const UNITS = [
@@ -96,7 +99,7 @@ async function readBody(req: IncomingMessage): Promise<unknown> {
 export async function startFake(init: Partial<FakeState> = {}): Promise<{ url: string; state: FakeState; close: () => Promise<void>; server: Server }> {
   const st: FakeState = {
     sessionMode: "session", validSessions: new Set(), logins: 0, requests: [], bookings: [], blocks: [], messages: [],
-    nextId: 100, dropPaths: new Set(), afterCommit: new Map(), nightPriceCents: 15000, ...init,
+    nextId: 100, dropPaths: new Set(), afterCommit: new Map(), nightPriceCents: 15000, conflictOnCreate: false, guestsUpserted: 0, ...init,
   };
   const server = createServer(async (req, res) => {
     const url = new URL(req.url ?? "/", "http://x");
@@ -105,6 +108,11 @@ export async function startFake(init: Partial<FakeState> = {}): Promise<{ url: s
     st.requests.push({ method: req.method ?? "", path: url.pathname + url.search, auth, body });
     const after = st.afterCommit.get(`${req.method} ${url.pathname}`);
     const send = (status: number, data: unknown) => {
+      if (after === "vide" && status < 400) {
+        res.writeHead(200, { "content-type": "application/json" });
+        res.end("{}");
+        return;
+      }
       if (after && status < 400) {
         res.writeHead(after === "500" ? 500 : 200, { "content-type": "text/html" });
         res.end(after === "500" ? "<html>Worker exception</html>" : "<html>oups");
@@ -208,7 +216,8 @@ export async function startFake(init: Partial<FakeState> = {}): Promise<{ url: s
     if (m === "POST" && p === "/api/admin/bookings") {
       const b = body as any;
       const unit = UNITS.find((u) => u.id === b.unitId)!;
-      if (conflicts(st, unit.id, b.checkin, b.checkout).length) return send(409, { error: "créneau indisponible (conflit avec une autre réservation)" });
+      st.guestsUpserted++; // comme le Worker : la fiche client est écrite avant l'INSERT atomique
+      if (st.conflictOnCreate || conflicts(st, unit.id, b.checkin, b.checkout).length) return send(409, { error: "créneau indisponible (conflit avec une autre réservation)" });
       const qq = quote(unit.id, b.checkin, b.checkout, st.nightPriceCents);
       const nb = booking({
         id: st.nextId++, reference: `PM-2026-${st.nextId}`, unitId: unit.id, unitName: unit.name, checkin: b.checkin, checkout: b.checkout,
