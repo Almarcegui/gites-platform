@@ -7,10 +7,13 @@
 // Les tests qui ont besoin d'une VRAIE base D1 passent par Miniflare piloté
 // directement (test/helpers/d1.ts) — même moteur workerd, même sémantique
 // SQLite, et ça fonctionne depuis ce chemin.
-import { defineConfig } from "vitest/config";
+import { configDefaults, defineConfig } from "vitest/config";
 
 export default defineConfig({
   test: {
+    // mcp/ = connecteur Claude, paquet Node à part (ses propres dépendances et
+    // sa propre suite : `cd mcp && npm test`).
+    exclude: [...configDefaults.exclude, "mcp/**", ".worktrees/**"],
     testTimeout: 30_000,
     hookTimeout: 60_000,
   },

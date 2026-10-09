@@ -1,0 +1,25 @@
+{
+  "name": "gites-mcp",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Connecteur MCP local (stdio) de la plateforme Gîtes : lit et écrit via l'API admin HTTP existante.",
+  "type": "module",
+  "bin": { "gites-mcp": "dist/index.js" },
+  "main": "dist/index.js",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.1",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.5.4",
+    "vitest": "~3.2.4"
+  }
+}
