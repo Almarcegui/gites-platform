@@ -247,7 +247,7 @@ describe("écran des pourcentages (#97)", () => {
   /** Appelle une route avec un ExecutionContext qui collecte les push différés,
    *  et un Beds24 simulé qui enregistre les calendriers reçus. */
   async function callWithBeds24(method: string, path: string, body?: unknown) {
-    const pushes: { calendar: { from: string; to?: string; price1?: number }[] }[][] = [];
+    const pushes: { roomId: number; calendar: { from: string; to?: string; price1?: number }[] }[][] = [];
     const realFetch = globalThis.fetch;
     globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input instanceof Request ? input.url : input);
@@ -283,10 +283,19 @@ describe("écran des pourcentages (#97)", () => {
     }
   }
 
-  /** Prix poussés (en euros) le premier jour posé, toutes chambres confondues :
-   *  seule la Maison du Scieur porte la surcharge à 200 €. */
-  function prixPoussesAuJour(push: { calendar: { from: string; to?: string; price1?: number }[] }[]): (number | undefined)[] {
-    return push.flatMap((room) => room.calendar.filter((c) => c.from <= FROM && FROM <= (c.to ?? c.from)).map((c) => c.price1));
+  /** Prix poussé (en euros) le premier jour posé, sur la chambre Beds24 de la
+   *  Maison du Scieur — la seule à porter la surcharge à 200 €. */
+  async function prixPousseScieur(
+    push: { roomId: number; calendar: { from: string; to?: string; price1?: number }[] }[],
+  ): Promise<number | undefined> {
+    const roomId = (await t.db
+      .prepare("SELECT beds24_room_id AS r FROM units WHERE id = ?1")
+      .bind(SCIEUR)
+      .first<{ r: number }>())!.r;
+    const room = push.find((x) => x.roomId === roomId);
+    expect(room).toBeDefined();
+    const span = room!.calendar.find((c) => c.from <= FROM && FROM <= (c.to ?? c.from));
+    return span?.price1;
   }
 
   it("expose la borne de saisie, pour que l'écran ne la recopie pas", async () => {
@@ -304,11 +313,24 @@ describe("écran des pourcentages (#97)", () => {
     expect((state.data.channels as { markupPct: number }[])[0]?.markupPct).toBe(18);
   });
 
-  it("50 % pile est accepté", async () => {
+  it("50 % pile est accepté et enregistré tel quel", async () => {
     const res = await call("PUT", "/api/admin/channel-markups", {
       channels: [{ channel: "airbnb", label: "Airbnb", markupPct: 50 }],
     });
     expect(res.status).toBe(200);
+    const { data } = await call("GET", "/api/admin/channel-markups");
+    expect(data.channels).toEqual([{ channel: "airbnb", label: "Airbnb", markupPct: 50 }]);
+  });
+
+  it("un taux qui n'est pas un nombre est refusé, pas converti en 0 %", async () => {
+    for (const markupPct of [null, "", false, "18"]) {
+      const res = await call("PUT", "/api/admin/channel-markups", {
+        channels: [{ channel: "airbnb", label: "Airbnb", markupPct }],
+      });
+      expect(res.status, `markupPct = ${JSON.stringify(markupPct)}`).toBe(400);
+    }
+    const { data } = await call("GET", "/api/admin/channel-markups");
+    expect((data.channels as { markupPct: number }[])[0]?.markupPct).toBe(18);
   });
 
   it("une valeur stockée au-delà de 50 % reste lue telle quelle (pas de retour silencieux aux défauts)", async () => {
@@ -338,7 +360,7 @@ describe("écran des pourcentages (#97)", () => {
       suggestedCents: 25000,
     });
     expect(res.pushes.length).toBe(1); // une seule propriété mappée dans le seed
-    expect(prixPoussesAuJour(res.pushes[0]!)).toContain(250); // 200 € × 1,25
+    expect(await prixPousseScieur(res.pushes[0]!)).toBe(250); // 200 € × 1,25
   });
 
   it("changer le taux d'un canal NON appliqué ne repousse rien", async () => {

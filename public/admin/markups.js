@@ -43,3 +43,8 @@ export function readMarkupEdits(channels, values, pushChannel, maxPct) {
   }
   return { ok: true, channels: out, changed, applied };
 }
+
+/** Pourcentage à la française pour l'affichage : « 17,5 », « 18 ». */
+export function pctFr(pct) {
+  return String(pct).replace(".", ",");
+}

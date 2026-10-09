@@ -7,7 +7,7 @@ import {
   addDaysIso, api, copyText, currentPropertyId, dfr, downloadCsv, dshort, esc, eur, eurInput,
   openBooking, openModal, registerView, state, toCents, toast, todayIso,
 } from "./app.js";
-import { readMarkupEdits } from "./markups.js";
+import { pctFr, readMarkupEdits } from "./markups.js";
 
 const MODE_FR = {
   per_stay: "par séjour",
@@ -738,7 +738,7 @@ export function registerConfigViews() {
           poussés vers Beds24 — <b>le prix de vente directe n'est jamais modifié</b>.</p>
         <p style="margin-top:8px">${markups.pushChannel
           ? `<span class="tag t-ok">Majoration active</span> <b>${esc(markups.channels.find((c) => c.channel === markups.pushChannel)?.label ?? markups.pushChannel)}</b>
-             · +${markups.pushMarkupPct} % — un prix de ${eur(markups.example.directCents)} en direct part à <b>${eur(markups.example.pushedCents)}</b> sur les plateformes.`
+             · +${pctFr(markups.pushMarkupPct)} % — un prix de ${eur(markups.example.directCents)} en direct part à <b>${eur(markups.example.pushedCents)}</b> sur les plateformes.`
           : `<span class="tag">Aucune majoration</span> les plateformes reçoivent le prix de vente directe, commission non compensée.`}</p>
         <div class="tbl-wrap"><table style="margin-top:10px"><tr><th>Plateforme</th><th>Majoration</th><th>Prix conseillé</th><th class="r">Appliquer</th></tr>
           ${markups.channels.map((c) => `<tr>
@@ -746,7 +746,7 @@ export function registerConfigViews() {
             <td style="white-space:nowrap"><input type="number" class="inline-num chanPct" data-chan="${esc(c.channel)}" value="${c.markupPct}"
                   min="0" max="${markups.maxPct ?? 50}" step="0.5" inputmode="decimal"
                   aria-label="Majoration ${esc(c.label)}, en pourcentage"> %</td>
-            <td><span class="small">+${c.markupPct} % · ${eur(markups.example.directCents)} → <b>${eur(markups.examples.find((e) => e.channel === c.channel)?.suggestedCents ?? markups.example.directCents)}</b></span></td>
+            <td><span class="small">+${pctFr(c.markupPct)} % · ${eur(markups.example.directCents)} → <b>${eur(markups.examples.find((e) => e.channel === c.channel)?.suggestedCents ?? markups.example.directCents)}</b></span></td>
             <td class="r">${c.channel === markups.pushChannel
               ? `<span class="tag t-ok">appliquée</span>`
               : `<button class="btn o sm chanApply" data-chan="${esc(c.channel)}">Appliquer</button>`}</td></tr>`).join("")}
@@ -834,7 +834,7 @@ export function registerConfigViews() {
       const chan = markups?.channels.find((c) => c.channel === channel);
       // Le compte Beds24 est réel : on annonce l'effet avant de pousser.
       const ok = chan
-        ? confirm(`Majorer de +${chan.markupPct} % tous les prix envoyés aux plateformes (référence ${chan.label}) ?\n\n`
+        ? confirm(`Majorer de +${pctFr(chan.markupPct)} % tous les prix envoyés aux plateformes (référence ${chan.label}) ?\n\n`
             + `Les prix de vente directe ne changent pas. Les calendriers repartent aux plateformes tout de suite.`)
         : confirm("Ne plus majorer : les plateformes recevront le prix de vente directe. Confirmer ?");
       if (!ok) return;
@@ -888,7 +888,7 @@ export function registerConfigViews() {
       if (!r.ok) return toast(r.error, true);
       if (r.changed.length === 0) return;
       if (r.applied && !confirm(
-        `La majoration appliquée aux plateformes (${r.applied.label}) passe de +${r.applied.from} % à +${r.applied.to} %.\n\n`
+        `La majoration appliquée aux plateformes (${r.applied.label}) passe de +${pctFr(r.applied.from)} % à +${pctFr(r.applied.to)} %.\n\n`
           + "Les calendriers repartent aux plateformes tout de suite. Les prix de vente directe ne changent pas.",
       )) return;
       saveChan.disabled = true;

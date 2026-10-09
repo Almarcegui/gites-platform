@@ -116,7 +116,10 @@ export function normalizeChannelMarkups(raw: unknown, maxPct = 100): ChannelMark
     if (!item || typeof item !== "object") return null;
     const r = item as Record<string, unknown>;
     const channel = String(r.channel ?? "").trim().toLowerCase();
-    const pct = Number(r.markupPct);
+    // Un nombre, pas une valeur que `Number()` ramènerait à 0 (null, "", false) :
+    // sinon une requête mal formée poserait 0 % sans erreur (contrôle Codex, #97).
+    if (typeof r.markupPct !== "number") return null;
+    const pct = r.markupPct;
     if (!/^[a-z0-9_-]{1,32}$/.test(channel) || seen.has(channel)) return null;
     if (!Number.isFinite(pct) || pct < 0 || pct > maxPct) return null;
     seen.add(channel);

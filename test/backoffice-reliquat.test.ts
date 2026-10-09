@@ -11,7 +11,9 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 // @ts-expect-error — module ESM du front, sans typage TypeScript
-import { parsePct, readMarkupEdits } from "../public/admin/markups.js";
+import { parsePct, pctFr, readMarkupEdits } from "../public/admin/markups.js";
+// @ts-expect-error — module ESM du front, sans typage TypeScript
+import { propertyChoice } from "../public/admin/scope.js";
 
 const CHANNELS = [
   { channel: "airbnb", label: "Airbnb", markupPct: 18 },
@@ -34,6 +36,13 @@ describe("parsePct (#97)", () => {
 
   it("refuse ce qui n'est pas un pourcentage positif", () => {
     for (const bad of ["", "  ", "abc", "-5", "1e3", "18 %", null, undefined]) expect(parsePct(bad)).toBeNull();
+  });
+});
+
+describe("pctFr (#97)", () => {
+  it("affiche la virgule décimale française", () => {
+    expect(pctFr(17.5)).toBe("17,5");
+    expect(pctFr(18)).toBe("18");
   });
 });
 
@@ -81,6 +90,32 @@ describe("readMarkupEdits (#97)", () => {
   });
 });
 
+describe("propertyChoice — faut-il demander le domaine ? (#52)", () => {
+  const DEUX = [{ id: 1 }, { id: 2 }];
+
+  it("un domaine sélectionné : on écrit dessus sans rien demander", () => {
+    expect(propertyChoice(2, DEUX)).toEqual({ kind: "direct", id: 2 });
+  });
+
+  it("« Tous » avec plusieurs domaines : on demande, jamais de repli sur le premier", () => {
+    expect(propertyChoice(0, DEUX)).toEqual({ kind: "ask" });
+  });
+
+  it("« Tous » avec un seul domaine : c'est forcément lui", () => {
+    expect(propertyChoice(0, [{ id: 7 }])).toEqual({ kind: "direct", id: 7 });
+  });
+
+  it("aucun domaine connu : on n'écrit rien (pas de repli sur l'id 1)", () => {
+    expect(propertyChoice(0, [])).toEqual({ kind: "none" });
+    expect(propertyChoice(3, [])).toEqual({ kind: "none" });
+    expect(propertyChoice(0, undefined)).toEqual({ kind: "none" });
+  });
+
+  it("un domaine sélectionné devenu inconnu ne sert pas de cible", () => {
+    expect(propertyChoice(9, DEUX)).toEqual({ kind: "ask" });
+  });
+});
+
 describe("écritures mono-domaine en « Tous les domaines » (#52)", () => {
   const app = readFileSync(fileURLToPath(new URL("../public/admin/app.js", import.meta.url)), "utf8");
 
@@ -98,13 +133,17 @@ describe("écritures mono-domaine en « Tous les domaines » (#52)", () => {
 
   it("le choix du domaine n'est demandé qu'en « Tous » avec plusieurs biens", () => {
     const fn = body("export function chooseProperty(");
-    expect(fn).toContain("state.propertyId !== 0 || state.properties.length <= 1");
+    expect(fn).toContain("propertyChoice(state.propertyId, state.properties)");
     expect(fn).toContain("data-pick");
+    // fermer sans choisir résout null, quelle que soit la façon de fermer
+    expect(fn).toContain("MutationObserver");
+    expect(fn).not.toContain("currentPropertyId()");
   });
 
   it("la nouvelle vente demande son domaine au lieu de prendre le premier", () => {
     const fn = body("export async function openNewSale(");
     expect(fn).toContain('await chooseProperty("Nouvelle vente (téléphone)")');
+    expect(fn).toContain("if (pid == null) return;");
     expect(fn).not.toContain("currentPropertyId()");
     expect(fn).toContain("propertySuffix(pid)");
   });
@@ -112,6 +151,7 @@ describe("écritures mono-domaine en « Tous les domaines » (#52)", () => {
   it("l'import elloha demande son domaine au lieu de prendre le premier", () => {
     const fn = body("async function openEllohaImport(");
     expect(fn).toContain('await chooseProperty("Importer les réservations elloha")');
+    expect(fn).toContain("if (pid == null) return;");
     expect(fn).not.toContain("currentPropertyId()");
     expect(fn).toContain("/api/admin/import/elloha?property=${pid}");
   });

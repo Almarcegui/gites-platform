@@ -3,6 +3,7 @@
 // Les vues de configuration vivent dans config.js.
 
 import { stayBadge } from "./badges.js";
+import { propertyChoice } from "./scope.js";
 import { registerCalendarView } from "./calendar.js";
 import { registerConfigViews } from "./config.js";
 
@@ -33,20 +34,35 @@ export function currentPropertyId() {
  *  vente, import elloha). Un domaine sélectionné → celui-là. « Tous les
  *  domaines » avec plusieurs biens → on demande, au lieu de retomber en
  *  silence sur le premier : une vente du Moulin ne doit pas pouvoir partir
- *  sur le Pré Moré faute de l'avoir dit (issue #52). Fermer la boîte sans
- *  choisir abandonne l'action — la promesse ne se résout alors jamais. */
+ *  sur le Pré Moré faute de l'avoir dit (issue #52). Résout `null` si la
+ *  boîte est fermée sans choix, ou si aucun domaine n'est connu : l'appelant
+ *  abandonne alors l'action. */
 export function chooseProperty(title) {
-  if (state.propertyId !== 0 || state.properties.length <= 1) return Promise.resolve(currentPropertyId());
+  const choice = propertyChoice(state.propertyId, state.properties);
+  if (choice.kind === "direct") return Promise.resolve(choice.id);
+  if (choice.kind === "none") {
+    toast("Aucun domaine configuré — rien n'a été fait", true);
+    return Promise.resolve(null);
+  }
   return new Promise((resolve) => {
+    let chosen = null;
     const modal = openModal(`
       <h2>${esc(title)} <button class="x">×</button></h2>
       <p>Tu regardes « Tous les domaines ». Pour quel domaine ?</p>
       <div class="row" style="margin-top:12px">${state.properties
         .map((p) => `<div class="n"><button type="button" class="btn o" data-pick="${p.id}">${esc(p.name)}</button></div>`)
         .join("")}</div>`);
+    // Croix, Échap et clic sur le fond referment la boîte par `openModal` lui-
+    // même : on guette donc son retrait du DOM, quelle qu'en soit la cause.
+    const watch = new MutationObserver(() => {
+      if (modal.isConnected) return;
+      watch.disconnect();
+      resolve(chosen);
+    });
+    watch.observe(modal.parentNode, { childList: true });
     modal.querySelectorAll("[data-pick]").forEach((b) => (b.onclick = () => {
+      chosen = Number(b.dataset.pick);
       modal.remove();
-      resolve(Number(b.dataset.pick));
     }));
   });
 }
@@ -1295,6 +1311,7 @@ async function openEditBooking(b, onDone) {
 
 async function openEllohaImport() {
   const pid = await chooseProperty("Importer les réservations elloha");
+  if (pid == null) return;
   const modal = openModal(`
     <h2>Importer les réservations elloha${propertySuffix(pid)} <button class="x">×</button></h2>
     <div class="note">Colle ici l'export CSV des réservations FUTURES du compte elloha.
@@ -1685,6 +1702,7 @@ export async function renderGuestRegister(modal, bookingId, booking) {
 
 export async function openNewSale() {
   const pid = await chooseProperty("Nouvelle vente (téléphone)");
+  if (pid == null) return;
   const { units } = await api(`/api/admin/units?property=${pid}`);
   const propData = await api(`/api/admin/options?property=${pid}`);
   const options = propData.options.filter((o) => o.active);
