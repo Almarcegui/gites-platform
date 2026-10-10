@@ -12,6 +12,7 @@ import {
   cancelBooking,
   createBookingAtomic,
   getBookingByExternalUid,
+  getManualBlockByExternalUid,
   listFeedBookings,
   listLinks,
   manualBlocksInWindow,
@@ -160,6 +161,13 @@ function parseIcsDate(value: string): IsoDate | undefined {
 // Synchronisation d'un flux entrant
 // ---------------------------------------------------------------------------
 
+/** Motifs d'annulation posés par l'import des agendas Google
+ *  (src/services/agenda-import.ts) : la synchronisation ne rouvre pas ces
+ *  réservations quand l'événement reste dans le flux. */
+export const AGENDA_CANCEL_REASON = "agenda_annulee";
+export const AGENDA_BLOCK_REASON = "agenda_blocage";
+const STICKY_CANCEL_REASONS = new Set([AGENDA_CANCEL_REASON, AGENDA_BLOCK_REASON]);
+
 export interface SyncResult {
   feedId: number;
   imported: number;
@@ -242,12 +250,19 @@ export async function syncFeed(
     seenUids.add(extUid);
     const known = byUid.get(extUid);
     if (!known) {
+      // Événement tenu par un blocage manuel (import des agendas Google :
+      // famille, usage de papa) : ce n'est pas une vente, rien à créer.
+      if (await getManualBlockByExternalUid(db, extUid)) continue;
       // L'événement est peut-être connu mais ANNULÉ (disparu du flux puis
       // réapparu) : listFeedBookings filtre les annulées, et une création
       // violerait l'unicité de external_uid — l'exception faisait échouer
       // TOUTE la relève du flux, à chaque passage (issue #18). On réactive
       // après revérification de disponibilité : le créneau a pu être revendu.
       const archived = await getBookingByExternalUid(db, extUid);
+      // Annulation décidée à l'import de l'agenda (« annulé » écrit dans le
+      // titre, ou événement devenu blocage) : le flux public ne dit que
+      // « Busy » et continuerait de la publier ; on ne la rouvre pas.
+      if (archived && STICKY_CANCEL_REASONS.has(archived.cancelReason ?? "")) continue;
       if (archived) {
         const back = await reactivateBookingAtomic(db, archived.id, archived.unitId, ev.dtstart, ev.dtend, nowSql);
         if (back) {

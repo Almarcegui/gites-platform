@@ -59,7 +59,9 @@ check: _outils  ## tout ce qui doit passer avant de dire « fini » ; sur un arb
 	$(VITEST) run --no-file-parallelism
 	npm run -s check:images
 	@# les scripts Python se lisent sans erreur (ast, et non py_compile : pas de __pycache__ dans l'arbre)
-	$(PYTHON) -B -c 'import ast, sys; [ast.parse(open(f, encoding="utf-8").read(), f) for f in sys.argv[1:]]' scripts/sauvegarde_nuit.py scripts/livrer.py scripts/gites_sonde.py scripts/gites_admin.py
+	$(PYTHON) -B -c 'import ast, sys; [ast.parse(open(f, encoding="utf-8").read(), f) for f in sys.argv[1:]]' scripts/sauvegarde_nuit.py scripts/livrer.py scripts/gites_sonde.py scripts/gites_admin.py scripts/importer_agenda_google.py scripts/test_importer_agenda_google.py
+	@# l'interprétation des titres d'agenda (import Google), sur des titres de la forme des vrais
+	$(PYTHON) -B -m unittest -q scripts/test_importer_agenda_google.py
 	@etat="$$(git status --porcelain)" || { echo "git status a échoué : aucune marque posée."; exit 1; }; \
 	head="$$(git rev-parse HEAD)" || { echo "git rev-parse a échoué : aucune marque posée."; exit 1; }; \
 	if [ -z "$$etat" ] && [ -n "$$head" ]; then mkdir -p .wrangler && echo "$$head" > $(MARQUE_CHECK) && echo "check vert sur $${head:0:8} : livrable."; \

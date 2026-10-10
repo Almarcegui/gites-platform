@@ -151,6 +151,7 @@ import {
 } from "../services/booking-flow";
 import { buildBalanceReminderEmail, queueEmail } from "../services/email";
 import { importElloha } from "../services/elloha-import";
+import { importAgendaGoogle, MAX_AGENDA_EVENTS } from "../services/agenda-import";
 import { replyOnChannel } from "../services/beds24-messages";
 import { exportSql } from "../services/export-db";
 import { tarStream } from "../core/tar";
@@ -2624,6 +2625,31 @@ export function registerAdminRoutes(router: Router): void {
     const csv = String(body?.csv ?? "");
     if (csv.trim().length === 0) return apiError(400, "csv attendu");
     const result = await importElloha(env.DB, propertyId, csv, body?.dryRun !== false);
+    return json({ result });
+  }));
+
+  // --- import des agendas Google de papa (scripts/importer_agenda_google.py) -------
+  // Idempotent ; `essai: true` dit ce qui serait fait sans rien écrire.
+  router.post("/api/admin/import/agenda-google", guard(async (req, env, _p, _url, execCtx) => {
+    const body = await readJson<{ unitId?: unknown; feedId?: unknown; evenements?: unknown; essai?: unknown }>(req);
+    if (!body) return apiError(400, "corps JSON attendu");
+    const unitId = intParam(String(body.unitId ?? ""), 0);
+    const feedId = intParam(String(body.feedId ?? ""), 0);
+    if (!Array.isArray(body.evenements) || body.evenements.length === 0) return apiError(400, "evenements : liste attendue");
+    if (body.evenements.length > MAX_AGENDA_EVENTS) return apiError(400, `au plus ${MAX_AGENDA_EVENTS} événements par envoi`);
+    const feed = await getFeed(env.DB, feedId);
+    if (!feed) return apiError(404, "flux iCal inconnu");
+    if (feed.unitId !== unitId) return apiError(400, `le flux ${feedId} appartient au bien ${feed.unitId}, pas au bien ${unitId}`);
+    const essai = body.essai === true;
+    const result = await importAgendaGoogle(env.DB, feed, body.evenements, { essai });
+    if (!essai) {
+      await audit(env.DB, "admin", "agenda.import", `feed:${feed.id}`, {
+        par: currentUser(req), creees: result.creees, completees: result.completees,
+        annulees: result.annulees, blocages: result.blocages, ignorees: result.ignorees,
+      });
+      const unit = await getUnit(env.DB, unitId);
+      if (unit && result.creees + result.annulees + result.blocages > 0) triggerBeds24Push(env.DB, env, execCtx, unit.propertyId);
+    }
     return json({ result });
   }));
 

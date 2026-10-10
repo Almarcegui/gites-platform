@@ -775,6 +775,47 @@ export async function createBookingAtomic(db: D1Database, input: CreateBookingIn
   return { ok: true, id, reference: row?.reference ?? "" };
 }
 
+/** Inscrit une réservation DÉJÀ ANNULÉE (historique importé : séjour annulé
+ *  dans un agenda externe). Pas de garde de disponibilité : une annulée
+ *  n'occupe aucun stock, et son créneau a souvent été reloué. Même numérotation
+ *  que createBookingAtomic. */
+export async function insertCancelledBooking(
+  db: D1Database,
+  input: Omit<CreateBookingInput, "status" | "holdMinutes"> & { cancelReason: string },
+): Promise<{ id: number; reference: string }> {
+  if (!isIsoDate(input.checkin) || !isIsoDate(input.checkout) || input.checkin >= input.checkout) {
+    throw new Error(`insertCancelledBooking: dates invalides ${input.checkin} → ${input.checkout}`);
+  }
+  const nowDate = input.now ?? new Date();
+  const now = sqlNow(nowDate);
+  const year = todayInZone(nowDate).slice(0, 4);
+  const res = await db
+    .prepare(
+      `INSERT INTO bookings (reference, unit_id, guest_id, checkin, checkout, adults, children,
+                             status, source, channel_label, external_uid, total_cents,
+                             internal_notes, cancelled_at, cancel_reason, created_at, updated_at)
+       SELECT
+         (SELECT p.ref_prefix FROM units u JOIN properties p ON p.id = u.property_id WHERE u.id = ?1)
+           || '-' || ?2 || '-'
+           || printf('%03d', 1 + (
+                SELECT COUNT(*) FROM bookings b
+                 WHERE b.reference LIKE
+                   (SELECT p2.ref_prefix FROM units u2 JOIN properties p2 ON p2.id = u2.property_id WHERE u2.id = ?1)
+                   || '-' || ?2 || '-%'
+              )),
+         ?1, ?6, ?3, ?4, ?7, ?8, 'cancelled', ?9, ?10, ?11, ?12, ?13, ?5, ?14, ?5, ?5`,
+    )
+    .bind(
+      input.unitId, year, input.checkin, input.checkout, now, input.guestId ?? null,
+      input.adults, input.children, input.source, input.channelLabel ?? null, input.externalUid ?? null,
+      input.totalCents ?? 0, input.internalNotes ?? null, input.cancelReason,
+    )
+    .run();
+  const id = res.meta.last_row_id;
+  const row = await db.prepare("SELECT reference FROM bookings WHERE id = ?1").bind(id).first<{ reference: string }>();
+  return { id, reference: row?.reference ?? "" };
+}
+
 export async function getBooking(db: D1Database, id: number): Promise<BookingRow | null> {
   const row = await db.prepare(`${BOOKING_JOIN} WHERE b.id = ?1`).bind(id).first();
   return row ? mapBooking(row as Raw) : null;
@@ -1602,6 +1643,9 @@ export interface ManualBlockRow {
   releasedAt: string | null;
   releasedBy: string | null;
   createdAt: string;
+  /** Événement d'agenda externe que ce blocage représente (« feed<id>:<UID> »),
+   *  posé par l'import des agendas Google (migration 0028). */
+  externalUid: string | null;
 }
 
 function mapManualBlock(r: Raw): ManualBlockRow {
@@ -1618,6 +1662,7 @@ function mapManualBlock(r: Raw): ManualBlockRow {
     releasedAt: strOrNull(r.released_at),
     releasedBy: strOrNull(r.released_by),
     createdAt: str(r.created_at),
+    externalUid: strOrNull(r.external_uid),
   };
 }
 
@@ -1632,6 +1677,8 @@ export interface CreateManualBlockInput {
   checkout: IsoDate;
   reason: string;
   createdBy: string;
+  /** Événement d'agenda externe représenté (import agenda Google). */
+  externalUid?: string | null;
   now?: Date;
 }
 
@@ -1656,8 +1703,8 @@ export async function createManualBlockAtomic(
   const now = sqlNow(input.now ?? new Date());
   const res = await db
     .prepare(
-      `INSERT INTO manual_blocks (unit_id, checkin, checkout, reason, created_by, active, created_at, updated_at)
-       SELECT ?1, ?2, ?3, ?5, ?6, 1, ?4, ?4
+      `INSERT INTO manual_blocks (unit_id, checkin, checkout, reason, created_by, active, created_at, updated_at, external_uid)
+       SELECT ?1, ?2, ?3, ?5, ?6, 1, ?4, ?4, ?7
        WHERE NOT EXISTS (
          SELECT 1 FROM bookings b
           WHERE b.checkin < ?3
@@ -1671,10 +1718,16 @@ export async function createManualBlockAtomic(
        )
          AND ${manualBlockConflictSql("?1", "?2", "?3")}`,
     )
-    .bind(input.unitId, input.checkin, input.checkout, now, input.reason, input.createdBy)
+    .bind(input.unitId, input.checkin, input.checkout, now, input.reason, input.createdBy, input.externalUid ?? null)
     .run();
   if (res.meta.changes !== 1) return { ok: false, reason: "conflict" };
   return { ok: true, id: res.meta.last_row_id };
+}
+
+/** Blocage (actif OU levé) qui représente cet événement d'agenda externe. */
+export async function getManualBlockByExternalUid(db: D1Database, externalUid: string): Promise<ManualBlockRow | null> {
+  const row = await db.prepare(`${MANUAL_BLOCK_JOIN} WHERE k.external_uid = ?1`).bind(externalUid).first();
+  return row ? mapManualBlock(row as Raw) : null;
 }
 
 export async function getManualBlock(db: D1Database, id: number): Promise<ManualBlockRow | null> {
