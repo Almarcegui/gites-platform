@@ -42,7 +42,7 @@ export function ChannelsPage() {
   // garde que celles des biens de celui-ci.
   const channelBookings = (d?.channelBookings ?? []).filter((b) => d?.units.some((u) => u.name === b.unitName));
   return (
-    <Page title={t`Airbnb, Booking et Vrbo`} back tools={picker} width={1000} lead={t`Les plateformes reçoivent vos disponibilités et vos prix par Beds24, un service de liaison. Vous n'avez pas à ouvrir Beds24 : tout se suit ici.`}>
+    <Page title={t`Airbnb, Booking et Vrbo`} back tools={picker} lead={t`Les plateformes reçoivent vos disponibilités et vos prix par Beds24, un service de liaison. Vous n'avez pas à ouvrir Beds24 : tout se suit ici.`}>
       {ov.error ? <ErrorLine text={t`L'état des plateformes n'a pas pu être lu.`} /> : null}
       {ov.isLoading ? <Loading /> : null}
       {d && pid ? (

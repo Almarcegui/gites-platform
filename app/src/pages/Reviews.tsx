@@ -8,8 +8,10 @@ import { useQuery } from "@tanstack/react-query";
 
 import { api } from "../api/client";
 import type { ReviewItem, ReviewsSummary } from "../api/types2";
+import { ErrorLine } from "../lib/action";
 import { longDate } from "../lib/dates";
 import { useScope } from "../lib/scope";
+import { Empty, Loading, Page, Section } from "../ui/kit";
 
 const note = (n: number | null) => (n == null ? "—" : String(n).replace(".", ","));
 
@@ -94,5 +96,74 @@ export function ReviewsCard() {
         </a>
       </div>
     </article>
+  );
+}
+
+/** Plateformes › Avis : la note, les avis bas sans réponse, les derniers avis. */
+export function ReviewsPage() {
+  const { t } = useLingui();
+  const label = useChannelLabel();
+  const q = useReviews();
+  const s = q.data;
+  const row = (r: ReviewItem) => (
+    <div key={r.id} className="list-row two static">
+      <span>
+        <b>
+          {r.reviewerName || t`Voyageur`}, {note(r.rating)} / 5
+        </b>
+        <small>
+          {label(r.channel)}
+          {r.unitName ? `, ${r.unitName}` : ""}
+          {r.submittedAt ? `, ${longDate(r.submittedAt.slice(0, 10))}` : ""}
+        </small>
+        {excerpt(r) ? <small>« {excerpt(r)} »</small> : null}
+      </span>
+      <span className={`pill ${r.replied ? "soldee" : "muted-pill"}`}>{r.replied ? t`Répondu` : t`Sans réponse`}</span>
+    </div>
+  );
+  return (
+    <Page
+      title={t`Avis`}
+      back
+      lead={t`Les avis Airbnb et Booking relevés par Beds24. On y répond dans Beds24.`}
+      tools={
+        s ? (
+          <a className="btn" href={s.replyUrl} target="_blank" rel="noopener noreferrer">
+            <IconExternalLink size={20} />
+            {t`Répondre dans Beds24`}
+          </a>
+        ) : null
+      }
+    >
+      {q.isLoading ? <Loading /> : null}
+      {q.error ? <ErrorLine text={t`Les avis n'ont pas pu être lus. Rechargez la page.`} /> : null}
+      {s && s.count === 0 ? <Empty title={t`Aucun avis relevé pour l'instant`}>{t`Ils apparaissent ici dès que Beds24 en a relevé un.`}</Empty> : null}
+      {s && s.count > 0 ? (
+        <>
+          <div className="kpis">
+            <div className="kpi">
+              <span>{t`Note moyenne`}</span>
+              <b>{t`${note(s.average)} / 5`}</b>
+              <small>{t`${s.count} avis`}</small>
+            </div>
+            {s.byChannel.map((c) => (
+              <div key={c.channel} className="kpi">
+                <span>{label(c.channel)}</span>
+                <b>{t`${note(c.average)} / 5`}</b>
+                <small>{t`${c.count} avis`}</small>
+              </div>
+            ))}
+          </div>
+          {s.low.length ? (
+            <Section title={t`Avis sous ${s.lowScore} sans réponse`}>
+              <div className="panel">{s.low.map(row)}</div>
+            </Section>
+          ) : null}
+          <Section title={t`Derniers avis`}>
+            <div className="panel">{s.latest.map(row)}</div>
+          </Section>
+        </>
+      ) : null}
+    </Page>
   );
 }

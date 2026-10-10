@@ -40,7 +40,6 @@ export function StatsPage() {
     <Page
       title={t`Chiffres ${year}`}
       back
-      width={1040}
       tools={
         <>
           {picker}

@@ -71,6 +71,22 @@ msgstr ", {0} pers."
 msgid ", {0} restent à payer"
 msgstr ", {0} restent à payer"
 
+#: src/shell/Shell.tsx
+msgid ", {n} aujourd'hui"
+msgstr ", {n} aujourd'hui"
+
+#: src/shell/Shell.tsx
+msgid ", {n} non lus"
+msgstr ", {n} non lus"
+
+#: src/shell/Shell.tsx
+msgid ", 1 aujourd'hui"
+msgstr ", 1 aujourd'hui"
+
+#: src/shell/Shell.tsx
+msgid ", 1 non lu"
+msgstr ", 1 non lu"
+
 #: src/pages/Today.tsx
 msgid ", à l'arrivée"
 msgstr ", à l'arrivée"
@@ -169,6 +185,7 @@ msgstr "{0} {1} % par rapport à {2}"
 msgid "{0} {year} : {1} % ({2} nuits sur {3}), {4}. En {5} : {6} %."
 msgstr "{0} {year} : {1} % ({2} nuits sur {3}), {4}. En {5} : {6} %."
 
+#. placeholder {0}: note(c.average)
 #. placeholder {0}: note(s.average)
 #: src/pages/Reviews.tsx
 msgid "{0} / 5"
@@ -232,6 +249,7 @@ msgstr "{0} arrivées ({1})"
 msgid "{0} au plus"
 msgstr "{0} au plus"
 
+#. placeholder {0}: c.count
 #. placeholder {0}: s.count
 #: src/pages/Reviews.tsx
 msgid "{0} avis"
@@ -556,6 +574,10 @@ msgstr "{missing} nuits sans prix en {year} : elles ne se vendent pas."
 msgid "{n} est pris"
 msgstr "{n} est pris"
 
+#: src/pages/Bookings.tsx
+msgid "{n} nuits"
+msgstr "{n} nuits"
+
 #: src/calendar/BlockPanel.tsx
 msgid "{n} nuits qui ne se vendent pas, ici ni sur les plateformes."
 msgstr "{n} nuits qui ne se vendent pas, ici ni sur les plateformes."
@@ -643,6 +665,7 @@ msgstr "1 avis sous {0} sans réponse"
 #: src/booking/BookingPanel.tsx
 #: src/calendar/PricePanel.tsx
 #: src/calendar/Weeks.tsx
+#: src/pages/Bookings.tsx
 #: src/pages/settings/Tarifs.tsx
 #: src/pages/Today.tsx
 #: src/sale/SaleFlow.tsx
@@ -827,11 +850,11 @@ msgstr "Adresses à donner aux autres sites, calendriers à lire"
 msgid "Adultes"
 msgstr "Adultes"
 
-#: src/pages/Settings.tsx
+#: src/pages/settings/Device.tsx
 msgid "Affichage"
 msgstr "Affichage"
 
-#: src/pages/Settings.tsx
+#: src/pages/settings/Device.tsx
 msgid "Affichage clair ou sombre"
 msgstr "Affichage clair ou sombre"
 
@@ -844,6 +867,7 @@ msgid "Affichée"
 msgstr "Affichée"
 
 #: src/pages/Settings.tsx
+#: src/shell/nav.tsx
 msgid "Aide"
 msgstr "Aide"
 
@@ -1097,6 +1121,10 @@ msgstr "Au téléphone : touchez le premier jour, puis le jour du départ."
 msgid "aucun"
 msgstr "aucun"
 
+#: src/pages/Reviews.tsx
+msgid "Aucun avis relevé pour l'instant"
+msgstr "Aucun avis relevé pour l'instant"
+
 #: src/pages/settings/Channels.tsx
 msgid "aucun bien relié"
 msgstr "aucun bien relié"
@@ -1250,6 +1278,7 @@ msgid "aujourd'hui"
 msgstr "aujourd'hui"
 
 #: src/calendar/CalendarView.tsx
+#: src/shell/nav.tsx
 #: src/shell/Shell.tsx
 msgid "Aujourd'hui"
 msgstr "Aujourd'hui"
@@ -1314,8 +1343,15 @@ msgid "Avancement"
 msgstr "Avancement"
 
 #: src/pages/Reviews.tsx
+#: src/pages/Settings.tsx
+#: src/shell/nav.tsx
 msgid "Avis"
 msgstr "Avis"
+
+#. placeholder {0}: s.lowScore
+#: src/pages/Reviews.tsx
+msgid "Avis sous {0} sans réponse"
+msgstr "Avis sous {0} sans réponse"
 
 #. placeholder {0}: s.sentAt ? t` (le ${sqlWhen(s.sentAt)})` : ""
 #: src/pages/settings/ChannelPrices.tsx
@@ -1330,10 +1366,15 @@ msgstr "Beds24 calcule le prix de chaque plateforme à partir du prix de votre s
 msgid "Beds24 calculera le prix de chaque plateforme avec ces pourcentages. Les calendriers repartent tout de suite, au prix de votre site ; c'est Beds24 qui ajoute le pourcentage."
 msgstr "Beds24 calculera le prix de chaque plateforme avec ces pourcentages. Les calendriers repartent tout de suite, au prix de votre site ; c'est Beds24 qui ajoute le pourcentage."
 
+#: src/shell/nav.tsx
+msgid "Beds24 et canaux"
+msgstr "Beds24 et canaux"
+
 #: src/pages/settings/Channels.tsx
 msgid "Beds24 ne répond pas avec ce compte. Rétablissez la liaison avec un nouveau code d'invitation (ci-dessous)."
 msgstr "Beds24 ne répond pas avec ce compte. Rétablissez la liaison avec un nouveau code d'invitation (ci-dessous)."
 
+#: src/pages/Bookings.tsx
 #: src/pages/settings/Stats.tsx
 #: src/sale/SaleFlow.tsx
 msgid "Bien"
@@ -1806,6 +1847,7 @@ msgid "Calculées sur vos réservations et vos prix des 31 prochains jours. Un b
 msgstr "Calculées sur vos réservations et vos prix des 31 prochains jours. Un bouton prépare le changement ; rien ne s'enregistre sans vous."
 
 #: src/pages/Calendar.tsx
+#: src/shell/nav.tsx
 #: src/shell/Shell.tsx
 msgid "Calendrier"
 msgstr "Calendrier"
@@ -1826,6 +1868,10 @@ msgstr "Calendriers d'autres sites"
 #: src/pages/settings/Logs.tsx
 msgid "calendriers envoyés aux plateformes"
 msgstr "calendriers envoyés aux plateformes"
+
+#: src/shell/nav.tsx
+msgid "Calendriers iCal"
+msgstr "Calendriers iCal"
 
 #: src/pages/Settings.tsx
 #: src/pages/settings/Ical.tsx
@@ -1914,8 +1960,12 @@ msgid "Ce qui se fait tout seul"
 msgstr "Ce qui se fait tout seul"
 
 #: src/pages/Settings.tsx
-msgid "Ce qui se règle de temps en temps. Le quotidien reste dans le menu : Aujourd'hui, Calendrier, Réservations, Messages, Ménage."
-msgstr "Ce qui se règle de temps en temps. Le quotidien reste dans le menu : Aujourd'hui, Calendrier, Réservations, Messages, Ménage."
+msgid "Ce qui se règle de temps en temps, rangé par sujet. Tout se retrouve aussi dans la barre de gauche."
+msgstr "Ce qui se règle de temps en temps, rangé par sujet. Tout se retrouve aussi dans la barre de gauche."
+
+#: src/pages/settings/Device.tsx
+msgid "Ce qui se règle ici ne vaut que pour ce navigateur."
+msgstr "Ce qui se règle ici ne vaut que pour ce navigateur."
 
 #: src/pages/settings/ChannelPrices.tsx
 msgid "Ce serveur n'envoie rien à Beds24 (écritures fermées). Vos réglages sont gardés ici ; ils partiront quand les écritures seront ouvertes."
@@ -1943,6 +1993,8 @@ msgid "Ces nuits sont déjà prises. Rien n'a été changé."
 msgstr "Ces nuits sont déjà prises. Rien n'a été changé."
 
 #: src/pages/Settings.tsx
+#: src/pages/settings/Device.tsx
+#: src/shell/nav.tsx
 msgid "Cet appareil"
 msgstr "Cet appareil"
 
@@ -2067,6 +2119,10 @@ msgstr "Chemin du fichier"
 msgid "Chevauche {0} : la plus courte l'emporte sur les jours communs."
 msgstr "Chevauche {0} : la plus courte l'emporte sur les jours communs."
 
+#: src/shell/nav.tsx
+msgid "Chiffres"
+msgstr "Chiffres"
+
 #: src/pages/settings/Stats.tsx
 msgid "Chiffres {year}"
 msgstr "Chiffres {year}"
@@ -2095,10 +2151,15 @@ msgstr "Choisissez « Option » si le client doit encore payer les arrhes : les 
 msgid "Choisissez une autre période, ou faites une nouvelle vente depuis le calendrier."
 msgstr "Choisissez une autre période, ou faites une nouvelle vente depuis le calendrier."
 
-#: src/pages/Settings.tsx
+#: src/pages/settings/Device.tsx
 msgid "Clair"
 msgstr "Clair"
 
+#: src/pages/Settings.tsx
+msgid "Clair ou sombre, langue, domaine montré, déconnexion"
+msgstr "Clair ou sombre, langue, domaine montré, déconnexion"
+
+#: src/pages/Bookings.tsx
 #: src/pages/settings/Clients.tsx
 msgid "Client"
 msgstr "Client"
@@ -2114,10 +2175,12 @@ msgstr "Client sans nom"
 
 #: src/pages/Settings.tsx
 #: src/pages/settings/Clients.tsx
+#: src/shell/nav.tsx
 msgid "Clients"
 msgstr "Clients"
 
 #: src/pages/Settings.tsx
+#: src/shell/nav.tsx
 msgid "Clients et argent"
 msgstr "Clients et argent"
 
@@ -2187,6 +2250,10 @@ msgstr "Compte créé"
 msgid "compte supprimé"
 msgstr "compte supprimé"
 
+#: src/shell/nav.tsx
+msgid "Comptes"
+msgstr "Comptes"
+
 #: src/pages/settings/Domain.tsx
 msgid "Conditions de location"
 msgstr "Conditions de location"
@@ -2229,9 +2296,13 @@ msgstr "Confirmées"
 msgid "Confirmer"
 msgstr "Confirmer"
 
+#: src/shell/Shell.tsx
+msgid "Connecté"
+msgstr "Connecté"
+
 #. placeholder {0}: currentUser() ?? "?"
 #. placeholder {0}: me.data.user
-#: src/pages/Settings.tsx
+#: src/pages/settings/Device.tsx
 #: src/pages/settings/MyAccount.tsx
 msgid "Connecté en tant que {0}"
 msgstr "Connecté en tant que {0}"
@@ -2455,6 +2526,14 @@ msgstr "Départ : {0}, ménage à prévoir"
 msgid "Départ au plus tard à"
 msgstr "Départ au plus tard à"
 
+#: src/shell/Shell.tsx
+msgid "Déplier le menu"
+msgstr "Déplier le menu"
+
+#: src/shell/Shell.tsx
+msgid "Déplier le menu ({keys})"
+msgstr "Déplier le menu ({keys})"
+
 #. placeholder {0}: label(last.channel)
 #. placeholder {1}: note(last.rating)
 #: src/pages/Reviews.tsx
@@ -2504,6 +2583,10 @@ msgstr "Dernière minute (peu avant l'arrivée)"
 #: src/pages/settings/Tarifs.tsx
 msgid "Dernière nuit"
 msgstr "Dernière nuit"
+
+#: src/pages/Reviews.tsx
+msgid "Derniers avis"
+msgstr "Derniers avis"
 
 #. placeholder {0}: p.threshold ?? 0
 #: src/pages/settings/Promotions.tsx
@@ -2577,11 +2660,15 @@ msgstr "Détail technique"
 msgid "Dimanche à jeudi"
 msgstr "Dimanche à jeudi"
 
+#: src/shell/nav.tsx
+msgid "Domaine"
+msgstr "Domaine"
+
 #: src/calendar/Weeks.tsx
 msgid "Domaine : une des maisons est prise"
 msgstr "Domaine : une des maisons est prise"
 
-#: src/pages/Settings.tsx
+#: src/pages/settings/Device.tsx
 msgid "Domaine montré par l'écran"
 msgstr "Domaine montré par l'écran"
 
@@ -2897,6 +2984,10 @@ msgid "Étapes"
 msgstr "Étapes"
 
 #: src/pages/Bookings.tsx
+msgid "État"
+msgstr "État"
+
+#: src/pages/Bookings.tsx
 msgid "État des réservations"
 msgstr "État des réservations"
 
@@ -2953,6 +3044,7 @@ msgstr "fériés + {0} %"
 #: src/booking/BookingPanel.tsx
 #: src/calendar/PricePanel.tsx
 #: src/pages/Cleaning.tsx
+#: src/shell/Shell.tsx
 #: src/ui/kit.tsx
 msgid "Fermer"
 msgstr "Fermer"
@@ -2992,6 +3084,10 @@ msgstr "Fiche illisible"
 #: src/pages/settings/Stats.tsx
 msgid "Fichiers à ouvrir dans un tableur."
 msgstr "Fichiers à ouvrir dans un tableur."
+
+#: src/ui/kit.tsx
+msgid "Fil d'Ariane"
+msgstr "Fil d'Ariane"
 
 #: src/pages/settings/Payments.tsx
 msgid "Filtrer les paiements"
@@ -3090,6 +3186,10 @@ msgstr "Il ne sera plus jamais affiché : notez-le maintenant. Cet appareil rest
 msgid "Il reste dans l'historique de la réservation."
 msgstr "Il reste dans l'historique de la réservation."
 
+#: src/pages/Reviews.tsx
+msgid "Ils apparaissent ici dès que Beds24 en a relevé un."
+msgstr "Ils apparaissent ici dès que Beds24 en a relevé un."
+
 #: src/pages/settings/Import.tsx
 msgid "importée"
 msgstr "importée"
@@ -3169,6 +3269,7 @@ msgstr "Journal de la liaison"
 
 #: src/pages/Settings.tsx
 #: src/pages/settings/Logs.tsx
+#: src/shell/nav.tsx
 msgid "Journaux"
 msgstr "Journaux"
 
@@ -3316,6 +3417,10 @@ msgstr "La loi demande de noter chaque personne hébergée. La saisie se fait à
 msgid "La meilleure remise automatique s'applique seule ; un code promo s'ajoute ensuite. Les remises portent sur les nuits, pas sur le ménage ni les options."
 msgstr "La meilleure remise automatique s'applique seule ; un code promo s'ajoute ensuite. Les remises portent sur les nuits, pas sur le ménage ni les options."
 
+#: src/pages/Settings.tsx
+msgid "La note Airbnb et Booking, les avis qui attendent une réponse"
+msgstr "La note Airbnb et Booking, les avis qui attendent une réponse"
+
 #: src/calendar/PricePanel.tsx
 #: src/calendar/Weeks.tsx
 msgid "la nuit"
@@ -3376,12 +3481,12 @@ msgstr "La somme des maisons qu'il regroupe"
 msgid "La vente en trois étapes : dates et maison, voyageurs et prix, client et paiement."
 msgstr "La vente en trois étapes : dates et maison, voyageurs et prix, client et paiement."
 
-#: src/pages/Settings.tsx
+#: src/pages/settings/Device.tsx
 #: src/pages/settings/Templates.tsx
 msgid "Langue"
 msgstr "Langue"
 
-#: src/pages/Settings.tsx
+#: src/pages/settings/Device.tsx
 msgid "Langue de l'écran"
 msgstr "Langue de l'écran"
 
@@ -3596,9 +3701,17 @@ msgstr "Légende"
 msgid "Légende (facultatif)"
 msgstr "Légende (facultatif)"
 
+#: src/pages/Reviews.tsx
+msgid "Les avis Airbnb et Booking relevés par Beds24. On y répond dans Beds24."
+msgstr "Les avis Airbnb et Booking relevés par Beds24. On y répond dans Beds24."
+
 #: src/pages/settings/Help.tsx
 msgid "Les avis Airbnb et Booking sont relevés quatre fois par jour : la note moyenne s'affiche sur Aujourd'hui."
 msgstr "Les avis Airbnb et Booking sont relevés quatre fois par jour : la note moyenne s'affiche sur Aujourd'hui."
+
+#: src/pages/Reviews.tsx
+msgid "Les avis n'ont pas pu être lus. Rechargez la page."
+msgstr "Les avis n'ont pas pu être lus. Rechargez la page."
 
 #: src/pages/settings/Domain.tsx
 msgid "Les biens"
@@ -3940,6 +4053,7 @@ msgstr "Matthieu : le site ne s'ouvre plus du tout (il s'occupe de l'hébergemen
 
 #: src/pages/Cleaning.tsx
 #: src/pages/Today.tsx
+#: src/shell/nav.tsx
 #: src/shell/Shell.tsx
 msgid "Ménage"
 msgstr "Ménage"
@@ -3991,6 +4105,7 @@ msgstr "message envoyé au client"
 
 #: src/pages/Messages.tsx
 #: src/pages/Today.tsx
+#: src/shell/nav.tsx
 #: src/shell/Shell.tsx
 msgid "Messages"
 msgstr "Messages"
@@ -4013,6 +4128,7 @@ msgstr "mis de côté"
 
 #: src/pages/Settings.tsx
 #: src/pages/settings/Startup.tsx
+#: src/shell/nav.tsx
 msgid "Mise en route"
 msgstr "Mise en route"
 
@@ -4025,6 +4141,7 @@ msgid "Modèle de réponse"
 msgstr "Modèle de réponse"
 
 #: src/pages/settings/Templates.tsx
+#: src/shell/nav.tsx
 msgid "Modèles"
 msgstr "Modèles"
 
@@ -4068,8 +4185,13 @@ msgstr "Mois d'arrivée"
 
 #: src/pages/Settings.tsx
 #: src/pages/settings/MyAccount.tsx
+#: src/shell/nav.tsx
 msgid "Mon compte"
 msgstr "Mon compte"
+
+#: src/pages/Bookings.tsx
+msgid "Montant"
+msgstr "Montant"
 
 #: src/booking/BookingPanel.tsx
 msgid "Montant reçu (€)"
@@ -4254,6 +4376,10 @@ msgstr "Note (facultatif)"
 #: src/pages/settings/Clients.tsx
 msgid "Note (le client ne la voit pas)"
 msgstr "Note (le client ne la voit pas)"
+
+#: src/pages/Reviews.tsx
+msgid "Note moyenne"
+msgstr "Note moyenne"
 
 #: src/pages/Cleaning.tsx
 msgid "noté par {by}"
@@ -4448,6 +4574,7 @@ msgid "Option, pas encore payée"
 msgstr "Option, pas encore payée"
 
 #: src/pages/settings/Options.tsx
+#: src/shell/nav.tsx
 msgid "Options"
 msgstr "Options"
 
@@ -4531,6 +4658,7 @@ msgid "Paiement noté à la main"
 msgstr "Paiement noté à la main"
 
 #: src/booking/BookingPanel.tsx
+#: src/shell/nav.tsx
 msgid "Paiements"
 msgstr "Paiements"
 
@@ -4787,7 +4915,12 @@ msgstr "plateforme"
 msgid "Plateforme"
 msgstr "Plateforme"
 
+#: src/shell/nav.tsx
+msgid "Plateformes"
+msgstr "Plateformes"
+
 #: src/booking/BookingPanel.tsx
+#: src/shell/Shell.tsx
 #: src/ui/kit.tsx
 msgid "Plus"
 msgstr "Plus"
@@ -4869,6 +5002,7 @@ msgid "prête"
 msgstr "prête"
 
 #: src/sale/SaleFlow.tsx
+#: src/shell/nav.tsx
 msgid "Prix"
 msgstr "Prix"
 
@@ -4946,6 +5080,7 @@ msgstr "Prix et minimum"
 
 #: src/pages/Settings.tsx
 #: src/pages/settings/Tarifs.tsx
+#: src/shell/nav.tsx
 msgid "Prix et saisons"
 msgstr "Prix et saisons"
 
@@ -4998,6 +5133,10 @@ msgstr "Prochaine arrivée"
 #: src/pages/Today.tsx
 msgid "Prochains voyageurs : {0} personnes, {1}."
 msgstr "Prochains voyageurs : {0} personnes, {1}."
+
+#: src/shell/nav.tsx
+msgid "Promotions"
+msgstr "Promotions"
 
 #: src/pages/settings/ChannelPrices.tsx
 msgid "Promotions Airbnb"
@@ -5065,6 +5204,10 @@ msgstr "Qui s'en occupe"
 #: src/pages/Cleaning.tsx
 msgid "Qui s'en occupe, note"
 msgstr "Qui s'en occupe, note"
+
+#: src/shell/nav.tsx
+msgid "Quotidien"
+msgstr "Quotidien"
 
 #. placeholder {0}: m.errorDetail
 #: src/pages/settings/Logs.tsx
@@ -5155,7 +5298,7 @@ msgid "réglages"
 msgstr "réglages"
 
 #: src/pages/Settings.tsx
-#: src/shell/Shell.tsx
+#: src/shell/nav.tsx
 #: src/ui/kit.tsx
 msgid "Réglages"
 msgstr "Réglages"
@@ -5236,6 +5379,10 @@ msgstr "Remise pour un tarif sans remboursement"
 msgid "remise supprimée"
 msgstr "remise supprimée"
 
+#: src/shell/nav.tsx
+msgid "Remises"
+msgstr "Remises"
+
 #: src/pages/settings/Promotions.tsx
 msgid "Remises automatiques"
 msgstr "Remises automatiques"
@@ -5291,6 +5438,14 @@ msgstr "Renvoyer la confirmation"
 msgid "Renvoyer la confirmation au client"
 msgstr "Renvoyer la confirmation au client"
 
+#: src/shell/Shell.tsx
+msgid "Replier le menu"
+msgstr "Replier le menu"
+
+#: src/shell/Shell.tsx
+msgid "Replier le menu ({keys})"
+msgstr "Replier le menu ({keys})"
+
 #: src/pages/Today.tsx
 msgid "Répondre"
 msgstr "Répondre"
@@ -5302,6 +5457,10 @@ msgstr "Répondre dans Beds24"
 #: src/pages/settings/Domain.tsx
 msgid "Répondre tout de suite par un accusé de réception"
 msgstr "Répondre tout de suite par un accusé de réception"
+
+#: src/pages/Reviews.tsx
+msgid "Répondu"
+msgstr "Répondu"
 
 #: src/pages/Settings.tsx
 msgid "Reprendre des réservations d'un fichier"
@@ -5350,7 +5509,7 @@ msgstr "Réservation tôt (longtemps avant l'arrivée)"
 
 #: src/pages/Bookings.tsx
 #: src/pages/settings/Stats.tsx
-#: src/shell/Shell.tsx
+#: src/shell/nav.tsx
 msgid "Réservations"
 msgstr "Réservations"
 
@@ -5361,6 +5520,11 @@ msgstr "réservations rapatriées"
 #: src/pages/settings/Channels.tsx
 msgid "Réservations venues des plateformes"
 msgstr "Réservations venues des plateformes"
+
+#. placeholder {0}: rows.length
+#: src/pages/Bookings.tsx
+msgid "Réservations, {0} lignes. Les en-têtes Client, Séjour et Montant trient la liste."
+msgstr "Réservations, {0} lignes. Les en-têtes Client, Séjour et Montant trient la liste."
 
 #: src/booking/BookingPanel.tsx
 msgid "Réservé"
@@ -5407,7 +5571,9 @@ msgstr "Réservé tôt : {0}"
 msgid "Réserver ce bien bloque aussi"
 msgstr "Réserver ce bien bloque aussi"
 
+#. placeholder {0}: eur(b.balanceCents)
 #. placeholder {0}: eur(balance)
+#: src/calendar/Grid.tsx
 #: src/pages/Bookings.tsx
 msgid "reste {0}"
 msgstr "reste {0}"
@@ -5441,11 +5607,11 @@ msgstr "Rétablir la liaison"
 msgid "Rétablir la liaison avec un nouveau code"
 msgstr "Rétablir la liaison avec un nouveau code"
 
-#: src/pages/Settings.tsx
+#: src/pages/settings/Device.tsx
 msgid "Retenu sur cet appareil seulement."
 msgstr "Retenu sur cet appareil seulement."
 
-#: src/pages/Settings.tsx
+#: src/pages/settings/Device.tsx
 msgid "Retenu sur cet appareil seulement. Sans choix, l'écran suit la langue du navigateur."
 msgstr "Retenu sur cet appareil seulement. Sans choix, l'écran suit la langue du navigateur."
 
@@ -5585,6 +5751,10 @@ msgstr "Sans prix fixé à la main : {0} la nuit."
 msgid "sans problème"
 msgstr "sans problème"
 
+#: src/pages/Reviews.tsx
+msgid "Sans réponse"
+msgstr "Sans réponse"
+
 #: src/pages/settings/Payments.tsx
 msgid "Sans suite"
 msgstr "Sans suite"
@@ -5597,9 +5767,19 @@ msgstr "Sauna, bain chaud, linge, petit-déjeuner…"
 msgid "Se connecter"
 msgstr "Se connecter"
 
-#: src/pages/Settings.tsx
+#: src/pages/settings/Device.tsx
+#: src/shell/Shell.tsx
 msgid "Se déconnecter"
 msgstr "Se déconnecter"
+
+#. placeholder {0}: currentUser() ?? "?"
+#: src/shell/Shell.tsx
+msgid "Se déconnecter ({0})"
+msgstr "Se déconnecter ({0})"
+
+#: src/pages/Bookings.tsx
+msgid "Séjour"
+msgstr "Séjour"
 
 #: src/pages/settings/Stats.tsx
 msgid "Séjour cherché"
@@ -5713,7 +5893,7 @@ msgstr "solde restant"
 msgid "Solde, à payer avant le {0}"
 msgstr "Solde, à payer avant le {0}"
 
-#: src/pages/Settings.tsx
+#: src/pages/settings/Device.tsx
 msgid "Sombre"
 msgstr "Sombre"
 
@@ -5888,8 +6068,12 @@ msgstr "Tous les messages arrivent au même endroit : ceux du site, les mails de
 msgid "Tous les prix envoyés aux plateformes augmentent de + {0} %, pour tous les biens et toutes les dates. Ils repartent tout de suite. Le prix de votre site ne change pas."
 msgstr "Tous les prix envoyés aux plateformes augmentent de + {0} %, pour tous les biens et toutes les dates. Ils repartent tout de suite. Le prix de votre site ne change pas."
 
+#: src/shell/nav.tsx
+msgid "Tous les réglages"
+msgstr "Tous les réglages"
+
 #: src/pages/Cleaning.tsx
-#: src/pages/Settings.tsx
+#: src/pages/settings/Device.tsx
 #: src/pages/settings/Templates.tsx
 #: src/shell/Shell.tsx
 msgid "Tous mes gîtes"
@@ -5898,6 +6082,10 @@ msgstr "Tous mes gîtes"
 #: src/pages/Settings.tsx
 msgid "Tout ce qui a été encaissé ou attendu"
 msgstr "Tout ce qui a été encaissé ou attendu"
+
+#: src/shell/Shell.tsx
+msgid "Tout le menu"
+msgstr "Tout le menu"
 
 #: src/pages/settings/Ical.tsx
 msgid "Tout relire maintenant"
@@ -6219,6 +6407,10 @@ msgstr "Vous"
 #: src/pages/settings/MyAccount.tsx
 msgid "Vous êtes entré avec l'accès de secours du serveur : ce mot de passe-là se change dans la configuration du serveur, pas ici. Créez-vous un compte dans « Personnes qui ont accès »."
 msgstr "Vous êtes entré avec l'accès de secours du serveur : ce mot de passe-là se change dans la configuration du serveur, pas ici. Créez-vous un compte dans « Personnes qui ont accès »."
+
+#: src/pages/Reviews.tsx
+msgid "Voyageur"
+msgstr "Voyageur"
 
 #. placeholder {0}: i + 1
 #. placeholder {0}: m.canal

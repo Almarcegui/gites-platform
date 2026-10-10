@@ -1,16 +1,38 @@
+// La coque de l'écran. À l'ordinateur (≥ 1024 px, disposition A) : une barre
+// latérale fixe de 240 px, repliable en icônes (56 px, choix retenu sur
+// l'appareil, Ctrl/⌘ B), avec le domaine en haut et la personne connectée en
+// bas. Au téléphone (B) : la barre d'onglets du bas, dont « Plus » ouvre tout
+// le menu en feuille. Retour de Julien du 10/10 : « On veut une barre latérale ».
 import { Trans, useLingui } from "@lingui/react/macro";
-import { Menu } from "@mantine/core";
-import { IconAdjustmentsHorizontal, IconBrush, IconCalendar, IconCheck, IconHome, IconList, IconMessage, IconSun } from "@tabler/icons-react";
-import { Link, Outlet, useNavigate, useSearch } from "@tanstack/react-router";
+import { AppShell, Drawer, Menu, Tooltip } from "@mantine/core";
+import { useHotkeys } from "@mantine/hooks";
+import { IconBrush, IconCalendar, IconCheck, IconDots, IconLayoutSidebarLeftCollapse, IconLayoutSidebarLeftExpand, IconLogout, IconMessage, IconSelector, IconSun } from "@tabler/icons-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { Link, Outlet, useNavigate, useRouterState, useSearch } from "@tanstack/react-router";
 import { useEffect, useState, type ReactNode } from "react";
 
-import { useMessages, useProperties } from "../api/hooks";
+import { currentUser, logout } from "../api/client";
+import { useMessages, useProperties, useTasks } from "../api/hooks";
 import { BookingPanel } from "../booking/BookingPanel";
+import { addDays, todayBrussels } from "../lib/dates";
 import { useScope, type Scope } from "../lib/scope";
+import { useLayout } from "../lib/useLayout";
 import { Confirm, hasUnsaved } from "../ui/kit";
 import { SaleProvider } from "../sale/SaleFlow";
+import { useNav, type NavEntry } from "./nav";
 
-function DomainSelector() {
+const FOLD_KEY = "gp2_nav_replie";
+const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+
+function readFolded(): boolean {
+  try {
+    return localStorage.getItem(FOLD_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function DomainSelector({ variant }: { variant: "side" | "top" }) {
   const { t } = useLingui();
   const { scope, setScope: applyScope } = useScope();
   const [pending, setPending] = useState<Scope | null>(null);
@@ -21,11 +43,14 @@ function DomainSelector() {
   const label = current ? current.name : t`Tous mes gîtes`;
   const detail = current ? (current.commune ?? "") : properties.map((p) => p.name.replace(/^(Les Gîtes du |Le )/, "")).join(t` et `);
   return (
-    <Menu position="bottom-start" shadow="md" width={300}>
+    <Menu position={variant === "side" ? "bottom-start" : "bottom-start"} shadow="md" width={280}>
       <Menu.Target>
-        <button className="dom" type="button" aria-label={t`Choisir le domaine affiché, actuellement : ${label}`}>
-          <IconHome size={22} className="dom-ic" />
-          <b>{label}</b> <small>{detail}</small>
+        <button className={`dom dom-${variant}`} type="button" aria-label={t`Choisir le domaine affiché, actuellement : ${label}`}>
+          <span className="dom-txt">
+            <b>{label}</b>
+            {detail ? <small>{detail}</small> : null}
+          </span>
+          <IconSelector size={18} className="dom-chev" aria-hidden />
         </button>
       </Menu.Target>
       <Menu.Dropdown>
@@ -55,34 +80,184 @@ function DomainSelector() {
   );
 }
 
-function NavLink({ to, icon, children, badge }: { to: string; icon: ReactNode; children: ReactNode; badge?: number }) {
+/** Compteurs des entrées : messages non lus, ménages du jour pas encore faits. */
+function useCounts(): Record<"unread" | "cleaning", number> {
+  const today = todayBrussels();
+  const unread = useMessages("nouveau").data?.length ?? 0;
+  const tasks = useTasks(today, addDays(today, 1)).data ?? [];
+  const cleaning = tasks.filter((x) => x.dueDate === today && x.status !== "fait" && x.status !== "annule").length;
+  return { unread, cleaning };
+}
+
+function Badge({ n, kind }: { n: number; kind: "unread" | "cleaning" }) {
+  const { t } = useLingui();
+  if (!n) return null;
   return (
-    <Link to={to} activeOptions={{ exact: to === "/", includeSearch: false }} activeProps={{ "aria-current": "page" }} search={(s: object) => s}>
+    <span className={`badge b-${kind}`}>
+      <span aria-hidden>{n}</span>
+      <span className="sr">{kind === "unread" ? (n > 1 ? t`, ${n} non lus` : t`, 1 non lu`) : n > 1 ? t`, ${n} aujourd'hui` : t`, 1 aujourd'hui`}</span>
+    </span>
+  );
+}
+
+function SideLink({ e, folded, count, onClick }: { e: NavEntry; folded: boolean; count: number; onClick?: () => void }) {
+  const link = (
+    <Link
+      to={e.to}
+      className="nl"
+      activeOptions={{ exact: e.exact ?? false, includeSearch: false }}
+      activeProps={{ "aria-current": "page" }}
+      search={(s: object) => s}
+      onClick={onClick}
+    >
+      {e.icon}
+      <span className={folded ? "sr" : "nl-t"}>{e.label}</span>
+      {e.badge ? <Badge n={count} kind={e.badge} /> : null}
+    </Link>
+  );
+  return folded ? (
+    <Tooltip label={e.label} position="right" withArrow openDelay={150} events={{ hover: true, focus: true, touch: false }}>
+      {link}
+    </Tooltip>
+  ) : (
+    link
+  );
+}
+
+function useLogout() {
+  const qc = useQueryClient();
+  const navigate = useNavigate();
+  return async () => {
+    await logout();
+    qc.clear();
+    await navigate({ to: "/connexion" });
+  };
+}
+
+function initials(name: string): string {
+  const parts = name.trim().split(/[\s._-]+/).filter(Boolean);
+  return ((parts[0]?.[0] ?? "?") + (parts[1]?.[0] ?? "")).toUpperCase();
+}
+
+function Sidebar({ folded, toggle }: { folded: boolean; toggle: () => void }) {
+  const { t } = useLingui();
+  const nav = useNav();
+  const counts = useCounts();
+  const signOut = useLogout();
+  const user = currentUser() ?? "?";
+  const keys = isMac ? "⌘ B" : "Ctrl B";
+  return (
+    <>
+      <div className="side-top">{folded ? null : <DomainSelector variant="side" />}</div>
+      <nav className="side-nav" aria-label={t`Menu principal`}>
+        {nav.map((s) => (
+          <div key={s.id} className="side-sec" role="group" aria-labelledby={`nav-${s.id}`}>
+            <p className={folded ? "sr" : "side-h"} id={`nav-${s.id}`}>
+              {s.title}
+            </p>
+            {s.entries.map((e) => (
+              <SideLink key={e.to} e={e} folded={folded} count={e.badge ? counts[e.badge] : 0} />
+            ))}
+          </div>
+        ))}
+      </nav>
+      <div className={`side-foot${folded ? " col" : ""}`}>
+        {folded ? null : (
+          <span className="avatar" aria-hidden>
+            {initials(user)}
+          </span>
+        )}
+        {folded ? null : (
+          <span className="who-t">
+            <b>{user}</b>
+            <small>
+              <Trans>Connecté</Trans>
+            </small>
+          </span>
+        )}
+        <Tooltip label={t`Se déconnecter`} position="right" withArrow>
+          <button type="button" className="side-btn icon" onClick={() => void signOut()} aria-label={t`Se déconnecter`}>
+            <IconLogout size={18} />
+          </button>
+        </Tooltip>
+        <Tooltip label={folded ? t`Déplier le menu (${keys})` : t`Replier le menu (${keys})`} position="right" withArrow>
+          <button
+            type="button"
+            className="side-btn icon"
+            onClick={toggle}
+            aria-expanded={!folded}
+            aria-label={folded ? t`Déplier le menu` : t`Replier le menu`}
+            aria-keyshortcuts={isMac ? "Meta+B" : "Control+B"}
+          >
+            {folded ? <IconLayoutSidebarLeftExpand size={18} /> : <IconLayoutSidebarLeftCollapse size={18} />}
+          </button>
+        </Tooltip>
+      </div>
+    </>
+  );
+}
+
+function TabLink({ to, icon, children, badge, exact }: { to: string; icon: ReactNode; children: ReactNode; badge?: ReactNode; exact?: boolean }) {
+  return (
+    <Link to={to} activeOptions={{ exact: exact ?? false, includeSearch: false }} activeProps={{ "aria-current": "page" }} search={(s: object) => s}>
       {icon}
       {children}
-      {badge ? <span className="badge">{badge}</span> : null}
+      {badge}
     </Link>
   );
 }
 
-function Items({ unread }: { unread: number }) {
+/** Au téléphone : quatre onglets et « Plus », qui ouvre tout le menu en feuille. */
+function TabBar() {
+  const { t } = useLingui();
+  const counts = useCounts();
+  const nav = useNav();
+  const signOut = useLogout();
+  const [open, setOpen] = useState(false);
+  const path = useRouterState({ select: (s) => s.location.pathname });
+  useEffect(() => setOpen(false), [path]);
+  const inTabs = ["/", "/calendrier", "/messages", "/menage"];
+  const elsewhere = !inTabs.some((p) => (p === "/" ? path === "/" : path.startsWith(p)));
   return (
     <>
-      <NavLink to="/" icon={<IconSun size={22} />}>
-        <Trans>Aujourd'hui</Trans>
-      </NavLink>
-      <NavLink to="/calendrier" icon={<IconCalendar size={22} />}>
-        <Trans>Calendrier</Trans>
-      </NavLink>
-      <NavLink to="/reservations" icon={<IconList size={22} />}>
-        <Trans>Réservations</Trans>
-      </NavLink>
-      <NavLink to="/messages" icon={<IconMessage size={22} />} badge={unread}>
-        <Trans>Messages</Trans>
-      </NavLink>
-      <NavLink to="/menage" icon={<IconBrush size={22} />}>
-        <Trans>Ménage</Trans>
-      </NavLink>
+      <nav className="tabbar" aria-label={t`Menu principal`}>
+        <TabLink to="/" icon={<IconSun size={22} />} exact>
+          <Trans>Aujourd'hui</Trans>
+        </TabLink>
+        <TabLink to="/calendrier" icon={<IconCalendar size={22} />}>
+          <Trans>Calendrier</Trans>
+        </TabLink>
+        <TabLink to="/messages" icon={<IconMessage size={22} />} badge={<Badge n={counts.unread} kind="unread" />}>
+          <Trans>Messages</Trans>
+        </TabLink>
+        <TabLink to="/menage" icon={<IconBrush size={22} />} badge={<Badge n={counts.cleaning} kind="cleaning" />}>
+          <Trans>Ménage</Trans>
+        </TabLink>
+        <button type="button" className="tab-more" aria-haspopup="dialog" aria-expanded={open} aria-current={elsewhere ? "page" : undefined} onClick={() => setOpen(true)}>
+          <IconDots size={22} />
+          <Trans>Plus</Trans>
+        </button>
+      </nav>
+      <Drawer opened={open} onClose={() => setOpen(false)} position="bottom" size="88%" title={<b style={{ fontSize: 20 }}>{t`Tout le menu`}</b>} closeButtonProps={{ "aria-label": t`Fermer`, size: "lg" }} classNames={{ content: "sheet-all" }}>
+        <nav aria-label={t`Tout le menu`}>
+          {nav.map((s) => (
+            <section key={s.id} className="all-sec" aria-labelledby={`all-${s.id}`}>
+              <h2 id={`all-${s.id}`}>{s.title}</h2>
+              {s.entries.map((e) => (
+                <Link key={e.to} to={e.to} className="nl" activeOptions={{ exact: e.exact ?? false, includeSearch: false }} activeProps={{ "aria-current": "page" }} onClick={() => setOpen(false)}>
+                  {e.icon}
+                  <span className="nl-t">{e.label}</span>
+                  {e.badge ? <Badge n={counts[e.badge]} kind={e.badge} /> : null}
+                </Link>
+              ))}
+            </section>
+          ))}
+        </nav>
+        <button type="button" className="btn wide" style={{ marginTop: 16 }} onClick={() => void signOut()}>
+          <IconLogout size={20} />
+          {t`Se déconnecter (${currentUser() ?? "?"})`}
+        </button>
+      </Drawer>
     </>
   );
 }
@@ -104,36 +279,46 @@ function useOnline(): boolean {
 }
 
 export function Shell() {
-  const { t } = useLingui();
   const online = useOnline();
+  const layout = useLayout();
   const search = useSearch({ strict: false }) as { resa?: number };
   const navigate = useNavigate();
-  const unread = useMessages("nouveau").data?.length ?? 0;
+  const [folded, setFolded] = useState(readFolded);
+  const toggle = () =>
+    setFolded((f) => {
+      try {
+        localStorage.setItem(FOLD_KEY, f ? "0" : "1");
+      } catch {
+        /* stockage indisponible : le choix vaut pour la visite */
+      }
+      return !f;
+    });
+  useHotkeys([["mod+B", () => layout === "A" && toggle()]]);
   return (
     <SaleProvider>
-      {online ? null : (
-        <div className="offline" role="status">
-          <Trans>Hors ligne : vous voyez la dernière version gardée sur cet appareil. Rien ne peut être changé avant le retour du réseau.</Trans>
-        </div>
-      )}
-      <header className="top">
-        <DomainSelector />
-        <nav className="nav" aria-label={t`Menu principal`}>
-          <Items unread={unread} />
-        </nav>
-        <Link to="/reglages" className="btn ghost set" activeProps={{ "aria-current": "page" }} aria-label={t`Réglages`}>
-          <IconAdjustmentsHorizontal size={22} />
-          <span>
-            <Trans>Réglages</Trans>
-          </span>
-        </Link>
-      </header>
-      <main className="page">
-        <Outlet />
-      </main>
-      <nav className="tabbar" aria-label={t`Menu principal`}>
-        <Items unread={unread} />
-      </nav>
+      <AppShell navbar={{ width: folded ? 56 : 240, breakpoint: "64em", collapsed: { mobile: true } }} padding={0} withBorder={false} transitionDuration={0}>
+        {layout === "A" ? (
+          <AppShell.Navbar className={`side${folded ? " folded" : ""}`}>
+            <Sidebar folded={folded} toggle={toggle} />
+          </AppShell.Navbar>
+        ) : null}
+        <AppShell.Main className="page-main">
+          {online ? null : (
+            <div className="offline" role="status">
+              <Trans>Hors ligne : vous voyez la dernière version gardée sur cet appareil. Rien ne peut être changé avant le retour du réseau.</Trans>
+            </div>
+          )}
+          {layout === "B" ? (
+            <header className="top">
+              <DomainSelector variant="top" />
+            </header>
+          ) : null}
+          <div className="page">
+            <Outlet />
+          </div>
+        </AppShell.Main>
+      </AppShell>
+      {layout === "B" ? <TabBar /> : null}
       <BookingPanel
         id={search.resa ?? null}
         onClose={() => void navigate({ to: ".", search: (s: object) => ({ ...s, resa: undefined }) })}

@@ -2,10 +2,10 @@
 import { Trans, useLingui } from "@lingui/react/macro";
 import { Select, TextInput } from "@mantine/core";
 import { useDebouncedValue } from "@mantine/hooks";
-import { IconSearch } from "@tabler/icons-react";
+import { IconArrowDown, IconArrowUp, IconArrowsSort, IconSearch } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 
 import { api } from "../api/client";
 import type { Booking } from "../api/types";
@@ -19,6 +19,31 @@ import { useOpenBooking } from "../shell/Shell";
 import { DownloadButton } from "../ui/kit";
 
 type Period = "upcoming" | "current" | "past" | "";
+type SortKey = "name" | "checkin" | "amount";
+type Sort = { k: SortKey; dir: 1 | -1 } | null;
+
+function sortRows(list: Booking[], sort: Sort): Booking[] {
+  if (!sort) return list;
+  const key = (b: Booking): string | number => (sort.k === "name" ? (b.guestName || "").toLocaleLowerCase("fr") : sort.k === "checkin" ? b.checkin : b.totalCents);
+  return [...list].sort((a, b) => {
+    const x = key(a);
+    const y = key(b);
+    return (typeof x === "number" && typeof y === "number" ? x - y : String(x).localeCompare(String(y), "fr")) * sort.dir;
+  });
+}
+
+/** En-tête triable : un clic trie, un second inverse ; aria-sort dit l'état. */
+function SortTh({ k, sort, onSort, right, children }: { k: SortKey; sort: Sort; onSort: (s: Sort) => void; right?: boolean; children: ReactNode }) {
+  const on = sort?.k === k;
+  return (
+    <th scope="col" className={right ? "r" : undefined} aria-sort={on ? (sort.dir === 1 ? "ascending" : "descending") : "none"}>
+      <button type="button" className="th-sort" onClick={() => onSort(on && sort.dir === 1 ? { k, dir: -1 } : { k, dir: 1 })}>
+        {children}
+        {on ? sort.dir === 1 ? <IconArrowUp size={16} aria-hidden /> : <IconArrowDown size={16} aria-hidden /> : <IconArrowsSort size={16} aria-hidden className="muted" />}
+      </button>
+    </th>
+  );
+}
 
 export function BookingsPage() {
   const { t } = useLingui();
@@ -39,9 +64,15 @@ export function BookingsPage() {
     { id: "past", label: t`Passées` },
     { id: "", label: t`Toutes` },
   ];
+  const [sort, setSort] = useState<Sort>(null);
+  const rows = sortRows(list.data ?? [], sort);
+  const nightsLabel = (a: string, b: string) => {
+    const n = Math.round((Date.parse(b) - Date.parse(a)) / 86_400_000);
+    return n > 1 ? t`${n} nuits` : t`1 nuit`;
+  };
   const pill: Record<string, string> = { option: t`Option`, solde: t`Solde à encaisser`, soldee: t`Payée`, plat: t`Autre site`, annulee: t`Annulée` };
   return (
-    <div style={{ maxWidth: 1100 }}>
+    <div className="pg">
       <div className="head">
         <h1 className="title">
           <Trans>Réservations</Trans>
@@ -89,38 +120,54 @@ export function BookingsPage() {
       </div>
       {list.error ? <ErrorLine text={t`La liste n'a pas pu être lue. Réessayez.`} /> : null}
       {list.isLoading ? <p className="loading">{t`Chargement…`}</p> : null}
-      {list.data && list.data.length === 0 ? (
+      {list.data && rows.length === 0 ? (
         <div className="empty">
           <h3>{q ? t`Aucune réservation ne correspond à « ${q} »` : t`Aucune réservation sur cette période`}</h3>
           <p>{q ? t`Essayez le nom de famille seul, ou la référence (par exemple PM-2026-012).` : t`Choisissez une autre période, ou faites une nouvelle vente depuis le calendrier.`}</p>
         </div>
       ) : null}
-      {list.data && list.data.length > 0 ? (
-        <div className="panel">
-          {list.data.map((b) => {
-            const st = bookingState(b);
-            const balance = b.totalCents - b.paidCents;
-            return (
-              <button key={b.id} type="button" className="list-row" onClick={() => openBooking(b.id)}>
-                <span>
-                  <b>{b.guestName || channelName(b)}</b>
-                  <small>{b.reference}</small>
-                </span>
-                <span className="hide-s">
-                  {b.unitName}
-                  <small>{stayRange(b.checkin, b.checkout)}</small>
-                </span>
-                <span className="hide-s">
-                  <span className={`pill ${st}`}>{pill[st]}</span>
-                </span>
-                <span style={{ textAlign: "right" }}>
-                  <b>{st === "plat" ? t`sur ${channelName(b)}` : eur(b.totalCents)}</b>
-                  <small>{st === "solde" ? t`reste ${eur(balance)}` : ""}</small>
-                  <small className="sr">{stayRange(b.checkin, b.checkout)}</small>
-                </span>
-              </button>
-            );
-          })}
+      {rows.length > 0 ? (
+        <div className="tbl-wrap">
+          <table className="tbl dense bk">
+            <caption className="sr">{t`Réservations, ${rows.length} lignes. Les en-têtes Client, Séjour et Montant trient la liste.`}</caption>
+            <thead>
+              <tr>
+                <SortTh k="name" sort={sort} onSort={setSort}>{t`Client`}</SortTh>
+                <th scope="col" className="hide-s">{t`Bien`}</th>
+                <SortTh k="checkin" sort={sort} onSort={setSort}>{t`Séjour`}</SortTh>
+                <th scope="col" className="hide-s">{t`État`}</th>
+                <SortTh k="amount" sort={sort} onSort={setSort} right>{t`Montant`}</SortTh>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((b) => {
+                const st = bookingState(b);
+                const balance = b.totalCents - b.paidCents;
+                return (
+                  <tr key={b.id} onClick={() => openBooking(b.id)}>
+                    <td>
+                      <button type="button" className="cell-link" onClick={(e) => (e.stopPropagation(), openBooking(b.id))}>
+                        {b.guestName || channelName(b)}
+                      </button>
+                      <small>{b.reference}</small>
+                    </td>
+                    <td className="hide-s">{b.unitName}</td>
+                    <td>
+                      {stayRange(b.checkin, b.checkout)}
+                      <small>{nightsLabel(b.checkin, b.checkout)}</small>
+                    </td>
+                    <td className="hide-s">
+                      <span className={`pill ${st}`}>{pill[st]}</span>
+                    </td>
+                    <td className="r">
+                      <b className="amt">{st === "plat" ? t`sur ${channelName(b)}` : eur(b.totalCents)}</b>
+                      {st === "solde" ? <small>{t`reste ${eur(balance)}`}</small> : null}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       ) : null}
     </div>

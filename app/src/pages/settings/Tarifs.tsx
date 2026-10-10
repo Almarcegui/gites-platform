@@ -64,7 +64,7 @@ export function TarifsPage() {
     { id: "idees", label: t`Suggestions` },
   ];
   return (
-    <Page title={t`Prix et saisons`} back tools={picker} width={1040}>
+    <Page title={t`Prix et saisons`} back tools={picker}>
       <div className="rule-box">
         <p>
           <b>

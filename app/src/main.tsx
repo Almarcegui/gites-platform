@@ -1,10 +1,7 @@
-import "@fontsource/schibsted-grotesk/latin-400.css";
-import "@fontsource/schibsted-grotesk/latin-600.css";
-import "@fontsource/schibsted-grotesk/latin-700.css";
-import "@fontsource/schibsted-grotesk/latin-800.css";
-import "@fontsource/atkinson-hyperlegible/latin-400.css";
-import "@fontsource/atkinson-hyperlegible/latin-700.css";
-import "@fontsource/literata/latin-600.css";
+import "@fontsource/ibm-plex-sans/latin-400.css";
+import "@fontsource/ibm-plex-sans/latin-500.css";
+import "@fontsource/ibm-plex-sans/latin-600.css";
+import "@fontsource/ibm-plex-sans/latin-700.css";
 import "@mantine/core/styles.layer.css";
 import "./styles.css";
 

@@ -43,7 +43,7 @@ export function ChannelPricesPage() {
   const { property, picker } = useWorkingProperty(dirty);
   const pid = property?.id;
   return (
-    <Page title={t`Promotions Airbnb et prix par plateforme`} back tools={picker} width={1000} lead={t`Ce que voient les voyageurs sur Airbnb et Booking. Le prix de votre site ne change jamais ici.`}>
+    <Page title={t`Promotions Airbnb et prix par plateforme`} back tools={picker} lead={t`Ce que voient les voyageurs sur Airbnb et Booking. Le prix de votre site ne change jamais ici.`}>
       <LinkingSection />
       {pid ? <PromotionsSection key={pid} propertyId={pid} onDirty={setDirty} /> : <Loading />}
     </Page>
