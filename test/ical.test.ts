@@ -262,6 +262,21 @@ describe("syncFeed (import complet sur vraie D1)", () => {
     if (direct.ok) expect((await getBooking(db, direct.id))?.status).toBe("confirmed");
   });
 
+  it("nouvel événement listé AVANT le déplacement qui lui libère la place : importé au même passage", async () => {
+    // Cas réel du 10/10/2026 (agenda Google de papa, dates UTC d'avant #112) :
+    // la résa connue passe du 01/11 au 02/11, et le séjour 30/10→02/11, écrit
+    // plus haut dans le fichier, n'entre qu'une fois ce déplacement fait.
+    const feed = await makeFeed();
+    const cal = (events: string[][]) =>
+      ["BEGIN:VCALENDAR", ...events.flatMap(([uid, a, b]) => ["BEGIN:VEVENT", `UID:${uid}`, `DTSTART;VALUE=DATE:${a}`, `DTEND;VALUE=DATE:${b}`, "SUMMARY:Busy", "END:VEVENT"]), "END:VCALENDAR"].join("\r\n");
+    await syncFeed(db, feed, mockFetch(cal([["suivant@google.com", "20271101", "20271108"]])), NOW);
+    const r = await syncFeed(db, feed, mockFetch(cal([
+      ["avant@google.com", "20271030", "20271102"],
+      ["suivant@google.com", "20271102", "20271108"],
+    ])), NOW);
+    expect(r).toMatchObject({ imported: 1, updated: 1, conflicts: [] });
+  });
+
   it("erreur réseau → statut d'erreur sur le flux, aucune résa touchée", async () => {
     const feed = await makeFeed();
     await syncFeed(db, feed, mockFetch(AIRBNB_ICS), NOW);

@@ -162,6 +162,46 @@ for (const [backend, create] of [
       expect(g?.phone).toBe("+32470000000");
     });
 
+    it("titre corrigé : l'ancien paiement est neutralisé, pas additionné ; le vrai nombre de personnes remplace le défaut", async () => {
+      const b = (await bookingByUid(feed1, "busy1@google.com"))!;
+      const corrige = ev("busy1@google.com", 10, 13, {
+        totalCents: 300000, personnes: 7,
+        paiements: [{ cents: 5000, date: D(-90), methode: "cash" }, { cents: 140000, date: D(-30), methode: "transfer" }, { cents: 103900, date: null, methode: "transfer" }],
+      });
+      res(await imp(feed1, [corrige]));
+      const pays = await listPayments(t.db, { bookingId: Number(b.id) });
+      expect(pays.filter((p) => p.status === "succeeded").map((p) => p.amountCents).sort()).toEqual([103900, 140000, 5000].sort());
+      expect(pays.find((p) => p.amountCents === 137900)?.status).toBe("failed");
+      const apres = (await bookingByUid(feed1, "busy1@google.com"))!;
+      expect(apres).toMatchObject({ paid_cents: 248900, adults: 7 });
+      expect(String(apres.internal_notes)).not.toContain("capacité par défaut du bien");
+    });
+
+    it("libérée par la synchro (ical_removed) alors que l'agenda la garde : rouverte et complétée", async () => {
+      await syncFeed(t.db, feed1, fetchOf(ics([{ uid: "trou@google.com", from: D(100), to: D(102) }])));
+      await syncFeed(t.db, feed1, fetchOf(ics([{ uid: "busy1@google.com", from: D(10), to: D(13) }])));
+      expect(await bookingByUid(feed1, "trou@google.com")).toMatchObject({ status: "cancelled", cancel_reason: "ical_removed" });
+      const r = res(await imp(feed1, [ev("trou@google.com", 100, 102, { email: "trou@example.test", nom: "Trou Flux", paiements: [] })]));
+      expect(r.completees).toBe(1);
+      expect(await bookingByUid(feed1, "trou@google.com")).toMatchObject({ status: "confirmed", cancel_reason: null });
+    });
+
+    it("conflit : aucune fiche client créée pour rien", async () => {
+      const g = await count("SELECT COUNT(*) AS n FROM guests");
+      const occupe = await createBookingAtomic(t.db, { unitId: 1, checkin: D(110), checkout: D(112), adults: 2, children: 0, status: "confirmed", source: "manual" });
+      expect(occupe.ok).toBe(true);
+      expect(res(await imp(feed1, [ev("orphelin@google.com", 110, 112, { email: "jamais.vu@example.test", nom: "Jamais Vu" })])).ignorees).toBe(1);
+      expect(await count("SELECT COUNT(*) AS n FROM guests")).toBe(g);
+    });
+
+    it("annulation posée à la main : son motif est gardé", async () => {
+      const c = await createBookingAtomic(t.db, { unitId: 1, checkin: D(120), checkout: D(122), adults: 2, children: 0, status: "confirmed", source: "ical", externalUid: `feed${feed1.id}:main@google.com` });
+      if (c.ok) await t.db.prepare("UPDATE bookings SET status = 'cancelled', cancel_reason = 'client a appelé' WHERE id = ?1").bind(c.id).run();
+      const r = res(await imp(feed1, [ev("main@google.com", 120, 122, { statut: "annulee", paiements: [] })]));
+      expect(r.lignes[0]!.avertissements?.join(" ")).toContain("motif gardé");
+      expect(await bookingByUid(feed1, "main@google.com")).toMatchObject({ cancel_reason: "client a appelé" });
+    });
+
     it("crée une réservation iCal portant l'UID du flux, que syncFeed reconnaît ensuite", async () => {
       const r = res(await imp(feed1, [ev("neuf@google.com", 20, 23, { email: "autre.client@example.test", nom: "Autre Client", paiements: [] })]));
       expect(r.creees).toBe(1);
@@ -170,6 +210,7 @@ for (const [backend, create] of [
       const sync = await syncFeed(t.db, feed1, fetchOf(ics([
         { uid: "busy1@google.com", from: D(10), to: D(13) },
         { uid: "neuf@google.com", from: D(20), to: D(23) },
+        { uid: "trou@google.com", from: D(100), to: D(102) },
       ])));
       expect(sync).toMatchObject({ imported: 0, updated: 0, cancelled: 0 });
     });
@@ -192,6 +233,7 @@ for (const [backend, create] of [
         { uid: "neuf@google.com", from: D(20), to: D(23) },
         { uid: "connu@google.com", from: D(30), to: D(32) },
         { uid: "annule@google.com", from: D(40), to: D(43) },
+        { uid: "trou@google.com", from: D(100), to: D(102) },
       ];
       const sync = await syncFeed(t.db, feed1, fetchOf(ics(all)));
       expect(sync).toMatchObject({ imported: 0, reactivated: 0, conflicts: [] });

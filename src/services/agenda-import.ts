@@ -25,6 +25,7 @@ import { isIsoDate, sqlNow, type IsoDate } from "../core/dates";
 import {
   addPayment,
   audit,
+  recomputePaid,
   blockingBookings,
   blockingManualBlocks,
   cancelBooking,
@@ -34,6 +35,7 @@ import {
   getManualBlockByExternalUid,
   getUnit,
   insertCancelledBooking,
+  reactivateBookingAtomic,
   type BookingRow,
   type FeedRow,
   type UnitRow,
@@ -196,7 +198,9 @@ export function mergedNotes(existing: string | null, block: string, uid: string)
   const debut = reste.indexOf(`${NOTE_MARKER} (`);
   if (debut >= 0 && reste.slice(debut, reste.indexOf("\n", debut) >>> 0).includes(uid)) {
     const fin = reste.indexOf(NOTE_END, debut);
-    reste = reste.slice(0, debut) + (fin >= 0 ? reste.slice(fin + NOTE_END.length) : "");
+    // Sans marqueur de fin, on ne sait pas où le bloc s'arrête : rien n'est
+    // retiré (une note à la main pourrait suivre), le nouveau bloc s'ajoute.
+    if (fin >= 0) reste = reste.slice(0, debut) + reste.slice(fin + NOTE_END.length);
   }
   const garde = reste
     .split("\n")
@@ -214,13 +218,34 @@ export function mergedNotes(existing: string | null, block: string, uid: string)
 async function addPayments(db: D1Database, bookingId: number, ev: AgendaEvenement): Promise<number> {
   let added = 0;
   const rangs = new Map<string, number>();
+  const prefixe = `Agenda Google ${ev.uid} — `;
+  const voulues = new Set<string>();
   for (const p of ev.paiements) {
     const base = `${p.cents / 100} € le ${p.date ?? "?"} (${p.methode})`;
     const rang = (rangs.get(base) ?? 0) + 1;
     rangs.set(base, rang);
-    const note = `Agenda Google ${ev.uid} — ${base}${rang > 1 ? ` #${rang}` : ""}`;
-    const exists = await db.prepare("SELECT 1 AS x FROM payments WHERE booking_id = ?1 AND note = ?2").bind(bookingId, note).first();
-    if (exists) continue;
+    voulues.add(`${prefixe}${base}${rang > 1 ? ` #${rang}` : ""}`);
+  }
+  // Réconciliation : un paiement importé de cet événement qui n'est plus dans
+  // l'agenda (titre corrigé) est neutralisé (failed), jamais supprimé ; un
+  // paiement neutralisé qui y revient redevient réussi.
+  const { results: deja } = await db
+    .prepare("SELECT id, note, status FROM payments WHERE booking_id = ?1 AND substr(note, 1, length(?2)) = ?2")
+    .bind(bookingId, prefixe)
+    .all();
+  const existantes = new Map((deja as { id: number; note: string; status: string }[]).map((r) => [r.note, r]));
+  for (const [note, r] of existantes) {
+    const statut = voulues.has(note) ? "succeeded" : "failed";
+    if (r.status !== statut) await db.prepare("UPDATE payments SET status = ?2 WHERE id = ?1").bind(r.id, statut).run();
+  }
+  if (existantes.size) await recomputePaid(db, bookingId);
+  rangs.clear();
+  for (const p of ev.paiements) {
+    const base = `${p.cents / 100} € le ${p.date ?? "?"} (${p.methode})`;
+    const rang = (rangs.get(base) ?? 0) + 1;
+    rangs.set(base, rang);
+    const note = `${prefixe}${base}${rang > 1 ? ` #${rang}` : ""}`;
+    if (existantes.has(note)) continue;
     await addPayment(db, {
       bookingId,
       kind: "manual",
@@ -250,10 +275,11 @@ async function completeBooking(
   const guestId = b.guestId ?? (await guestFor(db, ev));
   if (b.guestId != null) await fillPhone(db, b.guestId, ev);
   const sansPersonnes = b.adults === 0 && b.children === 0;
-  const adults = sansPersonnes ? (ev.personnes ?? unit.capacityBase) : b.adults;
+  const parDefautAvant = (b.internalNotes ?? "").includes("capacité par défaut du bien");
+  const adults = sansPersonnes ? (ev.personnes ?? unit.capacityBase) : parDefautAvant && ev.personnes != null ? ev.personnes : b.adults;
   // « Personnes à vérifier » tant que l'import a dû prendre la capacité par
   // défaut — y compris au second passage, où adults n'est plus à 0.
-  const defaut = ev.personnes == null && (sansPersonnes || (b.internalNotes ?? "").includes("capacité par défaut du bien"));
+  const defaut = ev.personnes == null && (sansPersonnes || parDefautAvant);
   const notes = mergedNotes(b.internalNotes, noteBlock(ev, feed, defaut ? unit.capacityBase : null), ev.uid);
   const total = Math.max(b.totalCents, ev.totalCents ?? 0, paidTotal(ev));
   await db
@@ -338,11 +364,14 @@ async function importOne(
     if (existing) {
       const warnings = await completeBooking(db, existing, ev, feed, unit, nowSql);
       const done = active ? await cancelBooking(db, active.id, AGENDA_CANCEL_REASON, nowSql) : false;
-      if (!active && existing.cancelReason !== AGENDA_CANCEL_REASON) {
-        // Déjà annulée pour une autre raison (« ical_removed »…) : le motif
-        // devient celui de l'agenda, que syncFeed ne rouvre pas.
+      if (!active && existing.cancelReason === "ical_removed") {
+        // Libérée par la synchro (événement un temps absent du flux) : le motif
+        // devient celui de l'agenda, que syncFeed ne rouvre pas. Un motif posé
+        // à la main (annulation admin) reste tel quel.
         await db.prepare("UPDATE bookings SET cancel_reason = ?2, updated_at = ?3 WHERE id = ?1 AND status = 'cancelled'")
           .bind(existing.id, AGENDA_CANCEL_REASON, nowSql).run();
+      } else if (!active && existing.cancelReason !== AGENDA_CANCEL_REASON) {
+        warnings.push(`déjà annulée (motif « ${existing.cancelReason ?? "?"} ») : motif gardé`);
       }
       await audit(db, "admin", done ? "agenda.import.annulee" : "agenda.import.completee", `booking:${existing.id}`, {
         feedId: feed.id, uid: ev.uid, reference: existing.reference, paiements: ev.paiements.length,
@@ -357,6 +386,8 @@ async function importOne(
       internalNotes: noteBlock(ev, feed, ev.personnes == null ? unit.capacityBase : null),
       cancelReason: AGENDA_CANCEL_REASON, now,
     });
+    // UID inscrit entre-temps par la synchro (confirmé) : on l'annule.
+    if (!created.inserted) await cancelBooking(db, created.id, AGENDA_CANCEL_REASON, nowSql);
     await addPayments(db, created.id, ev);
     await audit(db, "admin", "agenda.import.annulee", `booking:${created.id}`, {
       feedId: feed.id, uid: ev.uid, reference: created.reference, paiements: ev.paiements.length,
@@ -366,6 +397,26 @@ async function importOne(
 
   // --- confirmée ------------------------------------------------------------
   if (existing && !active) {
+    // Libérée par la synchro (l'événement a manqué au flux un passage) alors
+    // que l'agenda la garde : on la rouvre sur les dates de l'agenda, avec le
+    // garde-fou de disponibilité. Toute autre annulation est une décision.
+    if (existing.cancelReason === "ical_removed") {
+      if (essai) return { ...base, action: "completee", reference: existing.reference, raison: "rouverte (libérée par la synchro)" };
+      const back = await reactivateBookingAtomic(db, existing.id, unit.id, ev.checkin, ev.checkout, nowSql);
+      if (back) {
+        const reread = (await getBookingByExternalUid(db, extUid))!;
+        const warnings = await completeBooking(db, reread, ev, feed, unit, nowSql);
+        await audit(db, "admin", "agenda.import.completee", `booking:${existing.id}`, {
+          feedId: feed.id, uid: ev.uid, reference: existing.reference, rouverte: true, paiements: ev.paiements.length,
+        });
+        return { ...base, action: "completee", reference: existing.reference, avertissements: ["rouverte (libérée par la synchro)", ...warnings] };
+      }
+      const [bs, ks] = await Promise.all([
+        blockingBookings(db, unit.id, ev.checkin, ev.checkout, nowSql),
+        blockingManualBlocks(db, unit.id, ev.checkin, ev.checkout),
+      ]);
+      return { ...base, action: "ignoree", reference: existing.reference, raison: `libérée par la synchro, réouverture impossible : ${conflictLabel(bs, ks)}` };
+    }
     return {
       ...base, action: "ignoree", reference: existing.reference,
       raison: `réservation annulée sur la plateforme (motif « ${existing.cancelReason ?? "?"} ») alors que l'agenda la garde : à revoir`,
@@ -387,11 +438,12 @@ async function importOne(
     if (bs.length || ks.length) return { ...base, action: "ignoree", raison: conflictLabel(bs, ks) };
     return { ...base, action: "creee" };
   }
-  const guestId = await guestFor(db, ev);
+  // Le client n'est créé qu'une fois la réservation acquise : un conflit ne
+  // laisse aucune fiche orpheline.
   const created = await createBookingAtomic(db, {
     unitId: unit.id, checkin: ev.checkin, checkout: ev.checkout,
     adults: ev.personnes ?? unit.capacityBase, children: 0,
-    status: "confirmed", source: "ical", channelLabel: feed.name, externalUid: extUid, guestId,
+    status: "confirmed", source: "ical", channelLabel: feed.name, externalUid: extUid, guestId: null,
     totalCents: Math.max(ev.totalCents ?? 0, paidTotal(ev)),
     internalNotes: noteBlock(ev, feed, ev.personnes == null ? unit.capacityBase : null),
     now,
@@ -403,6 +455,8 @@ async function importOne(
     ]);
     return { ...base, action: "ignoree", raison: conflictLabel(bs, ks) };
   }
+  const guestId = await guestFor(db, ev);
+  if (guestId != null) await db.prepare("UPDATE bookings SET guest_id = ?2 WHERE id = ?1").bind(created.id, guestId).run();
   await addPayments(db, created.id, ev);
   await audit(db, "admin", "agenda.import.creee", `booking:${created.id}`, {
     feedId: feed.id, uid: ev.uid, reference: created.reference, paiements: ev.paiements.length,

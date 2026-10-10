@@ -139,6 +139,15 @@ class Adresses(unittest.TestCase):
         self.assertEqual(l.email, "jan.x@example.com")
         self.assertEqual(pay(l), [(49500, "2025-08-30")])
 
+    def test_invitation_creee_par_un_client(self):
+        # La majorité des événements est créée par le propriétaire ; celui-ci
+        # vient d'une invitation du client : son adresse reste celle du client.
+        evs = [jour(f"e{i}", "2026-03-06", "2026-03-09", "TLF") for i in range(3)]
+        invit = jour("inv", "2026-04-06", "2026-04-09", "séjour", [PROPRIO, "client.z@example.com"])
+        invit["creator"] = {"email": "client.z@example.com"}
+        l = {x.event_id: x for x in m.interpreter(export(evs + [invit]))}["inv"]
+        self.assertEqual(l.email, "client.z@example.com")
+
     def test_adresse_generique(self):
         l = une("666 12/2 info@lacantine.example  Jos Dal 28/1/25", "2026-10-16", "2026-10-19")
         self.assertEqual(l.nom, "Jos Dal")

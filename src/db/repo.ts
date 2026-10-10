@@ -782,7 +782,7 @@ export async function createBookingAtomic(db: D1Database, input: CreateBookingIn
 export async function insertCancelledBooking(
   db: D1Database,
   input: Omit<CreateBookingInput, "status" | "holdMinutes"> & { cancelReason: string },
-): Promise<{ id: number; reference: string }> {
+): Promise<{ id: number; reference: string; inserted: boolean }> {
   if (!isIsoDate(input.checkin) || !isIsoDate(input.checkout) || input.checkin >= input.checkout) {
     throw new Error(`insertCancelledBooking: dates invalides ${input.checkin} → ${input.checkout}`);
   }
@@ -816,11 +816,11 @@ export async function insertCancelledBooking(
     // Un appel concurrent a inscrit le même UID : on rend la ligne gagnante.
     const won = await db.prepare("SELECT id, reference FROM bookings WHERE external_uid = ?1").bind(input.externalUid ?? null).first<{ id: number; reference: string }>();
     if (!won) throw new Error("insertCancelledBooking: insertion refusée");
-    return { id: Number(won.id), reference: won.reference };
+    return { id: Number(won.id), reference: won.reference, inserted: false };
   }
   const id = res.meta.last_row_id;
   const row = await db.prepare("SELECT reference FROM bookings WHERE id = ?1").bind(id).first<{ reference: string }>();
-  return { id, reference: row?.reference ?? "" };
+  return { id, reference: row?.reference ?? "", inserted: true };
 }
 
 export async function getBooking(db: D1Database, id: number): Promise<BookingRow | null> {

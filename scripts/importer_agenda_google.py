@@ -45,6 +45,7 @@ import json
 import re
 import sys
 import unicodedata
+from collections import Counter
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -175,15 +176,28 @@ def nettoyer_titre(titre: str) -> str:
     return s
 
 
-def adresses_du_proprietaire(ev: dict) -> set[str]:
-    """Le créateur et l'organisateur de l'événement : papa (ou l'agenda
-    lui-même), jamais le client. Lu dans l'événement, pas écrit dans le code."""
-    return {str((ev.get(k) or {}).get("email", "")).lower() for k in ("creator", "organizer")} - {""}
+def adresses_du_proprietaire(cal: dict) -> set[str]:
+    """Qui tient l'agenda, lu dans les données (jamais écrit dans le code) :
+    l'adresse de l'agenda lui-même, et le créateur de la majorité de ses
+    événements (papa). Un événement créé par un client (invitation) ne fait
+    pas de ce client le propriétaire."""
+    evs = cal.get("evenements", [])
+    adresses = {str(cal.get("calendarId", "")).lower()}
+    createurs = Counter(str((e.get("creator") or {}).get("email", "")).lower() for e in evs)
+    createurs.pop("", None)
+    if createurs:
+        qui, n = createurs.most_common(1)[0]
+        if n * 2 >= len(evs):
+            adresses.add(qui)
+    for e in evs:
+        o = str((e.get("organizer") or {}).get("email", "")).lower()
+        if o.endswith("@group.calendar.google.com"):
+            adresses.add(o)
+    return adresses - {""}
 
 
-def emails_de(ev: dict, texte: str) -> list[str]:
+def emails_de(ev: dict, texte: str, proprietaire: set[str] = frozenset()) -> list[str]:
     vus: list[str] = []
-    proprietaire = adresses_du_proprietaire(ev)
     candidats = [m.group(0) for m in RE_EMAIL.finditer(texte)]
     for a in ev.get("attendees", []) or []:
         e = str(a.get("email", "")).replace('"', "").replace("mailto:", "")
@@ -325,11 +339,11 @@ MOTS_HORS_NOM = re.compile(
 )
 
 
-def lire_evenement(cal: dict, ev: dict, au_plus_tard_export: dt.date) -> Ligne:
+def lire_evenement(cal: dict, ev: dict, au_plus_tard_export: dt.date, proprietaire: set[str] = frozenset()) -> Ligne:
     titre = (ev.get("summary") or "").strip()
     checkin, checkout, minute, heures = dates_evenement(ev)
     texte = nettoyer_titre(titre)
-    emails = emails_de(ev, texte)
+    emails = emails_de(ev, texte, proprietaire)
     ligne = Ligne(cal["nom"], int(cal["unitId"]), int(cal["feedId"]), ev["id"], titre, checkin, checkout, minute, emails)
 
     if checkin >= checkout or (minute and heures < RDV_MAX_HEURES):
@@ -517,10 +531,11 @@ def interpreter(export: dict, depuis: str | None = None) -> list[Ligne]:
     exporte = dt.date.fromisoformat(str(export.get("exporte_le", dt.date.today().isoformat()))[:10])
     lignes: list[Ligne] = []
     for cal in export["calendriers"]:
+        proprietaire = adresses_du_proprietaire(cal)
         for ev in cal["evenements"]:
             if ev.get("status") == "cancelled":
                 continue
-            l = lire_evenement(cal, ev, exporte)
+            l = lire_evenement(cal, ev, exporte, proprietaire)
             if depuis and l.checkout <= depuis:
                 l.statut, l.raison = "ignoree", f"terminé avant le {depuis}"
             lignes.append(l)

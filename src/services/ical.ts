@@ -246,9 +246,31 @@ export async function syncFeed(
     return result;
   }
 
-  for (const ev of relevant) {
+  for (const ev of relevant) seenUids.add(`feed${feed.id}:${ev.uid}`);
+
+  // Événements disparus du flux = annulés côté canal → on libère, mais
+  // uniquement les séjours qui n'ont pas commencé (les séjours en cours ou
+  // passés sont laissés tels quels). AVANT les créations : un créneau libéré
+  // à ce passage doit pouvoir être repris au même passage.
+  for (const b of existing) {
+    if (!seenUids.has(b.externalUid ?? "") && b.checkin >= today) {
+      await cancelBooking(db, b.id, "ical_removed", nowSql);
+      result.cancelled += 1;
+    }
+  }
+
+  // Les événements déjà connus d'abord (déplacements), les nouveaux ensuite :
+  // l'ordre du flux n'est pas celui des dates. Sur l'agenda Google de papa
+  // (10/10/2026), le séjour du 30/10 venait AVANT, dans le fichier, celui du
+  // 02/11 qui le chevauchait encore d'une nuit (dates UTC d'avant #112) : la
+  // création échouait « créneau déjà pris », puis le déplacement libérait le
+  // créneau trop tard pour ce passage — et le cron n'en refait pas d'autre.
+  const ordered = [
+    ...relevant.filter((ev) => byUid.has(`feed${feed.id}:${ev.uid}`)),
+    ...relevant.filter((ev) => !byUid.has(`feed${feed.id}:${ev.uid}`)),
+  ];
+  for (const ev of ordered) {
     const extUid = `feed${feed.id}:${ev.uid}`;
-    seenUids.add(extUid);
     const known = byUid.get(extUid);
     if (!known) {
       // Événement tenu par un blocage manuel (import des agendas Google :
@@ -339,16 +361,6 @@ export async function syncFeed(
           bookingReference: known.reference, channelLabel: feed.name, label,
         }, nowSql)) && registerOk;
       }
-    }
-  }
-
-  // Événements disparus du flux = annulés côté canal → on libère, mais
-  // uniquement les séjours qui n'ont pas commencé (les séjours en cours ou
-  // passés sont laissés tels quels).
-  for (const b of existing) {
-    if (!seenUids.has(b.externalUid ?? "") && b.checkin >= today) {
-      await cancelBooking(db, b.id, "ical_removed", nowSql);
-      result.cancelled += 1;
     }
   }
 
