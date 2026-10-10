@@ -77,8 +77,13 @@ export function IcalPage() {
                       const feeds = q.data!.feeds.filter((f) => f.active);
                       const bad: string[] = [];
                       for (const f of feeds) {
-                        const r = await api<{ result: FeedSyncResult }>(`/ical-feeds/${f.id}/sync`, { method: "POST" });
-                        if (r.result.error) bad.push(f.name);
+                        // Un flux en panne n'empêche pas de relire les suivants.
+                        try {
+                          const r = await api<{ result: FeedSyncResult }>(`/ical-feeds/${f.id}/sync`, { method: "POST" });
+                          if (r.result.error) bad.push(f.name);
+                        } catch {
+                          bad.push(f.name);
+                        }
                       }
                       if (bad.length) throw new Error(t`Relu, sauf : ${bad.join(", ")} (voir leur fiche).`);
                       return feeds.length;

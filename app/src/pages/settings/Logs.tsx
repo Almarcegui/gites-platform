@@ -10,7 +10,7 @@ import type { AuditRow, EmailLogRow } from "../../api/types2";
 import { ErrorLine } from "../../lib/action";
 import { useOpenBooking } from "../../shell/Shell";
 import { eur } from "../../lib/money";
-import { Empty, Loading, Page, SidePanel, sqlWhen } from "../../ui/kit";
+import { Empty, Fold, Loading, Page, SidePanel, sqlWhen } from "../../ui/kit";
 
 const ACTIONS: Record<string, string> = {
   "booking.create_manual": "réservation prise par téléphone",
@@ -169,8 +169,8 @@ function valueText(k: string, v: unknown): string {
   if (v == null) return "aucun";
   if (typeof v === "boolean") return v ? "oui" : "non";
   if (typeof v === "number" && /Cents$/.test(k)) return eur(v);
-  if (Array.isArray(v)) return v.map((x) => (typeof x === "object" ? "…" : String(x))).join(", ");
-  if (typeof v === "object") return "…";
+  if (Array.isArray(v)) return v.map((x) => (x && typeof x === "object" ? JSON.stringify(x) : String(x))).join(", ");
+  if (typeof v === "object") return JSON.stringify(v);
   return String(v);
 }
 
@@ -215,6 +215,11 @@ function AuditPanel({ e, onClose }: { e: AuditRow; onClose: () => void }) {
             ))}
           </tbody>
         </table>
+      ) : null}
+      {e.detail ? (
+        <Fold title={t`Détail technique`}>
+          <p className="mono-line">{e.detail}</p>
+        </Fold>
       ) : null}
     </SidePanel>
   );

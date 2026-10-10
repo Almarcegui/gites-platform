@@ -210,10 +210,24 @@ export function Confirm(props: { open: boolean; title: string; text?: ReactNode;
 
 // --- garde « modifications non enregistrées » ----------------------------------------
 
+/** Combien de saisies non enregistrées sont à l'écran : le sélecteur de
+ *  domaine de la barre du haut le consulte avant de changer de domaine. */
+let unsaved = 0;
+export function hasUnsaved(): boolean {
+  return unsaved > 0;
+}
+
 /** Retient la navigation vers un autre écran (et le rechargement) tant que
  *  `dirty` est vrai. Ouvrir une fiche (?resa=) sur le même écran ne compte pas. */
 export function UnsavedGuard({ dirty }: { dirty: boolean }) {
   const { t } = useLingui();
+  useEffect(() => {
+    if (!dirty) return;
+    unsaved += 1;
+    return () => {
+      unsaved -= 1;
+    };
+  }, [dirty]);
   const blocker = useBlocker({
     shouldBlockFn: ({ current, next }) => dirty && current.pathname !== next.pathname,
     enableBeforeUnload: () => dirty,

@@ -3,7 +3,7 @@
 // anti-conflit que le reste de la plateforme.
 import { useLingui } from "@lingui/react/macro";
 import { Textarea } from "@mantine/core";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { api } from "../../api/client";
 import type { ImportResult } from "../../api/types2";
@@ -25,6 +25,14 @@ export function ImportPage() {
     setTested(null);
     setImported(false);
   };
+  // Après un import, changer de domaine repart d'une page vierge.
+  const pid = property?.id;
+  useEffect(() => {
+    setCsvRaw("");
+    setRes(null);
+    setTested(null);
+    setImported(false);
+  }, [pid]);
   const testOk = !!tested && !!property && tested.csv === csv && tested.propertyId === property.id;
   const a = useAction();
   const run = (dryRun: boolean) =>

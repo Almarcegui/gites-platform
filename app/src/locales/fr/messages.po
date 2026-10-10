@@ -1590,6 +1590,10 @@ msgstr "Changé en partie : {applied} nuit(s) modifiées, le reste non. {0} Vér
 msgid "Changer"
 msgstr "Changer"
 
+#: src/shell/Shell.tsx
+msgid "Changer de domaine sans enregistrer ?"
+msgstr "Changer de domaine sans enregistrer ?"
+
 #: src/pages/settings/Channels.tsx
 msgid "Changer la majoration appliquée ?"
 msgstr "Changer la majoration appliquée ?"
@@ -1609,6 +1613,10 @@ msgstr "Changer les dates"
 #: src/booking/BookingPanel.tsx
 msgid "Changer les dates ou le nombre de voyageurs"
 msgstr "Changer les dates ou le nombre de voyageurs"
+
+#: src/shell/Shell.tsx
+msgid "Changer sans enregistrer"
+msgstr "Changer sans enregistrer"
 
 #: src/pages/settings/Channels.tsx
 msgid "Chaque bien d'ici et son équivalent chez Beds24. La correspondance se règle une fois, dans Beds24."
@@ -2006,6 +2014,10 @@ msgstr "dès {0} nuits"
 msgid "dès 1 nuit"
 msgstr "dès 1 nuit"
 
+#: src/shell/Shell.tsx
+msgid "Des modifications de cette page ne sont pas enregistrées. En changeant de domaine, elles seront perdues."
+msgstr "Des modifications de cette page ne sont pas enregistrées. En changeant de domaine, elles seront perdues."
+
 #: src/ui/kit.tsx
 msgid "Des modifications de cette page ne sont pas enregistrées. Si vous partez maintenant, elles seront perdues."
 msgstr "Des modifications de cette page ne sont pas enregistrées. Si vous partez maintenant, elles seront perdues."
@@ -2041,6 +2053,7 @@ msgid "Détail du prix"
 msgstr "Détail du prix"
 
 #: src/pages/settings/Channels.tsx
+#: src/pages/settings/Logs.tsx
 msgid "Détail technique"
 msgstr "Détail technique"
 
@@ -4213,6 +4226,10 @@ msgstr "Reste à payer : {0}. Indiquez ce que vous avez reçu."
 #: src/pages/Today.tsx
 msgid "Reste à payer à l'arrivée :"
 msgstr "Reste à payer à l'arrivée :"
+
+#: src/shell/Shell.tsx
+msgid "Rester sur ce domaine"
+msgstr "Rester sur ce domaine"
 
 #: src/ui/kit.tsx
 msgid "Rester sur la page"
