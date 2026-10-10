@@ -69,14 +69,17 @@ function TodayA() {
   const navigate = useNavigate();
   const openBooking = useOpenBooking();
   const total = d.toCollect.reduce((s, x) => s + x.cents, 0);
-  const list = (xs: string[]) => (xs.length > 2 ? [...xs.slice(0, 1), t`et ${xs.length - 1} autres`] : xs);
-  const items: { k: string; icon: ReactNode; title: string; count: string; lines: string[]; onClick: () => void }[] = [
+  // Bandeau du jour : un titre, un chiffre en grand, deux lignes au plus
+  // (« qui », puis « où et quand ») ; le reste se lit dans la fiche ou l'écran.
+  type Line = { main: string; sub?: string };
+  const list = (xs: Line[]): Line[] => (xs.length > 2 ? [xs[0]!, { main: t`et ${xs.length - 1} autres` }] : xs);
+  const items: { k: string; icon: ReactNode; title: string; count: string; lines: Line[]; onClick: () => void }[] = [
     {
       k: "arrive",
       icon: <IconLogin2 size={22} />,
       title: t`Arrivent`,
       count: String(d.arrivals.length),
-      lines: d.arrivals.length ? list(d.arrivals.map((e) => `${hourLabel(e.time)}, ${unitName(d.domains, e.booking)} : ${e.booking.guestName}${isChannel(e.booking) ? t`, via ${channelName(e.booking)}` : ""}`)) : [t`Personne aujourd'hui.`],
+      lines: d.arrivals.length ? list(d.arrivals.map((e) => ({ main: e.booking.guestName, sub: `${unitName(d.domains, e.booking)}, ${hourLabel(e.time)}${isChannel(e.booking) ? t`, via ${channelName(e.booking)}` : ""}` }))) : [{ main: t`Personne aujourd'hui.` }],
       onClick: () => (d.arrivals[0] ? openBooking(d.arrivals[0].booking.id) : undefined),
     },
     {
@@ -84,7 +87,7 @@ function TodayA() {
       icon: <IconLogout2 size={22} />,
       title: t`Partent`,
       count: String(d.departures.length),
-      lines: d.departures.length ? list(d.departures.map((e) => `${hourLabel(e.time)}, ${unitName(d.domains, e.booking)} : ${e.booking.guestName}`)) : [t`Personne aujourd'hui.`],
+      lines: d.departures.length ? list(d.departures.map((e) => ({ main: e.booking.guestName, sub: `${unitName(d.domains, e.booking)}, ${hourLabel(e.time)}` }))) : [{ main: t`Personne aujourd'hui.` }],
       onClick: () => (d.departures[0] ? openBooking(d.departures[0].booking.id) : undefined),
     },
     {
@@ -92,7 +95,7 @@ function TodayA() {
       icon: <IconBrush size={22} />,
       title: t`Ménage`,
       count: String(d.cleaning.length),
-      lines: d.cleaning.length ? list(d.cleaning.map((c) => (c.tight && c.next ? t`${c.unitName}, à finir avant ${hourLabel(c.next.checkinTime)}` : t`${c.unitName}, après ${hourLabel(c.time)}`))) : [t`Aucun ménage aujourd'hui.`],
+      lines: d.cleaning.length ? list(d.cleaning.map((c) => ({ main: c.unitName, sub: c.tight && c.next ? t`à finir avant ${hourLabel(c.next.checkinTime)}` : t`après ${hourLabel(c.time)}` }))) : [{ main: t`Aucun ménage aujourd'hui.` }],
       onClick: () => void navigate({ to: "/menage" }),
     },
     {
@@ -100,7 +103,7 @@ function TodayA() {
       icon: <IconCurrencyEuro size={22} />,
       title: t`À encaisser`,
       count: eur(total),
-      lines: d.toCollect.length ? list(d.toCollect.map((x) => `${x.name} : ${eur(x.cents)}${x.late ? t`, en retard` : t` à l'arrivée`}`)) : [t`Rien à encaisser aujourd'hui.`],
+      lines: d.toCollect.length ? list(d.toCollect.map((x) => ({ main: x.name, sub: `${eur(x.cents)}${x.late ? t`, en retard` : t`, à l'arrivée`}` }))) : [{ main: t`Rien aujourd'hui.` }],
       onClick: () => (d.toCollect[0] ? openBooking(d.toCollect[0].id) : undefined),
     },
     {
@@ -108,7 +111,7 @@ function TodayA() {
       icon: <IconMessage size={22} />,
       title: t`Messages`,
       count: String(d.messages.length),
-      lines: d.messages.length ? list(d.messages.map((m) => `${m.fromName || m.fromEmail} : ${m.subject}`)) : [t`Aucun message en attente.`],
+      lines: d.messages.length ? list(d.messages.map((m) => ({ main: m.fromName || m.fromEmail, sub: m.subject }))) : [{ main: t`Aucun en attente.` }],
       onClick: () => void navigate({ to: "/messages" }),
     },
   ];
@@ -124,10 +127,13 @@ function TodayA() {
               <span className="t-h">
                 {x.icon}
                 {x.title}
-                <b>{x.count}</b>
               </span>
+              <b className="t-n">{x.count}</b>
               {x.lines.map((l, i) => (
-                <p key={i}>{l}</p>
+                <p key={i}>
+                  <span>{l.main}</span>
+                  {l.sub ? <small>{l.sub}</small> : null}
+                </p>
               ))}
             </button>
           ))}

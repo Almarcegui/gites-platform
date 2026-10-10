@@ -216,7 +216,7 @@ export function Grid(props: GridProps) {
         </div>
         {props.showPrices ? (
           <div className="row px">
-            <div className="lab">{t`Prix, minimum`}</div>
+            <div className="lab">{t`Prix, nuits min.`}</div>
             {dates.map((d, i) => {
               const r = rates?.days.find((x) => x.date === d);
               const taken = isNightTaken(occupancy, u.id, d);
@@ -234,7 +234,8 @@ export function Grid(props: GridProps) {
                   {...cellHandlers(domain.property.id, u.id, d)}
                 >
                   <b>{price ?? "—"}</b>
-                  <small>{r?.minNights ? t`${r.minNights} n.` : ""}</small>
+                  {/* Le minimum ne s'écrit que là où il change : moins de chiffres, la grille respire. */}
+                  <small>{r?.minNights && (i === 0 || rates?.days.find((x) => x.date === dates[i - 1])?.minNights !== r.minNights) ? t`${r.minNights} n.` : ""}</small>
                 </button>
               );
             })}

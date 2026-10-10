@@ -4,6 +4,7 @@ import { TextInput } from "@mantine/core";
 import { useDebouncedValue } from "@mantine/hooks";
 import { IconSearch } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 
 import { api } from "../api/client";
@@ -15,6 +16,7 @@ import { channelName } from "../lib/derive";
 import { eur } from "../lib/money";
 import { useScope } from "../lib/scope";
 import { useOpenBooking } from "../shell/Shell";
+import { DownloadButton } from "../ui/kit";
 
 type Period = "upcoming" | "current" | "past" | "";
 
@@ -43,6 +45,14 @@ export function BookingsPage() {
         <h1 className="title">
           <Trans>Réservations</Trans>
         </h1>
+        <div className="tools">
+          <DownloadButton path="/bookings.csv" query={{ property: scope === "all" ? undefined : scope }} filename="reservations.csv">
+            {t`Exporter`}
+          </DownloadButton>
+          <Link className="btn" to="/reglages/import">
+            {t`Importer depuis elloha`}
+          </Link>
+        </div>
       </div>
       <div className="filters">
         <TextInput

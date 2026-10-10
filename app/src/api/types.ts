@@ -102,6 +102,7 @@ export interface DayRate {
   fallbackPriceCents: number | null;
   overridePriceCents: number | null;
   overrideMinNights: number | null;
+  seasonName?: string | null;
 }
 
 export interface RateCalendarUnit {
