@@ -604,6 +604,7 @@ export function registerAdminRoutes(router: Router): void {
   }));
 
   router.post("/api/admin/users", guard(async (req, env) => {
+    if (!isHuman(req)) return apiError(403, "les comptes du back-office se gèrent depuis une session humaine (pas par une clé de service)");
     const body = (await req.json().catch(() => ({}))) as { username?: unknown };
     const username = typeof body.username === "string" ? body.username.trim().toLowerCase() : "";
     if (!/^[a-z0-9][a-z0-9._-]{1,19}$/.test(username)) {
@@ -621,6 +622,7 @@ export function registerAdminRoutes(router: Router): void {
   }));
 
   router.post("/api/admin/users/:id/reset-password", guard(async (req, env, p) => {
+    if (!isHuman(req)) return apiError(403, "les comptes du back-office se gèrent depuis une session humaine (pas par une clé de service)");
     const id = Number(p.id);
     const row = await env.DB.prepare("SELECT id, username FROM admin_users WHERE id = ?").bind(id)
       .first<{ id: number; username: string }>();
@@ -633,6 +635,7 @@ export function registerAdminRoutes(router: Router): void {
   }));
 
   router.patch("/api/admin/users/:id", guard(async (req, env, p) => {
+    if (!isHuman(req)) return apiError(403, "les comptes du back-office se gèrent depuis une session humaine (pas par une clé de service)");
     const id = Number(p.id);
     const body = (await req.json().catch(() => ({}))) as { active?: unknown };
     if (typeof body.active !== "boolean") return apiError(400, "champ active (booléen) requis");
@@ -647,6 +650,7 @@ export function registerAdminRoutes(router: Router): void {
   }));
 
   router.delete("/api/admin/users/:id", guard(async (req, env, p) => {
+    if (!isHuman(req)) return apiError(403, "les comptes du back-office se gèrent depuis une session humaine (pas par une clé de service)");
     const id = Number(p.id);
     const row = await env.DB.prepare("SELECT id, username FROM admin_users WHERE id = ?").bind(id)
       .first<{ id: number; username: string }>();

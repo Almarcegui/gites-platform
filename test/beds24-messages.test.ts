@@ -192,6 +192,27 @@ describe("fil unifié et réponse par le canal", () => {
     expect((await api("POST", `/api/admin/messages/${id}/reply`, { body: "Réponse qui ne part pas" })).status).toBe(200);
   });
 
+  it("panne réseau pendant l'envoi : état « inconnu » gardé, pas de renvoi immédiat", async () => {
+    await pullChannelMessages(env());
+    const id = await guestMessageId();
+    const before = globalThis.fetch;
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      if ((init?.method ?? "GET") === "POST") throw new TypeError("fetch failed");
+      return before(input, init);
+    }) as typeof fetch;
+    try {
+      const r = await api("POST", `/api/admin/messages/${id}/reply`, { body: "Peut-être partie" });
+      expect(r.status).toBe(502);
+      expect(String(r.data.error)).toContain("peut-être partie");
+    } finally {
+      globalThis.fetch = before;
+    }
+    expect((await t.db.prepare("SELECT delivery FROM messages WHERE direction = 'out' AND channel = 'beds24'").all()).results).toEqual([{ delivery: "inconnu" }]);
+    calls = [];
+    expect((await api("POST", `/api/admin/messages/${id}/reply`, { body: "Peut-être partie" })).status).toBe(502);
+    expect(calls.filter((c) => c.method === "POST")).toHaveLength(0);
+  });
+
   it("double clic : la même réponse ne part qu'une fois", async () => {
     await pullChannelMessages(env());
     const id = await guestMessageId();

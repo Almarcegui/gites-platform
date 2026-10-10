@@ -66,6 +66,11 @@ describe("clés de service", () => {
     expect((await call("POST", `/api/admin/service-keys/${id}/revoke`, `svc:${key}`)).status).toBe(403);
     expect((await call("POST", "/api/admin/service-keys", "sauvegarde:nuit", { name: "x" })).status).toBe(403);
     expect((await call("POST", "/api/admin/service-keys", "jeton-humain", { name: "nu" })).status).toBe(403);
+    // ni de compte humain, qui ouvrirait ensuite une session (contre-review Codex)
+    expect((await call("POST", "/api/admin/users", `svc:${key}`, { username: "pirate" })).status).toBe(403);
+    expect((await call("POST", "/api/admin/users/1/reset-password", `svc:${key}`)).status).toBe(403);
+    expect((await call("PATCH", "/api/admin/users/1", `svc:${key}`, { active: false })).status).toBe(403);
+    expect((await call("DELETE", "/api/admin/users/1", `svc:${key}`)).status).toBe(403);
   });
 
   it("une session humaine crée aussi ; nom invalide ou déjà pris refusé", async () => {

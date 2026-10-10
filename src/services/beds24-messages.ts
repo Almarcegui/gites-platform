@@ -191,6 +191,7 @@ export async function pullChannelMessages(env: Env, now: Date = new Date()): Pro
     return c.remaining > Math.max(5, (c.cost ?? 1) * 3);
   };
   const unread: number[] = [];
+  let complete = false;
   try {
     for (let page = 1; page <= MAX_PAGES; page += 1) {
       if (page > 1 && !reserveOk()) break;
@@ -206,7 +207,10 @@ export async function pullChannelMessages(env: Env, now: Date = new Date()): Pro
         if (r.linked) result.linked += 1;
         if (!m.read) unread.push(m.id);
       }
-      if (!res.pages?.nextPageExists) break;
+      if (!res.pages?.nextPageExists) {
+        complete = true;
+        break;
+      }
     }
   } catch (e) {
     await audit(db, "cron", "beds24.messages.error", undefined, {
@@ -248,7 +252,8 @@ export async function pullChannelMessages(env: Env, now: Date = new Date()): Pro
   // La fenêtre ne recule que si tout ce qui a été lu est marqué lu chez Beds24 :
   // sinon un message resté « non lu » sortirait de la fenêtre maxAge suivante
   // et ne serait plus jamais marqué. (Le dédoublonnage évite toute copie double.)
-  const cursorAt = result.markRead === "ok" || result.markRead === "aucun" ? now.toISOString() : state.at;
+  // Pagination interrompue (quota, 3 pages) : idem, la fenêtre attend.
+  const cursorAt = complete && (result.markRead === "ok" || result.markRead === "aucun") ? now.toISOString() : state.at;
   await setSetting(db, MESSAGES_STATE_KEY, JSON.stringify({
     ...(cursorAt ? { at: cursorAt } : {}), seenAt: now.toISOString(), maxAge,
     fetched: result.fetched, imported: result.imported, markRead: result.markRead, credit: result.credit,
@@ -322,13 +327,22 @@ export async function replyOnChannel(
     const failures = arrayFailures(res);
     if (failures.length > 0) throw new Beds24Error(`Beds24 a refusé la réponse : ${failures.join(" · ")}`);
   } catch (e) {
-    // Rien n'est parti : la réservation locale « en cours » s'efface (elle n'a
-    // jamais été une donnée métier), le texte reste dans l'écran pour réessayer.
-    await db.batch([
-      db.prepare("DELETE FROM channel_messages WHERE message_id = ?1").bind(id),
-      db.prepare("DELETE FROM messages WHERE id = ?1 AND delivery = 'pending'").bind(id),
-    ]);
-    throw e;
+    // Refus EXPLICITE de Beds24 (statut HTTP ou élément refusé) : rien n'est
+    // parti, la réservation locale « en cours » s'efface (elle n'a jamais été
+    // une donnée métier) et le texte reste dans l'écran pour réessayer.
+    // Panne réseau ou délai : l'envoi a PU avoir lieu — la ligne reste, marquée
+    // « inconnu », et le garde-fou des 2 minutes empêche le renvoi immédiat.
+    const refused = e instanceof Beds24Error && (e.status != null || e.message.startsWith("Beds24 a refusé"));
+    if (refused) {
+      await db.batch([
+        db.prepare("DELETE FROM channel_messages WHERE message_id = ?1").bind(id),
+        db.prepare("DELETE FROM messages WHERE id = ?1 AND delivery = 'pending'").bind(id),
+      ]);
+      throw e;
+    }
+    await db.prepare("UPDATE messages SET delivery = 'inconnu' WHERE id = ?1").bind(id).run();
+    await audit(db, "admin", "message.reply.beds24.inconnu", `message:${id}`, { error: e instanceof Error ? e.message : String(e) });
+    throw new Beds24Error("Beds24 n'a pas répondu : la réponse est peut-être partie — vérifier la conversation dans Beds24 avant de la renvoyer");
   }
   await db.prepare("UPDATE messages SET delivery = 'beds24' WHERE id = ?1").bind(id).run();
   await audit(db, "admin", "message.reply.beds24", `message:${id}`, { bookingId: original.bookingId, beds24BookingId: link.beds24_booking_id });
