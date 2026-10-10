@@ -65,7 +65,9 @@ describe("clés de service", () => {
     expect((await call("POST", "/api/admin/service-keys", `svc:${key}`, { name: "fille" })).status).toBe(403);
     expect((await call("POST", `/api/admin/service-keys/${id}/revoke`, `svc:${key}`)).status).toBe(403);
     expect((await call("POST", "/api/admin/service-keys", "sauvegarde:nuit", { name: "x" })).status).toBe(403);
-    expect((await call("POST", "/api/admin/service-keys", "jeton-humain", { name: "nu" })).status).toBe(403);
+    // le jeton nu du secret ADMIN_TOKEN reste l'accès de secours du propriétaire : humain
+    expect((await call("POST", "/api/admin/service-keys", "jeton-humain", { name: "secours" })).status).toBe(200);
+    expect((await call("POST", "/api/admin/service-keys", "nuit", { name: "x2" })).status).toBe(403);
     // ni de compte humain, qui ouvrirait ensuite une session (contre-review Codex)
     expect((await call("POST", "/api/admin/users", `svc:${key}`, { username: "pirate" })).status).toBe(403);
     expect((await call("POST", "/api/admin/users/1/reset-password", `svc:${key}`)).status).toBe(403);

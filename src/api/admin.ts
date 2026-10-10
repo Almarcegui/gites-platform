@@ -217,14 +217,14 @@ function currentUser(req: Request): string {
 }
 
 /** Comment la requête s'est authentifiée. « humain » = session de la page de
- *  connexion, ou couple nommé du secret ADMIN_TOKEN (accès de secours) ; jamais
- *  une clé de service, le mot de passe nu historique, ni le compte sauvegarde. */
+ *  connexion, ou secret ADMIN_TOKEN (couple nommé ou jeton nu historique : l'accès
+ *  de secours du propriétaire) ; jamais une clé de service ni le compte sauvegarde. */
 type AuthKind = "session" | "paire" | "nu" | "service" | "access";
 const REQUEST_KIND = new WeakMap<Request, AuthKind>();
 
 function isHuman(req: Request): boolean {
   const kind = REQUEST_KIND.get(req);
-  return (kind === "session" || kind === "paire") && currentUser(req) !== BACKUP_USER;
+  return (kind === "session" || kind === "paire" || kind === "nu") && currentUser(req) !== BACKUP_USER;
 }
 
 /** Compte de la sauvegarde de nuit (scripts/sauvegarde_nuit.py, depuis le Mac) :
