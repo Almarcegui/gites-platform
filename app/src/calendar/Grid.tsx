@@ -6,7 +6,7 @@ import { IconBrush, IconCurrencyEuro, IconLock } from "@tabler/icons-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import type { DomainData } from "../api/hooks";
-import type { IsoDate, PlanningBooking, RateCalendarUnit, Unit } from "../api/types";
+import type { IsoDate, ManualBlock, PlanningBooking, RateCalendarUnit, Unit } from "../api/types";
 import { addDays, dayNum, dayRange, isWeekend, longDate, monthShort, shortDate, weekdayShort } from "../lib/dates";
 import { BAR_LABEL, barColumns, barKind, channelName, isChannel, isNightTaken } from "../lib/derive";
 import type { RangeSelection } from "./PricePanel";
@@ -20,6 +20,7 @@ export interface GridProps {
   showPrices: boolean;
   selection: RangeSelection | null;
   onOpenBooking: (id: number) => void;
+  onOpenBlock?: (block: ManualBlock) => void;
   onSelect: (s: RangeSelection, anchor: DOMRect | null) => void;
 }
 
@@ -206,6 +207,7 @@ export function Grid(props: GridProps) {
                   <span>{k.reason || t`Bloqué`}</span>
                 </>,
                 t`Bloqué du ${shortDate(k.checkin)} au ${shortDate(k.checkout)} : ${k.reason ?? ""}`,
+                props.onOpenBlock ? () => props.onOpenBlock!(k) : undefined,
               ),
             )}
           {departing && todayIdx >= 0 ? (

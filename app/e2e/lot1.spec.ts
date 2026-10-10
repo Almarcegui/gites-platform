@@ -41,7 +41,7 @@ test("prix et saisons : prix de base, saison créée puis supprimée, l'année",
   await go(page, "reglages/tarifs");
   await expect(page.getByRole("heading", { name: "Prix et saisons" })).toBeVisible();
   await page.getByRole("tab", { name: "Prix de base" }).click();
-  await page.getByRole("listitem").filter({ hasText: "La Scierie" }).click();
+  await page.locator(".list-row").filter({ hasText: "La Scierie" }).click();
   const d = drawer(page);
   await expect(d.getByRole("heading", { name: "La Scierie" })).toBeVisible();
   const we = d.getByLabel(/Nuit du week-end/);
@@ -53,7 +53,7 @@ test("prix et saisons : prix de base, saison créée puis supprimée, l'année",
   await d.getByRole("button", { name: "Enregistrer" }).click();
   await expect(page.getByText(/Prix de base de La Scierie enregistré/)).toBeVisible();
   // remise en place
-  await page.getByRole("listitem").filter({ hasText: "La Scierie" }).click();
+  await page.locator(".list-row").filter({ hasText: "La Scierie" }).click();
   await drawer(page).getByLabel(/Nuit du week-end/).fill(before);
   await drawer(page).getByRole("button", { name: "Enregistrer" }).click();
   await expect(page.getByText(/Prix de base de La Scierie enregistré/).first()).toBeVisible();
@@ -66,7 +66,7 @@ test("prix et saisons : prix de base, saison créée puis supprimée, l'année",
   await page.screenshot({ path: shot("apres-1280-panneau-saison") });
   await drawer(page).getByRole("button", { name: "Créer la saison" }).click();
   await expect(page.getByText(/Saison Essai lot 1 créée/)).toBeVisible();
-  await page.getByRole("listitem").filter({ hasText: "Essai lot 1" }).click();
+  await page.locator(".list-row").filter({ hasText: "Essai lot 1" }).click();
   await drawer(page).getByRole("button", { name: "Plus" }).click();
   await page.getByRole("menuitem", { name: "Supprimer la saison" }).click();
   await page.getByRole("dialog", { name: /Supprimer la saison/ }).getByRole("button", { name: "Supprimer la saison" }).click();
@@ -110,13 +110,13 @@ test("plateformes : coller un code d'invitation, l'erreur dite en clair", async 
 test("clients, paiements, chiffres, journaux : listes et panneaux", async ({ page }) => {
   await go(page, "reglages/clients");
   await page.getByLabel("Rechercher un client").fill("Oudewaeter");
-  await page.getByRole("listitem").filter({ hasText: "Oudewaeter" }).first().click();
+  await page.locator(".list-row").filter({ hasText: "Oudewaeter" }).first().click();
   await expect(drawer(page).getByRole("heading", { name: /Oudewaeter/ })).toBeVisible();
   await page.screenshot({ path: shot("apres-1280-panneau-client") });
   await page.keyboard.press("Escape");
 
   await go(page, "reglages/paiements");
-  await page.getByRole("listitem").first().click();
+  await page.locator(".list-row").first().click();
   await expect(drawer(page).getByRole("button", { name: /Ouvrir la réservation/ })).toBeVisible();
   await page.screenshot({ path: shot("apres-1280-panneau-paiement") });
   await page.keyboard.press("Escape");
@@ -126,7 +126,7 @@ test("clients, paiements, chiffres, journaux : listes et panneaux", async ({ pag
   await expect(page.getByRole("button", { name: /Chiffres \d{4}/ })).toBeVisible();
 
   await go(page, "reglages/journaux");
-  await page.getByRole("listitem").first().click();
+  await page.locator(".list-row").first().click();
   await expect(drawer(page)).toBeVisible();
 });
 
@@ -137,7 +137,7 @@ test("remises, options, comptes : créer, ouvrir, supprimer", async ({ page }) =
   await drawer(page).getByLabel("Remise (%)").fill("10");
   await drawer(page).getByRole("button", { name: "Créer" }).click();
   await expect(page.getByText("C'est fait. Remise créée.")).toBeVisible();
-  await page.getByRole("listitem").filter({ hasText: "ESSAILOT1" }).click();
+  await page.locator(".list-row").filter({ hasText: "ESSAILOT1" }).click();
   await page.screenshot({ path: shot("apres-1280-panneau-remise") });
   await drawer(page).getByRole("button", { name: "Plus" }).click();
   await page.getByRole("menuitem", { name: "Supprimer" }).click();
@@ -153,12 +153,12 @@ test("remises, options, comptes : créer, ouvrir, supprimer", async ({ page }) =
   await page.getByRole("button", { name: "Créer le compte" }).click();
   await expect(page.locator(".secret")).toHaveText(/\S{6,}/);
   await page.getByRole("button", { name: "C'est noté, fermer" }).click();
-  await page.getByRole("listitem").filter({ hasText: "essai-lot1" }).click();
+  await page.locator(".list-row").filter({ hasText: "essai-lot1" }).click();
   await page.screenshot({ path: shot("apres-1280-panneau-compte") });
   await drawer(page).getByRole("button", { name: "Couper l'accès" }).click();
   await page.getByRole("dialog", { name: /Couper l'accès/ }).getByRole("button", { name: "Couper l'accès" }).click();
   await expect(page.getByText("C'est fait. Accès coupé.")).toBeVisible();
-  await page.getByRole("listitem").filter({ hasText: "essai-lot1" }).click();
+  await page.locator(".list-row").filter({ hasText: "essai-lot1" }).click();
   await drawer(page).getByRole("button", { name: "Plus" }).click();
   await page.getByRole("menuitem", { name: "Supprimer le compte" }).click();
   await page.getByRole("dialog", { name: /Supprimer le compte/ }).getByRole("button", { name: "Supprimer le compte" }).click();
@@ -167,7 +167,7 @@ test("remises, options, comptes : créer, ouvrir, supprimer", async ({ page }) =
 
 test("registre : la saisie s'ouvre depuis la fiche (sans rien écrire)", async ({ page }) => {
   await go(page, "reservations");
-  await page.getByRole("listitem").first().click();
+  await page.locator(".list-row").first().click();
   const d = drawer(page);
   await d.getByText("Voyageurs inscrits").click();
   await d.getByRole("button", { name: /Inscrire/ }).click();
@@ -181,7 +181,7 @@ test("téléphone : réglages et prix en feuille plein écran", async ({ page })
   await page.setViewportSize({ width: 390, height: 844 });
   await go(page, "reglages/tarifs");
   await page.getByRole("tab", { name: "Prix de base" }).click();
-  await page.getByRole("listitem").filter({ hasText: "La Maison du Scieur" }).click();
+  await page.locator(".list-row").filter({ hasText: "La Maison du Scieur" }).click();
   await expect(drawer(page).getByRole("heading", { name: "La Maison du Scieur" })).toBeVisible();
   await page.waitForTimeout(400);
   await page.screenshot({ path: shot("apres-390-panneau-prix-de-base") });

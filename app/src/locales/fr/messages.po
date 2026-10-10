@@ -16,6 +16,11 @@ msgstr " — préparé, envoi des mails coupé sur ce poste"
 msgid " — somme des maisons, se lit seulement"
 msgstr " — somme des maisons, se lit seulement"
 
+#. placeholder {0}: m.reference
+#: src/shell/Health.tsx
+msgid " ({0})"
+msgstr " ({0})"
+
 #: src/pages/settings/Stats.tsx
 msgid " (plus forte perte)"
 msgstr " (plus forte perte)"
@@ -329,6 +334,11 @@ msgstr "{0} personne(s) inscrite(s) sur {1} attendue(s). Gardé {2} ans, puis ef
 msgid "{0} personnes"
 msgstr "{0} personnes"
 
+#. placeholder {0}: rows.length
+#: src/shell/Health.tsx
+msgid "{0} points à vérifier en coulisses"
+msgstr "{0} points à vérifier en coulisses"
+
 #. placeholder {0}: u.username
 #: src/pages/settings/Accounts.tsx
 msgid "{0} pourra de nouveau se connecter avec son mot de passe."
@@ -465,6 +475,10 @@ msgstr "{missing} nuits sans prix en {year} : elles ne se vendent pas."
 msgid "{n} est pris"
 msgstr "{n} est pris"
 
+#: src/calendar/BlockPanel.tsx
+msgid "{n} nuits qui ne se vendent pas, ici ni sur les plateformes."
+msgstr "{n} nuits qui ne se vendent pas, ici ni sur les plateformes."
+
 #: src/booking/BookingPanel.tsx
 #: src/calendar/PricePanel.tsx
 #: src/calendar/Weeks.tsx
@@ -487,6 +501,34 @@ msgstr "{price} € la nuit"
 #: src/pages/settings/Stats.tsx
 msgid "{sign} {0}{unit} par rapport à {1}"
 msgstr "{sign} {0}{unit} par rapport à {1}"
+
+#. placeholder {0}: p.reference
+#. placeholder {1}: eur(p.amountCents)
+#: src/shell/Health.tsx
+msgid "{where}{0} : {1} encaissés alors que la réservation n'est pas confirmée. À rembourser ou à reloger aujourd'hui."
+msgstr "{where}{0} : {1} encaissés alors que la réservation n'est pas confirmée. À rembourser ou à reloger aujourd'hui."
+
+#. placeholder {0}: p.reference
+#. placeholder {1}: eur(p.overpaidCents)
+#: src/shell/Health.tsx
+msgid "{where}{0} : {1} reçus en trop. À rembourser."
+msgstr "{where}{0} : {1} reçus en trop. À rembourser."
+
+#. placeholder {0}: h.recentErrors.length
+#: src/shell/Health.tsx
+msgid "{where}{0} erreur(s) technique(s) ces dernières 24 h (détail dans Réglages, Journaux)."
+msgstr "{where}{0} erreur(s) technique(s) ces dernières 24 h (détail dans Réglages, Journaux)."
+
+#. placeholder {0}: h.beds24StaleHours ?? "?"
+#: src/shell/Health.tsx
+msgid "{where}aucune nouvelle de Beds24 depuis {0} h : les plateformes peuvent vendre des dates déjà prises."
+msgstr "{where}aucune nouvelle de Beds24 depuis {0} h : les plateformes peuvent vendre des dates déjà prises."
+
+#. placeholder {0}: m.toEmail
+#. placeholder {1}: m.reference ? t` (${m.reference})` : ""
+#: src/shell/Health.tsx
+msgid "{where}un mail à {0}{1} n'est pas parti : le client n'a rien reçu."
+msgstr "{where}un mail à {0}{1} n'est pas parti : le client n'a rien reçu."
 
 #. placeholder {0}: eur(p.discountCents ?? 0)
 #: src/pages/settings/Promotions.tsx
@@ -514,6 +556,14 @@ msgstr "1 nuit"
 #: src/calendar/Weeks.tsx
 msgid "1 nuit libre"
 msgstr "1 nuit libre"
+
+#: src/calendar/BlockPanel.tsx
+msgid "1 nuit qui ne se vend pas, ici ni sur les plateformes."
+msgstr "1 nuit qui ne se vend pas, ici ni sur les plateformes."
+
+#: src/shell/Health.tsx
+msgid "1 point à vérifier en coulisses"
+msgstr "1 point à vérifier en coulisses"
 
 #: src/pages/settings/Clients.tsx
 msgid "1 séjour"
@@ -714,6 +764,10 @@ msgstr "annulée"
 #: src/pages/Bookings.tsx
 msgid "Annulée"
 msgstr "Annulée"
+
+#: src/pages/Bookings.tsx
+msgid "Annulées"
+msgstr "Annulées"
 
 #: src/booking/BookingPanel.tsx
 #: src/booking/Register.tsx
@@ -1078,6 +1132,11 @@ msgstr "bloqué"
 msgid "Bloqué"
 msgstr "Bloqué"
 
+#. placeholder {0}: stayRange(block.checkin, block.checkout)
+#: src/calendar/BlockPanel.tsx
+msgid "Bloqué {0}"
+msgstr "Bloqué {0}"
+
 #. placeholder {0}: shortDate(k.checkin)
 #. placeholder {1}: shortDate(k.checkout)
 #. placeholder {2}: k.reason ?? ""
@@ -1233,6 +1292,10 @@ msgstr "C'est fait. Fichier {filename} téléchargé."
 #: src/pages/settings/Tarifs.tsx
 msgid "C'est fait. La saison la plus courte l'emporte désormais."
 msgstr "C'est fait. La saison la plus courte l'emporte désormais."
+
+#: src/calendar/BlockPanel.tsx
+msgid "C'est fait. Les dates sont libres."
+msgstr "C'est fait. Les dates sont libres."
 
 #: src/pages/settings/Channels.tsx
 msgid "C'est fait. Les plateformes reçoivent le prix de votre site."
@@ -1476,6 +1539,10 @@ msgstr "Ce qui se règle de temps en temps. Le quotidien reste dans le menu : Au
 msgid "Ces données ne sortent par aucun autre chemin que cet export."
 msgstr "Ces données ne sortent par aucun autre chemin que cet export."
 
+#: src/calendar/BlockPanel.tsx
+msgid "Ces nuits redeviennent libres tout de suite, ici et sur Airbnb et Booking."
+msgstr "Ces nuits redeviennent libres tout de suite, ici et sur Airbnb et Booking."
+
 #: src/booking/BookingPanel.tsx
 #: src/sale/SaleFlow.tsx
 msgid "Ces nuits sont déjà prises."
@@ -1696,6 +1763,10 @@ msgstr "Confirmée et payée"
 msgid "Confirmée sans attendre les arrhes"
 msgstr "Confirmée sans attendre les arrhes"
 
+#: src/pages/Bookings.tsx
+msgid "Confirmées"
+msgstr "Confirmées"
+
 #: src/booking/BookingPanel.tsx
 msgid "Confirmer"
 msgstr "Confirmer"
@@ -1821,6 +1892,10 @@ msgstr "Créez un « invite code » avec lecture et écriture (réservations, di
 msgid "Date de naissance"
 msgstr "Date de naissance"
 
+#: src/calendar/BlockPanel.tsx
+msgid "Dates bloquées"
+msgstr "Dates bloquées"
+
 #: src/pages/settings/Stats.tsx
 msgid "Dates cherchées sans réponse"
 msgstr "Dates cherchées sans réponse"
@@ -1944,6 +2019,10 @@ msgstr "Détail du prix"
 #: src/pages/settings/Channels.tsx
 msgid "Détail technique"
 msgstr "Détail technique"
+
+#: src/calendar/PricePanel.tsx
+msgid "Dimanche à jeudi"
+msgstr "Dimanche à jeudi"
 
 #: src/calendar/Weeks.tsx
 msgid "Domaine : une des maisons est prise"
@@ -2192,6 +2271,10 @@ msgstr "Étape"
 msgid "Étapes"
 msgstr "Étapes"
 
+#: src/pages/Bookings.tsx
+msgid "État des réservations"
+msgstr "État des réservations"
+
 #: src/pages/settings/Channels.tsx
 msgid "Exemple"
 msgstr "Exemple"
@@ -2418,6 +2501,10 @@ msgstr "Journaux"
 #: src/pages/Today.tsx
 msgid "Journée calme"
 msgstr "Journée calme"
+
+#: src/calendar/PricePanel.tsx
+msgid "Jours de la plage"
+msgstr "Jours de la plage"
 
 #: src/pages/settings/Tarifs.tsx
 msgid "Jours où l'on peut arriver"
@@ -2816,6 +2903,14 @@ msgstr "Les réservations qui l'ont déjà gardent leur prix. Pour l'arrêter sa
 msgid "Les suggestions n'ont pas pu être calculées."
 msgstr "Les suggestions n'ont pas pu être calculées."
 
+#: src/calendar/BlockPanel.tsx
+msgid "Lever le blocage"
+msgstr "Lever le blocage"
+
+#: src/calendar/BlockPanel.tsx
+msgid "Lever le blocage ?"
+msgstr "Lever le blocage ?"
+
 #: src/pages/settings/Channels.tsx
 msgid "Liaison coupée"
 msgstr "Liaison coupée"
@@ -3050,8 +3145,10 @@ msgid "motif : {0}"
 msgstr "motif : {0}"
 
 #. placeholder {0}: b.cancelReason
+#. placeholder {0}: block.reason
 #. placeholder {0}: c.ignoreReason
 #: src/booking/BookingPanel.tsx
+#: src/calendar/BlockPanel.tsx
 #: src/pages/settings/Channels.tsx
 msgid "Motif : {0}"
 msgstr "Motif : {0}"
@@ -3315,6 +3412,10 @@ msgstr "Option, pas encore payée"
 msgid "Options"
 msgstr "Options"
 
+#: src/pages/Bookings.tsx
+msgid "Options en cours"
+msgstr "Options en cours"
+
 #: src/pages/Settings.tsx
 #: src/pages/settings/Options.tsx
 msgid "Options payantes"
@@ -3479,6 +3580,10 @@ msgstr "pas de chiffre en {0}"
 #: src/booking/BookingPanel.tsx
 msgid "Pas de mail sur cette réservation : le message s'affichera seulement sur la page du client."
 msgstr "Pas de mail sur cette réservation : le message s'affichera seulement sur la page du client."
+
+#: src/calendar/BlockPanel.tsx
+msgid "Pas de motif noté."
+msgstr "Pas de motif noté."
 
 #: src/pages/settings/Tarifs.tsx
 msgid "Pas de nuit coincée entre deux séjours, pas de dates proches à brader, pas de férié à relever dans le mois qui vient."
@@ -4398,6 +4503,7 @@ msgstr "Total, {0} réservations"
 msgid "touchez quand la maison est prête"
 msgstr "touchez quand la maison est prête"
 
+#: src/calendar/PricePanel.tsx
 #: src/pages/Messages.tsx
 #: src/pages/settings/Payments.tsx
 msgid "Tous"
@@ -4410,6 +4516,10 @@ msgstr "Tous les champs sont demandés par la loi."
 #: src/pages/settings/Clients.tsx
 msgid "Tous les clients des deux domaines. La recherche lit le nom et le mail."
 msgstr "Tous les clients des deux domaines. La recherche lit le nom et le mail."
+
+#: src/pages/Bookings.tsx
+msgid "Tous les états"
+msgstr "Tous les états"
 
 #: src/pages/settings/Tarifs.tsx
 msgid "Tous les jours"
@@ -4570,6 +4680,10 @@ msgstr "Vendre ces nuits"
 #: src/pages/settings/Tarifs.tsx
 msgid "vendredi et samedi"
 msgstr "vendredi et samedi"
+
+#: src/calendar/PricePanel.tsx
+msgid "Vendredis et samedis"
+msgstr "Vendredis et samedis"
 
 #: src/pages/settings/Channels.tsx
 msgid "vendu ici seulement ; ses deux maisons se ferment toutes seules ailleurs"

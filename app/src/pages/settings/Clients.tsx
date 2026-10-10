@@ -36,9 +36,9 @@ export function ClientsPage() {
       {list.isLoading ? <Loading /> : null}
       {list.data && list.data.length === 0 ? <Empty title={q ? t`Aucun client ne correspond à « ${q} »` : t`Aucun client pour l'instant`} /> : null}
       {list.data && list.data.length ? (
-        <div className="panel" role="list">
+        <div className="panel">
           {list.data.map((g) => (
-            <button key={g.id} type="button" role="listitem" className="list-row two" onClick={() => setOpen(g.id)}>
+            <button key={g.id} type="button" className="list-row two" onClick={() => setOpen(g.id)}>
               <span>
                 <b>{fullName(g) || t`Client sans nom`}</b>
                 <small>{[g.email, g.phone].filter(Boolean).join(", ") || t`ni mail ni téléphone`}</small>
@@ -115,12 +115,12 @@ function ClientForm({ guest: g, bookings, onClose }: { guest: GuestRow; bookings
       {a.state.status === "error" ? <ErrorLine text={a.state.text} /> : null}
       <h3 className="sub3">{t`Séjours (${bookings.length})`}</h3>
       {bookings.length === 0 ? <p className="muted">{t`Aucune réservation.`}</p> : null}
-      <div className="panel" role="list" style={{ marginBottom: 16 }}>
+      <div className="panel" style={{ marginBottom: 16 }}>
         {bookings.map((b) => (
           <button
             key={b.id}
             type="button"
-            role="listitem"
+           
             className="list-row two"
             onClick={() => {
               onClose();

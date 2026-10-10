@@ -194,12 +194,12 @@ function BaseTab({ units, rules }: { units: UnitFull[]; rules: RateRule[] }) {
   const [open, setOpen] = useState<UnitFull | null>(null);
   return (
     <Section title={t`Prix de base`} hint={t`Le prix de chaque bien en dehors des saisons. Touchez un bien pour le changer.`}>
-      <div className="panel" role="list">
+      <div className="panel">
         {units.map((u) => {
           const r = rules.find((x) => x.unitId === u.id && x.seasonId == null);
           const own = ownPrices(u);
           return (
-            <button key={u.id} type="button" role="listitem" className="list-row two" disabled={!own} onClick={() => setOpen(u)}>
+            <button key={u.id} type="button" className="list-row two" disabled={!own} onClick={() => setOpen(u)}>
               <span>
                 <b>{u.name}</b>
                 <small>{!own ? t`Prix = somme des deux maisons : rien à régler ici.` : r ? ruleSentence(r) : t`Pas encore de prix de base : ce bien ne se vend pas.`}</small>
@@ -276,7 +276,7 @@ function SeasonsTab({ propertyId, units, seasons, rules }: { propertyId: number;
     const ov = overlapsOf(s, seasons);
     const sRules = rules.filter((r) => r.seasonId === s.id);
     return (
-      <button key={s.id} type="button" role="listitem" className="list-row two" onClick={() => setOpen(s)}>
+      <button key={s.id} type="button" className="list-row two" onClick={() => setOpen(s)}>
         <span>
           <b>{s.name}</b>
           <small>{t`Du ${longDate(s.dateStart)} au ${longDate(s.dateEnd)} (${seasonNights(s)} nuits)`}</small>
@@ -329,13 +329,13 @@ function SeasonsTab({ propertyId, units, seasons, rules }: { propertyId: number;
           <p>{t`Toute l'année se vend au prix de base. Créez une saison pour l'été, les vacances ou les fêtes.`}</p>
         </Empty>
       ) : (
-        <div className="panel" role="list">
+        <div className="panel">
           {current.map(row)}
         </div>
       )}
       {past.length ? (
         <Fold title={t`Saisons passées`} count={String(past.length)}>
-          <div className="panel" role="list">
+          <div className="panel">
             {past.map(row)}
           </div>
         </Fold>
@@ -492,9 +492,9 @@ function ManualTab({ propertyId, units }: { propertyId: number; units: UnitFull[
         </Empty>
       ) : null}
       {runs.length ? (
-        <div className="panel" role="list">
+        <div className="panel">
           {runs.map((r) => (
-            <button key={`${r.unitId}${r.from}`} type="button" role="listitem" className="list-row two" onClick={() => setOpen({ unit: { id: r.unitId, name: name(r.unitId) }, ...r })}>
+            <button key={`${r.unitId}${r.from}`} type="button" className="list-row two" onClick={() => setOpen({ unit: { id: r.unitId, name: name(r.unitId) }, ...r })}>
               <span>
                 <b>{name(r.unitId)}</b>
                 <small>{r.from === r.to ? t`Nuit du ${longDate(r.from)}` : t`Nuits du ${longDate(r.from)} au ${longDate(r.to)}`}</small>

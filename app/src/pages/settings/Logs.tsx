@@ -91,9 +91,9 @@ export function LogsPage() {
           {audit.isLoading ? <Loading /> : null}
           {audit.data && audit.data.length === 0 ? <Empty title={t`Rien d'écrit pour l'instant`} /> : null}
           {audit.data?.length ? (
-            <div className="panel" role="list">
+            <div className="panel">
               {audit.data.map((e) => (
-                <button key={e.id} type="button" role="listitem" className="list-row two" onClick={() => setOpenA(e)}>
+                <button key={e.id} type="button" className="list-row two" onClick={() => setOpenA(e)}>
                   <span>
                     <b>{actionLabel(e.action)}</b>
                     <small>
@@ -113,9 +113,9 @@ export function LogsPage() {
           {mails.isLoading ? <Loading /> : null}
           {mails.data && mails.data.length === 0 ? <Empty title={t`Aucun mail envoyé`} /> : null}
           {mails.data?.length ? (
-            <div className="panel" role="list">
+            <div className="panel">
               {mails.data.map((m) => (
-                <button key={m.id} type="button" role="listitem" className="list-row two" onClick={() => setOpenM(m)}>
+                <button key={m.id} type="button" className="list-row two" onClick={() => setOpenM(m)}>
                   <span>
                     <b>{m.subject}</b>
                     <small>

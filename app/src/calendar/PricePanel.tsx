@@ -33,9 +33,15 @@ const PRESETS: { key: string; label: string; change: PriceChange }[] = [
   { key: "a15", label: "+ 15 €", change: { kind: "add", cents: 1500 } },
 ];
 
-function daysIn(rates: RateCalendarUnit | undefined, from: IsoDate, to: IsoDate): DayRate[] {
-  return (rates?.days ?? []).filter((d) => d.date >= from && d.date <= to);
+function daysIn(rates: RateCalendarUnit | undefined, from: IsoDate, to: IsoDate, keep: (d: IsoDate) => boolean = () => true): DayRate[] {
+  return (rates?.days ?? []).filter((d) => d.date >= from && d.date <= to && keep(d.date));
 }
+
+/** Jours de la plage visés (comme l'ancien écran : « tous les week-ends de la
+ *  plage ») ; 0 = dimanche, comme le serveur. */
+type Wd = "all" | "we" | "wk";
+const WD: Record<Wd, number[] | null> = { all: null, we: [5, 6], wk: [0, 1, 2, 3, 4] };
+const dow = (d: IsoDate) => new Date(`${d}T12:00:00Z`).getUTCDay();
 
 export function PricePanel(props: {
   selection: RangeSelection;
@@ -57,6 +63,9 @@ export function PricePanel(props: {
   const [mode, setMode] = useState<"set" | "rel">("rel");
   const [preset, setPreset] = useState<string>("p10");
   const [fixed, setFixed] = useState<number | string>("");
+  const [wd, setWd] = useState<Wd>("all");
+  const keep = (d: IsoDate) => WD[wd] == null || WD[wd]!.includes(dow(d));
+  const wdParam = WD[wd]?.join(",");
   const first = daysIn(rates?.find((r) => r.unit.id === sel.unitId), sel.from, sel.from)[0];
   const [minNights, setMinNights] = useState<number>(first?.minNights ?? 1);
   const [minTouched, setMinTouched] = useState(false);
@@ -104,7 +113,7 @@ export function PricePanel(props: {
 
   const preview = chosen.map((id) => {
     const u = units.find((x) => x.id === id);
-    const days = daysIn(rates?.find((r) => r.unit.id === id), sel.from, sel.to);
+    const days = daysIn(rates?.find((r) => r.unit.id === id), sel.from, sel.to, keep);
     const olds = days.map((d) => d.priceCents).filter((x): x is number => x != null);
     const news = change ? days.map((d) => newPrice(d.priceCents, change)).filter((x): x is number => x != null) : [];
     const span = (xs: number[]) => (xs.length === 0 ? "—" : Math.min(...xs) === Math.max(...xs) ? eur(Math.min(...xs)) : `${eur(Math.min(...xs))} à ${eur(Math.max(...xs))}`);
@@ -113,7 +122,9 @@ export function PricePanel(props: {
 
   const title = nights > 1 ? t`Nuits du ${longDate(sel.from)} au ${longDate(sel.to)}` : t`Nuit du ${longDate(sel.from)}`;
   const sub = t`${nights > 1 ? t`${nights} nuits` : t`1 nuit`}, départ le ${longDate(addDays(sel.to, 1))}`;
-  const total = nights * chosen.length;
+  let kept = 0;
+  for (let d = sel.from; d <= sel.to; d = addDays(d, 1)) if (keep(d)) kept += 1;
+  const total = kept * chosen.length;
 
   async function apply() {
     if (!change && !minTouched) return;
@@ -127,7 +138,7 @@ export function PricePanel(props: {
       const name = units.find((u) => u.id === id)?.name ?? "";
       try {
         if (change) {
-          const runs = priceRuns(daysIn(rates?.find((r) => r.unit.id === id), sel.from, sel.to), change);
+          const runs = priceRuns(daysIn(rates?.find((r) => r.unit.id === id), sel.from, sel.to, keep), change);
           if (runs.length === 0) throw new Error(t`aucun prix de départ sur ces nuits`);
           for (const run of runs) {
             await api("/rate-overrides", {
@@ -137,8 +148,8 @@ export function PricePanel(props: {
             applied += diffDays(run.from, run.to) + 1;
           }
         } else {
-          await api("/rate-overrides", { method: "PATCH", body: { unitId: id, from: sel.from, to: sel.to, minNights } });
-          applied += nights;
+          await api("/rate-overrides", { method: "PATCH", body: { unitId: id, from: sel.from, to: sel.to, minNights, ...(wdParam ? { weekdays: wdParam } : {}) } });
+          applied += daysIn(rates?.find((r) => r.unit.id === id), sel.from, sel.to, keep).length || nights;
         }
         ok += 1;
       } catch (e) {
@@ -165,7 +176,7 @@ export function PricePanel(props: {
       let done = 0;
       try {
         for (const id of chosen) {
-          await api("/rate-overrides", { method: "DELETE", query: { unit: id, from: sel.from, to: sel.to } });
+          await api("/rate-overrides", { method: "DELETE", query: { unit: id, from: sel.from, to: sel.to, weekdays: wdParam } });
           done += 1;
         }
       } catch (e) {
@@ -245,6 +256,24 @@ export function PricePanel(props: {
               ))}
             </div>
           </fieldset>
+          {nights >= 2 ? (
+            <fieldset>
+              <legend>
+                <Trans>Jours de la plage</Trans>
+              </legend>
+              <div className="chips">
+                <button type="button" className="chip" aria-pressed={wd === "all"} onClick={() => setWd("all")}>
+                  <Trans>Tous</Trans>
+                </button>
+                <button type="button" className="chip" aria-pressed={wd === "we"} onClick={() => setWd("we")}>
+                  <Trans>Vendredis et samedis</Trans>
+                </button>
+                <button type="button" className="chip" aria-pressed={wd === "wk"} onClick={() => setWd("wk")}>
+                  <Trans>Dimanche à jeudi</Trans>
+                </button>
+              </div>
+            </fieldset>
+          ) : null}
           <div className="seg" role="group" aria-label={t`Façon de changer le prix`}>
             <button type="button" aria-pressed={mode === "set"} onClick={() => setMode("set")}>
               <Trans>Fixer un prix</Trans>

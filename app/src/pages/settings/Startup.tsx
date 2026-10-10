@@ -56,9 +56,9 @@ export function StartupPage() {
       ) : null}
       {sections.map((s) => (
         <Section key={s.name} title={s.name} hint={t`${s.items.filter((i) => DONE.includes(i.status)).length} sur ${s.items.length} réglés`}>
-          <div className="panel" role="list">
+          <div className="panel">
             {s.items.map((i) => (
-              <button key={i.id} type="button" role="listitem" className={`list-row two${DONE.includes(i.status) ? " off" : ""}`} onClick={() => setOpen(i)}>
+              <button key={i.id} type="button" className={`list-row two${DONE.includes(i.status) ? " off" : ""}`} onClick={() => setOpen(i)}>
                 <span>
                   <b>{i.label}</b>
                   <small>{[t`pour ${w.owner(i.owner)}`, i.note].filter(Boolean).join(", ")}</small>

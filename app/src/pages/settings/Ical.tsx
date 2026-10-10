@@ -40,9 +40,9 @@ export function IcalPage() {
       {q.data ? (
         <>
           <Section title={t`Nos calendriers, à donner aux autres sites`} hint={t`À coller dans Airbnb (« Importer un calendrier ») ou ailleurs. Si le Domaine entier est réservé, les deux maisons y apparaissent prises.`}>
-            <div className="panel" role="list">
+            <div className="panel">
               {q.data.exports.map((e) => (
-                <div key={e.unitId} role="listitem" className="list-row two static">
+                <div key={e.unitId} className="list-row two static">
                   <span>
                     <b>{e.unitName}</b>
                     <small className="mono-line">{e.url}</small>
@@ -87,9 +87,9 @@ export function IcalPage() {
                 <p>{t`Ajoutez l'adresse iCal donnée par un autre site pour que ses réservations bloquent les dates ici.`}</p>
               </Empty>
             ) : (
-              <div className="panel" role="list">
+              <div className="panel">
                 {q.data.feeds.map((f) => (
-                  <button key={f.id} type="button" role="listitem" className={`list-row two${f.active ? "" : " off"}`} onClick={() => setOpen(f)}>
+                  <button key={f.id} type="button" className={`list-row two${f.active ? "" : " off"}`} onClick={() => setOpen(f)}>
                     <span>
                       <b>{f.name}</b>
                       <small>

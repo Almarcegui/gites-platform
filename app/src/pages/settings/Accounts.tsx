@@ -36,9 +36,9 @@ export function AccountsPage() {
             </button>
           }
         >
-          <div className="panel" role="list">
+          <div className="panel">
             {q.data.map((u) => (
-              <button key={u.id} type="button" role="listitem" className={`list-row two${isOn(u) ? "" : " off"}`} onClick={() => setOpen(u)}>
+              <button key={u.id} type="button" className={`list-row two${isOn(u) ? "" : " off"}`} onClick={() => setOpen(u)}>
                 <span>
                   <b>
                     {u.username}

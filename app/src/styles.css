@@ -670,3 +670,11 @@ fieldset.wd legend { font-weight: 600; margin-bottom: 8px; padding: 0; }
 .t-item p small { display: block; color: var(--ink-2); font-size: 15px; }
 .t-item p span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .t-item { display: flex; flex-direction: column; justify-content: flex-start; align-items: stretch; min-width: 0; }
+/* « à vérifier en coulisses » */
+.health { background: var(--genet-soft); border: 1px solid var(--genet-mid); border-radius: 12px; padding: 0 16px; margin: 0 0 12px; }
+.health summary { list-style: none; display: flex; align-items: center; gap: 10px; min-height: 48px; font-weight: 700; cursor: pointer; }
+.health summary::-webkit-details-marker { display: none; }
+.health summary svg { color: var(--genet); flex: none; }
+.health ul { margin: 0 0 12px; padding-left: 22px; }
+.health li { margin: 6px 0; }
+.health li button { border: 0; background: none; padding: 2px 0; text-align: left; color: inherit; text-decoration: underline; text-underline-offset: 3px; min-height: 32px; }

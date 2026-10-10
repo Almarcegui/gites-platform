@@ -41,9 +41,9 @@ export function OptionsPage() {
           {q.data.length === 0 ? (
             <Empty title={t`Aucune option`} />
           ) : (
-            <div className="panel" role="list">
+            <div className="panel">
               {q.data.map((o) => (
-                <button key={o.id} type="button" role="listitem" className={`list-row two${o.active ? "" : " off"}`} onClick={() => setOpen(o)}>
+                <button key={o.id} type="button" className={`list-row two${o.active ? "" : " off"}`} onClick={() => setOpen(o)}>
                   <span>
                     <b>{o.name}</b>
                     <small>{[mode(o.pricingMode), o.maxQty ? t`${o.maxQty} au plus` : "", o.active ? "" : t`en pause`].filter(Boolean).join(", ")}</small>

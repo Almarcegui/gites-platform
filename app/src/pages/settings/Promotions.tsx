@@ -42,7 +42,7 @@ export function PromotionsPage() {
   const autos = (q.data ?? []).filter((p) => p.kind !== "code");
   const codes = (q.data ?? []).filter((p) => p.kind === "code");
   const row = (p: Promotion) => (
-    <button key={p.id} type="button" role="listitem" className={`list-row two${p.active ? "" : " off"}`} onClick={() => setOpen(p)}>
+    <button key={p.id} type="button" className={`list-row two${p.active ? "" : " off"}`} onClick={() => setOpen(p)}>
       <span>
         <b>{p.kind === "code" ? p.code : p.label || txt.kindName(p.kind)}</b>
         <small>
@@ -71,7 +71,7 @@ export function PromotionsPage() {
               </button>
             }
           >
-            {autos.length ? <div className="panel" role="list">{autos.map(row)}</div> : <Empty title={t`Aucune remise automatique`} />}
+            {autos.length ? <div className="panel">{autos.map(row)}</div> : <Empty title={t`Aucune remise automatique`} />}
           </Section>
           <Section
             title={t`Codes promo`}
@@ -83,7 +83,7 @@ export function PromotionsPage() {
               </button>
             }
           >
-            {codes.length ? <div className="panel" role="list">{codes.map(row)}</div> : <Empty title={t`Aucun code promo`} />}
+            {codes.length ? <div className="panel">{codes.map(row)}</div> : <Empty title={t`Aucun code promo`} />}
           </Section>
         </>
       ) : null}

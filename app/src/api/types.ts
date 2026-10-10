@@ -89,6 +89,17 @@ export interface Overview {
     overdueBalances: OverviewBalance[];
     activeHolds: { id: number; reference: string; unitName: string; holdExpiresAt: string | null }[];
     newEmails: number;
+    feedAlerts?: { id: number; name: string; status: string | null }[];
+  };
+  health?: {
+    orphanPayments: { reference: string; bookingId: number; amountCents: number; bookingStatus: string }[];
+    overpaidBookings: { reference: string; bookingId: number; overpaidCents: number }[];
+    failedEmails: { bookingId: number | null; reference: string | null; kind: string; toEmail: string; errorDetail: string | null }[];
+    recentErrors: { action: string; entity: string | null; createdAt: string }[];
+    beds24Stale: boolean;
+    beds24StaleHours: number | null;
+    drift: { kind: string; label: string; detail: string; href: string }[];
+    ok: boolean;
   };
 }
 

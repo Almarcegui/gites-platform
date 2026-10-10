@@ -75,4 +75,29 @@ describe("calendrier multi-biens", () => {
     await user.click(go);
     await waitFor(() => expect(calls.find((c) => c.method === "POST" && c.path === "/blocks")?.body).toEqual({ unitId: 2, checkin: "2026-10-13", checkout: "2026-10-15", reason: "Travaux" }));
   });
+
+  it("« vendredis et samedis » ne change que ces nuits de la plage", async () => {
+    const user = userEvent.setup();
+    const { calls } = renderApp("/calendrier");
+    drag(await cell(1, "2026-10-19"), await cell(1, "2026-10-25"));
+    const pop = await screen.findByRole("dialog", { name: /Nuits du lundi 19/ });
+    await user.click(within(pop).getByRole("button", { name: "Vendredis et samedis" }));
+    await user.click(within(pop).getByRole("button", { name: "+ 10 %" }));
+    await user.click(within(pop).getByRole("button", { name: "Appliquer à 2 nuits" }));
+    await within(pop).findByText(/C'est fait/);
+    const patch = calls.filter((c) => c.method === "PATCH" && c.path === "/rate-overrides");
+    expect(patch.map((c) => c.body)).toEqual([{ unitId: 1, from: "2026-10-23", to: "2026-10-24", priceCents: 20000 }]);
+  });
+
+  it("un blocage s'ouvre en panneau et se lève après confirmation", async () => {
+    const user = userEvent.setup();
+    const { calls } = renderApp("/calendrier", [
+      (c) => (c.path === "/planning" ? { body: { from: c.query.from, to: c.query.to, units: [], bookings: [], blocks: [], manualBlocks: [{ id: 9, unitId: 2, checkin: "2026-10-13", checkout: "2026-10-15", reason: "Travaux" }] } } : undefined),
+    ]);
+    await user.click(await screen.findByRole("button", { name: /Bloqué du 13 octobre au 15 octobre : Travaux/ }));
+    await user.click(await screen.findByRole("button", { name: "Lever le blocage" }));
+    const box = await screen.findByRole("dialog", { name: "Lever le blocage ?" });
+    await user.click(within(box).getByRole("button", { name: "Lever le blocage" }));
+    await waitFor(() => expect(calls.some((c) => c.method === "DELETE" && c.path === "/blocks/9")).toBe(true));
+  });
 });

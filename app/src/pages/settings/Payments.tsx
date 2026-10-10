@@ -55,9 +55,9 @@ export function PaymentsPage() {
       {q.isLoading ? <Loading /> : null}
       {q.data && rows.length === 0 ? <Empty title={t`Aucun paiement ici`} /> : null}
       {rows.length ? (
-        <div className="panel" role="list">
+        <div className="panel">
           {rows.map((p) => (
-            <button key={p.id} type="button" role="listitem" className="list-row" onClick={() => setOpen(p)}>
+            <button key={p.id} type="button" className="list-row" onClick={() => setOpen(p)}>
               <span>
                 <b>{w.kind(p.kind)}</b>
                 <small>{sqlWhen(p.receivedAt ?? p.createdAt)}</small>

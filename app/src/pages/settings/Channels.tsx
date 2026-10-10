@@ -50,9 +50,9 @@ export function ChannelsPage() {
                 <Trans>Aucun désaccord : tout ce que les plateformes annoncent est repris ici.</Trans>
               </p>
             ) : (
-              <div className="panel" role="list">
+              <div className="panel">
                 {open.map((c) => (
-                  <button key={c.id} type="button" role="listitem" className="list-row two" onClick={() => setConflict(c)}>
+                  <button key={c.id} type="button" className="list-row two" onClick={() => setConflict(c)}>
                     <span>
                       <b>{c.unitName}</b>
                       <small>
@@ -66,9 +66,9 @@ export function ChannelsPage() {
             )}
             {ignored.length ? (
               <Fold title={t`Désaccords mis de côté`} count={String(ignored.length)}>
-                <div className="panel" role="list">
+                <div className="panel">
                   {ignored.map((c) => (
-                    <button key={c.id} type="button" role="listitem" className="list-row two off" onClick={() => setConflict(c)}>
+                    <button key={c.id} type="button" className="list-row two off" onClick={() => setConflict(c)}>
                       <span>
                         <b>{c.unitName}</b>
                         <small>
@@ -87,9 +87,9 @@ export function ChannelsPage() {
                 <p>{t`Elles apparaîtront ici, dans le calendrier et dans Réservations dès que les annonces seront reliées.`}</p>
               </Empty>
             ) : (
-              <div className="panel" role="list">
+              <div className="panel">
                 {d.channelBookings.map((b) => (
-                  <div key={b.reference} role="listitem" className="list-row two static">
+                  <div key={b.reference} className="list-row two static">
                     <span>
                       <b>{b.guestName || b.reference}</b>
                       <small>

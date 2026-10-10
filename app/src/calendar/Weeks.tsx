@@ -7,7 +7,7 @@ import { Fragment, useState } from "react";
 
 import { api, errorText } from "../api/client";
 import { useRefresh, type DomainData } from "../api/hooks";
-import type { IsoDate, RateCalendarUnit } from "../api/types";
+import type { IsoDate, ManualBlock, RateCalendarUnit } from "../api/types";
 import { ErrorLine } from "../lib/action";
 import { addDays, dayNum, diffDays, isWeekend, longDate, monthName, weekdayShort } from "../lib/dates";
 import { EMPTY_SELECTION, isNightTaken, nightState, tapDay, type DaySelection } from "../lib/derive";
@@ -22,6 +22,7 @@ export function Weeks(props: {
   weeks: number;
   today: IsoDate;
   onOpenBooking: (id: number) => void;
+  onOpenBlock?: (block: ManualBlock) => void;
   onSell: (s: { unitId: number; checkin: IsoDate; checkout: IsoDate }) => void;
   onPrice: (s: RangeSelection) => void;
 }) {
@@ -217,8 +218,10 @@ export function Weeks(props: {
                               ))}
                               {blocks.map((k) => (
                                 <li key={`k${k.id}`}>
-                                  {weekdayShort(k.checkin)} {dayNum(k.checkin)} → {weekdayShort(k.checkout)} {dayNum(k.checkout)} : {t`bloqué`}
-                                  {k.reason ? `, ${k.reason}` : ""}
+                                  <button type="button" onClick={() => props.onOpenBlock?.(k)}>
+                                    {weekdayShort(k.checkin)} {dayNum(k.checkin)} → {weekdayShort(k.checkout)} {dayNum(k.checkout)} : {t`bloqué`}
+                                    {k.reason ? `, ${k.reason}` : ""}
+                                  </button>
                                 </li>
                               ))}
                             </ul>
