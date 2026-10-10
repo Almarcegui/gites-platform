@@ -36,19 +36,35 @@ export function ClientsPage() {
       {list.isLoading ? <Loading /> : null}
       {list.data && list.data.length === 0 ? <Empty title={q ? t`Aucun client ne correspond à « ${q} »` : t`Aucun client pour l'instant`} /> : null}
       {list.data && list.data.length ? (
-        <div className="panel">
-          {list.data.map((g) => (
-            <button key={g.id} type="button" className="list-row two" onClick={() => setOpen(g.id)}>
-              <span>
-                <b>{fullName(g) || t`Client sans nom`}</b>
-                <small>{[g.email, g.phone].filter(Boolean).join(", ") || t`ni mail ni téléphone`}</small>
-              </span>
-              <span style={{ textAlign: "right" }}>
-                <b className="num">{eur(g.totalSpentCents ?? 0)}</b>
-                <small>{(g.bookingsCount ?? 0) > 1 ? t`${g.bookingsCount} séjours, client fidèle` : (g.bookingsCount ?? 0) === 1 ? t`1 séjour` : t`aucun séjour`}</small>
-              </span>
-            </button>
-          ))}
+        <div className="tbl-wrap">
+          <table className="tbl dense rows-link">
+            <caption className="sr">{t`Clients`}</caption>
+            <thead>
+              <tr>
+                <th scope="col">{t`Nom`}</th>
+                <th scope="col" className="hide-s">{t`Mail`}</th>
+                <th scope="col" className="hide-s">{t`Téléphone`}</th>
+                <th scope="col" className="r">{t`Séjours`}</th>
+                <th scope="col" className="r">{t`Total des séjours`}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {list.data.map((g) => (
+                <tr key={g.id} onClick={() => setOpen(g.id)}>
+                  <td>
+                    <button type="button" className="cell-link" onClick={(e) => (e.stopPropagation(), setOpen(g.id))}>
+                      {fullName(g) || t`Client sans nom`}
+                    </button>
+                    <small className="show-s-inline">{[g.email, g.phone].filter(Boolean).join(", ")}</small>
+                  </td>
+                  <td className="hide-s">{g.email || "—"}</td>
+                  <td className="hide-s nowrap">{g.phone || "—"}</td>
+                  <td className="r">{g.bookingsCount ?? 0}</td>
+                  <td className="r amt">{eur(g.totalSpentCents ?? 0)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       ) : null}
       {open != null ? <ClientPanel id={open} onClose={() => setOpen(null)} /> : null}

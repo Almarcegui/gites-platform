@@ -2,7 +2,7 @@
 import { Trans, useLingui } from "@lingui/react/macro";
 import { Select, TextInput } from "@mantine/core";
 import { useDebouncedValue } from "@mantine/hooks";
-import { IconArrowDown, IconArrowUp, IconArrowsSort, IconSearch } from "@tabler/icons-react";
+import { IconArrowDown, IconArrowUp, IconArrowsSort, IconPlus, IconSearch } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useState, type ReactNode } from "react";
@@ -16,6 +16,7 @@ import { stayRange, todayBrussels } from "../lib/dates";
 import { channelName } from "../lib/derive";
 import { eur } from "../lib/money";
 import { useScope } from "../lib/scope";
+import { useSale } from "../sale/SaleFlow";
 import { useOpenBooking } from "../shell/Shell";
 import { DownloadButton } from "../ui/kit";
 
@@ -50,6 +51,7 @@ export function BookingsPage() {
   const { t } = useLingui();
   const { scope } = useScope();
   const openBooking = useOpenBooking();
+  const sell = useSale();
   const [search, setSearch] = useState("");
   const [period, setPeriod] = useState<Period>("upcoming");
   const [status, setStatus] = useState<string>("");
@@ -77,6 +79,8 @@ export function BookingsPage() {
     const p = stayPhase(b, today);
     return p ? PHASES[p] : null;
   };
+  const sourceLabel = (b: Booking) =>
+    b.source === "direct" ? t`site` : b.source === "manual" ? t`téléphone` : b.source === "import" ? t`import elloha` : b.channelLabel?.trim() || t`iCal`;
   const pill: Record<string, string> = { option: t`Option`, solde: t`Solde à encaisser`, soldee: t`Payée`, plat: t`Autre site`, annulee: t`Annulée` };
   return (
     <div className="pg">
@@ -85,6 +89,10 @@ export function BookingsPage() {
           <Trans>Réservations</Trans>
         </h1>
         <div className="tools">
+          <button type="button" className="btn pri" onClick={() => sell()}>
+            <IconPlus size={18} />
+            {t`Nouvelle vente`}
+          </button>
           <DownloadButton path="/bookings.csv" query={{ property: scope === "all" ? undefined : scope }} filename="reservations.csv">
             {t`Exporter`}
           </DownloadButton>
@@ -136,14 +144,17 @@ export function BookingsPage() {
       {rows.length > 0 ? (
         <div className="tbl-wrap">
           <table className="tbl dense bk">
-            <caption className="sr">{t`Réservations, ${rows.length} lignes. Les en-têtes Client, Séjour et Montant trient la liste.`}</caption>
+            <caption className="sr">{t`Réservations, ${rows.length} lignes. Les en-têtes Client, Séjour et Total trient la liste.`}</caption>
             <thead>
               <tr>
+                <th scope="col">{t`Réf.`}</th>
                 <SortTh k="name" sort={sort} onSort={setSort}>{t`Client`}</SortTh>
                 <th scope="col" className="hide-s">{t`Bien`}</th>
                 <SortTh k="checkin" sort={sort} onSort={setSort}>{t`Séjour`}</SortTh>
+                <SortTh k="amount" sort={sort} onSort={setSort} right>{t`Total`}</SortTh>
+                <th scope="col" className="r hide-s">{t`Payé`}</th>
                 <th scope="col" className="hide-s">{t`État`}</th>
-                <SortTh k="amount" sort={sort} onSort={setSort} right>{t`Montant`}</SortTh>
+                <th scope="col" className="hide-s">{t`Source`}</th>
               </tr>
             </thead>
             <tbody>
@@ -152,11 +163,12 @@ export function BookingsPage() {
                 const balance = b.totalCents - b.paidCents;
                 return (
                   <tr key={b.id} onClick={() => openBooking(b.id)}>
+                    <td className="ref">{b.reference}</td>
                     <td>
                       <button type="button" className="cell-link" onClick={(e) => (e.stopPropagation(), openBooking(b.id))}>
                         {b.guestName || channelName(b)}
                       </button>
-                      <small>{b.reference}</small>
+                      <small className="show-s-inline">{b.unitName}</small>
                     </td>
                     <td className="hide-s">{b.unitName}</td>
                     <td>
@@ -166,13 +178,15 @@ export function BookingsPage() {
                         {phaseOf(b) ? <span className="phase"> · {phaseOf(b)}</span> : null}
                       </small>
                     </td>
+                    <td className="r">
+                      <b className="amt">{st === "plat" && !b.totalCents ? "—" : eur(b.totalCents)}</b>
+                      {st === "solde" ? <small>{t`reste ${eur(balance)}`}</small> : null}
+                    </td>
+                    <td className="r hide-s">{b.paidCents ? eur(b.paidCents) : "—"}</td>
                     <td className="hide-s">
                       <span className={`pill ${st}`}>{pill[st]}</span>
                     </td>
-                    <td className="r">
-                      <b className="amt">{st === "plat" ? t`sur ${channelName(b)}` : eur(b.totalCents)}</b>
-                      {st === "solde" ? <small>{t`reste ${eur(balance)}`}</small> : null}
-                    </td>
+                    <td className="hide-s muted">{sourceLabel(b)}</td>
                   </tr>
                 );
               })}

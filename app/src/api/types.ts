@@ -84,9 +84,20 @@ export interface OverviewBalance {
 export interface Overview {
   property: { id: number; name: string };
   today: IsoDate;
-  kpis: { balanceDueTotalCents: number; balanceDueCount: number };
+  kpis: {
+    balanceDueTotalCents: number;
+    balanceDueCount: number;
+    monthLabel?: string;
+    occupancyPct?: number;
+    occupancyPrevPct?: number;
+    revenueCents?: number;
+    revenuePrevCents?: number;
+    nextArrival?: { checkin: IsoDate; unitName: string; persons: number; guestName: string | null } | null;
+  };
+  movements?: { kind: "arrivée" | "départ"; id: number; reference: string; unitName: string; guestName: string | null; checkin: IsoDate; checkout: IsoDate; persons: number; status: string }[];
   alerts: {
     overdueBalances: OverviewBalance[];
+    linkAlerts?: { id: number; unitName: string; checkin: IsoDate; checkout: IsoDate; blocked: string[] }[];
     activeHolds: { id: number; reference: string; unitName: string; holdExpiresAt: string | null }[];
     newEmails: number;
     feedAlerts?: { id: number; name: string; status: string | null }[];
@@ -163,6 +174,7 @@ export interface EmailLog {
   id: number;
   kind: string;
   subject: string;
+  toEmail?: string | null;
   status: string;
   errorDetail?: string | null;
   createdAt: string;
@@ -173,6 +185,7 @@ export interface AuditEntry {
   action: string;
   createdAt: string;
   actor: string;
+  detail?: string | null;
 }
 
 export interface BookingDetail {

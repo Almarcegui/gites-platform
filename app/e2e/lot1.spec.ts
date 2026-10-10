@@ -110,13 +110,13 @@ test("plateformes : coller un code d'invitation, l'erreur dite en clair", async 
 test("clients, paiements, chiffres, journaux : listes et panneaux", async ({ page }) => {
   await go(page, "reglages/clients");
   await page.getByLabel("Rechercher un client").fill("Oudewaeter");
-  await page.locator(".list-row").filter({ hasText: "Oudewaeter" }).first().click();
+  await page.locator(".tbl tbody tr").filter({ hasText: "Oudewaeter" }).first().click();
   await expect(drawer(page).getByRole("heading", { name: /Oudewaeter/ })).toBeVisible();
   await page.screenshot({ path: shot("apres-1280-panneau-client") });
   await page.keyboard.press("Escape");
 
   await go(page, "reglages/paiements");
-  await page.locator(".list-row").first().click();
+  await page.locator(".tbl tbody tr").first().click();
   await expect(drawer(page).getByRole("button", { name: /Ouvrir la réservation/ })).toBeVisible();
   await page.screenshot({ path: shot("apres-1280-panneau-paiement") });
   await page.keyboard.press("Escape");
@@ -169,7 +169,6 @@ test("registre : la saisie s'ouvre depuis la fiche (sans rien écrire)", async (
   await go(page, "reservations");
   await page.locator(".bk tbody tr").first().click();
   const d = drawer(page);
-  await d.getByText("Voyageurs inscrits").click();
   await d.getByRole("button", { name: /Inscrire/ }).click();
   const box = page.getByRole("dialog", { name: /Inscrire les voyageurs/ });
   await expect(box.getByRole("button", { name: "Inscrire au registre" })).toBeDisabled();

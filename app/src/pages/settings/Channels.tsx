@@ -96,18 +96,33 @@ export function ChannelsPage() {
                 <p>{t`Elles apparaîtront ici, dans le calendrier et dans Réservations dès que les annonces seront reliées.`}</p>
               </Empty>
             ) : (
-              <div className="panel">
-                {channelBookings.map((b) => (
-                  <div key={b.reference} className="list-row two static">
-                    <span>
-                      <b>{b.guestName || b.reference}</b>
-                      <small>
-                        {b.unitName}, {stayRange(b.checkin, b.checkout)}, {b.channelLabel ?? t`plateforme`}
-                      </small>
-                    </span>
-                    <b className="num">{eur(b.totalCents)}</b>
-                  </div>
-                ))}
+              <div className="tbl-wrap">
+                <table className="tbl dense">
+                  <thead>
+                    <tr>
+                      <th scope="col">{t`Réf.`}</th>
+                      <th scope="col">{t`Plateforme`}</th>
+                      <th scope="col">{t`Bien`}</th>
+                      <th scope="col">{t`Séjour`}</th>
+                      <th scope="col">{t`Client`}</th>
+                      <th scope="col" className="r">
+                        {t`Montant`}
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {channelBookings.map((b) => (
+                      <tr key={b.reference}>
+                        <td className="ref">{b.reference}</td>
+                        <td>{b.channelLabel ?? t`plateforme`}</td>
+                        <td>{b.unitName}</td>
+                        <td>{stayRange(b.checkin, b.checkout)}</td>
+                        <td>{b.guestName || "—"}</td>
+                        <td className="r">{b.totalCents ? eur(b.totalCents) : "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             )}
           </Section>
@@ -123,7 +138,7 @@ export function ChannelsPage() {
               </tbody>
             </table>
           </Section>
-          <Fold title={t`Journal de la liaison`} count={String(d.events.length)}>
+          <Fold title={t`Journal de la liaison`} count={String(d.events.length)} open>
             {d.events.length === 0 ? <p className="muted">{t`Encore rien.`}</p> : null}
             <ul className="log">
               {d.events.map((e) => (

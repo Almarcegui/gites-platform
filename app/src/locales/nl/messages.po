@@ -7,15 +7,6 @@ msgstr ""
 "X-Generator: @lingui/cli\n"
 "Language: nl\n"
 
-#. placeholder {0}: m.errorDetail ? ` (${m.errorDetail})` : ""
-#: src/booking/BookingPanel.tsx
-msgid " — n'est pas parti{0}"
-msgstr " — is niet vertrokken{0}"
-
-#: src/booking/BookingPanel.tsx
-msgid " — préparé, envoi des mails coupé sur ce poste"
-msgstr " — voorbereid, mails versturen staat uit op dit toestel"
-
 #: src/pages/settings/Tarifs.tsx
 msgid " — somme des maisons, se lit seulement"
 msgstr " — som van de huizen, alleen te lezen"
@@ -38,9 +29,20 @@ msgstr " ({0})"
 msgid " (+ {0} %, sans remise de durée)."
 msgstr " (+ {0} %, zonder korting voor verblijfsduur)."
 
+#. placeholder {0}: longDate(b.balanceDueDate)
+#: src/pages/Dashboard.tsx
+msgid " (échéance {0})"
+msgstr " (vervaldag {0})"
+
 #: src/pages/settings/Beds24Property.tsx
 msgid " (existante)"
 msgstr " (bestaand)"
+
+#. placeholder {0}: longDate(h.holdExpiresAt.slice(0, 10))
+#. placeholder {1}: h.holdExpiresAt.slice(11, 16)
+#: src/pages/Dashboard.tsx
+msgid " (expire le {0} à {1} UTC)"
+msgstr " (vervalt op {0} om {1} UTC)"
 
 #. placeholder {0}: sqlWhen(s.sentAt)
 #: src/pages/settings/ChannelPrices.tsx
@@ -211,11 +213,6 @@ msgstr "{0}: formaat niet aanvaard (JPEG, PNG of WebP)."
 msgid "{0} : la majoration va de 0 à {1} %."
 msgstr "{0}: de verhoging gaat van 0 tot {1} %."
 
-#. placeholder {0}: longDate(b.createdAt.slice(0, 10))
-#: src/booking/BookingPanel.tsx
-msgid "{0} : réservation enregistrée"
-msgstr "{0}: reservering geregistreerd"
-
 #. placeholder {0}: f.name
 #: src/pages/settings/Domain.tsx
 msgid "{0} : trop lourde (8 Mo au plus)."
@@ -281,6 +278,17 @@ msgstr "{0} heeft seizoensprijzen"
 #: src/sale/SaleFlow.tsx
 msgid "{0} accueille {1} personnes au plus."
 msgstr "{0} ontvangt maximaal {1} personen."
+
+#. placeholder {0}: b.adults
+#: src/booking/BookingPanel.tsx
+msgid "{0} adulte(s)"
+msgstr "{0} volwassene(n)"
+
+#. placeholder {0}: b.adults
+#. placeholder {1}: b.children
+#: src/booking/BookingPanel.tsx
+msgid "{0} adulte(s) et {1} enfant(s)"
+msgstr "{0} volwassene(n) en {1} kind(eren)"
 
 #. placeholder {0}: r.cancelled
 #: src/pages/settings/Ical.tsx
@@ -475,10 +483,8 @@ msgstr "max. {0} pers."
 msgid "{0} personne(s) inscrite(s) sur {1} attendue(s). Gardé {2} ans, puis effacé tout seul."
 msgstr "{0} persoon/personen ingeschreven op {1} verwacht. {2} jaar bewaard, daarna vanzelf gewist."
 
-#. placeholder {0}: b.adults + b.children
 #. placeholder {0}: c.next.persons
 #. placeholder {0}: x.capacityMax
-#: src/booking/BookingPanel.tsx
 #: src/pages/Cleaning.tsx
 #: src/pages/settings/Domain.tsx
 msgid "{0} personnes"
@@ -488,6 +494,11 @@ msgstr "{0} personen"
 #: src/shell/Health.tsx
 msgid "{0} points à vérifier en coulisses"
 msgstr "{0} punten om achter de schermen na te kijken"
+
+#. placeholder {0}: rows.length
+#: src/shell/Health.tsx
+msgid "{0} points à voir"
+msgstr "{0} punten om na te kijken"
 
 #. placeholder {0}: u.username
 #: src/pages/settings/Accounts.tsx
@@ -504,11 +515,6 @@ msgstr "{0} ontvangen"
 #: src/pages/settings/Payments.tsx
 msgid "{0} reçus au total sur les {1} derniers paiements affichés."
 msgstr "{0} ontvangen in totaal over de {1} laatste getoonde betalingen."
-
-#. placeholder {0}: g.bookingsCount
-#: src/pages/settings/Clients.tsx
-msgid "{0} séjours, client fidèle"
-msgstr "{0} verblijven, trouwe klant"
 
 #. placeholder {0}: other.name
 #: src/calendar/Weeks.tsx
@@ -534,6 +540,13 @@ msgstr "{0} op {1} betaald"
 #: src/calendar/Grid.tsx
 msgid "{0}, {1} : {2}{3}{4}"
 msgstr "{0}, {1}: {2}{3}{4}"
+
+#. placeholder {0}: next.unitName
+#. placeholder {1}: next.persons
+#. placeholder {2}: next.guestName ? `, ${next.guestName}` : ""
+#: src/pages/Dashboard.tsx
+msgid "{0}, {1} pers.{2}"
+msgstr "{0}, {1} pers.{2}"
 
 #. placeholder {0}: b.guestName
 #. placeholder {1}: b.persons
@@ -609,6 +622,18 @@ msgstr "{0}, nieuwe gasten dezelfde dag"
 msgid "{0}. Seules les réservations confirmées comptent ; une réservation du Domaine entier occupe ses deux maisons."
 msgstr "{0}. Alleen bevestigde reserveringen tellen; een reservering van het hele domein bezet de twee huizen."
 
+#. placeholder {0}: occ(overviews[0]!).d >= 0 ? "+" : ""
+#. placeholder {1}: fr1(occ(overviews[0]!).d)
+#: src/pages/Dashboard.tsx
+msgid "{0}{1} points par rapport à l'an passé"
+msgstr "{0}{1} punten tegenover vorig jaar"
+
+#. placeholder {0}: revDelta >= 0 ? "+" : ""
+#. placeholder {1}: eur(revPrev)
+#: src/pages/Dashboard.tsx
+msgid "{0}{revDelta} % par rapport à l'an passé ({1})"
+msgstr "{0}{revDelta} % tegenover vorig jaar ({1})"
+
 #: src/pages/settings/ChannelPrices.tsx
 msgid "{d} jours"
 msgstr "{d} dagen"
@@ -620,6 +645,10 @@ msgstr "{days} dagen"
 #: src/lib/derive.ts
 msgid "{dep} et {arr}"
 msgstr "{dep} en {arr}"
+
+#: src/pages/Dashboard.tsx
+msgid "{dueCount} dossiers"
+msgstr "{dueCount} dossiers"
 
 #: src/calendar/Weeks.tsx
 msgid "{free} nuits libres"
@@ -680,15 +709,42 @@ msgstr "{where}{0}: {1} geïnd terwijl de reservering niet bevestigd is. Vandaag
 msgid "{where}{0} : {1} reçus en trop. À rembourser."
 msgstr "{where}{0}: {1} te veel ontvangen. Terug te betalen."
 
+#. placeholder {0}: l.unitName
+#. placeholder {1}: shortDate(l.checkin)
+#. placeholder {2}: shortDate(l.checkout)
+#. placeholder {3}: l.blocked.join(" et ")
+#: src/pages/Dashboard.tsx
+msgid "{where}{0} du {1} au {2} : {3} bloqué(s)"
+msgstr "{where}{0} van {1} tot {2}: {3} geblokkeerd"
+
 #. placeholder {0}: h.recentErrors.length
 #: src/shell/Health.tsx
 msgid "{where}{0} erreur(s) technique(s) ces dernières 24 h (détail dans Réglages, Journaux)."
 msgstr "{where}{0} technische fout(en) de voorbije 24 u (details in Instellingen, Logboeken)."
 
+#. placeholder {0}: o.alerts.newEmails
+#: src/pages/Dashboard.tsx
+msgid "{where}{0} message(s) client à traiter"
+msgstr "{where}{0} klantbericht(en) te behandelen"
+
+#. placeholder {0}: h.reference
+#. placeholder {1}: h.unitName
+#. placeholder {2}: h.holdExpiresAt ? t` (expire le ${longDate(h.holdExpiresAt.slice(0, 10))} à ${h.holdExpiresAt.slice(11, 16)} UTC)` : ""
+#: src/pages/Dashboard.tsx
+msgid "{where}{0}, {1}{2}"
+msgstr "{where}{0}, {1}{2}"
+
 #. placeholder {0}: h.beds24StaleHours ?? "?"
 #: src/shell/Health.tsx
 msgid "{where}aucune nouvelle de Beds24 depuis {0} h : les plateformes peuvent vendre des dates déjà prises."
 msgstr "{where}geen nieuws van Beds24 sinds {0} u: de platformen kunnen data verkopen die al bezet zijn."
+
+#. placeholder {0}: e.action
+#. placeholder {1}: e.entity ? ` (${e.entity})` : ""
+#. placeholder {2}: sqlWhen(e.createdAt)
+#: src/shell/Health.tsx
+msgid "{where}erreur technique : {0}{1}, {2}"
+msgstr "{where}technische fout: {0}{1}, {2}"
 
 #. placeholder {0}: m.toEmail
 #. placeholder {1}: m.reference ? t` (${m.reference})` : ""
@@ -721,6 +777,10 @@ msgstr "1 = als eerste op de site"
 msgid "1 avis sous {0} sans réponse"
 msgstr "1 beoordeling onder {0} zonder antwoord"
 
+#: src/pages/Dashboard.tsx
+msgid "1 dossier"
+msgstr "1 dossier"
+
 #: src/booking/BookingPanel.tsx
 #: src/calendar/PricePanel.tsx
 #: src/calendar/Weeks.tsx
@@ -747,9 +807,9 @@ msgstr "1 nacht die niet verkocht wordt, hier noch op de platformen."
 msgid "1 point à vérifier en coulisses"
 msgstr "1 punt om achter de schermen na te kijken"
 
-#: src/pages/settings/Clients.tsx
-msgid "1 séjour"
-msgstr "1 verblijf"
+#: src/shell/Health.tsx
+msgid "1 point à voir"
+msgstr "1 punt om na te kijken"
 
 #: src/pages/settings/Import.tsx
 msgid "1. Coller le fichier"
@@ -806,6 +866,10 @@ msgstr "Aan te vullen in Beds24"
 msgid "À encaisser"
 msgstr "Te innen"
 
+#: src/pages/Dashboard.tsx
+msgid "À encaisser (soldes)"
+msgstr "Te innen (saldi)"
+
 #: src/pages/settings/Startup.tsx
 msgid "À faire"
 msgstr "Te doen"
@@ -818,6 +882,10 @@ msgstr "Klaar tegen"
 #: src/pages/Today.tsx
 msgid "à finir avant {0}"
 msgstr "klaar tegen {0}"
+
+#: src/pages/Dashboard.tsx
+msgid "à jour"
+msgstr "in orde"
 
 #: src/pages/settings/Options.tsx
 msgid "à la pièce"
@@ -839,6 +907,10 @@ msgstr "Hoe lang op voorhand er geboekt wordt"
 #: src/pages/Today.tsx
 msgid "À régler sans heure fixe"
 msgstr "Te regelen zonder vast uur"
+
+#: src/booking/BookingPanel.tsx
+msgid "À rembourser (trop-perçu, à faire à la main)"
+msgstr "Terug te betalen (te veel ontvangen, met de hand te doen)"
 
 #. placeholder {0}: pending.data?.length ?? 0
 #: src/pages/Messages.tsx
@@ -1007,6 +1079,10 @@ msgstr "Een opmerking toevoegen"
 msgid "Ajoutez l'adresse iCal donnée par un autre site pour que ses réservations bloquent les dates ici."
 msgstr "Voeg het iCal-adres van een andere site toe, zodat zijn reserveringen de data hier blokkeren."
 
+#: src/pages/Dashboard.tsx
+msgid "Alertes"
+msgstr "Waarschuwingen"
+
 #: src/pages/settings/Templates.tsx
 msgid "anglais"
 msgstr "Engels"
@@ -1103,6 +1179,10 @@ msgstr "Toepassen op {total} nachten"
 msgid "après {0}"
 msgstr "na {0}"
 
+#: src/booking/BookingPanel.tsx
+msgid "arrhes"
+msgstr "voorschot"
+
 #: src/pages/settings/Payments.tsx
 msgid "Arrhes"
 msgstr "Voorschot"
@@ -1129,12 +1209,18 @@ msgid "Arrhes propres à ce bien (%)"
 msgstr "Eigen voorschot voor deze woning (%)"
 
 #: src/pages/Bookings.tsx
+#: src/pages/Dashboard.tsx
 msgid "arrive aujourd'hui"
 msgstr "komt vandaag aan"
 
 #: src/pages/Bookings.tsx
+#: src/pages/Dashboard.tsx
 msgid "arrive demain"
 msgstr "komt morgen aan"
+
+#: src/pages/Dashboard.tsx
+msgid "arrivée"
+msgstr "aankomst"
 
 #: src/booking/BookingPanel.tsx
 #: src/booking/Register.tsx
@@ -1163,6 +1249,10 @@ msgstr "Aankomst en vertrek vallen op hetzelfde uur: er is geen tijd voor de sch
 #: src/pages/settings/Tarifs.tsx
 msgid "arrivée le {days}"
 msgstr "aankomst op {days}"
+
+#: src/pages/Dashboard.tsx
+msgid "Arrivées et départs, 7 jours"
+msgstr "Aankomsten en vertrekken, 7 dagen"
 
 #: src/pages/Today.tsx
 msgid "Arrivent"
@@ -1282,6 +1372,10 @@ msgstr "Geen sjabloon"
 msgid "Aucun modèle."
 msgstr "Geen sjabloon."
 
+#: src/pages/Dashboard.tsx
+msgid "Aucun mouvement cette semaine."
+msgstr "Geen aankomsten of vertrekken deze week."
+
 #: src/pages/settings/Payments.tsx
 msgid "Aucun paiement ici"
 msgstr "Hier geen betaling"
@@ -1301,10 +1395,6 @@ msgstr "Voor een deel van deze nachten is geen prijs vastgelegd."
 #: src/pages/settings/Tarifs.tsx
 msgid "Aucun prix sur {year}."
 msgstr "Geen prijs in {year}."
-
-#: src/pages/settings/Clients.tsx
-msgid "aucun séjour"
-msgstr "geen verblijf"
 
 #: src/pages/settings/Channels.tsx
 msgid "aucune"
@@ -1353,6 +1443,10 @@ msgstr "Geen automatische korting"
 #: src/pages/settings/Stats.tsx
 msgid "aucune réservation"
 msgstr "geen reservering"
+
+#: src/pages/Dashboard.tsx
+msgid "aucune réservation à venir"
+msgstr "geen komende boekingen"
 
 #: src/pages/Bookings.tsx
 msgid "Aucune réservation ne correspond à « {q} »"
@@ -1480,6 +1574,8 @@ msgid "Beds24 ne répond pas avec ce compte. Rétablissez la liaison avec un nou
 msgstr "Beds24 antwoordt niet met deze account. Herstel de koppeling met een nieuwe uitnodigingscode (hieronder)."
 
 #: src/pages/Bookings.tsx
+#: src/pages/Dashboard.tsx
+#: src/pages/settings/Channels.tsx
 #: src/pages/settings/Stats.tsx
 #: src/sale/SaleFlow.tsx
 msgid "Bien"
@@ -2310,7 +2406,10 @@ msgstr "Sleutel aangemaakt"
 msgid "Clés de service, {active} active(s)"
 msgstr "Servicesleutels, {active} actief"
 
+#: src/booking/BookingPanel.tsx
 #: src/pages/Bookings.tsx
+#: src/pages/Dashboard.tsx
+#: src/pages/settings/Channels.tsx
 #: src/pages/settings/Clients.tsx
 msgid "Client"
 msgstr "Klant"
@@ -2653,6 +2752,11 @@ msgstr "Servicesleutel aanmaken"
 msgid "Créez un « invite code » avec lecture et écriture (réservations, disponibilités, propriétés, canaux), sans liste d'adresses IP."
 msgstr "Maak een « invite code » aan met lezen en schrijven (reserveringen, beschikbaarheden, accommodaties, kanalen), zonder lijst van IP-adressen."
 
+#: src/booking/BookingPanel.tsx
+#: src/pages/settings/Payments.tsx
+msgid "Date"
+msgstr "Datum"
+
 #: src/booking/Register.tsx
 msgid "Date de naissance"
 msgstr "Geboortedatum"
@@ -2693,11 +2797,6 @@ msgstr "al aanwezig"
 msgid "Déjà payé"
 msgstr "Al betaald"
 
-#. placeholder {0}: b.guestNotes
-#: src/booking/BookingPanel.tsx
-msgid "Demande du client : {0}"
-msgstr "Vraag van de klant: {0}"
-
 #: src/pages/settings/Startup.tsx
 msgid "Démarche"
 msgstr "Stap"
@@ -2705,6 +2804,10 @@ msgstr "Stap"
 #: src/pages/Settings.tsx
 msgid "Démarches légales et techniques, où on en est"
 msgstr "Wettelijke en technische stappen, hoe ver we staan"
+
+#: src/pages/Dashboard.tsx
+msgid "départ"
+msgstr "vertrek"
 
 #: src/booking/BookingPanel.tsx
 #: src/booking/Register.tsx
@@ -2847,11 +2950,14 @@ msgstr "Beschrijving en huisreglement."
 msgid "Description sur le site"
 msgstr "Beschrijving op de site"
 
+#: src/booking/BookingPanel.tsx
+msgid "Destinataire"
+msgstr "Ontvanger"
+
 #: src/pages/settings/Import.tsx
 msgid "Détail"
 msgstr "Detail"
 
-#: src/booking/BookingPanel.tsx
 #: src/sale/SaleFlow.tsx
 msgid "Détail du prix"
 msgstr "Detail van de prijs"
@@ -2860,6 +2966,10 @@ msgstr "Detail van de prijs"
 #: src/pages/settings/Logs.tsx
 msgid "Détail technique"
 msgstr "Technisch detail"
+
+#: src/booking/BookingPanel.tsx
+msgid "Devis"
+msgstr "Offerte"
 
 #: src/calendar/PricePanel.tsx
 msgid "Dimanche à jeudi"
@@ -3136,6 +3246,10 @@ msgid "Envoyé : {0}."
 msgstr "Verstuurd: {0}."
 
 #: src/booking/BookingPanel.tsx
+msgid "Envoyé le"
+msgstr "Verstuurd op"
+
+#: src/booking/BookingPanel.tsx
 #: src/pages/Messages.tsx
 #: src/pages/settings/ChannelPrices.tsx
 msgid "Envoyer"
@@ -3197,8 +3311,10 @@ msgstr "Stap"
 msgid "Étapes"
 msgstr "Stappen"
 
+#: src/booking/BookingPanel.tsx
 #: src/pages/Bookings.tsx
 #: src/pages/settings/Beds24Property.tsx
+#: src/pages/settings/Payments.tsx
 #: src/pages/settings/ServiceKeys.tsx
 msgid "État"
 msgstr "Status"
@@ -3325,6 +3441,10 @@ msgstr "Een prijs vastleggen"
 msgid "Fixer un prix ou augmenter de 10 %."
 msgstr "Een prijs vastleggen of met 10 % verhogen."
 
+#: src/pages/Dashboard.tsx
+msgid "Flux iCal"
+msgstr "iCal-feed"
+
 #: src/pages/settings/Stats.tsx
 msgid "Fois"
 msgstr "Keer"
@@ -3389,6 +3509,10 @@ msgstr "Geschiedenis"
 msgid "Hors ligne : vous voyez la dernière version gardée sur cet appareil. Rien ne peut être changé avant le retour du réseau."
 msgstr "Offline: u ziet de laatste versie die op dit toestel bewaard is. Er kan niets gewijzigd worden voor het netwerk terug is."
 
+#: src/pages/Bookings.tsx
+msgid "iCal"
+msgstr "iCal"
+
 #: src/pages/Login.tsx
 #: src/pages/settings/Accounts.tsx
 msgid "Identifiant"
@@ -3413,6 +3537,11 @@ msgstr "Het blijft in de geschiedenis van de reservering."
 #: src/pages/Reviews.tsx
 msgid "Ils apparaissent ici dès que Beds24 en a relevé un."
 msgstr "Ze verschijnen hier zodra Beds24 er een heeft opgehaald."
+
+#: src/booking/BookingPanel.tsx
+#: src/pages/Bookings.tsx
+msgid "import elloha"
+msgstr "import elloha"
 
 #: src/pages/settings/Import.tsx
 msgid "importée"
@@ -3873,6 +4002,10 @@ msgstr "De schoonmaak"
 msgid "Le message s'affiche sur la page du client et part par mail à {email} quand l'envoi des mails est actif."
 msgstr "Het bericht verschijnt op de pagina van de klant en vertrekt per mail naar {email} wanneer mails versturen actief is."
 
+#: src/pages/Dashboard.tsx
+msgid "Le mois en chiffres"
+msgstr "De maand in cijfers"
+
 #: src/pages/settings/Templates.tsx
 msgid "le mot affiché sur la puce, par exemple : Accès et clés"
 msgstr "het woord op het label, bijvoorbeeld: Toegang en sleutels"
@@ -4164,6 +4297,10 @@ msgstr "De blokkering opheffen"
 msgid "Lever le blocage ?"
 msgstr "De blokkering opheffen?"
 
+#: src/pages/Dashboard.tsx
+msgid "Liaison active"
+msgstr "Actieve koppeling"
+
 #: src/pages/settings/Logs.tsx
 msgid "liaison Beds24 rétablie"
 msgstr "koppeling met Beds24 hersteld"
@@ -4368,6 +4505,11 @@ msgstr "bericht"
 msgid "Message à lire"
 msgstr "Bericht te lezen"
 
+#. placeholder {0}: b.guestNotes
+#: src/booking/BookingPanel.tsx
+msgid "Message du client : {0}"
+msgstr "Bericht van de klant: {0}"
+
 #: src/pages/settings/Logs.tsx
 msgid "message envoyé à un client"
 msgstr "bericht aan een klant verstuurd"
@@ -4376,6 +4518,7 @@ msgstr "bericht aan een klant verstuurd"
 msgid "message envoyé au client"
 msgstr "bericht aan de klant verstuurd"
 
+#: src/pages/Dashboard.tsx
 #: src/pages/Messages.tsx
 #: src/pages/Today.tsx
 #: src/shell/nav.tsx
@@ -4462,7 +4605,9 @@ msgstr "Maand van aankomst"
 msgid "Mon compte"
 msgstr "Mijn account"
 
-#: src/pages/Bookings.tsx
+#: src/booking/BookingPanel.tsx
+#: src/pages/settings/Channels.tsx
+#: src/pages/settings/Payments.tsx
 msgid "Montant"
 msgstr "Bedrag"
 
@@ -4519,6 +4664,11 @@ msgstr "Reden: {0}"
 msgid "Motif de l'annulation"
 msgstr "Reden van de annulering"
 
+#: src/pages/Dashboard.tsx
+msgid "Mouvement"
+msgstr "Beweging"
+
+#: src/booking/BookingPanel.tsx
 #: src/pages/settings/Payments.tsx
 msgid "Moyen"
 msgstr "Betaalwijze"
@@ -4563,10 +4713,6 @@ msgstr "Nederlands"
 #: src/lib/derive.ts
 msgid "Ni arrivée ni départ aujourd'hui."
 msgstr "Vandaag geen aankomst of vertrek."
-
-#: src/pages/settings/Clients.tsx
-msgid "ni mail ni téléphone"
-msgstr "geen mail of telefoon"
 
 #: src/booking/BookingPanel.tsx
 msgid "Ni téléphone ni mail sur cette réservation."
@@ -4693,8 +4839,8 @@ msgid "Noter un paiement reçu"
 msgstr "Een ontvangen betaling noteren"
 
 #: src/booking/BookingPanel.tsx
-msgid "Notes"
-msgstr "Notities"
+msgid "Notes internes"
+msgstr "Interne notities"
 
 #: src/pages/settings/Ical.tsx
 msgid "Nouveau calendrier"
@@ -4743,6 +4889,7 @@ msgid "Nouvelle saison"
 msgstr "Nieuw seizoen"
 
 #: src/calendar/CalendarView.tsx
+#: src/pages/Bookings.tsx
 #: src/sale/SaleFlow.tsx
 msgid "Nouvelle vente"
 msgstr "Nieuwe verkoop"
@@ -4815,6 +4962,15 @@ msgstr "Nummer van het document"
 msgid "numéro obtenu, date, qui a appelé…"
 msgstr "verkregen nummer, datum, wie gebeld heeft…"
 
+#: src/booking/BookingPanel.tsx
+msgid "Objet"
+msgstr "Onderwerp"
+
+#: src/pages/Dashboard.tsx
+msgid "Occupation, {month}"
+msgstr "Bezetting, {month}"
+
+#: src/pages/Dashboard.tsx
 #: src/pages/settings/Clients.tsx
 msgid "option"
 msgstr "optie"
@@ -4840,6 +4996,10 @@ msgstr "optie in afwachting"
 #: src/pages/Today.tsx
 msgid "Option en attente des arrhes"
 msgstr "Optie in afwachting van het voorschot"
+
+#: src/pages/Dashboard.tsx
+msgid "Option en cours"
+msgstr "Lopende optie"
 
 #: src/pages/settings/Logs.tsx
 msgid "option modifiée"
@@ -4935,8 +5095,16 @@ msgid "Paiement"
 msgstr "Betaling"
 
 #: src/booking/BookingPanel.tsx
+msgid "paiement complet"
+msgstr "volledige betaling"
+
+#: src/booking/BookingPanel.tsx
 msgid "paiement en ligne"
 msgstr "onlinebetaling"
+
+#: src/booking/BookingPanel.tsx
+msgid "paiement manuel"
+msgstr "manuele betaling"
 
 #: src/booking/BookingPanel.tsx
 #: src/pages/settings/Logs.tsx
@@ -4948,6 +5116,7 @@ msgid "Paiement noté à la main"
 msgstr "Betaling met de hand genoteerd"
 
 #: src/booking/BookingPanel.tsx
+#: src/pages/settings/Payments.tsx
 #: src/shell/nav.tsx
 msgid "Paiements"
 msgstr "Betalingen"
@@ -4956,6 +5125,10 @@ msgstr "Betalingen"
 #: src/pages/settings/Payments.tsx
 msgid "Paiements reçus"
 msgstr "Ontvangen betalingen"
+
+#: src/shell/Health.tsx
+msgid "Paiements, envois de mails et liaison avec les plateformes : rien d'anormal dans les dernières 24 h."
+msgstr "Betalingen, verstuurde mails en koppeling met de platformen: niets abnormaals in de laatste 24 uur."
 
 #: src/pages/settings/Startup.tsx
 msgid "Papa"
@@ -5024,6 +5197,7 @@ msgid "par téléphone"
 msgstr "telefonisch"
 
 #: src/pages/Bookings.tsx
+#: src/pages/Dashboard.tsx
 msgid "part aujourd'hui"
 msgstr "vertrekt vandaag"
 
@@ -5036,6 +5210,7 @@ msgstr "Aandeel bezette nachten, in %. De grijze lijn toont {0}."
 msgid "Partent"
 msgstr "Vertrekken"
 
+#: src/booking/BookingPanel.tsx
 #: src/pages/settings/Logs.tsx
 msgid "parti"
 msgstr "vertrokken"
@@ -5065,9 +5240,17 @@ msgstr "Daarna geen aankomst gepland."
 msgid "pas de chiffre en {0}"
 msgstr "geen cijfer in {0}"
 
+#: src/pages/Dashboard.tsx
+msgid "pas de chiffre l'an passé"
+msgstr "geen cijfer vorig jaar"
+
 #: src/api/client.ts
 msgid "Pas de connexion avec le serveur. Vérifiez internet, puis réessayez."
 msgstr "Geen verbinding met de server. Kijk uw internet na en probeer opnieuw."
+
+#: src/booking/BookingPanel.tsx
+msgid "Pas de devis enregistré"
+msgstr "Geen offerte opgeslagen"
 
 #: src/booking/BookingPanel.tsx
 msgid "Pas de mail sur cette réservation : le message s'affichera seulement sur la page du client."
@@ -5118,6 +5301,7 @@ msgstr "nog niet gekoppeld"
 msgid "Pas envoyé. {0} Votre texte est gardé."
 msgstr "Niet verstuurd. {0} Uw tekst is bewaard."
 
+#: src/booking/BookingPanel.tsx
 #: src/pages/settings/Logs.tsx
 msgid "pas parti"
 msgstr "niet vertrokken"
@@ -5129,6 +5313,10 @@ msgstr "Voorbij"
 #: src/pages/settings/Stats.tsx
 msgid "Passent à l'étape"
 msgstr "Gaan door naar de stap"
+
+#: src/pages/Bookings.tsx
+msgid "Payé"
+msgstr "Betaald"
 
 #: src/sale/SaleFlow.tsx
 msgid "payé avant l'enregistrement"
@@ -5158,6 +5346,10 @@ msgstr "Vorige periode"
 #: src/calendar/CalendarView.tsx
 msgid "Période suivante"
 msgstr "Volgende periode"
+
+#: src/pages/Dashboard.tsx
+msgid "Pers."
+msgstr "Pers."
 
 #: src/pages/Today.tsx
 msgid "Personne aujourd'hui."
@@ -5300,6 +5492,10 @@ msgstr "Voornaam"
 msgid "prénom du client"
 msgstr "voornaam van de klant"
 
+#: src/booking/BookingPanel.tsx
+msgid "préparé (envoi coupé)"
+msgstr "voorbereid (verzending uit)"
+
 #: src/pages/settings/Logs.tsx
 msgid "préparé, envoi coupé"
 msgstr "voorbereid, versturen uitgeschakeld"
@@ -5436,6 +5632,7 @@ msgid "problème"
 msgstr "probleem"
 
 #: src/pages/Cleaning.tsx
+#: src/pages/Dashboard.tsx
 msgid "Prochaine arrivée"
 msgstr "Volgende aankomst"
 
@@ -5591,6 +5788,7 @@ msgstr "Opnieuw beginnen"
 msgid "Recopiez chaque pièce d'identité. Un enregistrement est définitif : une erreur se corrige ensuite par une nouvelle ligne."
 msgstr "Neem elk identiteitsbewijs over. Een registratie is definitief: een fout verbetert u daarna met een nieuwe regel."
 
+#: src/booking/BookingPanel.tsx
 #: src/pages/settings/Payments.tsx
 msgid "reçu"
 msgstr "ontvangen"
@@ -5606,6 +5804,11 @@ msgstr "Ontvangen door"
 #: src/pages/settings/Payments.tsx
 msgid "Reçus"
 msgstr "Ontvangen"
+
+#: src/pages/Bookings.tsx
+#: src/pages/settings/Channels.tsx
+msgid "Réf."
+msgstr "Ref."
 
 #: src/booking/BookingPanel.tsx
 msgid "Référence"
@@ -5664,6 +5867,10 @@ msgstr "Nu opnieuw lezen"
 #: src/pages/settings/Ical.tsx
 msgid "Relu, sauf : {0} (voir leur fiche)."
 msgstr "Opnieuw gelezen, behalve: {0} (zie hun fiche)."
+
+#: src/booking/BookingPanel.tsx
+msgid "remboursement"
+msgstr "terugbetaling"
 
 #: src/pages/settings/Payments.tsx
 msgid "Remboursement"
@@ -5825,6 +6032,10 @@ msgid "Réservation d'ici"
 msgstr "Reservering van hier"
 
 #: src/booking/BookingPanel.tsx
+msgid "réservation enregistrée"
+msgstr "boeking geregistreerd"
+
+#: src/booking/BookingPanel.tsx
 #: src/pages/settings/Logs.tsx
 msgid "réservation prise par téléphone"
 msgstr "telefonische reservering"
@@ -5854,8 +6065,8 @@ msgstr "Reserveringen van de platformen"
 
 #. placeholder {0}: rows.length
 #: src/pages/Bookings.tsx
-msgid "Réservations, {0} lignes. Les en-têtes Client, Séjour et Montant trient la liste."
-msgstr "Boekingen, {0} rijen. De kolomkoppen Klant, Verblijf en Bedrag sorteren de lijst."
+msgid "Réservations, {0} lignes. Les en-têtes Client, Séjour et Total trient la liste."
+msgstr "Boekingen, {0} rijen. De kolomkoppen Klant, Verblijf en Totaal sorteren de lijst."
 
 #: src/booking/BookingPanel.tsx
 msgid "Réservé"
@@ -5992,6 +6203,10 @@ msgstr "Terug naar de seizoensprijs"
 msgid "Revenus"
 msgstr "Inkomsten"
 
+#: src/pages/Dashboard.tsx
+msgid "Revenus, {month}"
+msgstr "Inkomsten, {month}"
+
 #: src/pages/settings/ServiceKeys.tsx
 msgid "révoquée"
 msgstr "ingetrokken"
@@ -6012,6 +6227,10 @@ msgstr "Sleutel « {0} » intrekken?"
 #: src/pages/settings/Channels.tsx
 msgid "Revu"
 msgstr "Opnieuw gezien"
+
+#: src/pages/Dashboard.tsx
+msgid "Rien à signaler."
+msgstr "Niets te melden."
 
 #: src/pages/settings/Tarifs.tsx
 msgid "Rien à suggérer"
@@ -6112,6 +6331,10 @@ msgstr "Zonder antwoord"
 msgid "Sans suite"
 msgstr "Zonder gevolg"
 
+#: src/shell/Health.tsx
+msgid "Santé du système"
+msgstr "Gezondheid van het systeem"
+
 #: src/pages/Settings.tsx
 msgid "Sauna, bain chaud, linge, petit-déjeuner…"
 msgstr "Sauna, hottub, linnen, ontbijt…"
@@ -6131,6 +6354,7 @@ msgid "Se déconnecter ({0})"
 msgstr "Afmelden ({0})"
 
 #: src/pages/Bookings.tsx
+#: src/pages/settings/Channels.tsx
 msgid "Séjour"
 msgstr "Verblijf"
 
@@ -6150,6 +6374,10 @@ msgstr "verblijf gewijzigd"
 #: src/pages/settings/ChannelPrices.tsx
 msgid "Séjour sur votre site"
 msgstr "Verblijf op uw site"
+
+#: src/pages/settings/Clients.tsx
+msgid "Séjours"
+msgstr "Verblijven"
 
 #. placeholder {0}: bookings.length
 #: src/pages/settings/Clients.tsx
@@ -6208,6 +6436,10 @@ msgstr "Anders de prijs van het seizoen dat deze dag dekt. Als twee seizoenen ov
 msgid "Sinon, le solde reste à encaisser dans la fiche."
 msgstr "Anders blijft het saldo te innen in de fiche."
 
+#: src/pages/Bookings.tsx
+msgid "site"
+msgstr "site"
+
 #: src/pages/Today.tsx
 msgid "SMS"
 msgstr "Sms"
@@ -6215,6 +6447,10 @@ msgstr "Sms"
 #: src/pages/settings/Domain.tsx
 msgid "soit environ {hours} h"
 msgstr "ongeveer {hours} u"
+
+#: src/booking/BookingPanel.tsx
+msgid "solde"
+msgstr "saldo"
 
 #: src/booking/BookingPanel.tsx
 #: src/pages/settings/Payments.tsx
@@ -6233,6 +6469,7 @@ msgstr "Saldo te innen"
 msgid "Solde à payer, jours avant l'arrivée"
 msgstr "Saldo te betalen, dagen voor aankomst"
 
+#: src/pages/Dashboard.tsx
 #: src/pages/Today.tsx
 msgid "Solde en retard"
 msgstr "Saldo te laat"
@@ -6253,6 +6490,14 @@ msgstr "Donker"
 #: src/pages/settings/Help.tsx
 msgid "Sommaire"
 msgstr "Inhoud"
+
+#: src/pages/Bookings.tsx
+msgid "Source"
+msgstr "Bron"
+
+#: src/pages/Dashboard.tsx
+msgid "Statut"
+msgstr "Status"
 
 #: src/pages/settings/Tarifs.tsx
 msgid "Suggestion"
@@ -6309,13 +6554,16 @@ msgstr "Op"
 
 #. placeholder {0}: channelName(b)
 #: src/booking/BookingPanel.tsx
-#: src/pages/Bookings.tsx
 msgid "sur {0}"
 msgstr "op {0}"
 
 #: src/pages/settings/Domain.tsx
 msgid "Taxe de séjour"
 msgstr "Verblijfsbelasting"
+
+#: src/pages/Bookings.tsx
+msgid "téléphone"
+msgstr "telefoon"
 
 #: src/pages/settings/Clients.tsx
 #: src/pages/settings/Domain.tsx
@@ -6368,9 +6616,15 @@ msgstr "Teksten en voorzieningen geweigerd door Beds24: {0}"
 msgid "textes, adresse et équipements pas encore préparés pour ce domaine"
 msgstr "teksten, adres en voorzieningen nog niet voorbereid voor dit domein"
 
+#: src/booking/BookingPanel.tsx
+#: src/pages/Bookings.tsx
 #: src/sale/SaleFlow.tsx
 msgid "Total"
 msgstr "Totaal"
+
+#: src/pages/settings/Clients.tsx
+msgid "Total des séjours"
+msgstr "Totaal van de verblijven"
 
 #: src/booking/BookingPanel.tsx
 msgid "Total du séjour"
@@ -6457,6 +6711,10 @@ msgstr "Het hele menu"
 msgid "Tout relire maintenant"
 msgstr "Nu alles opnieuw lezen"
 
+#: src/shell/Health.tsx
+msgid "tout va bien"
+msgstr "alles in orde"
+
 #: src/pages/settings/Tarifs.tsx
 msgid "Toute l'année se vend au prix de base. Créez une saison pour l'été, les vacances ou les fêtes."
 msgstr "Het hele jaar wordt tegen de basisprijs verkocht. Maak een seizoen aan voor de zomer, de vakanties of de feestdagen."
@@ -6484,6 +6742,11 @@ msgstr "Alle reserveringen"
 #: src/pages/settings/Stats.tsx
 msgid "Trois lectures pour régler l'ouverture des calendriers et les prix."
 msgstr "Drie cijfers om de opening van de kalenders en de prijzen in te stellen."
+
+#: src/booking/BookingPanel.tsx
+#: src/pages/settings/Payments.tsx
+msgid "Type"
+msgstr "Type"
 
 #: src/pages/settings/Promotions.tsx
 msgid "Type de remise"
