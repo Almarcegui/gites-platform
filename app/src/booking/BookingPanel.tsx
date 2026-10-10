@@ -441,7 +441,7 @@ function MoreMenu({ b, setDialog }: { b: Booking; setDialog: (d: Dialog) => void
 function Box({ open, onClose, title, children }: { open: boolean; onClose: () => void; title: string; children: ReactNode }) {
   const layout = useLayout();
   return (
-    <Modal opened={open} onClose={onClose} title={<b style={{ fontSize: 20 }}>{title}</b>} closeOnClickOutside={false} centered fullScreen={layout === "B"} size="lg" zIndex={400}>
+    <Modal opened={open} onClose={onClose} title={<b style={{ fontSize: 20 }}>{title}</b>} closeOnClickOutside={false} closeOnEscape={false} centered fullScreen={layout === "B"} size="lg" zIndex={400}>
       {children}
     </Modal>
   );

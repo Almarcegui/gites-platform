@@ -183,7 +183,7 @@ export function SidePanel(props: {
 export function Box({ open, onClose, title, children, size = "lg" }: { open: boolean; onClose: () => void; title: string; children: ReactNode; size?: string }) {
   const layout = useLayout();
   return (
-    <Modal opened={open} onClose={onClose} title={<b style={{ fontSize: 20 }}>{title}</b>} closeOnClickOutside={false} centered fullScreen={layout === "B"} size={size} zIndex={400}>
+    <Modal opened={open} onClose={onClose} title={<b style={{ fontSize: 20 }}>{title}</b>} closeOnClickOutside={false} closeOnEscape={false} centered fullScreen={layout === "B"} size={size} zIndex={400}>
       {children}
     </Modal>
   );
