@@ -7,7 +7,7 @@
 // Cloudflare reste possible à tout moment, sans divergence de code métier.
 
 import { createServer } from "node:http";
-import { existsSync, mkdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { unlink, writeFile } from "node:fs/promises";
 import { dirname, extname, join, normalize, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -106,6 +106,16 @@ const env = {
       if (!/^[0-9a-f]{32}\.(jpg|png|webp)$/.test(name)) return;
       await unlink(join(UPLOADS_DIR, name));
     },
+    // Sauvegarde des photos (GET /api/admin/export-uploads.tar).
+    async list() {
+      if (!existsSync(UPLOADS_DIR)) return [];
+      return readdirSync(UPLOADS_DIR).filter((n) => /^[0-9a-f]{32}\.(jpg|png|webp)$/.test(n));
+    },
+    async read(name) {
+      if (!/^[0-9a-f]{32}\.(jpg|png|webp)$/.test(name)) throw new Error("nom de fichier refusé");
+      const full = join(UPLOADS_DIR, name);
+      return { bytes: new Uint8Array(readFileSync(full)), mtime: Math.floor(statSync(full).mtimeMs / 1000) };
+    },
   },
 };
 
@@ -115,7 +125,7 @@ const { Router, apiError } = await import("../dist/api/router.js");
 const { registerPublicRoutes } = await import("../dist/api/public.js");
 const { registerAdminRoutes } = await import("../dist/api/admin.js");
 const { runAllScheduled } = await import("../dist/jobs/scheduled.js");
-const { adminIpGate } = await import("../dist/core/ip-allow.js");
+const { adminIpCheck, adminIpGate, ipDeniedResponse, markIpDenied } = await import("../dist/core/ip-allow.js");
 
 const router = new Router();
 registerPublicRoutes(router);
@@ -284,9 +294,12 @@ const server = createServer(async (req, res) => {
     }
 
     // 3. Accès administrateur fermé au public (ADMIN_ALLOWED_IPS, vide = ouvert).
-    const denied = adminIpGate(url.pathname, env.ADMIN_ALLOWED_IPS, clientIp(req));
-    if (denied) {
-      await sendResponse(res, denied);
+    //    Écrans : refus immédiat. API : refus après authentification, aux
+    //    humains seulement (clés svc: et compte « sauvegarde » exemptés).
+    const ip = clientIp(req);
+    const ipCheck = adminIpCheck(url.pathname, env.ADMIN_ALLOWED_IPS, ip);
+    if (ipCheck === "deny") {
+      await sendResponse(res, adminIpGate(url.pathname, env.ADMIN_ALLOWED_IPS, ip) ?? ipDeniedResponse());
       return;
     }
 
@@ -316,9 +329,14 @@ const server = createServer(async (req, res) => {
       req.destroy();
       return;
     }
+    if (ipCheck === "defer") markIpDenied(request);
     const response = await router.handle(request, env, execCtx);
     if (response) {
       await sendResponse(res, response);
+      return;
+    }
+    if (ipCheck === "defer") {
+      await sendResponse(res, ipDeniedResponse());
       return;
     }
 

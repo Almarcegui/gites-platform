@@ -71,7 +71,7 @@ def lire_config(chemin: Path = CONFIG) -> tuple[str, str]:
 
 class _SansRedirection(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
-        raise urllib.error.HTTPError(req.full_url, code, "redirection refusée", headers, fp)
+        raise urllib.error.HTTPError(req.full_url, code, f"redirection refusée ({msg}) vers {newurl}", headers, fp)
 
 
 _OUVREUR = urllib.request.build_opener(_SansRedirection)
@@ -82,7 +82,7 @@ class Api:
         self.url = url
         self.__cle = cle
 
-    def _req(self, methode: str, chemin: str, corps: dict | None = None, auth: bool = True):
+    def ouvrir(self, methode: str, chemin: str, corps: dict | None = None, auth: bool = True):
         entetes = {"user-agent": "gites-admin", "accept": "application/json"}
         if auth:
             entetes["authorization"] = f"Bearer svc:{self.__cle}"
@@ -103,12 +103,19 @@ class Api:
             raise Erreur(f"{self.url} injoignable ({type(e).__name__})") from None
 
     def json(self, methode: str, chemin: str, corps: dict | None = None, auth: bool = True):
-        with self._req(methode, chemin, corps, auth) as r:
+        with self.ouvrir(methode, chemin, corps, auth) as r:
             texte = r.read(5 * 1024 * 1024).decode("utf-8", "replace")
         try:
             return json.loads(texte) if texte else None
         except ValueError:
             raise Erreur(f"{chemin.split('?')[0]} : réponse qui n'est pas du JSON") from None
+
+    def objet(self, methode: str, chemin: str, corps: dict | None = None, auth: bool = True) -> dict:
+        """Comme json(), mais la réponse doit être un objet JSON (sinon : Erreur)."""
+        r = self.json(methode, chemin, corps, auth)
+        if not isinstance(r, dict):
+            raise Erreur(f"{chemin.split('?')[0]} : réponse vide ou qui n'est pas un objet JSON")
+        return r
 
 
 def sante(api: Api, _a) -> dict:
@@ -124,11 +131,11 @@ def sante(api: Api, _a) -> dict:
 
 
 def beds24_statut(api: Api, _a) -> dict:
-    return api.json("GET", "/api/admin/beds24/status")
+    return api.objet("GET", "/api/admin/beds24/status")
 
 
 def beds24_lier(api: Api, a) -> dict:
-    return api.json("POST", "/api/admin/beds24/invite-code", {"code": a.code})
+    return api.objet("POST", "/api/admin/beds24/invite-code", {"code": a.code})
 
 
 def resa_annuler(api: Api, a) -> dict:
@@ -152,7 +159,7 @@ def export_sauvegarde(api: Api, a) -> dict:
     tmp = sortie.with_name(sortie.name + ".partiel")
     total = 0
     try:
-        with api._req("GET", "/api/admin/export.sqlite") as r, open(os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), "wb") as f:
+        with api.ouvrir("GET", "/api/admin/export.sqlite") as r, open(os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), "wb") as f:
             while bloc := r.read(1 << 20):
                 total += len(bloc)
                 f.write(bloc)

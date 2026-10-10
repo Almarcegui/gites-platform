@@ -4,7 +4,7 @@ import { apiError, Router } from "./api/router";
 import { registerPublicRoutes } from "./api/public";
 import { registerAdminRoutes } from "./api/admin";
 import { runAllScheduled } from "./jobs/scheduled";
-import { adminIpGate } from "./core/ip-allow";
+import { adminIpCheck, adminIpGate, ipDeniedResponse, markIpDenied } from "./core/ip-allow";
 import { withStandardHeaders } from "./services/http-headers";
 import { buildReplyMime, parseRawEmail, processInboundEmail } from "./services/inbound-email";
 import { PaymentInFlightError } from "./services/booking-flow";
@@ -28,12 +28,18 @@ export default {
     if (legacy) return finish(legacy);
     // Accès administrateur fermé au public (ADMIN_ALLOWED_IPS, vide = ouvert) :
     // API admin ET écrans /admin/ et /admin2/, avant toute lecture de la base.
-    const denied = adminIpGate(url.pathname, env.ADMIN_ALLOWED_IPS, request.headers.get("cf-connecting-ip"));
-    if (denied) return finish(denied);
+    // Écrans : refus immédiat. API : refus après authentification, aux humains
+    // seulement (clés de service et compte « sauvegarde » exemptés, cf. guard).
+    const clientIp = request.headers.get("cf-connecting-ip");
+    const ipCheck = adminIpCheck(url.pathname, env.ADMIN_ALLOWED_IPS, clientIp);
+    if (ipCheck === "deny") return finish(adminIpGate(url.pathname, env.ADMIN_ALLOWED_IPS, clientIp) ?? ipDeniedResponse());
+    if (ipCheck === "defer") markIpDenied(request);
     // "/" sert le site vitrine (public/index.html) via les assets.
     try {
       const response = await router.handle(request, env, ctx);
       if (response) return finish(response);
+      // API admin hors liste qu'aucune route gardée n'a reconnue : refus.
+      if (ipCheck === "defer") return finish(ipDeniedResponse());
     } catch (e) {
       // Refus métier, pas panne : un paiement est déjà parti chez la banque du
       // client. 409 avec un message lisible, aucune trace d'erreur à ouvrir.

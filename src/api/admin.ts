@@ -8,6 +8,7 @@ import { blockingUnitIds, blocksAsSpans, isActiveBooking, isUnitFree } from "../
 import { rateCalendar, type RateOverride, type UnitPricingInfo } from "../core/pricing";
 import { detectDrift, type DriftSignal } from "../core/drift";
 import { imageSize } from "../core/image-size";
+import { ipDeniedResponse, isIpDenied } from "../core/ip-allow";
 import {
   GUEST_ID_TYPES,
   GUEST_ID_TYPE_FR,
@@ -151,6 +152,7 @@ import { buildBalanceReminderEmail, queueEmail } from "../services/email";
 import { importElloha } from "../services/elloha-import";
 import { replyOnChannel } from "../services/beds24-messages";
 import { exportSql } from "../services/export-db";
+import { buildTar, type TarEntry } from "../core/tar";
 import {
   createServiceKey, listServiceKeys, resolveServiceKey, revokeServiceKey, validServiceKeyName,
 } from "../services/service-keys";
@@ -224,7 +226,7 @@ export function currentUser(req: Request): string {
 type AuthKind = "session" | "paire" | "nu" | "service" | "access";
 const REQUEST_KIND = new WeakMap<Request, AuthKind>();
 
-function isHuman(req: Request): boolean {
+export function isHuman(req: Request): boolean {
   const kind = REQUEST_KIND.get(req);
   return (kind === "session" || kind === "paire" || kind === "nu") && currentUser(req) !== BACKUP_USER;
 }
@@ -234,17 +236,31 @@ function isHuman(req: Request): boolean {
  *  déconnexion). Une fuite de son mot de passe donne une copie des données —
  *  c'est son métier — mais aucune écriture, aucun réglage, aucun compte. */
 export const BACKUP_USER = "sauvegarde";
-const BACKUP_ROUTES = new Set(["/api/admin/export.sqlite", "/api/admin/export.sql", "/api/admin/logout"]);
+const BACKUP_ROUTES = new Set(["/api/admin/export.sqlite", "/api/admin/export.sql", "/api/admin/export-uploads.tar", "/api/admin/logout"]);
 
 function backupAccountRefused(username: string, url: URL): Response | null {
   if (username !== BACKUP_USER || BACKUP_ROUTES.has(url.pathname)) return null;
   return apiError(403, "le compte « sauvegarde » n'ouvre que l'export de la base");
 }
 
-export function guard(handler: Handler): Handler {
+/** Garde IP (ADMIN_ALLOWED_IPS) appliquée APRÈS l'authentification, aux humains
+ *  seulement : une clé de service et le compte « sauvegarde » partent du Mac et
+ *  passent depuis toute adresse (lot 3 ; cf. src/core/ip-allow.ts). */
+function ipRefused(req: Request): Response | null {
+  if (!isIpDenied(req)) return null;
+  if (REQUEST_KIND.get(req) === "service" || currentUser(req) === BACKUP_USER) return null;
+  return ipDeniedResponse();
+}
+
+export function guard(inner: Handler): Handler {
   return async (req, env, params, url, ctx) => {
     const header = req.headers.get("authorization") ?? "";
     const presented = header.startsWith("Bearer ") ? header.slice(7) : "";
+    const handler: Handler = (r, e, p, u, c) => ipRefused(r) ?? inner(r, e, p, u, c);
+    // Adresse hors liste : seules une clé de service, une session ou une paire
+    // ADMIN_TOKEN peuvent encore se révéler exemptées ; tout le reste est
+    // refusé ici, sans lire la base.
+    if (isIpDenied(req) && !presented) return ipDeniedResponse();
 
     // 0) Accès de service (Claude, scripts du Mac) : clé svc:<clé>, droits admin.
     if (presented.startsWith("svc:")) {
@@ -565,6 +581,9 @@ export function registerAdminRoutes(router: Router): void {
     const user = typeof body.user === "string" ? body.user.trim().toLowerCase() : "";
     const password = typeof body.password === "string" ? body.password : "";
     if (!user || !password) return apiError(400, "identifiant et mot de passe requis");
+    // Garde IP : depuis une adresse hors liste, seul le compte « sauvegarde »
+    // (tiré depuis le Mac, export seul) peut ouvrir une session.
+    if (isIpDenied(req) && user !== BACKUP_USER) return ipDeniedResponse();
 
     // 1) Comptes en base (gérés par la page Utilisateurs) → session de 30 jours.
     const row = await env.DB.prepare("SELECT id, username, password_hash, active FROM admin_users WHERE username = ?")
@@ -2614,6 +2633,32 @@ export function registerAdminRoutes(router: Router): void {
         "content-disposition": `attachment; filename="gites-${new Date().toISOString().slice(0, 10)}.sqlite"`,
         "cache-control": "no-store",
         "x-content-type-options": "nosniff",
+      },
+    });
+  }));
+
+  // .tar des photos envoyées depuis le back-office (UPLOADS_DIR, Node
+  // seulement) : tirée par la sauvegarde de nuit juste après la base.
+  router.get("/api/admin/export-uploads.tar", guard(async (req, env) => {
+    const store = env.UPLOADS;
+    if (!store?.list || !store.read) {
+      return apiError(501, "photos indisponibles sur cette cible (seulement sur le serveur Node)", { code: "uploads_unavailable" });
+    }
+    const names = (await store.list()).filter((n) => /^[0-9a-f]{32}\.(?:jpg|png|webp)$/.test(n)).sort();
+    const entries: TarEntry[] = [];
+    for (const name of names) {
+      const { bytes, mtime } = await store.read(name);
+      entries.push({ name, bytes, mtime });
+    }
+    const tar = buildTar(entries);
+    await audit(env.DB, "admin", "export.uploads", undefined, { fichiers: entries.length, octets: tar.byteLength, par: currentUser(req) });
+    return new Response(tar, {
+      headers: {
+        "content-type": "application/x-tar",
+        "content-disposition": `attachment; filename="gites-photos-${new Date().toISOString().slice(0, 10)}.tar"`,
+        "cache-control": "no-store",
+        "x-content-type-options": "nosniff",
+        "x-gites-files": String(entries.length),
       },
     });
   }));

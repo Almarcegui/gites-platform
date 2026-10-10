@@ -7,8 +7,8 @@
 // par de vraies requêtes HTTP : santé, garde fail-closed, connexion, ménage,
 // modèles, envoi et service d'une photo, lien de partage, garde par adresse IP.
 // Sort en 1 au premier écart. Aucune donnée réelle.
-import { spawn } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { spawn, spawnSync } from "node:child_process";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -115,6 +115,10 @@ try {
   const tooBig = await fetch(`${base}/api/admin/units/1/photos/upload`, { method: "POST", headers: { ...auth, "content-type": "application/octet-stream" }, body: huge }).catch(() => null);
   check("photo : corps de 10 Mo refusé (413)", !tooBig || tooBig.status === 413, String(tooBig?.status));
 
+  const tar = await fetch(`${base}/api/admin/export-uploads.tar`, { headers: auth });
+  const tarBytes = new Uint8Array(await tar.arrayBuffer());
+  check("photos : archive .tar servie (1 fichier)", tar.status === 200 && tar.headers.get("x-gites-files") === "1" && tarBytes.length >= 2048, `${tar.status} ${tar.headers.get("x-gites-files")}`);
+
   const link = await (await fetch(`${base}/api/admin/task-links`, { method: "POST", headers: { ...auth, "content-type": "application/json" }, body: JSON.stringify({ label: "Fumée" }) })).json();
   const page = await fetch(link.url);
   check("lien de partage : page publique", page.status === 200 && (await page.text()).includes("Ménage"));
@@ -130,6 +134,43 @@ try {
   check("garde IP : 403 sur /admin2/", (await fetch(`${base2}/admin2/`)).status === 403);
   check("garde IP : X-Forwarded-For ignoré sans TRUST_PROXY", (await fetch(`${base2}/api/admin/units`, { headers: { ...auth, "x-forwarded-for": "10.9.9.9" } })).status === 403);
   check("garde IP : le public reste ouvert", (await fetch(`${base2}/internal/health`)).ok);
+
+  // Garde IP aux humains seulement (lot 3) : un troisième serveur derrière un
+  // « proxy » (TRUST_PROXY), qui n'admet que 10.9.9.9.
+  const port3 = await freePort();
+  const base3 = `http://127.0.0.1:${port3}`;
+  const srv3 = start(port3, dir, { ADMIN_ALLOWED_IPS: "10.9.9.9", TRUST_PROXY: "true", SQLITE_PATH: join(dir, "smoke3.db") });
+  servers.push(srv3);
+  await waitUp(base3);
+  const from = (ip) => ({ "x-forwarded-for": ip });
+  const json = { "content-type": "application/json" };
+  const key = await (await fetch(`${base3}/api/admin/service-keys`, { method: "POST", headers: { ...auth, ...from("10.9.9.9"), ...json }, body: JSON.stringify({ name: "fumee-mac" }) })).json();
+  check("garde IP : clé de service créée depuis la liste", typeof key.key === "string", JSON.stringify(key).slice(0, 120));
+  const svc = { authorization: `Bearer svc:${key.key}` };
+  check("garde IP : clé svc: acceptée hors liste", (await fetch(`${base3}/api/admin/units?property=1`, { headers: { ...svc, ...from("1.2.3.4") } })).status === 200);
+  check("garde IP : humain refusé hors liste", (await fetch(`${base3}/api/admin/units?property=1`, { headers: { ...auth, ...from("1.2.3.4") } })).status === 403);
+  check("lien de partage : refusé à une clé svc:", (await fetch(`${base3}/api/admin/task-links`, { method: "POST", headers: { ...svc, ...from("10.9.9.9"), ...json }, body: JSON.stringify({ label: "Fumée" }) })).status === 403);
+  const backup = await (await fetch(`${base3}/api/admin/users`, { method: "POST", headers: { ...auth, ...from("10.9.9.9"), ...json }, body: JSON.stringify({ username: "sauvegarde" }) })).json();
+  check("compte sauvegarde créé", typeof backup.password === "string", JSON.stringify(backup).slice(0, 120));
+  const py = "/opt/homebrew/bin/python3";
+  if (existsSync(py) && backup.password) {
+    // La vraie sauvegarde de nuit, contre ce serveur, depuis une adresse hors liste.
+    const sav = join(dir, "sauvegardes");
+    mkdirSync(sav, { recursive: true });
+    const ids = join(dir, "sauvegarde.env");
+    writeFileSync(ids, `GITES_URL=${base3}\nGITES_USER=sauvegarde\nGITES_PASSWORD=${backup.password}\n`);
+    chmodSync(ids, 0o600);
+    const run = spawnSync(py, [join(ROOT, "scripts", "sauvegarde_nuit.py"), "--cible", "infomaniak", "--origine", "manuel"], {
+      env: { ...process.env, GITES_SAUVEGARDE_ENV: ids, GITES_SAUVEGARDES: sav, GITES_SAUVEGARDE_JOURNAL: join(dir, "journal.log") },
+      encoding: "utf-8",
+      timeout: 60_000,
+    });
+    const out = `${run.stdout}${run.stderr}`;
+    const saved = existsSync(sav) ? readdirSync(sav) : [];
+    check("sauvegarde de nuit hors liste : base + photos", run.status === 0 && saved.some((n) => n.endsWith("-gites-infomaniak.sqlite")) && saved.some((n) => n.endsWith("-gites-infomaniak-photos.tar")) && out.includes("photos : 1 photo(s)"), out.slice(0, 400));
+  } else {
+    console.log("—    sauvegarde de nuit : python3 de Homebrew absent, essai sauté");
+  }
 } catch (e) {
   failures++;
   console.error("ÉCHEC", e);

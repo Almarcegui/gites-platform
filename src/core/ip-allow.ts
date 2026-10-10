@@ -169,3 +169,55 @@ export function adminIpGate(pathname: string, raw: string | undefined | null, cl
     { status: 403, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } },
   );
 }
+
+// --- garde IP appliquée aux humains seulement (lot 3, remarque (a) de la PR #107)
+//
+// Les écrans /admin/ et /admin2/ sont refusés tout de suite (un humain seul les
+// ouvre). Pour l'API /api/admin/*, la décision est REPORTÉE après
+// l'authentification : la garde du routeur (`guard`, src/api/admin.ts) ne
+// l'applique qu'aux humains (sessions, ADMIN_TOKEN). Une clé de service `svc:`
+// et le compte réservé `sauvegarde` passent depuis n'importe quelle adresse :
+// ils partent du Mac (IP domestique changeante) et leurs droits sont déjà
+// bornés (clé révocable, export seul). Une requête marquée qu'aucune route
+// gardée n'a reconnue reçoit le refus à la fin (`deniedAfterRouting`).
+
+const IP_DENIED = new WeakSet<Request>();
+
+/** Le chemin vise l'API admin (et non les écrans), segment par segment. */
+export function isAdminApiPath(pathname: string): boolean {
+  try {
+    const segs = pathname.split(/[/\\]+/).filter(Boolean).map((s) => decodeURIComponent(s).toLowerCase());
+    const whole = decodeURIComponent(pathname).toLowerCase().split(/[/\\]+/).filter(Boolean);
+    const api = (s: string[]) => s[0] === "api" && s[1] === "admin";
+    const screen = (s: string[]) => s[0] === "admin" || s[0] === "admin2";
+    return (api(segs) || api(whole)) && !screen(segs) && !screen(whole);
+  } catch {
+    return false;
+  }
+}
+
+/** Première étape, avant le routeur : `pass`, `deny` (écran, refus immédiat),
+ *  ou `defer` (API admin depuis une adresse non listée : refus après
+ *  authentification, sauf clé de service et compte `sauvegarde`). */
+export function adminIpCheck(pathname: string, raw: string | undefined | null, clientIp: string | null | undefined): "pass" | "deny" | "defer" {
+  if (!isAdminPath(pathname)) return "pass";
+  if (adminIpDecision(raw, clientIp) !== "denied") return "pass";
+  return isAdminApiPath(pathname) ? "defer" : "deny";
+}
+
+/** Marque une requête dont l'adresse n'est pas listée (étape `defer`). */
+export function markIpDenied(req: Request): void {
+  IP_DENIED.add(req);
+}
+
+export function isIpDenied(req: Request): boolean {
+  return IP_DENIED.has(req);
+}
+
+/** Le refus de la garde IP (403 JSON), pour un humain hors liste. */
+export function ipDeniedResponse(): Response {
+  return new Response(
+    JSON.stringify({ error: "accès administrateur fermé depuis cette adresse (ADMIN_ALLOWED_IPS)", code: "admin_ip_denied" }),
+    { status: 403, headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" } },
+  );
+}
