@@ -12,7 +12,7 @@
 import { desiredCleaningTasks, makesCleaning, type CleaningBooking, type DesiredTask } from "../core/cleaning";
 import { randomHex, sha256hex } from "../core/crypto";
 import { addDays, sqlNow, type IsoDate } from "../core/dates";
-import { bookingsInWindow, getSettings, listLinks, listProperties } from "./repo";
+import { getSettings, listLinks, listProperties } from "./repo";
 
 type Raw = Record<string, unknown>;
 const num = (v: unknown): number => Number(v ?? 0);
@@ -86,21 +86,34 @@ export interface SyncResult {
   cancelled: number;
 }
 
-function toCleaningBooking(b: Awaited<ReturnType<typeof bookingsInWindow>>[number]): CleaningBooking {
-  return {
-    id: b.id,
-    unitId: b.unitId,
-    checkin: b.checkin,
-    checkout: b.checkout,
-    status: b.status,
-    source: b.source,
-    holdExpiresAt: b.holdExpiresAt,
-    persons: b.adults + b.children,
-  };
+/** Réservations non annulées d'un domaine qui partent le jour `from` ou après,
+ *  SANS borne haute : la plus lointaine des arrivées suivantes doit rester
+ *  visible (« prochaine arrivée » n'a pas d'horizon). Le volume d'un domaine
+ *  de gîtes reste de l'ordre de quelques centaines de lignes. */
+async function departuresFrom(db: D1Database, propertyId: number, from: IsoDate): Promise<CleaningBooking[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT b.id, b.unit_id, b.checkin, b.checkout, b.status, b.source, b.hold_expires_at, b.adults, b.children
+         FROM bookings b JOIN units u ON u.id = b.unit_id
+        WHERE u.property_id = ?1 AND b.status != 'cancelled' AND b.checkout >= ?2`,
+    )
+    .bind(propertyId, from)
+    .all();
+  return (results as Raw[]).map((r) => ({
+    id: num(r.id),
+    unitId: num(r.unit_id),
+    checkin: String(r.checkin),
+    checkout: String(r.checkout),
+    status: String(r.status),
+    source: String(r.source),
+    holdExpiresAt: strOrNull(r.hold_expires_at),
+    persons: num(r.adults) + num(r.children),
+  }));
 }
 
-function sameDesired(row: Raw, d: DesiredTask): boolean {
+function sameDesired(row: Raw, d: DesiredTask, propertyId: number): boolean {
   return (
+    num(row.property_id) === propertyId &&
     num(row.unit_id) === d.unitId &&
     String(row.due_date) === d.dueDate &&
     strOrNull(row.due_time) === d.dueTime &&
@@ -134,13 +147,11 @@ export async function syncCleaningTasks(
     if (range.to > to) to = range.to > hi ? hi : range.to;
   }
   const nowSql = sqlNow(now);
-  const [links, settings, rows] = await Promise.all([
+  const [links, settings, bookings] = await Promise.all([
     listLinks(db, propertyId),
     getSettings(db, propertyId),
-    // 90 jours au-delà : de quoi trouver l'arrivée suivante du dernier départ.
-    bookingsInWindow(db, propertyId, from, addDays(to, 90)),
+    departuresFrom(db, propertyId, from),
   ]);
-  const bookings = rows.map(toCleaningBooking);
   const desired = desiredCleaningTasks(bookings, links, settings, from, to, nowSql);
   const result: SyncResult = { created: 0, updated: 0, cancelled: 0 };
 
@@ -168,19 +179,20 @@ export async function syncCleaningTasks(
       continue;
     }
     const revived = String(row.status) === "annule";
-    const dayMoved = String(row.due_date) !== d.dueDate;
-    if (sameDesired(row, d) && !revived) continue;
-    // Le jour change ou la réservation revient : c'est un nouveau ménage à faire.
+    // Autre jour ou autre logement (déplacement de réservation) : ce n'est plus
+    // le même ménage, il repasse à faire.
+    const dayMoved = String(row.due_date) !== d.dueDate || num(row.unit_id) !== d.unitId || num(row.property_id) !== propertyId;
+    if (sameDesired(row, d, propertyId) && !revived) continue;
     const resetStatus = revived || (dayMoved && String(row.status) === "fait");
     stmts.push(
       db
         .prepare(
           `UPDATE tasks SET unit_id = ?2, due_date = ?3, due_time = ?4, next_checkin = ?5, next_checkin_time = ?6,
-                  next_unit_id = ?7, next_persons = ?8, updated_at = ?9
+                  next_unit_id = ?7, next_persons = ?8, updated_at = ?9, property_id = ?10
                   ${resetStatus ? (dayMoved ? ", status = 'a_faire', done_at = NULL, done_by = NULL" : ", status = CASE WHEN status = 'annule' THEN 'a_faire' ELSE status END") : ""}
             WHERE id = ?1`,
         )
-        .bind(num(row.id), d.unitId, d.dueDate, d.dueTime, d.nextCheckin, d.nextCheckinTime, d.nextUnitId, d.nextPersons, nowSql),
+        .bind(num(row.id), d.unitId, d.dueDate, d.dueTime, d.nextCheckin, d.nextCheckinTime, d.nextUnitId, d.nextPersons, nowSql, propertyId),
     );
     result.updated++;
   }

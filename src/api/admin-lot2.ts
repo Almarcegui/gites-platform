@@ -9,6 +9,7 @@ import { apiError, json, readJson, type Router } from "./router";
 import { currentUser, guard } from "./admin";
 import { sha256hex, randomHex } from "../core/crypto";
 import { addDays, diffDays, isIsoDate, todayInZone } from "../core/dates";
+import { TASK_SYNC_MAX_DAYS, TASK_SYNC_MIN_DAYS } from "../db/tasks";
 import { imageSize, sniffImageType } from "../core/image-size";
 import { audit, createUnitPhoto, getUnit, listProperties } from "../db/repo";
 import {
@@ -73,6 +74,10 @@ export function registerLot2AdminRoutes(router: Router): void {
     const to = url.searchParams.get("to") ?? addDays(today, 22);
     if (!isIsoDate(from) || !isIsoDate(to) || from >= to) return apiError(400, "dates invalides (format AAAA-MM-JJ, début avant fin)");
     if (diffDays(from, to) > MAX_TASK_RANGE_DAYS) return apiError(400, `plage trop longue (max ${MAX_TASK_RANGE_DAYS} jours)`);
+    // Hors de l'horizon de génération, la liste serait incomplète sans le dire.
+    if (from < addDays(today, TASK_SYNC_MIN_DAYS) || to > addDays(today, TASK_SYNC_MAX_DAYS)) {
+      return apiError(400, `plage hors de l'horizon des ménages (de ${-TASK_SYNC_MIN_DAYS} jours en arrière à ${TASK_SYNC_MAX_DAYS} jours devant)`);
+    }
     const pid = intOrZero(url.searchParams.get("property"));
     const properties = (await listProperties(env.DB)).filter((p) => !pid || p.id === pid);
     if (url.searchParams.get("sync") !== "0") {
@@ -280,10 +285,13 @@ export function registerLot2AdminRoutes(router: Router): void {
       if (next.toLowerCase().includes(row.username.toLowerCase())) return apiError(400, "le mot de passe ne doit pas contenir l'identifiant");
     }
     const keep = await sha256hex(session);
-    await env.DB.batch([
-      env.DB.prepare("UPDATE admin_users SET password_hash = ?2 WHERE id = ?1").bind(row.id, await hashPassword(next)),
-      env.DB.prepare("DELETE FROM admin_sessions WHERE user_id = ?1 AND token_hash != ?2").bind(row.id, keep),
-    ]);
+    // Comparer-puis-échanger : si un autre appareil a changé le mot de passe
+    // entre la vérification et l'écriture, on n'écrase pas son choix.
+    const swap = await env.DB.prepare("UPDATE admin_users SET password_hash = ?2 WHERE id = ?1 AND password_hash = ?3")
+      .bind(row.id, await hashPassword(next), row.password_hash)
+      .run();
+    if (swap.meta.changes !== 1) return apiError(409, "le mot de passe vient d'être changé ailleurs : reconnectez-vous");
+    await env.DB.prepare("DELETE FROM admin_sessions WHERE user_id = ?1 AND token_hash != ?2").bind(row.id, keep).run();
     await audit(env.DB, "admin", "me.password.changed", `user:${row.username}`, { genere: generated });
     return json({ ok: true, ...(generated ? { password: next } : {}) });
   }));

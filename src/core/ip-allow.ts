@@ -15,15 +15,23 @@
  *  « //admin2/ » ou « /api/%61dmin » ne contournent pas la garde. Un chemin
  *  indécodable est traité comme protégé. */
 export function isAdminPath(pathname: string): boolean {
-  let segs: string[];
+  const guarded = (segs: string[]) => {
+    const first = segs[0] ?? "";
+    return first === "admin" || first === "admin2" || (first === "api" && segs[1] === "admin");
+  };
+  let decoded: string;
+  let perSegment: string[];
   try {
-    segs = pathname.split("/").filter(Boolean).map((s) => decodeURIComponent(s).toLowerCase());
+    // Deux lectures, toutes deux gardées : segment par segment (comme le
+    // routeur) et chemin décodé d'un bloc (comme le service des fichiers
+    // statiques de Node, où « /admin2%2F » devient « /admin2/ »). La barre
+    // oblique inverse compte comme séparateur.
+    perSegment = pathname.split("/").filter(Boolean).map((s) => decodeURIComponent(s).toLowerCase());
+    decoded = decodeURIComponent(pathname).toLowerCase();
   } catch {
     return true;
   }
-  const first = segs[0] ?? "";
-  if (first === "admin" || first === "admin2") return true;
-  return first === "api" && segs[1] === "admin";
+  return guarded(perSegment) || guarded(decoded.split(/[/\\]+/).filter(Boolean));
 }
 
 interface Range {
@@ -106,7 +114,9 @@ export function parseAllowList(raw: string | undefined | null): Range[] | null {
   const entries = (raw ?? "").split(/[\s,]+/).filter(Boolean);
   const out: Range[] = [];
   for (const e of entries) {
-    const [addr, pre] = e.split("/");
+    const parts = e.split("/");
+    if (parts.length > 2) return null;
+    const [addr, pre] = parts;
     const ip = parseIp(addr ?? "");
     if (!ip) return null;
     const max = ip.v6 ? 128 : 32;

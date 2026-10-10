@@ -259,6 +259,25 @@ for (const [backend, create] of [
         expect((r.data.tasks as { bookingId: number }[]).some((x) => x.bookingId === id)).toBe(true);
       });
 
+      it("un départ le premier jour de la plage est généré, une plage hors horizon est refusée", async () => {
+        const id = await booking("PM-T-091", 1, D(-12), D(-7));
+        await call("POST", "/api/admin/tasks/generate", {});
+        const row = await t.db.prepare("SELECT due_date FROM tasks WHERE booking_id = ?1").bind(id).first<{ due_date: string }>();
+        expect(row?.due_date).toBe(D(-7));
+        expect((await call("GET", `/api/admin/tasks?from=${D(500)}&to=${D(510)}`)).status).toBe(400);
+      });
+
+      it("réservation déplacée sur un autre bien : la tâche suit et repasse à faire", async () => {
+        const id = await booking("PM-T-092", 2, D(40), D(43));
+        await call("POST", "/api/admin/tasks/generate", {});
+        const tid = (await t.db.prepare("SELECT id FROM tasks WHERE booking_id = ?1").bind(id).first<{ id: number }>())!.id;
+        await call("PATCH", `/api/admin/tasks/${tid}`, { status: "fait" });
+        await t.db.prepare("UPDATE bookings SET unit_id = 4 WHERE id = ?1").bind(id).run();
+        await call("POST", "/api/admin/tasks/generate", {});
+        const row = await t.db.prepare("SELECT unit_id, property_id, status FROM tasks WHERE id = ?1").bind(tid).first();
+        expect(row).toEqual({ unit_id: 4, property_id: 2, status: "a_faire" });
+      });
+
       it("le cron génère aussi les ménages", async () => {
         const id = await booking("PM-T-005", 2, D(20), D(23));
         await runLot2Scheduled(env);
@@ -492,5 +511,10 @@ describe("revue Codex 1", () => {
   it("garde IP : doubles barres, casse et encodage ne contournent pas", () => {
     for (const p of ["/api//admin/tasks", "//api/admin/units", "//admin2/", "/API/admin/units", "/api/%61dmin/units", "/Admin2/", "/api/admin%2"]) expect(isAdminPath(p)).toBe(true);
     expect(adminIpGate("/api//admin/tasks", "10.0.0.0/8", "1.2.3.4")?.status).toBe(403);
+  });
+
+  it("revue Codex 2 : séparateur encodé, barre inverse, CIDR à deux barres", () => {
+    for (const p of ["/admin2%2F", "/admin%2Findex.html", "/admin2%2f", "/%61dmin2/", "/admin2%5Cindex.html", "/api%2Fadmin%2Funits"]) expect(isAdminPath(p)).toBe(true);
+    expect(adminIpDecision("10.0.0.0/8/erreur", "10.1.1.1")).toBe("denied");
   });
 });

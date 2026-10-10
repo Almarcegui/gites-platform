@@ -12,8 +12,10 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 
 import { App } from "./App";
+import { checkOfflineCacheOwner } from "./api/client";
 import { makeRouter } from "./router";
 
+checkOfflineCacheOwner();
 const racine = document.getElementById("racine");
 if (!racine) throw new Error("La page n'a pas de racine où poser l'écran.");
 createRoot(racine).render(
