@@ -1,0 +1,49 @@
+{
+  "name": "gites-admin2",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Pilote du nouveau back-office (A à l'ordinateur, B au téléphone) — build dans ../public/admin2/",
+  "scripts": {
+    "dev": "vite",
+    "build": "lingui extract --clean && tsc --noEmit && vite build",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "textes": "lingui extract --clean",
+    "e2e": "playwright test"
+  },
+  "dependencies": {
+    "@fontsource/atkinson-hyperlegible": "5.3.0",
+    "@fontsource/literata": "5.3.0",
+    "@fontsource/schibsted-grotesk": "5.3.0",
+    "@lingui/core": "6.8.0",
+    "@lingui/react": "6.8.0",
+    "@mantine/core": "9.6.2",
+    "@mantine/hooks": "9.6.2",
+    "@tabler/icons-react": "3.48.0",
+    "@tanstack/react-query": "5.103.2",
+    "@tanstack/react-router": "1.170.39",
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  },
+  "devDependencies": {
+    "@lingui/babel-plugin-lingui-macro": "6.8.0",
+    "@lingui/cli": "6.8.0",
+    "@lingui/format-po": "6.8.0",
+    "@lingui/vite-plugin": "6.8.0",
+    "@playwright/test": "1.63.0",
+    "@rolldown/plugin-babel": "0.2.4",
+    "@testing-library/dom": "10.4.2",
+    "@testing-library/jest-dom": "7.0.1",
+    "@testing-library/react": "16.3.3",
+    "@testing-library/user-event": "14.6.7",
+    "@types/node": "24.13.6",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.1.1",
+    "jsdom": "30.1.1",
+    "typescript": "7.0.2",
+    "vite": "8.3.1",
+    "vitest": "5.0.1"
+  }
+}
