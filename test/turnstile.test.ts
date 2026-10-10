@@ -104,7 +104,10 @@ async function book(env: Env, opts: { token?: string; offset?: number } = {}): P
     body: JSON.stringify({
       unitId: 1,
       checkin,
-      checkout: addDays(checkin, 3),
+      // 7 nuits : le plus long minimum du seed (juillet-août). J+300 tombe dans
+      // la haute saison selon le jour où la suite tourne (août 2027 vu du
+      // 09/10/2026) — avec 3 nuits, le test passait au rouge en 409.
+      checkout: addDays(checkin, 7),
       adults: 2,
       children: 0,
       paymentMode: "deposit",

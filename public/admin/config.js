@@ -7,6 +7,7 @@ import {
   addDaysIso, api, copyText, currentPropertyId, dfr, downloadCsv, dshort, esc, eur, eurInput,
   openBooking, openModal, registerView, state, toCents, toast, todayIso,
 } from "./app.js";
+import { pctFr, readMarkupEdits } from "./markups.js";
 
 const MODE_FR = {
   per_stay: "par séjour",
@@ -737,19 +738,24 @@ export function registerConfigViews() {
           poussés vers Beds24 — <b>le prix de vente directe n'est jamais modifié</b>.</p>
         <p style="margin-top:8px">${markups.pushChannel
           ? `<span class="tag t-ok">Majoration active</span> <b>${esc(markups.channels.find((c) => c.channel === markups.pushChannel)?.label ?? markups.pushChannel)}</b>
-             · +${markups.pushMarkupPct} % — un prix de ${eur(markups.example.directCents)} en direct part à <b>${eur(markups.example.pushedCents)}</b> sur les plateformes.`
+             · +${pctFr(markups.pushMarkupPct)} % — un prix de ${eur(markups.example.directCents)} en direct part à <b>${eur(markups.example.pushedCents)}</b> sur les plateformes.`
           : `<span class="tag">Aucune majoration</span> les plateformes reçoivent le prix de vente directe, commission non compensée.`}</p>
-        <table style="margin-top:10px"><tr><th>Plateforme</th><th>Majoration</th><th class="r">Appliquer</th></tr>
+        <div class="tbl-wrap"><table style="margin-top:10px"><tr><th>Plateforme</th><th>Majoration</th><th>Prix conseillé</th><th class="r">Appliquer</th></tr>
           ${markups.channels.map((c) => `<tr>
             <td>${esc(c.label)}</td>
-            <td>+${c.markupPct} %<span class="muted small"> · ${eur(markups.example.directCents)} → ${eur(markups.examples.find((e) => e.channel === c.channel)?.suggestedCents ?? markups.example.directCents)}</span></td>
+            <td style="white-space:nowrap"><input type="number" class="inline-num chanPct" data-chan="${esc(c.channel)}" value="${c.markupPct}"
+                  min="0" max="${markups.maxPct ?? 50}" step="0.5" inputmode="decimal"
+                  aria-label="Majoration ${esc(c.label)}, en pourcentage"> %</td>
+            <td><span class="small">+${pctFr(c.markupPct)} % · ${eur(markups.example.directCents)} → <b>${eur(markups.examples.find((e) => e.channel === c.channel)?.suggestedCents ?? markups.example.directCents)}</b></span></td>
             <td class="r">${c.channel === markups.pushChannel
               ? `<span class="tag t-ok">appliquée</span>`
               : `<button class="btn o sm chanApply" data-chan="${esc(c.channel)}">Appliquer</button>`}</td></tr>`).join("")}
-        </table>
+        </table></div>
         <p class="small" style="margin-top:10px">
+          <button class="btn sm" id="chanSave" disabled>Enregistrer les pourcentages</button>
+          <span id="chanErr" class="tag t-bad" role="status" style="display:none"></span>
           ${markups.pushChannel ? `<button class="btn o sm" id="chanClear">Ne plus majorer</button> ` : ""}
-          <span class="muted">${esc(markups.formula || "")} — le changement est poussé aux plateformes immédiatement.</span></p>
+          <span class="muted">De 0 à ${markups.maxPct ?? 50} %. ${esc(markups.formula || "")} — un changement sur la plateforme appliquée est poussé aux plateformes immédiatement.</span></p>
       </div>` : ""}
 
       ${data.configured ? "" : `
@@ -828,7 +834,7 @@ export function registerConfigViews() {
       const chan = markups?.channels.find((c) => c.channel === channel);
       // Le compte Beds24 est réel : on annonce l'effet avant de pousser.
       const ok = chan
-        ? confirm(`Majorer de +${chan.markupPct} % tous les prix envoyés aux plateformes (référence ${chan.label}) ?\n\n`
+        ? confirm(`Majorer de +${pctFr(chan.markupPct)} % tous les prix envoyés aux plateformes (référence ${chan.label}) ?\n\n`
             + `Les prix de vente directe ne changent pas. Les calendriers repartent aux plateformes tout de suite.`)
         : confirm("Ne plus majorer : les plateformes recevront le prix de vente directe. Confirmer ?");
       if (!ok) return;
@@ -847,6 +853,53 @@ export function registerConfigViews() {
     root.querySelectorAll(".chanApply").forEach((b) => (b.onclick = () => setPushChannel(b.dataset.chan, b)));
     const clearChan = root.querySelector("#chanClear");
     if (clearChan) clearChan.onclick = () => setPushChannel(null, clearChan);
+
+    // Pourcentages de majoration par plateforme (issue #97). Le serveur
+    // repousse les calendriers si — et seulement si — le taux du canal
+    // appliqué change : on ne demande confirmation que dans ce cas.
+    const saveChan = root.querySelector("#chanSave");
+    const pctInputs = [...root.querySelectorAll(".chanPct")];
+    const readPcts = () => readMarkupEdits(
+      markups?.channels ?? [],
+      Object.fromEntries(pctInputs.map((i) => [i.dataset.chan, i.value])),
+      markups?.pushChannel ?? null,
+      markups?.maxPct ?? 50,
+    );
+    pctInputs.forEach((i) => i.addEventListener("input", () => {
+      const r = readPcts();
+      const dirty = !r.ok || r.changed.length > 0;
+      if (saveChan) saveChan.disabled = !r.ok || r.changed.length === 0;
+      // Un bouton grisé sans raison ne dit rien : l'erreur est écrite à côté.
+      const err = root.querySelector("#chanErr");
+      if (err) {
+        // `display` et non l'attribut `hidden`, que `.tag` (inline-block) écrase.
+        err.style.display = r.ok ? "none" : "";
+        err.textContent = r.ok ? "" : r.error;
+      }
+      // « Appliquer » lit le taux ENREGISTRÉ : tant qu'une saisie attend, il
+      // appliquerait l'ancien. On le suspend jusqu'à l'enregistrement.
+      root.querySelectorAll(".chanApply").forEach((b) => {
+        b.disabled = dirty;
+        b.title = dirty ? "Enregistre d'abord les pourcentages" : "";
+      });
+    }));
+    if (saveChan) saveChan.onclick = async () => {
+      const r = readPcts();
+      if (!r.ok) return toast(r.error, true);
+      if (r.changed.length === 0) return;
+      if (r.applied && !confirm(
+        `La majoration appliquée aux plateformes (${r.applied.label}) passe de +${pctFr(r.applied.from)} % à +${pctFr(r.applied.to)} %.\n\n`
+          + "Les calendriers repartent aux plateformes tout de suite. Les prix de vente directe ne changent pas.",
+      )) return;
+      saveChan.disabled = true;
+      try {
+        await api("/api/admin/channel-markups", { method: "PUT", body: { channels: r.channels } });
+        location.reload();
+      } catch (e) {
+        saveChan.disabled = false;
+        toast(e.message, true);
+      }
+    };
 
     // Conflits de synchro (issue #72) : le planning à la bonne date, et la
     // décision d'ignorer — jamais sans motif, c'est lui qui rend la décision
