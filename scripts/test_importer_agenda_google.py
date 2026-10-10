@@ -195,9 +195,22 @@ class Statuts(unittest.TestCase):
 
 
 class Dates(unittest.TestCase):
-    def test_journee(self):
+    def test_journee_depart_inclus(self):
+        # convention de papa : affiché du 2 au 4 (fin Google exclusive = 5) = départ le 4
         l = une("x.y@example.com", "2026-10-02", "2026-10-05")
+        self.assertEqual((l.checkin, l.checkout), ("2026-10-02", "2026-10-04"))
+
+    def test_journee_a_la_norme(self):
+        m.DEPART_INCLUS = False
+        try:
+            l = une("x.y@example.com", "2026-10-02", "2026-10-05")
+        finally:
+            m.DEPART_INCLUS = True
         self.assertEqual((l.checkin, l.checkout), ("2026-10-02", "2026-10-05"))
+
+    def test_journee_d_un_seul_jour_ignoree(self):
+        l = une("x.y@example.com", "2026-10-02", "2026-10-03")
+        self.assertEqual(l.statut, "ignoree")
 
     def test_heure_a_bruxelles(self):
         l = m.interpreter(export([heure("e1", "2026-11-01T23:00:00Z", "2026-11-08T09:00:00Z", "dpx@example.com 11/11 vendredi à 10h")]))[0]
@@ -264,10 +277,10 @@ class PassesCroisees(unittest.TestCase):
 
     def test_chevauchement_a_venir_laisse_et_signale(self):
         lignes = m.interpreter(export([
-            jour("a", "2027-07-31", "2027-08-08", "a@example.com"),
-            jour("b", "2027-08-07", "2027-08-10", "b@example.com"),
+            jour("a", "2027-07-31", "2027-08-08", "a@example.com"),  # affiché jusqu'au 7 = départ le 7
+            jour("b", "2027-08-06", "2027-08-10", "b@example.com"),  # arrivée le 6 : vrai chevauchement
         ]))
-        self.assertEqual(lignes[0].checkout, "2027-08-08")
+        self.assertEqual(lignes[0].checkout, "2027-08-07")
         self.assertTrue(any("conflit" in d for d in lignes[0].doutes))
 
 

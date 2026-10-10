@@ -1,6 +1,6 @@
 #!/opt/homebrew/bin/python3
 # Lit l'export JSON des deux agendas Google de papa (« location maison du scieur », « location scierie »), en déduit réservations, paiements, annulations et blocages, affiche le tableau événement → action et, avec --oui seulement, l'envoie à POST /api/admin/import/agenda-google (clé de service de ~/.config/gites/service.env).
-# Usage : /opt/homebrew/bin/python3 scripts/importer_agenda_google.py <export.json> [--essai | --simuler | --oui] [--depuis AAAA-MM-JJ] [--table-md fichier.md] [--charge-utile fichier.json]
+# Usage : /opt/homebrew/bin/python3 scripts/importer_agenda_google.py <export.json> [--essai | --simuler | --oui] [--depuis AAAA-MM-JJ] [--depart-exclu] [--table-md fichier.md] [--charge-utile fichier.json]
 """Import des agendas Google du père de Julien dans la plateforme.
 
 Les deux agendas Google sont LA base des réservations. Leur flux iCal public ne
@@ -153,13 +153,23 @@ def _sans_accents(s: str) -> str:
     return "".join(c for c in unicodedata.normalize("NFD", s) if unicodedata.category(c) != "Mn").lower()
 
 
-def dates_evenement(ev: dict) -> tuple[str, str, bool, float]:
-    """(arrivée, départ, à l'heure ?, durée en heures). Journée : la date telle
-    quelle (le départ est exclusif, comme DTEND). À l'heure : la date de
-    l'instant à Bruxelles."""
+DEPART_INCLUS = True  # convention de papa (décision Julien 11/10/2026) ; --depart-exclu pour un agenda à la norme
+
+
+def dates_evenement(ev: dict, depart_inclus: bool | None = None) -> tuple[str, str, bool, float]:
+    """(arrivée, départ, à l'heure ?, durée en heures). Journée entière : papa
+    bloque aussi le jour du départ (« du 22 au 26 » affiché = départ le 26), donc
+    on retire un jour à la fin exclusive de Google — la plateforme, elle, est à
+    la norme (départ exclu). À l'heure : la date de l'instant à Bruxelles, déjà
+    juste."""
+    if depart_inclus is None:
+        depart_inclus = DEPART_INCLUS
     debut, fin = ev.get("start", {}), ev.get("end", {})
     if "date" in debut:
-        return debut["date"][:10], fin["date"][:10], False, 24.0
+        fin_date = fin["date"][:10]
+        if depart_inclus:
+            fin_date = (dt.date.fromisoformat(fin_date) - dt.timedelta(days=1)).isoformat()
+        return debut["date"][:10], fin_date, False, 24.0
     a = dt.datetime.fromisoformat(debut["dateTime"].replace("Z", "+00:00"))
     b = dt.datetime.fromisoformat(fin["dateTime"].replace("Z", "+00:00"))
     heures = (b - a).total_seconds() / 3600
@@ -601,9 +611,12 @@ def main() -> int:
     mode.add_argument("--simuler", action="store_true", help="le serveur dit ce qu'il ferait, sans rien écrire")
     mode.add_argument("--oui", action="store_true", help="écrire sur le serveur (idempotent)")
     p.add_argument("--depuis", help="ignorer les séjours terminés avant cette date (AAAA-MM-JJ)")
+    p.add_argument("--depart-exclu", action="store_true", help="agenda tenu à la norme (jour de départ libre) : ne pas retirer un jour aux journées entières")
     p.add_argument("--table-md", help="écrire le tableau nominatif dans ce fichier (à ranger dans le vault)")
     p.add_argument("--charge-utile", help="écrire le JSON envoyé au serveur dans ce fichier (à ranger dans le vault)")
     a = p.parse_args()
+    global DEPART_INCLUS
+    DEPART_INCLUS = not a.depart_exclu
 
     export = json.loads(Path(a.export).read_text(encoding="utf-8"))
     lignes = interpreter(export, a.depuis)

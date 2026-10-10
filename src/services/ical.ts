@@ -104,6 +104,8 @@ export interface IcsEvent {
   dtstart: IsoDate;
   dtend: IsoDate;
   summary: string;
+  /** DTEND donné en date entière (VALUE=DATE, exclusif), pas à l'heure. */
+  allDay?: boolean;
 }
 
 /** Parse un calendrier iCal. Ne garde que les VEVENT complets (UID + dates).
@@ -124,7 +126,7 @@ export function parseIcs(text: string): IcsEvent[] {
     }
     if (line === "END:VEVENT") {
       if (current?.uid && current.dtstart && current.dtend && current.dtstart < current.dtend) {
-        events.push({ uid: current.uid, dtstart: current.dtstart, dtend: current.dtend, summary: current.summary ?? "" });
+        events.push({ uid: current.uid, dtstart: current.dtstart, dtend: current.dtend, summary: current.summary ?? "", allDay: current.allDay === true });
       }
       current = null;
       continue;
@@ -138,9 +140,31 @@ export function parseIcs(text: string): IcsEvent[] {
     if (name === "UID") current.uid = value.trim();
     if (name === "SUMMARY") current.summary = value.trim();
     if (name === "DTSTART") current.dtstart = parseIcsDate(value);
-    if (name === "DTEND") current.dtend = parseIcsDate(value);
+    if (name === "DTEND") {
+      current.dtend = parseIcsDate(value);
+      current.allDay = !/T\d{6}/.test(value.trim());
+    }
   }
   return events;
+}
+
+/** Convention « jour de départ inclus » (agendas Google de papa, décision
+ *  Julien 11/10/2026) : l'événement affiché du 22 au 26 (DTEND exclusif = 27)
+ *  est un séjour du 22 au 26, départ le 26. On retire un jour au DTEND des
+ *  événements « journée entière » ; un événement à l'heure donne déjà la bonne
+ *  date. Un événement réduit à zéro nuit disparaît (pas un séjour). La
+ *  plateforme, elle, reste à la norme partout (départ exclu). */
+export function applyDepartureDayIncluded(events: IcsEvent[]): IcsEvent[] {
+  const out: IcsEvent[] = [];
+  for (const ev of events) {
+    if (!ev.allDay) {
+      out.push(ev);
+      continue;
+    }
+    const dtend = addDays(ev.dtend, -1);
+    if (dtend > ev.dtstart) out.push({ ...ev, dtend });
+  }
+  return out;
 }
 
 /** '20260810' → '2026-08-10' ; '20260810T140000Z' → la date de cet instant
@@ -212,6 +236,7 @@ export async function syncFeed(
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const body = await res.text();
     events = parseIcs(body);
+    if (feed.departureDayIncluded) events = applyDepartureDayIncluded(events);
     // Un VEVENT annoncé mais non retenu = date ou UID illisible : on le compte
     // au lieu de l'ignorer en silence (un flux à moitié cassé doit se voir).
     result.malformed = Math.max(0, (body.match(/BEGIN:VEVENT/g) ?? []).length - events.length);

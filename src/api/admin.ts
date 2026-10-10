@@ -2572,25 +2572,27 @@ export function registerAdminRoutes(router: Router): void {
   }));
 
   router.post("/api/admin/ical-feeds", guard(async (req, env) => {
-    const body = await readJson<{ unitId?: number; name?: string; url?: string }>(req);
+    const body = await readJson<{ unitId?: number; name?: string; url?: string; departureDayIncluded?: boolean }>(req);
     const unitId = intParam(String(body?.unitId ?? ""), 0);
     const name = String(body?.name ?? "").trim();
     const feedUrl = String(body?.url ?? "").trim();
     if (!unitId || !name || !/^https?:\/\//.test(feedUrl)) return apiError(400, "unitId, name et url http(s) requis");
-    const id = await createFeed(env.DB, { unitId, name, url: feedUrl });
-    await audit(env.DB, "admin", "ical_feed.create", `feed:${id}`, { unitId, name });
+    const departureDayIncluded = body?.departureDayIncluded === true;
+    const id = await createFeed(env.DB, { unitId, name, url: feedUrl, departureDayIncluded });
+    await audit(env.DB, "admin", "ical_feed.create", `feed:${id}`, { unitId, name, departureDayIncluded });
     return json({ id }, 201);
   }));
 
   router.patch("/api/admin/ical-feeds/:id", guard(async (req, env, p) => {
     const id = intParam(p.id, 0);
-    const body = await readJson<{ name?: string; url?: string; active?: boolean }>(req);
+    const body = await readJson<{ name?: string; url?: string; active?: boolean; departureDayIncluded?: boolean }>(req);
     if (!id || !body) return apiError(400, "requête invalide");
     if (body.url !== undefined && !/^https?:\/\//.test(String(body.url))) return apiError(400, "url invalide");
     await updateFeed(env.DB, id, {
       name: body.name !== undefined ? String(body.name).trim() : undefined,
       url: body.url !== undefined ? String(body.url).trim() : undefined,
       active: typeof body.active === "boolean" ? body.active : undefined,
+      departureDayIncluded: typeof body.departureDayIncluded === "boolean" ? body.departureDayIncluded : undefined,
     });
     await audit(env.DB, "admin", "ical_feed.update", `feed:${id}`, body);
     return json({ ok: true });

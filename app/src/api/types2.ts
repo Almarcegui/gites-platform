@@ -176,6 +176,7 @@ export interface IcalFeed {
   name: string;
   url: string;
   active: boolean;
+  departureDayIncluded: boolean;
   lastSyncAt: string | null;
   lastStatus: string | null;
 }

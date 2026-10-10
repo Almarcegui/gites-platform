@@ -2223,6 +2223,9 @@ export interface FeedRow {
   name: string;
   url: string;
   active: boolean;
+  /** Le calendrier bloque aussi le jour du départ (convention de papa) :
+   *  la lecture retire un jour aux événements « journée entière ». */
+  departureDayIncluded: boolean;
   lastSyncAt: string | null;
   lastStatus: string | null;
 }
@@ -2231,6 +2234,7 @@ function mapFeed(r: Raw): FeedRow {
   return {
     id: num(r.id), unitId: num(r.unit_id), unitName: strOrNull(r.unit_name) ?? undefined,
     name: str(r.name), url: str(r.url), active: num(r.active) === 1,
+    departureDayIncluded: num(r.departure_day_included ?? 0) === 1,
     lastSyncAt: strOrNull(r.last_sync_at), lastStatus: strOrNull(r.last_status),
   };
 }
@@ -2253,10 +2257,13 @@ export async function getFeed(db: D1Database, id: number): Promise<FeedRow | nul
   return row ? mapFeed(row as Raw) : null;
 }
 
-export async function createFeed(db: D1Database, f: { unitId: number; name: string; url: string }): Promise<number> {
+export async function createFeed(
+  db: D1Database,
+  f: { unitId: number; name: string; url: string; departureDayIncluded?: boolean },
+): Promise<number> {
   const res = await db
-    .prepare("INSERT INTO ical_feeds (unit_id, name, url) VALUES (?1, ?2, ?3)")
-    .bind(f.unitId, f.name, f.url)
+    .prepare("INSERT INTO ical_feeds (unit_id, name, url, departure_day_included) VALUES (?1, ?2, ?3, ?4)")
+    .bind(f.unitId, f.name, f.url, f.departureDayIncluded ? 1 : 0)
     .run();
   return res.meta.last_row_id;
 }
@@ -2264,13 +2271,17 @@ export async function createFeed(db: D1Database, f: { unitId: number; name: stri
 export async function updateFeed(
   db: D1Database,
   id: number,
-  f: Partial<{ name: string; url: string; active: boolean }>,
+  f: Partial<{ name: string; url: string; active: boolean; departureDayIncluded: boolean }>,
 ): Promise<void> {
   await db
     .prepare(
-      "UPDATE ical_feeds SET name = COALESCE(?2, name), url = COALESCE(?3, url), active = COALESCE(?4, active) WHERE id = ?1",
+      `UPDATE ical_feeds SET name = COALESCE(?2, name), url = COALESCE(?3, url), active = COALESCE(?4, active),
+         departure_day_included = COALESCE(?5, departure_day_included) WHERE id = ?1`,
     )
-    .bind(id, f.name ?? null, f.url ?? null, f.active === undefined ? null : f.active ? 1 : 0)
+    .bind(
+      id, f.name ?? null, f.url ?? null, f.active === undefined ? null : f.active ? 1 : 0,
+      f.departureDayIncluded === undefined ? null : f.departureDayIncluded ? 1 : 0,
+    )
     .run();
 }
 
