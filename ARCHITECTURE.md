@@ -52,7 +52,7 @@ flowchart TB
         SITE["Site vitrine<br/>public/index.html + 5 pages<br/>site.js"]
         BOOK["Tunnel de reservation<br/>public/book/ — 4 etapes<br/>book.js"]
         VOUCH["Voucher client<br/>voucher.html<br/>reference + email"]
-        ADMIN["Back-office<br/>public/admin/<br/>app.js + config.js"]
+        ADMIN["Back-office<br/>app/ (React)<br/>servi sous /admin/"]
     end
 
     subgraph WORKER["Cloudflare Worker — src/index.ts"]
@@ -478,13 +478,13 @@ Elle est nette **des deux côtés** : front et API.
 | | **Site public** | **Back-office admin** |
 |---|---|---|
 | URL | `/`, `/la-propriete/`, `/book/`… | `/admin/` |
-| Fichiers front | `public/` **hors** `admin/` | `public/admin/` |
+| Fichiers front | `public/` **hors** `admin/` | `app/` (construit dans `public/admin/`) |
 | API | `src/api/public.ts` | `src/api/admin.ts` |
 | Préfixe | `/api/public/*`, `/api/webhooks/*`, `/ical/*` | `/api/admin/*` |
 | Authentification | **Aucune** | `guard()` fail-closed sur **toutes** les routes sauf `/login` |
 | Protection prod | — | Cloudflare Access **+** `ADMIN_TOKEN` (les deux, pas l'un ou l'autre) |
 | Indexation | Ouverte | `<meta name="robots" content="noindex">` |
-| CSS | `public/site.css` (vitrine) + `public/book/book.css` (tunnel) | `public/admin/styles.css` |
+| CSS | `public/site.css` (vitrine) + `public/book/book.css` (tunnel) | `app/src/styles.css` + Mantine |
 
 ### 5.2 Le site public
 
@@ -566,34 +566,21 @@ Pages de retour : `merci.html` (poll toutes les 1,5 s jusqu'à `confirmed`, 20 e
 **référence + email**, avec fil de conversation et bouton de reprise de paiement),
 `dev-pay.html` (simulateur local avec décompte honnête du hold).
 
-### 5.4 Le back-office — `public/admin/`
+### 5.4 Le back-office — `app/`, servi sous `/admin/`
 
-**15 vues**, routage par hash, un seul point d'entrée module (`app.js`).
+Une application React (Vite + Mantine + TanStack Router/Query, textes Lingui
+FR/NL), dans `app/`, construite par `npm run build` dans `public/admin/`
+(non versionné) et servie sous `/admin/` par le Worker comme par Node. Routage
+en hash (`/admin/#/calendrier`) : un seul fichier à servir. Depuis le
+10/10/2026 c'est la seule adresse : l'ancien écran vanilla (`app.js`,
+`config.js`, `login.html`) a été retiré ; `/admin2/…` et `/admin/login.html`
+redirigent (`src/core/admin-redirect.ts`), et les anciennes adresses d'écran
+(`#/dash`, `#/resa`, `#/canaux`…) mènent au bon écran (`app/src/router.tsx`).
 
-| Section | Vues |
-|---|---|
-| **Pilotage** (`app.js`) | `#/startup` Mise en route · `#/dash` Tableau de bord · `#/plan` Planning · `#/resa` Réservations · `#/messages` Messages · `#/stats` Statistiques |
-| **Configuration** (`config.js`) | `#/tarifs` · `#/promos` · `#/options` · `#/clients` · `#/paiements` · `#/canaux` Canaux OTA · `#/ical` · `#/users` Utilisateurs · `#/params` Paramètres |
-
-**Le partage `app.js` / `config.js`** — c'est la première question qu'on se pose :
-
-- **`app.js` (1079 l.) est la racine** et le seul script chargé par `index.html`.
-  Il porte l'infrastructure : l'objet `state`, le client `api()` avec
-  `authHeaders()` / `clearAuth()`, les helpers de formatage (`eur`, `dfr`, `esc`…),
-  les primitives d'UI (`toast`, `openModal`), le registre `VIEWS` + `registerView`
-  + le routeur `navigate()`, le sélecteur de domaine, la séquence de démarrage —
-  **plus les 6 vues opérationnelles** et les modales partagées (`openBooking`,
-  `openNewSale`, `openThread`, `openEllohaImport`).
-- **`config.js` (984 l.) est une feuille** : il importe 17 symboles depuis
-  `./app.js` et n'exporte qu'une fonction, `registerConfigViews()`, appelée par
-  `app.js` juste avant le câblage du routeur. Il ne contient que les 9 vues de
-  configuration.
-- La dépendance est **circulaire mais sûre par construction** :
-  `registerConfigViews()` n'est *appelée* qu'après l'évaluation de tout le
-  top-level de `app.js`.
-
-La frontière est sémantique : **`app.js` fait tourner la journée, `config.js`
-fixe les règles.** Elle correspond exactement au découpage de la barre latérale.
+À l'ordinateur (≥ 1024 px), barre latérale par rubriques : *Quotidien*
+(Aujourd'hui, Calendrier, Réservations, Messages, Ménage), *Clients et argent*,
+*Prix*, *Plateformes*, *Réglages* (`app/src/shell/nav.tsx`). Au téléphone,
+barre d'onglets du bas et « Plus ».
 
 ### 5.5 L'authentification admin, en pratique
 
@@ -601,13 +588,13 @@ C'est le point le plus subtil du projet. Il existe **deux mécanismes**, coexist
 
 **A. Comptes en base** (`admin_users`, migration 0012) — le mode normal.
 
-`login.html` → `POST /api/admin/login {user, password}` → si le compte existe en
+L'écran de connexion (`/admin/#/connexion`) → `POST /api/admin/login {user, password}` → si le compte existe en
 base et que PBKDF2 valide → le serveur crée une session de 30 jours et renvoie
 `{session}`. Le navigateur stocke `localStorage.gp_session` et envoie ensuite
 `Authorization: Bearer session:<jeton>`. Seul le **SHA-256** du jeton est en base :
 une fuite de la base ne permet pas de rejouer les sessions.
 
-Les comptes se gèrent entièrement depuis `#/users` : création (le **mot de passe
+Les comptes se gèrent entièrement depuis Réglages › Comptes (`#/reglages/comptes`) : création (le **mot de passe
 est généré par le serveur** au format `mot-mot-mot-NN`, dictable au téléphone, et
 **affiché une seule fois**), réinitialisation, désactivation, suppression.
 Désactiver ou réinitialiser **coupe les sessions ouvertes**. On ne peut ni se

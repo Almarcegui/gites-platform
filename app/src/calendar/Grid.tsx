@@ -4,13 +4,14 @@
 import { i18n } from "@lingui/core";
 import { msg } from "@lingui/core/macro";
 import { useLingui } from "@lingui/react/macro";
-import { IconBrush, IconCheck, IconCurrencyEuro, IconLock } from "@tabler/icons-react";
+import { IconBrush, IconCheck, IconLock } from "@tabler/icons-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import type { DomainData } from "../api/hooks";
 import type { IsoDate, ManualBlock, PlanningBooking, RateCalendarUnit, Task, Unit } from "../api/types";
 import { addDays, dayNum, dayRange, isWeekend, longDate, monthShort, shortDate, weekdayShort } from "../lib/dates";
 import { barColumns, barLabel, barKind, channelName, isChannel, isNightTaken } from "../lib/derive";
+import { eur } from "../lib/money";
 import type { RangeSelection } from "./PricePanel";
 
 export interface GridProps {
@@ -182,17 +183,16 @@ export function Grid(props: GridProps) {
           })}
           {own.map((b) => {
             const kind = barKind(b);
-            const icon = kind === "solde" ? <IconCurrencyEuro size={16} /> : null;
             return bar(
               `b${b.id}`,
               b.checkin,
               b.checkout,
               kind,
               <>
-                {icon}
                 <span>
                   {guestLabel(b)}
                   {kind === "plat" ? <i> {channelName(b)}</i> : null}
+                  {kind === "solde" && b.balanceCents > 0 ? <i> {t`reste ${eur(b.balanceCents)}`}</i> : null}
                 </span>
               </>,
               t`${b.guestName}, ${u.name}, du ${shortDate(b.checkin)} au ${shortDate(b.checkout)}, ${kind === "plat" ? t`via ${channelName(b)}` : barLabel(kind)}`,
@@ -295,23 +295,23 @@ export function GridLegend() {
   return (
     <div className="legend" aria-label={t`Légende`}>
       <span>
-        <i className="sw" style={{ background: "var(--pine)" }} />
+        <i className="sw soldee" />
         {t`Confirmée et payée`}
       </span>
       <span>
-        <i className="sw" style={{ background: "var(--myrt)" }} />
+        <i className="sw solde" />
         {t`Solde à encaisser`}
       </span>
       <span>
-        <i className="sw" style={{ background: "repeating-linear-gradient(-45deg,var(--genet-soft) 0 4px,var(--genet-mid) 4px 7px)" }} />
+        <i className="sw option" />
         {t`Option, arrhes pas encore payées`}
       </span>
       <span>
-        <i className="sw" style={{ background: "var(--ourthe)" }} />
+        <i className="sw plat" />
         {t`Airbnb, Booking ou autre site`}
       </span>
       <span>
-        <i className="sw" style={{ background: "repeating-linear-gradient(-45deg,var(--surface-2) 0 3px,var(--hatch) 3px 5px)" }} />
+        <i className="sw bloc" />
         {t`Bloqué`}
       </span>
       <span>{t`Prix souligné : changé à la main`}</span>

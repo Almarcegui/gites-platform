@@ -7,7 +7,7 @@ declare const process: { env: Record<string, string | undefined> };
 const shot = (name: string) => `docs/captures/lot1/${name}.png`;
 
 async function login(page: Page) {
-  await page.goto("/admin2/");
+  await page.goto("/admin/");
   await page.getByLabel("Identifiant").fill("pilote");
   await page.getByLabel("Mot de passe").fill(process.env.PILOTE_PASSWORD ?? "");
   await page.getByRole("button", { name: "Se connecter" }).click();
@@ -15,7 +15,7 @@ async function login(page: Page) {
 }
 
 async function go(page: Page, route: string) {
-  await page.goto(`/admin2/#/${route}`);
+  await page.goto(`/admin/#/${route}`);
 }
 
 const drawer = (page: Page) => page.locator(".mantine-Drawer-content");
@@ -83,7 +83,7 @@ test("le domaine : un seul Enregistrer, garde à la sortie", async ({ page }) =>
   const before = await phone.inputValue();
   await phone.fill("0470 00 00 99");
   await expect(page.getByText("Modifications non enregistrées.")).toBeVisible();
-  await page.getByRole("navigation", { name: "Menu principal" }).first().getByRole("link", { name: "Calendrier" }).click();
+  await page.getByRole("navigation", { name: "Menu principal" }).first().getByRole("link", { name: "Calendrier", exact: true }).click();
   await expect(page.getByRole("dialog", { name: "Partir sans enregistrer ?" })).toBeVisible();
   await page.screenshot({ path: shot("apres-1280-domaine-garde") });
   await page.getByRole("button", { name: "Rester sur la page" }).click();
@@ -110,13 +110,13 @@ test("plateformes : coller un code d'invitation, l'erreur dite en clair", async 
 test("clients, paiements, chiffres, journaux : listes et panneaux", async ({ page }) => {
   await go(page, "reglages/clients");
   await page.getByLabel("Rechercher un client").fill("Oudewaeter");
-  await page.locator(".list-row").filter({ hasText: "Oudewaeter" }).first().click();
+  await page.locator(".tbl tbody tr").filter({ hasText: "Oudewaeter" }).first().click();
   await expect(drawer(page).getByRole("heading", { name: /Oudewaeter/ })).toBeVisible();
   await page.screenshot({ path: shot("apres-1280-panneau-client") });
   await page.keyboard.press("Escape");
 
   await go(page, "reglages/paiements");
-  await page.locator(".list-row").first().click();
+  await page.locator(".tbl tbody tr").first().click();
   await expect(drawer(page).getByRole("button", { name: /Ouvrir la réservation/ })).toBeVisible();
   await page.screenshot({ path: shot("apres-1280-panneau-paiement") });
   await page.keyboard.press("Escape");
@@ -167,9 +167,8 @@ test("remises, options, comptes : créer, ouvrir, supprimer", async ({ page }) =
 
 test("registre : la saisie s'ouvre depuis la fiche (sans rien écrire)", async ({ page }) => {
   await go(page, "reservations");
-  await page.locator(".list-row").first().click();
+  await page.locator(".bk tbody tr").first().click();
   const d = drawer(page);
-  await d.getByText("Voyageurs inscrits").click();
   await d.getByRole("button", { name: /Inscrire/ }).click();
   const box = page.getByRole("dialog", { name: /Inscrire les voyageurs/ });
   await expect(box.getByRole("button", { name: "Inscrire au registre" })).toBeDisabled();

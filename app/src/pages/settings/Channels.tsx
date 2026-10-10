@@ -16,16 +16,12 @@ import { api } from "../../api/client";
 import type { Beds24Status, ChannelsOverview, MarkupState, PriceLinkingState, SyncConflict } from "../../api/types2";
 import { ErrorLine, useAction } from "../../lib/action";
 import { stayRange } from "../../lib/dates";
+import { parsePct, pctFr } from "../../lib/markups";
 import { eur } from "../../lib/money";
+import { Beds24PropertyCard } from "./Beds24Property";
 import { Confirm, Empty, Fold, Loading, Page, SaveBar, Section, SidePanel, sqlWhen, useWorkingProperty } from "../../ui/kit";
 
-/** « 17,5 » → 17.5 ; illisible → null. */
-function parsePct(raw: number | string): number | null {
-  const s = String(raw ?? "").trim().replace(",", ".");
-  if (!/^\d+(\.\d+)?$/.test(s)) return null;
-  return Math.round(Number(s) * 100) / 100;
-}
-const pctFr = (n: number) => String(n).replace(".", ",");
+
 
 export function ChannelsPage() {
   const { t } = useLingui();
@@ -42,12 +38,13 @@ export function ChannelsPage() {
   // garde que celles des biens de celui-ci.
   const channelBookings = (d?.channelBookings ?? []).filter((b) => d?.units.some((u) => u.name === b.unitName));
   return (
-    <Page title={t`Airbnb, Booking et Vrbo`} back tools={picker} width={1000} lead={t`Les plateformes reçoivent vos disponibilités et vos prix par Beds24, un service de liaison. Vous n'avez pas à ouvrir Beds24 : tout se suit ici.`}>
+    <Page title={t`Airbnb, Booking et Vrbo`} back tools={picker} lead={t`Les plateformes reçoivent vos disponibilités et vos prix par Beds24, un service de liaison. Vous n'avez pas à ouvrir Beds24 : tout se suit ici.`}>
       {ov.error ? <ErrorLine text={t`L'état des plateformes n'a pas pu être lu.`} /> : null}
       {ov.isLoading ? <Loading /> : null}
       {d && pid ? (
         <>
           <LinkCard d={d} propertyId={pid} />
+          {d.configured ? <Beds24PropertyCard propertyId={pid} /> : null}
           {linking.data?.enabled ? <p className="note">{t`Prix par plateforme en place : Beds24 ajoute à chaque plateforme son pourcentage ci-dessous. Le bouton « Appliquer » ne compte plus tant qu'ils sont en place.`}</p> : null}
           {mk.data ? <MarkupsCard m={mk.data} /> : mk.error ? <ErrorLine text={t`Les prix envoyés aux plateformes n'ont pas pu être lus.`} /> : null}
           <Section title={t`Promotions Airbnb et prix par plateforme`} hint={t`Remises long séjour, réservation tôt, dernière minute et non remboursable sur Airbnb ; un prix propre à chaque plateforme, calculé par Beds24 avec les pourcentages ci-dessus.`}>
@@ -99,18 +96,33 @@ export function ChannelsPage() {
                 <p>{t`Elles apparaîtront ici, dans le calendrier et dans Réservations dès que les annonces seront reliées.`}</p>
               </Empty>
             ) : (
-              <div className="panel">
-                {channelBookings.map((b) => (
-                  <div key={b.reference} className="list-row two static">
-                    <span>
-                      <b>{b.guestName || b.reference}</b>
-                      <small>
-                        {b.unitName}, {stayRange(b.checkin, b.checkout)}, {b.channelLabel ?? t`plateforme`}
-                      </small>
-                    </span>
-                    <b className="num">{eur(b.totalCents)}</b>
-                  </div>
-                ))}
+              <div className="tbl-wrap">
+                <table className="tbl dense">
+                  <thead>
+                    <tr>
+                      <th scope="col">{t`Réf.`}</th>
+                      <th scope="col">{t`Plateforme`}</th>
+                      <th scope="col">{t`Bien`}</th>
+                      <th scope="col">{t`Séjour`}</th>
+                      <th scope="col">{t`Client`}</th>
+                      <th scope="col" className="r">
+                        {t`Montant`}
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {channelBookings.map((b) => (
+                      <tr key={b.reference}>
+                        <td className="ref">{b.reference}</td>
+                        <td>{b.channelLabel ?? t`plateforme`}</td>
+                        <td>{b.unitName}</td>
+                        <td>{stayRange(b.checkin, b.checkout)}</td>
+                        <td>{b.guestName || "—"}</td>
+                        <td className="r">{b.totalCents ? eur(b.totalCents) : "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             )}
           </Section>
@@ -126,7 +138,7 @@ export function ChannelsPage() {
               </tbody>
             </table>
           </Section>
-          <Fold title={t`Journal de la liaison`} count={String(d.events.length)}>
+          <Fold title={t`Journal de la liaison`} count={String(d.events.length)} open>
             {d.events.length === 0 ? <p className="muted">{t`Encore rien.`}</p> : null}
             <ul className="log">
               {d.events.map((e) => (

@@ -500,9 +500,13 @@ describe("garde IP dans le point d'entrée Worker", () => {
     expect((await worker.fetch(req("/api/admin/units", "1.2.3.4"), env, ctx)).status).toBe(403);
     expect((await worker.fetch(req("/admin2/", "1.2.3.4"), env, ctx)).status).toBe(403);
     expect((await worker.fetch(req("/admin/", "1.2.3.4"), env, ctx)).status).toBe(403);
-    const ok = await worker.fetch(req("/admin2/", "81.82.83.84"), env, ctx);
+    const ok = await worker.fetch(req("/admin/", "81.82.83.84"), env, ctx);
     expect(ok.status).toBe(200);
     expect(await ok.text()).toBe("asset");
+    // L'ancienne adresse du pilote redirige vers /admin/ (une seule adresse, 10/10/2026).
+    const moved = await worker.fetch(req("/admin2/", "81.82.83.84"), env, ctx);
+    expect(moved.status).toBe(301);
+    expect(moved.headers.get("location")).toBe("/admin/");
     expect((await worker.fetch(req("/book/", "1.2.3.4"), env, ctx)).status).toBe(200);
   });
 });

@@ -1,13 +1,14 @@
-// Suggestions tarifaires du back-office (issue #31). Seule logique métier du
-// front : elle est isolée dans `public/admin/suggestions.js`, sans DOM ni
-// import, précisément pour être testée ici.
+// @ts-nocheck — cas repris tels quels de l'ancien écran (données de test lâches) ; la logique testée est typée.
+// Suggestions tarifaires du back-office (issue #31). Tests de l'ancien écran
+// (test/suggestions.test.ts, public/admin/suggestions.js), repris le 10/10/2026
+// sur la version du nouvel écran (./suggestions.ts) quand l'ancien a été retiré.
 //
 // Chaque montant attendu est calculé à la main dans le commentaire — jamais
 // recopié depuis la sortie du code.
 import { describe, expect, it } from "vitest";
 
-// @ts-expect-error — module ESM du front, sans typage TypeScript
-import { buildSuggestions } from "../public/admin/suggestions.js";
+
+import { buildSuggestions } from "./suggestions";
 
 const TODAY = "2026-08-12";
 
@@ -153,7 +154,9 @@ describe("suggestions — dernière minute", () => {
     // L'horizon est de 21 jours (jusqu'au 2 septembre) mais la proposition
     // reste bornée au mois affiché : on ne peint pas hors de l'écran.
     expect(dm.to).toBe("2026-08-31");
-    expect(dm.prefill).toEqual({ priceCents: 21600 });
+    // Le nouvel écran change le prix jour par jour (runs) au lieu d'un prix
+    // unique pré-rempli : tous les jours sont au même prix, une seule plage.
+    expect(dm.runs).toEqual([{ from: "2026-08-12", to: "2026-08-31", priceCents: 21600 }]);
     expect(dm.why).toContain("10 %");
   });
 
@@ -192,7 +195,7 @@ describe("suggestions — dates fortes", () => {
     expect(fortes).toBeDefined();
     expect(fortes.from).toBe("2026-08-14");
     expect(fortes.to).toBe("2026-08-15");
-    expect(fortes.prefill).toEqual({ priceCents: 37030 });
+    expect(fortes.runs).toEqual([{ from: "2026-08-14", to: "2026-08-15", priceCents: 37030 }]);
   });
 
   it("laisse tranquilles les fériés dont le prix est déjà fixé à la main", () => {

@@ -40,7 +40,6 @@ export function StatsPage() {
     <Page
       title={t`Chiffres ${year}`}
       back
-      width={1040}
       tools={
         <>
           {picker}
@@ -223,6 +222,7 @@ export function StatsPage() {
                 </table>
               </Fold>
               <Fold title={t`Dates cherchées sans réponse`} count={String(q.data.searches.topEmpty.length)}>
+                <p className="hint">{t`Journal anonyme : dates, nombre de personnes, résultat. Aucune donnée identifiante n'est enregistrée : ni adresse IP, ni e-mail, ni identifiant de session.`}</p>
                 {q.data.searches.topEmpty.length === 0 ? (
                   <p className="muted">{t`Aucune recherche restée sans réponse.`}</p>
                 ) : (

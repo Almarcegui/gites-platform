@@ -13,6 +13,7 @@ import type { AdminUser } from "../../api/types2";
 import { ErrorLine, useAction } from "../../lib/action";
 import { useToast } from "../../lib/toasts";
 import { Box, Confirm, Loading, Page, Section, SidePanel, sqlWhen } from "../../ui/kit";
+import { ServiceKeysSection } from "./ServiceKeys";
 
 const isOn = (u: AdminUser) => u.active === true || u.active === 1;
 
@@ -52,6 +53,7 @@ export function AccountsPage() {
           </div>
         </Section>
       ) : null}
+      <ServiceKeysSection />
       {open ? <AccountPanel u={open} onClose={() => setOpen(null)} onPassword={(p) => setShown({ ...p, created: false })} /> : null}
       <AddBox open={adding} onClose={() => setAdding(false)} onCreated={(p) => setShown({ ...p, created: true })} />
       <PasswordBox shown={shown} onClose={() => setShown(null)} />

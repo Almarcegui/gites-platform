@@ -12,10 +12,19 @@ tourné** (`lastCronAt: null`) — le Planificateur n'est pas posé.
 Chaque case se coche à la main ; les gestes marqués **Julien** ou **Matthieu**
 ne peuvent pas être faits depuis le dépôt.
 
+## 0. Une seule adresse pour l'écran d'administration (10/10/2026)
+
+`/admin/` sert le nouvel écran (`app/`, React). L'ancien back-office
+(`public/admin/*.js`, `login.html`) est **supprimé** du dépôt. `/admin2/…`
+redirige (301) vers `/admin/`, `/admin/login.html` vers `/admin/#/connexion`,
+et les anciennes adresses d'écran (`#/dash`, `#/cal`, `#/resa`, `#/canaux`,
+`#/ical`, `#/users`, `#/params`…) mènent au bon écran.
+
 ## 1. Le site lui-même (Manager Infomaniak)
 
 - [ ] **Matthieu** — vérifier la **commande de build** du site Node : `dist/` et
-      `public/admin2/` ne sont pas versionnés, le serveur doit les construire
+      `public/admin/` (l'écran d'administration, construit depuis `app/`) ne sont
+      pas versionnés : **sans build, `/admin/` répond 404**. Le serveur doit les construire
       au redémarrage (`npm ci && npm run build`, qui demande les dépendances de
       développement : TypeScript, et `app/` pour le back-office). Commande de
       démarrage : `node node/server.mjs`, Node 22 ou plus, **un seul processus**.
@@ -35,9 +44,9 @@ ne peuvent pas être faits depuis le dépôt.
 
 ## 2. Les comptes
 
-- [ ] **Julien** — comptes nominatifs du back-office (page **Utilisateurs**) :
+- [ ] **Julien** — comptes nominatifs du back-office (**Réglages › Comptes**) :
       julien, matthieu, papa ; `ADMIN_TOKEN` ne reste qu'en accès de secours.
-- [ ] **Julien** — compte **`sauvegarde`** (page Utilisateurs, identifiant exact
+- [ ] **Julien** — compte **`sauvegarde`** (Réglages › Comptes, identifiant exact
       `sauvegarde`) : il n'ouvre que l'export de la base. Puis, sur le Mac :
 
       ```bash
@@ -72,7 +81,7 @@ ne peuvent pas être faits depuis le dépôt.
       `SANS_SAUVEGARDE=oui`.
 
 - [ ] **Julien** — première **clé d'accès de service** (pour Claude et
-      `scripts/gites_admin.py`) : page Utilisateurs › Accès de service ›
+      `scripts/gites_admin.py`) : Réglages › Comptes › Accès de service ›
       « Créer une clé » (`claude-mac`), puis `~/.config/gites/service.env`
       (modèle `scripts/service.env.example`, chmod 600) ; vérifier par
       `/opt/homebrew/bin/python3 scripts/gites_admin.py sante`.
@@ -112,7 +121,11 @@ ne peuvent pas être faits depuis le dépôt.
       l'abonnement, le jour où l'on pousse le site sur les plateformes.
 - [ ] Nouveau code d'invitation avec les scopes `bookings`, `bookings-personal`,
       `inventory`, `properties` (la messagerie lit et écrit `/bookings/messages`),
-      collé dans le back-office (Canaux OTA).
+      collé dans le back-office (Plateformes › Beds24 et canaux).
+- [ ] Compte Beds24 vide ou identifiant périmé : **Créer la propriété sur
+      Beds24** (même écran, carte « Compte Beds24 relié ») ; relire l'aperçu,
+      confirmer, compléter dans Beds24 ce que la liste « à compléter » indique,
+      puis **Pousser les calendriers**.
 - [ ] Webhook réservation Beds24 vers `https://<domaine>/api/webhooks/beds24?key=<BEDS24_WEBHOOK_KEY>`.
 - [ ] Première relève des messages : 30 jours en arrière, puis une par passage
       du cron ; quota lisible dans `app_settings.beds24_messages_last`.

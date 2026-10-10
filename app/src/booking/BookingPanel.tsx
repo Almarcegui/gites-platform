@@ -26,7 +26,7 @@ import { useEffect, useState, type ReactNode } from "react";
 
 import { api } from "../api/client";
 import { useBooking, useGuest, useProperties } from "../api/hooks";
-import type { Booking, BookingDetail, Guest, QuoteResponse } from "../api/types";
+import type { AuditEntry, Booking, BookingDetail, Guest, QuoteResponse } from "../api/types";
 import { ErrorLine, useAction } from "../lib/action";
 import { diffDays, hourLabel, longDate, todayBrussels } from "../lib/dates";
 import { channelName, isChannel } from "../lib/derive";
@@ -35,6 +35,7 @@ import { TemplateChips } from "../messages/TemplateChips";
 import { useToast } from "../lib/toasts";
 import { useLayout } from "../lib/useLayout";
 import { RegisterSection } from "./Register";
+import { sqlWhen } from "../ui/kit";
 
 export type BookingState = "option" | "solde" | "soldee" | "plat" | "annulee";
 
@@ -172,13 +173,21 @@ function Fiche({ detail, dialog, setDialog }: { detail: BookingDetail; dialog: D
             <dt>
               <Trans>Voyageurs</Trans>
             </dt>
-            <dd>{b.adults + b.children > 0 ? t`${b.adults + b.children} personnes` : t`non communiqué`}</dd>
+            <dd>
+              {b.adults + b.children > 0
+                ? b.children > 0
+                  ? t`${b.adults} adulte(s) et ${b.children} enfant(s)`
+                  : t`${b.adults} adulte(s)`
+                : t`non communiqué`}
+            </dd>
           </div>
           <div>
             <dt>
               <Trans>Réservé</Trans>
             </dt>
-            <dd>{b.source === "manual" ? t`par téléphone` : t`sur ${channelName(b)}`}</dd>
+            <dd>
+              {b.source === "manual" ? t`par téléphone` : b.source === "import" ? t`import elloha` : t`sur ${channelName(b)}`}
+            </dd>
           </div>
           <div>
             <dt>
@@ -186,7 +195,17 @@ function Fiche({ detail, dialog, setDialog }: { detail: BookingDetail; dialog: D
             </dt>
             <dd>{b.reference}</dd>
           </div>
+          <div className="wide">
+            <dt>
+              <Trans>Client</Trans>
+            </dt>
+            <dd>
+              {b.guestName?.trim() || "—"}
+              {email || phone ? <small>{[email, phone].filter(Boolean).join(", ")}</small> : null}
+            </dd>
+          </div>
         </dl>
+        {b.guestNotes ? <p className="note">{t`Message du client : ${b.guestNotes}`}</p> : null}
 
         {isChannel(b) ? (
           <div className="money">
@@ -220,6 +239,12 @@ function Fiche({ detail, dialog, setDialog }: { detail: BookingDetail; dialog: D
                 <span>{eur(b.status === "pending" ? Math.max(0, b.depositCents - b.paidCents) : balance)}</span>
               </p>
             ) : null}
+            {b.paidCents > b.totalCents && b.status !== "cancelled" ? (
+              <p className="due">
+                <span>{t`À rembourser (trop-perçu, à faire à la main)`}</span>
+                <span>{eur(b.paidCents - b.totalCents)}</span>
+              </p>
+            ) : null}
             {late ? (
               <span className="late">
                 {t`En retard de ${diffDays(b.balanceDueDate as string, today)} jours.`}
@@ -234,55 +259,120 @@ function Fiche({ detail, dialog, setDialog }: { detail: BookingDetail; dialog: D
         {state !== "annulee" ? <MainActions b={b} state={state} balance={balance} setDialog={setDialog} /> : null}
         {state !== "annulee" ? <MoreMenu b={b} setDialog={setDialog} /> : null}
 
-        {detail.quote?.lines?.length ? (
-          <Fold title={t`Détail du prix`} count={eur(detail.quote.totalCents ?? b.totalCents)}>
-            <ul>
-              {detail.quote.lines.map((l, i) => (
-                <li key={i}>
-                  {l.publicLabel ?? l.label} : {eur(l.amountCents)}
-                </li>
+        <Fold title={t`Devis`} count={eur(detail.quote?.totalCents ?? b.totalCents)}>
+          <table className="tbl dense mini">
+            <tbody>
+              {(detail.quote?.lines ?? []).map((l, i) => (
+                <tr key={i}>
+                  <td>{l.publicLabel ?? l.label}</td>
+                  <td className="r">{eur(l.amountCents)}</td>
+                </tr>
               ))}
-            </ul>
-          </Fold>
-        ) : null}
+              {detail.quote?.lines?.length ? null : (
+                <tr>
+                  <td className="muted">{t`Pas de devis enregistré`}</td>
+                  <td className="r">{eur(b.totalCents)}</td>
+                </tr>
+              )}
+              <tr className="tot">
+                <td>{t`Total`}</td>
+                <td className="r">{eur(b.totalCents)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </Fold>
         <Fold title={t`Paiements`} count={detail.payments.length ? t`${detail.payments.filter((p) => p.status === "succeeded").length} reçu(s)` : t`aucun`}>
-          <ul>
-            {detail.payments.length === 0 ? <li>{t`Aucun paiement reçu.`}</li> : null}
-            {detail.payments.map((p) => (
-              <li key={p.id}>
-                {longDate((p.receivedAt ?? p.createdAt).slice(0, 10))} : {eur(p.amountCents)}, {methodLabel(p.method)}
-                {p.status !== "succeeded" ? ` (${p.status === "pending" ? t`en attente` : t`n'a pas abouti`})` : ""}
-              </li>
-            ))}
-          </ul>
+          {detail.payments.length === 0 ? (
+            <p className="muted">{t`Aucun paiement reçu.`}</p>
+          ) : (
+            <table className="tbl dense mini">
+              <thead>
+                <tr>
+                  <th scope="col">{t`Date`}</th>
+                  <th scope="col">{t`Type`}</th>
+                  <th scope="col">{t`Moyen`}</th>
+                  <th scope="col" className="r">
+                    {t`Montant`}
+                  </th>
+                  <th scope="col">{t`État`}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {detail.payments.map((p) => (
+                  <tr key={p.id}>
+                    <td>{shortIso((p.receivedAt ?? p.createdAt).slice(0, 10))}</td>
+                    <td>{payKindLabel(p.kind)}</td>
+                    <td>{methodLabel(p.method)}</td>
+                    <td className="r">{eur(p.amountCents)}</td>
+                    <td>
+                      <span className={`pill ${p.status === "succeeded" ? "soldee" : p.status === "pending" ? "option" : "muted-pill"}`}>
+                        {p.status === "succeeded" ? t`reçu` : p.status === "pending" ? t`en attente` : t`n'a pas abouti`}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </Fold>
+        <Fold title={t`Notes internes`} count={b.internalNotes ? "1" : "0"}>
+          <p className="note">{b.internalNotes || t`Aucune note.`}</p>
         </Fold>
         <Fold title={t`Mails envoyés`} count={String(detail.emails.length)}>
-          <ul>
-            {detail.emails.length === 0 ? <li>{t`Aucun mail pour l'instant.`}</li> : null}
-            {detail.emails.map((m) => (
-              <li key={m.id}>
-                {longDate(m.createdAt.slice(0, 10))} : {m.subject}
-                {m.status === "failed" ? t` — n'est pas parti${m.errorDetail ? ` (${m.errorDetail})` : ""}` : m.status === "stub" ? t` — préparé, envoi des mails coupé sur ce poste` : ""}
-              </li>
-            ))}
-          </ul>
+          {detail.emails.length === 0 ? (
+            <p className="muted">{t`Aucun mail pour l'instant.`}</p>
+          ) : (
+            <table className="tbl dense mini">
+              <thead>
+                <tr>
+                  <th scope="col">{t`Envoyé le`}</th>
+                  <th scope="col">{t`Objet`}</th>
+                  <th scope="col">{t`Destinataire`}</th>
+                  <th scope="col">{t`État`}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[...detail.emails]
+                  .sort((x, y) => (x.createdAt < y.createdAt ? 1 : -1))
+                  .map((m) => (
+                    <tr key={m.id}>
+                      <td>{sqlWhen(m.createdAt)}</td>
+                      <td>{m.subject}</td>
+                      <td>{m.toEmail ?? ""}</td>
+                      <td>
+                        <span className={`pill ${m.status === "sent" ? "soldee" : m.status === "failed" ? "annulee" : "muted-pill"}`}>
+                          {m.status === "sent" ? t`parti` : m.status === "failed" ? t`pas parti` : m.status === "stub" ? t`préparé (envoi coupé)` : m.status}
+                        </span>
+                        {m.errorDetail ? <small>{m.errorDetail}</small> : null}
+                      </td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          )}
         </Fold>
-        <Fold title={t`Notes`} count={b.internalNotes ? "1" : "0"}>
-          <p className="note">{b.internalNotes || t`Aucune note.`}</p>
-          {b.guestNotes ? <p className="note">{t`Demande du client : ${b.guestNotes}`}</p> : null}
+        <Fold title={t`Historique`} count={String(detail.history.length + 1)}>
+          <table className="tbl dense mini">
+            <tbody>
+              {[...detail.history]
+                .sort((x, y) => (x.createdAt < y.createdAt ? 1 : -1))
+                .map((h) => (
+                  <tr key={h.id}>
+                    <td>{sqlWhen(h.createdAt)}</td>
+                    <td>{historyLabel(h.action)}</td>
+                    <td className="muted">{historyWho(h)}</td>
+                  </tr>
+                ))}
+              <tr>
+                <td>{sqlWhen(b.createdAt)}</td>
+                <td>{t`réservation enregistrée`}</td>
+                <td />
+              </tr>
+            </tbody>
+          </table>
         </Fold>
         <Fold title={t`Voyageurs inscrits`} count={t`registre`}>
           <RegisterSection b={b} />
-        </Fold>
-        <Fold title={t`Historique`} count={String(detail.history.length)}>
-          <ul>
-            {detail.history.map((h) => (
-              <li key={h.id}>
-                {longDate(h.createdAt.slice(0, 10))} : {historyLabel(h.action)}
-              </li>
-            ))}
-            <li>{t`${longDate(b.createdAt.slice(0, 10))} : réservation enregistrée`}</li>
-          </ul>
         </Fold>
       </div>
 
@@ -296,9 +386,11 @@ function Fiche({ detail, dialog, setDialog }: { detail: BookingDetail; dialog: D
   );
 }
 
+/** Section de la fiche, ouverte d'office : tout ce que l'ancien écran
+ *  montrait reste visible sans clic (retour de Julien du 10/10). */
 function Fold({ title, count, children }: { title: string; count: string; children: ReactNode }) {
   return (
-    <details className="fold">
+    <details className="fold" open>
       <summary>
         <IconChevronRight size={22} />
         {title}
@@ -310,6 +402,31 @@ function Fold({ title, count, children }: { title: string; count: string; childr
 }
 
 const METHODS: Record<string, MessageDescriptor> = { transfer: msg`virement`, cash: msg`espèces`, stripe: msg`carte bancaire`, other: msg`autre moyen` };
+function payKindLabel(k: string): string {
+  if (k === "deposit") return i18n._(msg`arrhes`);
+  if (k === "balance") return i18n._(msg`solde`);
+  if (k === "refund") return i18n._(msg`remboursement`);
+  if (k === "full") return i18n._(msg`paiement complet`);
+  if (k === "manual") return i18n._(msg`paiement manuel`);
+  return k;
+}
+
+/** « 2026-10-10 » → « 10/10/2026 ». */
+function shortIso(d: string): string {
+  return `${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(0, 4)}`;
+}
+
+/** Qui a fait le geste : le « par » du détail s'il existe, sinon l'acteur. */
+function historyWho(h: AuditEntry): string {
+  try {
+    const par = h.detail ? (JSON.parse(h.detail) as { par?: string }).par : null;
+    if (par) return par;
+  } catch {
+    /* détail non JSON : l'acteur */
+  }
+  return h.actor === "admin" ? "" : h.actor;
+}
+
 function methodLabel(m: string): string {
   const d = METHODS[m];
   return d ? i18n._(d) : m;

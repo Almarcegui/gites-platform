@@ -238,27 +238,27 @@ export function Weeks(props: {
       })}
       <div className="wlegend" aria-label={t`Légende`}>
         <span>
-          <i style={{ background: "var(--pine)", borderColor: "var(--pine)" }} />
+          <i className="d c-soldee" />
           {t`Réservé et payé`}
         </span>
         <span>
-          <i style={{ background: "var(--myrt-soft)", borderColor: "var(--myrt)" }} />
+          <i className="d c-solde" />
           {t`Solde à encaisser`}
         </span>
         <span>
-          <i style={{ background: "repeating-linear-gradient(-45deg,var(--genet-soft) 0 4px,var(--genet-mid) 4px 7px)", borderColor: "var(--genet)" }} />
+          <i className="d c-option" />
           {t`Option, pas encore payée`}
         </span>
         <span>
-          <i style={{ background: "var(--ourthe)", borderColor: "var(--ourthe)" }} />
+          <i className="d c-plat" />
           {t`Airbnb, Booking ou autre site`}
         </span>
         <span>
-          <i style={{ background: "repeating-linear-gradient(-45deg,var(--surface-2) 0 4px,var(--hatch) 4px 7px)" }} />
+          <i className="d c-bloc" />
           {t`Bloqué`}
         </span>
         <span>
-          <i style={{ background: "repeating-linear-gradient(-45deg,transparent 0 4px,var(--line-2) 4px 7px)" }} />
+          <i className="d c-pris" />
           {t`Domaine : une des maisons est prise`}
         </span>
       </div>

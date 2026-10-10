@@ -1,5 +1,7 @@
-// Routes du pilote. Historique en hash (/admin2/#/calendrier) : le serveur
-// n'a qu'un fichier à servir, /admin2/index.html, sans réécriture d'URL.
+// Routes de l'écran d'administration. Historique en hash (/admin/#/calendrier) :
+// le serveur n'a qu'un fichier à servir, /admin/index.html, sans réécriture
+// d'URL. Les adresses de l'ancien écran (#/dash, #/cal, #/resa…) mènent au
+// bon écran : liens gardés dans un favori, un mail, ou la carte Santé.
 // La fiche ouverte vit dans l'adresse (?resa=12) : un lien la rouvre.
 import { createHashHistory, createRootRoute, createRoute, createRouter, Outlet, redirect } from "@tanstack/react-router";
 
@@ -32,6 +34,8 @@ import { StatsPage } from "./pages/settings/Stats";
 import { TarifsPage } from "./pages/settings/Tarifs";
 import { TemplatesPage } from "./pages/settings/Templates";
 import { MyAccountPage } from "./pages/settings/MyAccount";
+import { DevicePage } from "./pages/settings/Device";
+import { ReviewsPage } from "./pages/Reviews";
 
 export interface RootSearch {
   resa?: number;
@@ -67,6 +71,7 @@ const calendarRoute = createRoute({ getParentRoute: () => appRoute, path: "/cale
 const bookingsRoute = createRoute({ getParentRoute: () => appRoute, path: "/reservations", component: BookingsPage });
 const messagesRoute = createRoute({ getParentRoute: () => appRoute, path: "/messages", component: MessagesPage });
 const cleaningRoute = createRoute({ getParentRoute: () => appRoute, path: "/menage", component: CleaningPage });
+const reviewsRoute = createRoute({ getParentRoute: () => appRoute, path: "/avis", component: ReviewsPage });
 const settingsRoute = createRoute({ getParentRoute: () => appRoute, path: "/reglages", component: SettingsPage });
 // Réglages du lot 1 : tout ce que l'ancien /admin/ savait faire.
 const sub = (path: string, component: () => ReactNode) => createRoute({ getParentRoute: () => appRoute, path: `/reglages/${path}`, component });
@@ -89,11 +94,44 @@ const settingsRoutes = [
   sub("modeles", TemplatesPage),
   sub("mon-compte", MyAccountPage),
   sub("aide", HelpPage),
+  sub("appareil", DevicePage),
 ];
+
+// Adresses de l'ancien écran (favoris, mails, carte Santé) : on mène au bon
+// écran. La fiche ouverte (?resa=) et le reste de l'adresse sont gardés.
+const LEGACY: Record<string, string> = {
+  "/dash": "/",
+  "/cal": "/calendrier",
+  "/plan": "/calendrier",
+  "/cal/prix": "/reglages/tarifs",
+  "/tarifs": "/reglages/tarifs",
+  "/cal/annee": "/reglages/tarifs",
+  "/resa": "/reservations",
+  "/clients": "/reglages/clients",
+  "/paiements": "/reglages/paiements",
+  "/stats": "/reglages/chiffres",
+  "/promos": "/reglages/promotions",
+  "/options": "/reglages/options",
+  "/canaux": "/reglages/plateformes",
+  "/ical": "/reglages/calendriers",
+  "/users": "/reglages/comptes",
+  "/params": "/reglages/domaine",
+  "/startup": "/reglages/mise-en-route",
+};
+const legacyRoutes = Object.entries(LEGACY).map(([from, to]) =>
+  createRoute({
+    getParentRoute: () => rootRoute,
+    path: from,
+    beforeLoad: ({ search }) => {
+      throw redirect({ to, search, replace: true });
+    },
+  }),
+);
 
 const routeTree = rootRoute.addChildren([
   loginRoute,
-  appRoute.addChildren([todayRoute, calendarRoute, bookingsRoute, messagesRoute, cleaningRoute, settingsRoute, ...settingsRoutes]),
+  ...legacyRoutes,
+  appRoute.addChildren([todayRoute, calendarRoute, bookingsRoute, messagesRoute, cleaningRoute, reviewsRoute, settingsRoute, ...settingsRoutes]),
 ]);
 
 export function makeRouter(history = createHashHistory()) {

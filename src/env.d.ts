@@ -46,7 +46,7 @@ interface Env {
   /** Instantané complet de la base SQLite (VACUUM INTO), injecté par
    *  node/server.mjs ; absent sur Workers (export SQL à la place). */
   SQLITE_SNAPSHOT?: () => Promise<Uint8Array>;
-  /** Adresses ou plages CIDR autorisées sur /api/admin/*, /admin/ et /admin2/
+  /** Adresses ou plages CIDR autorisées sur /api/admin/* et /admin/
    *  (virgules ou espaces). Vide = ouvert. Garde appliquée aux HUMAINS : une
    *  clé de service `svc:` et le compte `sauvegarde` passent depuis toute
    *  adresse (lot 3). Cf. src/core/ip-allow.ts. */

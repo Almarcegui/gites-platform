@@ -34,7 +34,7 @@ export function IcalPage() {
   const all = useAction();
   const syncText = useSyncText();
   return (
-    <Page title={t`Calendriers reliés`} back tools={picker} width={1000} lead={t`Pour les sites qui ne passent pas par Beds24 : chacun lit nos dates, et nous lisons les siennes. Le délai côté Airbnb est d'environ deux heures.`}>
+    <Page title={t`Calendriers reliés`} back tools={picker} lead={t`Pour les sites qui ne passent pas par Beds24 : chacun lit nos dates, et nous lisons les siennes. Le délai côté Airbnb est d'environ deux heures.`}>
       {q.error ? <ErrorLine text={t`Les calendriers n'ont pas pu être lus.`} /> : null}
       {q.isLoading ? <Loading /> : null}
       {q.data ? (

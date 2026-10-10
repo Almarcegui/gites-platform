@@ -4,10 +4,11 @@ import babel from "@rolldown/plugin-babel";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
-// Pilote du nouveau back-office. Servi sous /admin2/ par le Worker (binding
-// ASSETS) et par node/server.mjs, comme l'ancien /admin/ : même origine que
-// l'API, donc ni CORS ni changement serveur. Le routeur travaille en hash
-// (/admin2/#/calendrier) : aucune réécriture d'URL côté serveur n'est requise.
+// L'écran d'administration. Servi sous /admin/ par le Worker (binding ASSETS)
+// et par node/server.mjs : même origine que l'API, donc ni CORS ni changement
+// serveur. Le routeur travaille en hash (/admin/#/calendrier) : aucune
+// réécriture d'URL côté serveur n'est requise. L'ancienne adresse /admin2/
+// redirige ici (src/core/admin-redirect.ts).
 //
 // En travail : `npm run dev` à la racine lance wrangler dev (API + D1 locale),
 // et `npm run dev` ici sert l'écran en renvoyant /api vers lui.
@@ -20,7 +21,7 @@ process.env.LINGUI_CONFIG ??= `${ici}lingui.config.ts`;
 if (process.env.VITEST) process.env.TZ ??= "Europe/Brussels";
 
 export default defineConfig({
-  base: "/admin2/",
+  base: "/admin/",
   plugins: [
     react(),
     lingui(),
@@ -32,7 +33,7 @@ export default defineConfig({
     proxy: { "/api": { target: api, changeOrigin: true } },
   },
   // Dossier de build gitignoré ; pas de sourcemap (le code ne se publie pas).
-  build: { outDir: "../public/admin2", emptyOutDir: true, assetsDir: "assets", sourcemap: false },
+  build: { outDir: "../public/admin", emptyOutDir: true, assetsDir: "assets", sourcemap: false },
   test: {
     environment: "jsdom",
     globals: true,

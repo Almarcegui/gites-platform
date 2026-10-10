@@ -10,7 +10,7 @@
 import { Trans, useLingui } from "@lingui/react/macro";
 import { Drawer, Menu, Modal } from "@mantine/core";
 import { IconChevronRight, IconDots, IconDownload } from "@tabler/icons-react";
-import { Link, useBlocker } from "@tanstack/react-router";
+import { Link, useBlocker, useRouterState } from "@tanstack/react-router";
 import { useEffect, useState, type ReactNode } from "react";
 
 import { authHeader, errorText } from "../api/client";
@@ -20,14 +20,16 @@ import { ErrorLine } from "../lib/action";
 import { useScope } from "../lib/scope";
 import { useToast } from "../lib/toasts";
 import { useLayout } from "../lib/useLayout";
+import { sectionOf, useNav } from "../shell/nav";
 
 // --- page ---------------------------------------------------------------------
 
-/** Un écran : un titre, une phrase qui dit à quoi il sert, les outils à droite. */
-export function Page({ title, lead, tools, back, children, width = 980 }: { title: string; lead?: ReactNode; tools?: ReactNode; back?: boolean; children: ReactNode; width?: number }) {
+/** Un écran : un fil d'Ariane discret, un seul titre, les actions principales
+ *  à droite du titre, une phrase qui dit à quoi il sert. */
+export function Page({ title, lead, tools, back, children, width = 1400 }: { title: string; lead?: ReactNode; tools?: ReactNode; back?: boolean; children: ReactNode; width?: number }) {
   return (
     <div className="pg" style={{ maxWidth: width }}>
-      {back ? <BackToSettings /> : null}
+      {back ? <Crumbs title={title} /> : null}
       <div className="head">
         <h1 className="title">{title}</h1>
         {tools ? <div className="tools">{tools}</div> : null}
@@ -38,12 +40,22 @@ export function Page({ title, lead, tools, back, children, width = 980 }: { titl
   );
 }
 
-function BackToSettings() {
+/** « Prix › Prix et saisons » : la rubrique de la barre latérale, puis la page. */
+function Crumbs({ title }: { title: string }) {
+  const { t } = useLingui();
+  const nav = useNav();
+  const path = useRouterState({ select: (s) => s.location.pathname });
+  const hit = sectionOf(nav, path);
   return (
-    <Link className="crumb" to="/reglages">
-      <IconChevronRight size={18} style={{ transform: "rotate(180deg)" }} />
-      <Trans>Réglages</Trans>
-    </Link>
+    <nav className="crumbs" aria-label={t`Fil d'Ariane`}>
+      <ol>
+        <li>
+          <Link to="/reglages">{hit && hit.section.id !== "reglages" ? hit.section.title : t`Réglages`}</Link>
+          <IconChevronRight size={14} aria-hidden />
+        </li>
+        <li aria-current="page">{title}</li>
+      </ol>
+    </nav>
   );
 }
 

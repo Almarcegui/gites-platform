@@ -5,7 +5,7 @@
 ## Zone touchée
 
 - [ ] Site public (`public/` hors `admin/`)
-- [ ] Back-office (`public/admin/`, `src/api/admin.ts`)
+- [ ] Back-office (`app/`, servi sous `/admin/`, et `src/api/admin.ts`)
 - [ ] API / moteur métier (`src/`)
 - [ ] Base de données (`migrations/`)
 - [ ] Infra / config (`wrangler.jsonc`, CI)

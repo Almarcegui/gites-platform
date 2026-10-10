@@ -3,16 +3,16 @@
   "short_name": "Gîtes",
   "description": "Gestion des Gîtes du Pré Moré et du Moulin de Braives : aujourd'hui, calendrier, réservations, messages, ménage.",
   "lang": "fr",
-  "start_url": "/admin2/#/",
-  "scope": "/admin2/",
+  "start_url": "/admin/#/",
+  "scope": "/admin/",
   "display": "standalone",
   "orientation": "any",
   "background_color": "#F4F1EA",
   "theme_color": "#2C5A4B",
   "icons": [
-    { "src": "/admin2/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "/admin2/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
-    { "src": "/admin2/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
-    { "src": "/admin2/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+    { "src": "/admin/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/admin/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/admin/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "/admin/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
   ]
 }

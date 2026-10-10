@@ -1,6 +1,6 @@
 // Parcours Playwright du lot 2 sur le SERVEUR NODE (la production), port 8797.
 //
-//   npm run build            (à la racine : dist/ et public/admin2/)
+//   npm run build            (à la racine : dist/ et public/admin/)
 //   node app/e2e/lot2-serveur.mjs
 //
 // 1. base SQLite et dossier de photos TEMPORAIRES, migrations, puis données

@@ -1,6 +1,6 @@
 // Parcours du lot 3 sur le serveur Node (production) et des données inventées :
 // lancé par `node app/e2e/lot3-serveur.mjs`, qui prépare une base temporaire.
-//  - captures de l'aide « Comment ça marche » (public/aide/, servies sous /admin2/aide/) ;
+//  - captures de l'aide « Comment ça marche » (public/aide/, servies sous /admin/aide/) ;
 //  - promotions Airbnb et prix par plateforme (écritures Beds24 fermées ici) ;
 //  - carte « Avis » d'Aujourd'hui ;
 //  - écran et tunnel de réservation en néerlandais ;
@@ -15,7 +15,7 @@ const aide = (name: string) => `public/aide/${name}.png`;
 test.describe.configure({ mode: "serial" });
 
 async function login(page: Page) {
-  await page.goto("/admin2/");
+  await page.goto("/admin/");
   await page.getByLabel("Identifiant").fill("pilote");
   await page.getByLabel("Mot de passe").fill(process.env.PILOTE_PASSWORD ?? "");
   await page.getByRole("button", { name: "Se connecter" }).click();
@@ -32,7 +32,7 @@ test("captures de l'aide : Aujourd'hui, calendrier, vente, ménage, messages", a
   await expect(page.locator(".reviews-strip")).toBeVisible();
   await page.screenshot({ path: aide("aujourdhui") });
 
-  await page.goto("/admin2/#/calendrier");
+  await page.goto("/admin/#/calendrier");
   await expect(page.getByText("Pirlouvet").first()).toBeVisible();
   await page.screenshot({ path: aide("calendrier") });
 
@@ -42,17 +42,17 @@ test("captures de l'aide : Aujourd'hui, calendrier, vente, ménage, messages", a
   await page.screenshot({ path: aide("vente") });
   await page.keyboard.press("Escape");
 
-  await page.goto("/admin2/#/menage");
+  await page.goto("/admin/#/menage");
   await expect(page.getByRole("heading", { name: "Ménage", level: 1 })).toBeVisible();
   await page.screenshot({ path: aide("menage") });
 
-  await page.goto("/admin2/#/messages");
+  await page.goto("/admin/#/messages");
   await expect(page.getByText("Chaise haute").first()).toBeVisible();
   await page.screenshot({ path: aide("messages") });
 });
 
 test("promotions Airbnb : aperçu chiffré, enregistrement, envoi fermé sans Beds24", async ({ page }) => {
-  await page.goto("/admin2/#/reglages/plateformes");
+  await page.goto("/admin/#/reglages/plateformes");
   await page.getByRole("link", { name: "Régler les promotions et les prix par plateforme" }).click();
   await expect(page.getByRole("heading", { name: "Promotions Airbnb et prix par plateforme", level: 1 })).toBeVisible();
   const apercu = page.getByTestId("apercu");
@@ -78,18 +78,18 @@ test("Aujourd'hui : carte Avis, note moyenne, alerte sous 4, lien vers Beds24", 
 });
 
 test("néerlandais : l'écran bascule dans Réglages et le reste après rechargement", async ({ page }) => {
-  await page.goto("/admin2/#/reglages");
+  await page.goto("/admin/#/reglages");
   await page.getByRole("button", { name: "Nederlands" }).click();
   await expect(page.getByRole("heading", { name: "Instellingen", level: 1 })).toBeVisible();
   await page.screenshot({ path: shot("1280-instellingen-nl"), fullPage: true });
-  await page.goto("/admin2/#/");
+  await page.goto("/admin/#/");
   await page.reload();
   await expect(page.getByLabel("De dag")).toBeVisible();
   await expect(page.getByText("Komen aan").first()).toBeVisible();
   await page.screenshot({ path: shot("1280-vandaag-nl") });
-  await page.goto("/admin2/#/reglages/aide");
+  await page.goto("/admin/#/reglages/aide");
   await expect(page.getByRole("heading", { name: "Hoe het werkt", level: 1 })).toBeVisible();
-  await page.goto("/admin2/#/reglages");
+  await page.goto("/admin/#/reglages");
   await page.getByRole("button", { name: "Français" }).click();
   await expect(page.getByRole("heading", { name: "Réglages", level: 1 })).toBeVisible();
 });
@@ -128,7 +128,7 @@ test("tunnel public en néerlandais : sélecteur, textes, formulaire ; FR par d�
 });
 
 test("aide « Comment ça marche » : ouverte depuis Réglages, illustrée", async ({ page }) => {
-  await page.goto("/admin2/#/reglages");
+  await page.goto("/admin/#/reglages");
   await page.getByRole("link", { name: /Comment ça marche/ }).click();
   await expect(page.getByRole("heading", { name: "Comment ça marche", level: 1 })).toBeVisible();
   for (const h of ["Une journée type", "Le calendrier", "Vendre par téléphone", "Le ménage", "Les messages", "Ce qui se fait tout seul", "Qui appeler"]) {

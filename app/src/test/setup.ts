@@ -17,7 +17,7 @@ export function setWide(v: boolean) {
 Object.defineProperty(window, "matchMedia", {
   writable: true,
   value: vi.fn().mockImplementation((q: string) => ({
-    matches: q.includes("min-width: 900px") ? wide : false,
+    matches: q.includes("min-width: 64em") ? wide : false,
     media: q,
     onchange: null,
     addListener: vi.fn(),

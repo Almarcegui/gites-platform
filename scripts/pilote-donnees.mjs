@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Données du pilote du nouveau back-office (/admin2/) — D1 LOCALE uniquement.
+// Données du pilote du back-office (/admin/) — D1 LOCALE uniquement.
 //
 // Ce que fait le script, dans l'ordre :
 //   1. repart d'une D1 locale vide (.wrangler/state/v3/d1 du dossier courant) ;
@@ -153,7 +153,7 @@ try {
   const dv = join(ROOT, ".dev.vars");
   const txt = readFileSync(dv, "utf8").replace(/\n?# Compte d'essai du pilote[^\n]*\nPILOTE_PASSWORD=.*\n?/g, "\n");
   writeFileSync(dv, txt.replace(/\n*$/, "\n"));
-  appendFileSync(dv, `# Compte d'essai du pilote /admin2/ (identifiant « pilote »), régénéré par npm run pilote:donnees\nPILOTE_PASSWORD=${u.password}\n`);
+  appendFileSync(dv, `# Compte d'essai du back-office /admin/ (identifiant « pilote »), régénéré par npm run pilote:donnees\nPILOTE_PASSWORD=${u.password}\n`);
 
   const { units } = await call("/units?property=1");
   const { units: units2 } = await call("/units?property=2");

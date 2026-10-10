@@ -404,3 +404,60 @@ export interface ReviewsSummary {
   replyUrl: string;
   lowScore: number;
 }
+
+// --- Beds24 : création de la propriété (PR #104, portée de l'ancien écran) ---
+export type MappingEtat = "absent" | "actif" | "perime" | "inconnu";
+export interface Beds24Liaison {
+  connected: boolean;
+  error?: string;
+  compte?: { id: number | null; appareil?: string | null; scopes: string[]; limiteAPropriete?: number | null };
+  properties?: { id: number; name: string; roomTypes?: { id: number; name: string }[] }[];
+  ecritureAutorisee: boolean;
+  ecriturePropriete: boolean | null;
+  jetonRestreint: boolean;
+  mapping: {
+    propertyId: number;
+    propertyName: string;
+    beds24PropertyId: number | null;
+    etat: MappingEtat;
+    rooms: { unitId: number; unitName: string; beds24RoomId: number | null; etat: MappingEtat }[];
+    homonyme: { id: number; name: string } | null;
+  } | null;
+  mappingARefaire: boolean;
+  contenuPrepare: boolean;
+  contenuEnAttente: boolean;
+  creationPossible: boolean;
+}
+export interface Beds24PropertyPlan {
+  propertyId: number;
+  name: string;
+  currency: string;
+  address?: string;
+  city?: string;
+  country: string;
+  checkInStart?: string;
+  checkOutEnd?: string;
+  rooms: { unitId: number; name: string; maxPeople: number; minStay?: number; rackRate?: number; cleaningFee?: number; description?: string; featureCodes: string[]; photos: { url: string; legende: string }[] }[];
+  directOnly: { unitId: number; name: string; raison: string }[];
+  aCompleter: string[];
+}
+export interface Beds24Creation {
+  ok: true;
+  propriete: { beds24PropertyId: number; name: string; creee: boolean };
+  rooms: { unitId: number; name: string; beds24RoomId: number; creee: boolean }[];
+  envoye: { propriete: string[]; rooms: { name: string; champs: string[] }[] };
+  contenu: { ok: boolean; erreur?: string };
+  aCompleter: { propriete: string[]; rooms: { unitId: number; name: string; points: string[]; photos: { url: string; legende: string }[] }[] };
+  avertissements: string[];
+}
+
+// --- Accès de service (PR #105) ---
+export interface ServiceKey {
+  id: number;
+  name: string;
+  keyHint: string;
+  createdAt: string;
+  createdBy: string | null;
+  lastUsedAt: string | null;
+  revokedAt: string | null;
+}

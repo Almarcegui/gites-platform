@@ -29,7 +29,7 @@ export function CleaningPage() {
   const [editing, setEditing] = useState<Task | null>(null);
 
   return (
-    <div style={{ maxWidth: 760 }}>
+    <div className="pg" style={{ maxWidth: 880 }}>
       <div className="head">
         <h1 className="title">
           <Trans>Ménage</Trans>

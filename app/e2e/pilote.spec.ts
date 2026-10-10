@@ -7,7 +7,7 @@ declare const process: { env: Record<string, string | undefined> };
 const shots = (name: string) => `docs/captures/${name}.png`;
 
 async function login(page: Page) {
-  await page.goto("/admin2/");
+  await page.goto("/admin/");
   await expect(page.getByRole("heading", { name: "Gestion des gîtes" })).toBeVisible();
   await page.getByLabel("Identifiant").fill("pilote");
   await page.getByLabel("Mot de passe").fill(process.env.PILOTE_PASSWORD ?? "");

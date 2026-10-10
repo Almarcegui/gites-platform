@@ -13,9 +13,7 @@
     "e2e": "playwright test"
   },
   "dependencies": {
-    "@fontsource/atkinson-hyperlegible": "5.3.0",
-    "@fontsource/literata": "5.3.0",
-    "@fontsource/schibsted-grotesk": "5.3.0",
+    "@fontsource/ibm-plex-sans": "5.3.0",
     "@lingui/core": "6.8.0",
     "@lingui/react": "6.8.0",
     "@mantine/core": "9.6.2",

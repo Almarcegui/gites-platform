@@ -128,6 +128,7 @@ const { registerPublicRoutes } = await import("../dist/api/public.js");
 const { registerAdminRoutes } = await import("../dist/api/admin.js");
 const { runAllScheduled } = await import("../dist/jobs/scheduled.js");
 const { adminIpCheck, adminIpGate, ipDeniedResponse, markIpDenied } = await import("../dist/core/ip-allow.js");
+const { adminAddressRedirect } = await import("../dist/core/admin-redirect.js");
 const { localizePublicResponse } = await import("../dist/core/public-i18n.js");
 
 const router = new Router();
@@ -197,7 +198,7 @@ function staticHeaders(file) {
   if (file.startsWith(join(PUBLIC_DIR, "img"))) {
     headers["cache-control"] = "public, max-age=31536000, immutable";
   } else if (ext === ".html" || file.endsWith("/sw.js")) {
-    // Le service worker de /admin2/ doit être relu à chaque visite, sinon une
+    // Le service worker de /admin/ doit être relu à chaque visite, sinon une
     // nouvelle version de l'écran ne s'installe pas.
     headers["cache-control"] = "no-cache";
   } else {
@@ -312,7 +313,15 @@ const server = createServer(async (req, res) => {
       return;
     }
 
-    // 3 bis. Photos envoyées depuis le back-office.
+    // 3 bis. Une seule adresse pour l'écran d'administration : l'ancienne
+    //    adresse du pilote et la connexion de l'ancien écran renvoient vers /admin/.
+    const moved = adminAddressRedirect(url.pathname);
+    if (moved) {
+      res.writeHead(301, { location: moved, "cache-control": "public, max-age=3600" }).end();
+      return;
+    }
+
+    // 3 ter. Photos envoyées depuis le back-office.
     if (url.pathname.startsWith("/uploads/")) {
       const file = resolveUpload(url.pathname);
       if (!file) {

@@ -129,7 +129,7 @@ npm run dev -- --port 8788
 |---|---|
 | http://localhost:8788/ | Le site vitrine (Les Gîtes du Pré Moré) |
 | http://localhost:8788/book/ | La landing des domaines, puis le tunnel |
-| http://localhost:8788/admin/ | Le back-office (redirige vers `login.html`) |
+| http://localhost:8788/admin/ | Le back-office (écran de connexion, puis Aujourd'hui). Construire d'abord : `npm run build:app` |
 | http://localhost:8788/api/public/properties | Un JSON avec 2 domaines |
 
 Vérification rapide en une commande :
@@ -144,7 +144,7 @@ curl -s http://localhost:8788/api/public/properties
 Sur une base fraîche, la table `admin_users` est **vide**. C'est donc le secret
 `ADMIN_TOKEN` qui ouvre la porte :
 
-1. Va sur http://localhost:8788/admin/ → tu es redirigé vers `login.html`.
+1. Va sur http://localhost:8788/admin/ → l'écran de connexion s'affiche (`npm run build:app` au préalable : `public/admin/` est construit, pas versionné).
 2. Saisis l'identifiant et le mot de passe de ton `ADMIN_TOKEN`
    (`dev` / `motdepasse-local-quelconque` dans l'exemple ci-dessus).
 3. Tu es dans le back-office. Le navigateur garde ces identifiants dans
@@ -488,7 +488,7 @@ sans conflit tant qu'elles sont sur des zones différentes — `area:api-moteur`
 |---|---|---|
 | `Address already in use (127.0.0.1:8788)` | Un `wrangler dev` tourne déjà | `lsof -nP -iTCP:8788 -sTCP:LISTEN` pour trouver le PID. **Vérifie que ce n'est pas la session du propriétaire** avant de tuer quoi que ce soit. |
 | `/api/admin/*` répond **503** | `ADMIN_TOKEN` absent de `.dev.vars` | Renseigne-le, redémarre `wrangler dev` (le fichier est lu au démarrage) |
-| `/api/admin/*` répond **401** | Identifiants faux, ou session expirée | Reconnecte-toi via `/admin/login.html` |
+| `/api/admin/*` répond **401** | Identifiants faux, ou session expirée | Reconnecte-toi via `/admin/` |
 | **500** sur des routes qui marchaient | Une migration a été ajoutée et n'est pas appliquée en local | `npm run db:migrate:local` — **à refaire après chaque `git pull`** |
 | Le back-office ne connaît pas la page Utilisateurs | Migration `0012` non appliquée | Idem |
 | Base locale incohérente | État accumulé | `npm run db:reset:local` |
