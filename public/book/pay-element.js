@@ -17,6 +17,8 @@
 //     échec laisse donc la réservation intacte : le blocage de 30 minutes
 //     continue de courir et le bouton « Réessayer » relance la même intention.
 
+import { LANG, t } from "./i18n.js";
+
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 
 /** Configuration publique du paiement. Un échec réseau se lit comme « pas de
@@ -40,8 +42,8 @@ export function loadStripeJs() {
     const tag = document.createElement("script");
     tag.src = "https://js.stripe.com/v3/";
     tag.async = true;
-    tag.onload = () => (window.Stripe ? resolve(window.Stripe) : reject(new Error("module de paiement indisponible")));
-    tag.onerror = () => reject(new Error("module de paiement inaccessible"));
+    tag.onload = () => (window.Stripe ? resolve(window.Stripe) : reject(new Error(t("module de paiement indisponible"))));
+    tag.onerror = () => reject(new Error(t("module de paiement inaccessible")));
     document.head.appendChild(tag);
   });
   return stripeJsPromise;
@@ -89,16 +91,16 @@ export async function mountPayment(container, opts) {
   const elements = stripe.elements({
     clientSecret: opts.clientSecret,
     appearance: appearance(),
-    locale: "fr",
+    locale: LANG === "nl" ? "nl" : "fr",
   });
 
   container.hidden = false;
   container.innerHTML = `
-    <h3>${esc(opts.title || "Paiement sécurisé")}</h3>
+    <h3>${esc(opts.title || t("Paiement sécurisé"))}</h3>
     <div id="peMount"></div>
     <div id="peMsg" role="alert" aria-live="assertive"></div>
-    <button class="btn big" id="pePay" style="margin-top:14px">Payer${opts.amountLabel ? ` ${esc(opts.amountLabel)}` : ""}</button>
-    <p class="small muted" style="margin-top:8px">Carte bancaire, Bancontact, Apple&nbsp;Pay et Google&nbsp;Pay. Paiement traité par Stripe — vos données bancaires ne transitent pas par notre serveur.</p>`;
+    <button class="btn big" id="pePay" style="margin-top:14px">${opts.amountLabel ? t("Payer {montant}", { montant: esc(opts.amountLabel) }) : t("Payer")}</button>
+    <p class="small muted" style="margin-top:8px">${t("Carte bancaire, Bancontact, Apple&nbsp;Pay et Google&nbsp;Pay. Paiement traité par Stripe — vos données bancaires ne transitent pas par notre serveur.")}</p>`;
 
   const payment = elements.create("payment", { layout: "tabs" });
   payment.mount(container.querySelector("#peMount"));
@@ -108,16 +110,16 @@ export async function mountPayment(container, opts) {
 
   const fail = (text) => {
     // Le hold n'est pas perdu : on le dit, sinon le client referme l'onglet.
-    msg.innerHTML = `<div class="note bad">${esc(text)}<br><span class="small">Votre créneau reste bloqué — vous pouvez réessayer, ou choisir un autre moyen de paiement.</span></div>`;
+    msg.innerHTML = `<div class="note bad">${esc(text)}<br><span class="small">${t("Votre créneau reste bloqué — vous pouvez réessayer, ou choisir un autre moyen de paiement.")}</span></div>`;
     btn.disabled = false;
-    btn.textContent = `Réessayer le paiement${opts.amountLabel ? ` de ${opts.amountLabel}` : ""}`;
+    btn.textContent = opts.amountLabel ? t("Réessayer le paiement de {montant}", { montant: opts.amountLabel }) : t("Réessayer le paiement");
     msg.scrollIntoView({ behavior: "smooth", block: "center" });
   };
 
   btn.addEventListener("click", async () => {
     msg.innerHTML = "";
     btn.disabled = true;
-    btn.textContent = "Paiement en cours…";
+    btn.textContent = t("Paiement en cours…");
     let result;
     try {
       result = await stripe.confirmPayment({
@@ -125,16 +127,16 @@ export async function mountPayment(container, opts) {
         confirmParams: { return_url: opts.returnUrl },
       });
     } catch (e) {
-      fail(e?.message || "Le paiement n'a pas pu être lancé.");
+      fail(e?.message || t("Le paiement n'a pas pu être lancé."));
       return;
     }
     // On n'arrive ici QUE si Stripe n'a pas redirigé : carte refusée, champ
     // invalide, réseau. Les moyens à redirection (Bancontact) ont déjà quitté
     // la page, et c'est le webhook — pas ce retour — qui créditera.
     if (result?.error) {
-      fail(result.error.message || "Le paiement n'a pas abouti.");
+      fail(result.error.message || t("Le paiement n'a pas abouti."));
       return;
     }
-    btn.textContent = "Paiement confirmé — redirection…";
+    btn.textContent = t("Paiement confirmé — redirection…");
   });
 }

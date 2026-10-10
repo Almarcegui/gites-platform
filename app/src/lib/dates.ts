@@ -1,6 +1,8 @@
 // Dates du calendrier : chaînes ISO « AAAA-MM-JJ », calculées en UTC pour
 // qu'aucun changement d'heure ne décale un jour. « Aujourd'hui » se lit à
 // Bruxelles, comme côté serveur.
+import { i18n } from "@lingui/core";
+
 import type { IsoDate } from "../api/types";
 
 export function todayBrussels(now: Date = new Date()): IsoDate {
@@ -39,32 +41,46 @@ export function dayRange(from: IsoDate, count: number): IsoDate[] {
   return Array.from({ length: count }, (_, i) => addDays(from, i));
 }
 
-const JOURS = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"];
-const JOURS_COURTS = ["lun.", "mar.", "mer.", "jeu.", "ven.", "sam.", "dim."];
-const MOIS = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
-const MOIS_COURTS = ["janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc."];
+// Noms des jours et des mois dans la langue de l'écran (français ou
+// néerlandais de Belgique), lus au moment de l'affichage.
+const NAMES = {
+  fr: {
+    jours: ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"],
+    joursCourts: ["lun.", "mar.", "mer.", "jeu.", "ven.", "sam.", "dim."],
+    mois: ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"],
+    moisCourts: ["janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc."],
+  },
+  nl: {
+    jours: ["maandag", "dinsdag", "woensdag", "donderdag", "vrijdag", "zaterdag", "zondag"],
+    joursCourts: ["ma", "di", "wo", "do", "vr", "za", "zo"],
+    mois: ["januari", "februari", "maart", "april", "mei", "juni", "juli", "augustus", "september", "oktober", "november", "december"],
+    moisCourts: ["jan.", "feb.", "mrt.", "apr.", "mei", "jun.", "jul.", "aug.", "sep.", "okt.", "nov.", "dec."],
+  },
+};
+const isNl = () => i18n.locale === "nl";
+const names = () => (isNl() ? NAMES.nl : NAMES.fr);
 
 export function dayNum(d: IsoDate): number {
   return Number(d.slice(8, 10));
 }
 function quantieme(d: IsoDate): string {
   const n = dayNum(d);
-  return n === 1 ? "1er" : String(n);
+  return n === 1 && !isNl() ? "1er" : String(n);
 }
 export function monthName(d: IsoDate): string {
-  return MOIS[Number(d.slice(5, 7)) - 1] ?? "";
+  return names().mois[Number(d.slice(5, 7)) - 1] ?? "";
 }
 export function monthShort(d: IsoDate): string {
-  return MOIS_COURTS[Number(d.slice(5, 7)) - 1] ?? "";
+  return names().moisCourts[Number(d.slice(5, 7)) - 1] ?? "";
 }
 export function weekdayShort(d: IsoDate): string {
-  return JOURS_COURTS[weekdayMon(d)] ?? "";
+  return names().joursCourts[weekdayMon(d)] ?? "";
 }
 export function weekdayLong(d: IsoDate): string {
-  return JOURS[weekdayMon(d)] ?? "";
+  return names().jours[weekdayMon(d)] ?? "";
 }
 
-/** « samedi 10 octobre » */
+/** « samedi 10 octobre » · « zaterdag 10 oktober » */
 export function longDate(d: IsoDate): string {
   return `${weekdayLong(d)} ${quantieme(d)} ${monthName(d)}`;
 }
@@ -77,17 +93,19 @@ export function titleDate(d: IsoDate): string {
 export function shortDate(d: IsoDate): string {
   return `${quantieme(d)} ${monthName(d)}`;
 }
-/** « du 23 au 30 octobre » ou « du 30 octobre au 2 novembre » */
+/** « du 23 au 30 octobre » ou « du 30 octobre au 2 novembre » · « van 23 tot 30 oktober » */
 export function stayRange(a: IsoDate, b: IsoDate): string {
-  if (a.slice(0, 7) === b.slice(0, 7)) return `du ${quantieme(a)} au ${shortDate(b)}`;
-  return `du ${shortDate(a)} au ${shortDate(b)}`;
+  const [du, au] = isNl() ? ["van", "tot"] : ["du", "au"];
+  if (a.slice(0, 7) === b.slice(0, 7)) return `${du} ${quantieme(a)} ${au} ${shortDate(b)}`;
+  return `${du} ${shortDate(a)} ${au} ${shortDate(b)}`;
 }
 
-/** « 16:00 » → « 16 h », « 10:30 » → « 10 h 30 » */
+/** « 16:00 » → « 16 h », « 10:30 » → « 10 h 30 » ; en néerlandais « 16 u », « 10.30 u » */
 export function hourLabel(hhmm: string | undefined | null): string {
   if (!hhmm) return "";
   const [h, m] = hhmm.split(":");
   const hh = String(Number(h));
+  if (isNl()) return m && m !== "00" ? `${hh}.${m} u` : `${hh} u`;
   return m && m !== "00" ? `${hh} h ${m}` : `${hh} h`;
 }
 
@@ -102,9 +120,9 @@ export function whenLabel(sql: string, today: IsoDate): string {
     const parts = new Intl.DateTimeFormat("fr-BE", { timeZone: "Europe/Brussels", hour: "numeric", minute: "2-digit" }).formatToParts(dt);
     const h = parts.find((p) => p.type === "hour")?.value ?? "";
     const m = parts.find((p) => p.type === "minute")?.value ?? "00";
-    return `${Number(h)} h ${m}`;
+    return hourLabel(`${Number(h)}:${m}`);
   }
-  if (delta === 1) return "hier";
+  if (delta === 1) return isNl() ? "gisteren" : "hier";
   if (delta > 1 && delta < 7) return weekdayLong(day);
   return `${dayNum(day)} ${monthShort(day)}`;
 }

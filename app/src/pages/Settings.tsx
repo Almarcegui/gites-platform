@@ -3,6 +3,7 @@
 // nécessaire. En bas, ce qui ne regarde que cet appareil : clair ou sombre,
 // domaine affiché, déconnexion.
 import { Trans, useLingui } from "@lingui/react/macro";
+import { setLocale } from "../i18n";
 import { useMantineColorScheme } from "@mantine/core";
 import { IconCheck, IconChevronRight, IconLogout, IconMoon, IconSun } from "@tabler/icons-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -19,7 +20,7 @@ interface Entry {
 }
 
 export function SettingsPage() {
-  const { t } = useLingui();
+  const { t, i18n } = useLingui();
   const { data: properties = [] } = useProperties();
   const { scope, setScope } = useScope();
   const navigate = useNavigate();
@@ -28,6 +29,10 @@ export function SettingsPage() {
   const dark = colorScheme === "dark";
 
   const groups: { title: string; items: Entry[] }[] = [
+    {
+      title: t`Aide`,
+      items: [{ to: "/reglages/aide", label: t`Comment ça marche`, hint: t`Une journée type, le calendrier, la vente par téléphone, le ménage, les messages, qui appeler` }],
+    },
     {
       title: t`Prix et ventes`,
       items: [
@@ -49,6 +54,7 @@ export function SettingsPage() {
       title: t`Airbnb, Booking et calendriers`,
       items: [
         { to: "/reglages/plateformes", label: t`Airbnb, Booking et Vrbo`, hint: t`La liaison avec les plateformes, leurs réservations, leurs prix` },
+        { to: "/reglages/plateformes/prix", label: t`Promotions Airbnb et prix par plateforme`, hint: t`Remises long séjour, réservation tôt, dernière minute ; un prix propre à chaque plateforme` },
         { to: "/reglages/calendriers", label: t`Calendriers reliés`, hint: t`Adresses à donner aux autres sites, calendriers à lire` },
       ],
     },
@@ -118,6 +124,25 @@ export function SettingsPage() {
               </button>
               <button type="button" aria-pressed={dark} onClick={() => setColorScheme("dark")}>
                 <IconMoon size={20} /> <Trans>Sombre</Trans>
+              </button>
+            </div>
+          </div>
+          <div className="row-set">
+            <span>
+              <b>
+                <Trans>Langue</Trans>
+              </b>
+              <small>
+                <Trans>Retenu sur cet appareil seulement. Sans choix, l'écran suit la langue du navigateur.</Trans>
+              </small>
+            </span>
+            {/* Chaque langue s'écrit dans sa propre langue : on la reconnaît même sans la lire. */}
+            <div className="seg" role="group" aria-label={t`Langue de l'écran`} style={{ margin: 0 }}>
+              <button type="button" lang="fr" aria-pressed={i18n.locale === "fr"} onClick={() => setLocale("fr")}>
+                Français
+              </button>
+              <button type="button" lang="nl" aria-pressed={i18n.locale === "nl"} onClick={() => setLocale("nl")}>
+                Nederlands
               </button>
             </div>
           </div>

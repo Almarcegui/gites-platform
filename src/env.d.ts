@@ -47,7 +47,9 @@ interface Env {
    *  node/server.mjs ; absent sur Workers (export SQL à la place). */
   SQLITE_SNAPSHOT?: () => Promise<Uint8Array>;
   /** Adresses ou plages CIDR autorisées sur /api/admin/*, /admin/ et /admin2/
-   *  (virgules ou espaces). Vide = ouvert. Cf. src/core/ip-allow.ts. */
+   *  (virgules ou espaces). Vide = ouvert. Garde appliquée aux HUMAINS : une
+   *  clé de service `svc:` et le compte `sauvegarde` passent depuis toute
+   *  adresse (lot 3). Cf. src/core/ip-allow.ts. */
   ADMIN_ALLOWED_IPS?: string;
   /** Dépôt des photos envoyées depuis le back-office. Fourni par
    *  node/server.mjs (dossier UPLOADS_DIR, servi sous /uploads/) ; absent sur
@@ -60,4 +62,8 @@ interface UploadStore {
   put(name: string, bytes: Uint8Array): Promise<void>;
   /** Retire un fichier déposé (compensation quand la base refuse la ligne). */
   remove?(name: string): Promise<void>;
+  /** Noms des fichiers déposés (sauvegarde des photos, lot 3). */
+  list?(): Promise<string[]>;
+  /** Contenu et date (secondes Unix) d'un fichier déposé. */
+  read?(name: string): Promise<{ bytes: Uint8Array; mtime: number }>;
 }

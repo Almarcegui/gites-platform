@@ -16,6 +16,8 @@ import { CleaningPage } from "./pages/Cleaning";
 import { SettingsPage } from "./pages/Settings";
 import { AccountsPage } from "./pages/settings/Accounts";
 import { ChannelsPage } from "./pages/settings/Channels";
+import { ChannelPricesPage } from "./pages/settings/ChannelPrices";
+import { HelpPage } from "./pages/settings/Help";
 import { ClientsPage } from "./pages/settings/Clients";
 import { DomainPage } from "./pages/settings/Domain";
 import { IcalPage } from "./pages/settings/Ical";
@@ -76,6 +78,7 @@ const settingsRoutes = [
   sub("paiements", PaymentsPage),
   sub("chiffres", StatsPage),
   sub("plateformes", ChannelsPage),
+  sub("plateformes/prix", ChannelPricesPage),
   sub("calendriers", IcalPage),
   sub("comptes", AccountsPage),
   sub("domaine", DomainPage),
@@ -85,6 +88,7 @@ const settingsRoutes = [
   sub("journaux", LogsPage),
   sub("modeles", TemplatesPage),
   sub("mon-compte", MyAccountPage),
+  sub("aide", HelpPage),
 ];
 
 const routeTree = rootRoute.addChildren([

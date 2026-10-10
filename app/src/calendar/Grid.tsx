@@ -1,6 +1,8 @@
 // Calendrier multi-biens (maquette A) : une ligne par bien, les barres sciées
 // en biais, le trait jaune du jour, la ligne prix et minimum sous chaque bien.
 // Toucher une case (ou glisser sur une plage) ouvre le popover.
+import { i18n } from "@lingui/core";
+import { msg } from "@lingui/core/macro";
 import { useLingui } from "@lingui/react/macro";
 import { IconBrush, IconCheck, IconCurrencyEuro, IconLock } from "@tabler/icons-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
@@ -8,7 +10,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { DomainData } from "../api/hooks";
 import type { IsoDate, ManualBlock, PlanningBooking, RateCalendarUnit, Task, Unit } from "../api/types";
 import { addDays, dayNum, dayRange, isWeekend, longDate, monthShort, shortDate, weekdayShort } from "../lib/dates";
-import { BAR_LABEL, barColumns, barKind, channelName, isChannel, isNightTaken } from "../lib/derive";
+import { barColumns, barLabel, barKind, channelName, isChannel, isNightTaken } from "../lib/derive";
 import type { RangeSelection } from "./PricePanel";
 
 export interface GridProps {
@@ -48,7 +50,7 @@ function mergeSpans(spans: Span[]): Span[] {
 
 function guestLabel(b: PlanningBooking): string {
   const name = b.guestName && b.guestName !== "—" ? b.guestName.trim().split(/\s+/).slice(-1)[0] ?? b.guestName : "";
-  return name || (isChannel(b) ? "Réservé ailleurs" : b.reference);
+  return name || (isChannel(b) ? i18n._(msg`Réservé ailleurs`) : b.reference);
 }
 
 export function Grid(props: GridProps) {
@@ -176,7 +178,7 @@ export function Grid(props: GridProps) {
           {fromComposite.map((k) => {
             const src = pl.bookings.find((b) => b.id === k.sourceBookingId) as PlanningBooking;
             const kind = barKind(src);
-            return bar(`d${k.sourceBookingId}`, k.checkin, k.checkout, `${kind} dref`, <span>{t`Domaine, ${guestLabel(src)}`}</span>, t`${unitName(src.unitId)}, ${src.guestName}, ${shortDate(src.checkin)} – ${shortDate(src.checkout)}, ${BAR_LABEL[kind]}`, () => props.onOpenBooking(src.id));
+            return bar(`d${k.sourceBookingId}`, k.checkin, k.checkout, `${kind} dref`, <span>{t`Domaine, ${guestLabel(src)}`}</span>, t`${unitName(src.unitId)}, ${src.guestName}, ${shortDate(src.checkin)} – ${shortDate(src.checkout)}, ${barLabel(kind)}`, () => props.onOpenBooking(src.id));
           })}
           {own.map((b) => {
             const kind = barKind(b);
@@ -193,7 +195,7 @@ export function Grid(props: GridProps) {
                   {kind === "plat" ? <i> {channelName(b)}</i> : null}
                 </span>
               </>,
-              t`${b.guestName}, ${u.name}, du ${shortDate(b.checkin)} au ${shortDate(b.checkout)}, ${kind === "plat" ? t`via ${channelName(b)}` : BAR_LABEL[kind]}`,
+              t`${b.guestName}, ${u.name}, du ${shortDate(b.checkin)} au ${shortDate(b.checkout)}, ${kind === "plat" ? t`via ${channelName(b)}` : barLabel(kind)}`,
               () => props.onOpenBooking(b.id),
             );
           })}

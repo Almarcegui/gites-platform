@@ -1,6 +1,6 @@
 #!/opt/homebrew/bin/python3
-# Sauvegarde de la base des gîtes (production Infomaniak par HTTPS, ou D1 Cloudflare/essai par wrangler) dans sauvegardes/, rotation à 30 jours, une ligne dans ~/Library/Logs/gites-sauvegarde.log, sortie 1 sur échec.
-# Usage : /opt/homebrew/bin/python3 scripts/sauvegarde_nuit.py [--cible infomaniak|cloudflare|essai] [--origine nuit|manuel|livraison] [--garder-jours 30] [--base-vide-admise]
+# Sauvegarde de la base des gîtes (production Infomaniak par HTTPS, base + archive .tar des photos ; ou D1 Cloudflare/essai par wrangler) dans sauvegardes/, rotation à 30 jours, une ligne dans ~/Library/Logs/gites-sauvegarde.log, sortie 1 sur échec.
+# Usage : /opt/homebrew/bin/python3 scripts/sauvegarde_nuit.py [--cible infomaniak|cloudflare|essai] [--origine nuit|manuel|livraison] [--garder-jours 30] [--base-vide-admise] [--photos-facultatives]
 """Sauvegarde de nuit de la base des gîtes dans sauvegardes/, 30 jours gardés.
 
 Trois cibles :
@@ -8,7 +8,9 @@ Trois cibles :
   Node chez Infomaniak, https://dev1.mdcdy.be) : sans SSH, par HTTPS. Le script
   ouvre une session avec le compte réservé `sauvegarde` du back-office (il
   n'ouvre que l'export), tire GET /api/admin/export.sqlite (instantané
-  VACUUM INTO, fichier SQLite complet), ferme la session. Identifiants dans
+  VACUUM INTO, fichier SQLite complet), puis GET /api/admin/export-uploads.tar
+  (les photos de UPLOADS_DIR, archive .tar vérifiée nom par nom, même
+  rotation que la base), ferme la session. Identifiants dans
   ~/.config/gites/sauvegarde.env (droits 600, jamais dans le dépôt ; modèle :
   scripts/sauvegarde.env.example) ;
 - `cloudflare` : l'ancienne base D1 de production, par `wrangler d1 export`,
@@ -61,6 +63,7 @@ import sqlite3
 import stat
 import subprocess
 import sys
+import tarfile
 import tempfile
 import urllib.error
 import urllib.parse
@@ -75,6 +78,10 @@ BASES = {"infomaniak": "gites-infomaniak", "cloudflare": "gites-platform", "essa
 ALIAS = {"prod": "cloudflare"}  # ancien nom, gardé pour le LaunchAgent chargé avant la bascule
 IDENTIFIANTS = Path(os.environ.get("GITES_SAUVEGARDE_ENV") or (Path.home() / ".config" / "gites" / "sauvegarde.env"))
 TAILLE_MAX_EXPORT = 512 * 1024 * 1024
+# Archive des photos (lot 3) : nom de base distinct, même rotation que la base.
+BASE_PHOTOS = "gites-infomaniak-photos"
+TAILLE_MAX_PHOTOS = 4 * 1024 * 1024 * 1024
+NOM_PHOTO = re.compile(r"^[0-9a-f]{32}\.(?:jpg|png|webp)$")
 DELAI_HTTP_S = 120
 # Le plancher de toute sauvegarde ; le reste se déduit des migrations appliquées
 # (tables_attendues) : chaque table créée par une migration que la base dit avoir
@@ -220,8 +227,51 @@ def _motif_http(e: urllib.error.HTTPError) -> str:
     return f"HTTP {e.code}{' : ' + str(texte)[:200] if texte else ''}"
 
 
-def exporter_infomaniak(fichier: Path) -> None:
-    """Session du compte « sauvegarde », GET /api/admin/export.sqlite, fin de session."""
+class _RouteAbsente(Exception):
+    """404 ou 501 sur l'export des photos : serveur sans la route ou sans photos."""
+
+
+def _telecharger(url: str, jeton: str, fichier: Path, plafond: int, quoi: str) -> int:
+    try:
+        with _ouvrir(_requete(url, jeton=jeton), timeout=DELAI_HTTP_S) as r, fichier.open("wb") as sortie:
+            total = 0
+            while True:
+                bloc = r.read(1 << 20)
+                if not bloc:
+                    break
+                total += len(bloc)
+                if total > plafond:
+                    raise Echec(f"{quoi} de plus de {plafond >> 20} Mo : arrêté")
+                sortie.write(bloc)
+            return total
+    except urllib.error.HTTPError as e:
+        if quoi == "photos" and e.code in (404, 501):
+            raise _RouteAbsente() from e
+        raise Echec(f"{quoi} refusé ({_motif_http(e)})") from e
+    except (urllib.error.URLError, OSError) as e:
+        raise Echec(f"{quoi} interrompu ({type(e).__name__}: {str(e)[:150]})") from e
+
+
+def verifier_photos(fichier: Path) -> str:
+    """L'archive se lit en entier ; chaque membre est un fichier plat au nom attendu."""
+    taille = fichier.stat().st_size
+    try:
+        with tarfile.open(fichier, "r:") as t:
+            membres = t.getmembers()
+            for m in membres:
+                if not m.isfile() or not NOM_PHOTO.match(m.name):
+                    raise Echec(f"archive des photos refusée : membre inattendu ({m.name[:60]!r})")
+                f = t.extractfile(m)
+                if f is None or len(f.read()) != m.size:
+                    raise Echec(f"archive des photos coupée ({m.name})")
+    except tarfile.TarError as e:
+        raise Echec(f"archive des photos illisible ({taille} octets) : {type(e).__name__}") from e
+    return f"{len(membres)} photo(s), {taille} octets"
+
+
+def exporter_infomaniak(fichier: Path, photos: Path | None = None) -> None:
+    """Session du compte « sauvegarde », GET /api/admin/export.sqlite, puis
+    GET /api/admin/export-uploads.tar si `photos` est donné, fin de session."""
     ids = lire_identifiants()
     base = ids["GITES_URL"]
     try:
@@ -238,22 +288,14 @@ def exporter_infomaniak(fichier: Path) -> None:
         raise Echec(f"pas de session pour {ids['GITES_USER']} : créer le compte dans la page Utilisateurs du back-office")
     jeton = f"session:{session}"
     try:
-        try:
-            with _ouvrir(_requete(f"{base}/api/admin/export.sqlite", jeton=jeton), timeout=DELAI_HTTP_S) as r, \
-                    fichier.open("wb") as sortie:
-                total = 0
-                while True:
-                    bloc = r.read(1 << 20)
-                    if not bloc:
-                        break
-                    total += len(bloc)
-                    if total > TAILLE_MAX_EXPORT:
-                        raise Echec(f"export de plus de {TAILLE_MAX_EXPORT >> 20} Mo : arrêté")
-                    sortie.write(bloc)
-        except urllib.error.HTTPError as e:
-            raise Echec(f"export refusé ({_motif_http(e)})") from e
-        except (urllib.error.URLError, OSError) as e:
-            raise Echec(f"export interrompu ({type(e).__name__}: {str(e)[:150]})") from e
+        _telecharger(f"{base}/api/admin/export.sqlite", jeton, fichier, TAILLE_MAX_EXPORT, "export")
+        if photos is not None:
+            try:
+                _telecharger(f"{base}/api/admin/export-uploads.tar", jeton, photos, TAILLE_MAX_PHOTOS, "photos")
+            except _RouteAbsente:
+                # Serveur antérieur au lot 3 (ou cible sans photos) : la base
+                # reste sauvegardée, l'absence est dite au journal.
+                photos.unlink(missing_ok=True)
     finally:
         try:
             _ouvrir(_requete(f"{base}/api/admin/logout", "POST", {}, jeton=jeton), timeout=30).close()
@@ -383,9 +425,9 @@ def proteger_le_dossier() -> None:
     for chemin in DOSSIER.iterdir():
         if chemin.is_symlink() or not chemin.is_file():
             continue
-        if chemin.name.startswith(".export-") and chemin.suffix in (".sql", ".sqlite"):
+        if chemin.name.startswith(".export-") and chemin.suffix in (".sql", ".sqlite", ".tar"):
             chemin.unlink()
-        elif chemin.suffix in (".sql", ".sqlite"):
+        elif chemin.suffix in (".sql", ".sqlite", ".tar"):
             os.chmod(chemin, 0o600)
 
 
@@ -411,7 +453,16 @@ def rotation(base: str, garder_jours: int, aujourd_hui: dt.date, ext: str = ".sq
     return supprimees
 
 
-def sauvegarder(cible: str, garder_jours: int, base_vide_admise: bool) -> tuple[Path, str]:
+class PhotosManquantes(Exception):
+    """La base est sauvegardée, mais pas les photos (serveur sans la route du lot 3)."""
+
+    def __init__(self, final: Path, resume: str):
+        super().__init__(resume)
+        self.final = final
+        self.resume = resume
+
+
+def sauvegarder(cible: str, garder_jours: int, base_vide_admise: bool, photos_facultatives: bool = False) -> tuple[Path, str]:
     base = BASES[cible]
     ext = ".sqlite" if cible == "infomaniak" else ".sql"
     if cible != "infomaniak" and not (RACINE / "node_modules" / ".bin" / "wrangler").exists():
@@ -427,19 +478,41 @@ def sauvegarder(cible: str, garder_jours: int, base_vide_admise: bool) -> tuple[
         descripteur, nom = tempfile.mkstemp(prefix=".export-", suffix=ext, dir=DOSSIER)
         os.close(descripteur)
         temporaire = Path(nom)
+        photos_tmp: Path | None = None
+        if cible == "infomaniak":
+            descripteur, nom = tempfile.mkstemp(prefix=".export-", suffix=".tar", dir=DOSSIER)
+            os.close(descripteur)
+            photos_tmp = Path(nom)
+        resume_photos = ""
+        absentes = False
         try:
             if cible == "infomaniak":
-                exporter_infomaniak(temporaire)
+                exporter_infomaniak(temporaire, photos_tmp)
                 resume = verifier_sqlite(temporaire)
             else:
                 exporter(cible, temporaire)
                 resume = verifier(temporaire, base_vide_admise)
             final = mettre_en_place(temporaire, base, ext)
+            if photos_tmp is not None:
+                if photos_tmp.exists():
+                    resume_photos = f" ; photos : {verifier_photos(photos_tmp)}"
+                    mettre_en_place(photos_tmp, BASE_PHOTOS, ".tar")
+                    rotation(BASE_PHOTOS, garder_jours, dt.date.today(), ".tar")
+                else:
+                    resume_photos = " ; photos : route absente sur le serveur (antérieur au lot 3), non sauvegardées"
+                    absentes = True
         finally:
             temporaire.unlink(missing_ok=True)
+            if photos_tmp is not None:
+                photos_tmp.unlink(missing_ok=True)
         supprimees = rotation(base, garder_jours, dt.date.today(), ext)
-    return final, (f"{resume} ; rotation : {len(supprimees)} supprimée(s) "
-                   f"({garder_jours} jours, {GARDER_TOUJOURS} gardées au moins)")
+    texte = (f"{resume}{resume_photos} ; rotation : {len(supprimees)} supprimée(s) "
+             f"({garder_jours} jours, {GARDER_TOUJOURS} gardées au moins)")
+    # Une production sans archive des photos est une sauvegarde incomplète :
+    # échec, sauf --photos-facultatives (le temps que le serveur passe au lot 3).
+    if absentes and not photos_facultatives:
+        raise PhotosManquantes(final, texte)
+    return final, texte
 
 
 def main() -> int:
@@ -448,18 +521,22 @@ def main() -> int:
                    help="infomaniak (production, défaut) · cloudflare (ancienne D1) · essai · prod = ancien nom de cloudflare")
     p.add_argument("--origine", choices=["nuit", "manuel", "livraison"], default="nuit")
     p.add_argument("--garder-jours", type=int, default=30)
+    p.add_argument("--photos-facultatives", action="store_true",
+                   help="infomaniak : une archive des photos absente (serveur antérieur au lot 3) ne fait pas échouer la sauvegarde")
     p.add_argument("--base-vide-admise", action="store_true",
                    help="essai seulement : une base sans aucune table (pas encore migrée) passe pour sauvegardée")
     a = p.parse_args()
     if a.garder_jours < 1:
         p.error("--garder-jours doit valoir au moins 1")
-    a.cible = ALIAS.get(a.cible, a.cible)
+    a.cible = ALIAS.get(a.cible) or a.cible
     if a.base_vide_admise and a.cible != "essai":
         p.error("--base-vide-admise ne vaut que pour --cible essai")
     # Une seule ligne de journal par passage, écrite ici et nulle part ailleurs.
     try:
-        final, resume = sauvegarder(a.cible, a.garder_jours, a.base_vide_admise)
+        final, resume = sauvegarder(a.cible, a.garder_jours, a.base_vide_admise, a.photos_facultatives)
         ligne, code = f"OK {a.cible} {a.origine} {final} {resume}", 0
+    except PhotosManquantes as e:
+        ligne, code = f"ÉCHEC {a.cible} {a.origine} : photos non sauvegardées (base sauvegardée : {e.final} {e.resume})", 1
     except Echec as e:
         ligne, code = f"ÉCHEC {a.cible} {a.origine} : {e}", 1
     except Exception as e:  # imprévue : elle doit laisser sa ligne au journal

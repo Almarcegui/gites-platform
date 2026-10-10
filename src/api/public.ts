@@ -173,6 +173,8 @@ interface CreateBookingBody extends QuoteBody {
   notes?: string;
   cgvAccepted?: boolean;
   marketingOptIn?: boolean;
+  /** Langue du tunnel : "fr" (défaut) ou "nl". */
+  lang?: string;
   /** Jeton du widget Turnstile (issue #6). Absent tant que la fonctionnalité
    *  n'est pas configurée — il n'est alors pas non plus vérifié. */
   turnstileToken?: string;
@@ -843,6 +845,8 @@ export function registerPublicRoutes(router: Router): void {
       phone: String(guest.phone ?? "").trim() || null,
       address: String(guest.address ?? "").trim() || null,
       country: String(guest.country ?? "").trim() || null,
+      // Langue du tunnel (lot 3) : les mails et le voucher suivront.
+      lang: body.lang === "nl" ? "nl" : "fr",
       marketingOptIn: body.marketingOptIn === true,
     });
 
@@ -869,6 +873,8 @@ export function registerPublicRoutes(router: Router): void {
     }
     // preuve d'acceptation des CGV : version (hash serveur du texte affiché),
     // horodatage serveur et IP — la case front seule ne prouverait rien.
+    // Langue de CETTE réservation (lot 3) : ses mails et son voucher la suivront.
+    await db.prepare("UPDATE bookings SET lang = ?1 WHERE id = ?2").bind(body.lang === "nl" ? "nl" : "fr", created.id).run();
     await recordCgvAcceptance(db, created.id, {
       version: await cgvVersion(ctx.settings.cgvText),
       ip: req.headers.get("cf-connecting-ip"),

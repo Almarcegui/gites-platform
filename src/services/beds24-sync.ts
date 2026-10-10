@@ -50,6 +50,7 @@ import {
 } from "../core/price-guardrails";
 import { beds24UnitScope } from "../core/sync-conflicts";
 import { beds24Configured, beds24Fetch } from "./beds24";
+import { parsePriceLinking, PRICE_LINKING_KEY } from "../core/channel-promotions";
 import { closeSeenSyncConflicts, closeUnseenSyncConflicts, noteSyncConflict } from "./sync-conflicts";
 import { getSetting, setSetting } from "./settings";
 
@@ -72,6 +73,10 @@ export interface PushMarkup {
 }
 
 export async function resolvePushMarkup(db: D1Database): Promise<PushMarkup> {
+  // Prix dérivés actifs (lot 3) : le calendrier part au prix DIRECT, Beds24
+  // applique la majoration de chaque plateforme (priceRules.priceLinking).
+  // Majorer aussi ici compterait la commission deux fois.
+  if (parsePriceLinking(await getSetting(db, PRICE_LINKING_KEY)).enabled) return { channel: null, label: null, pct: 0 };
   const channels = parseChannelMarkups(await getSetting(db, CHANNEL_MARKUPS_KEY));
   const channel = parsePushChannel(await getSetting(db, PUSH_CHANNEL_KEY), channels);
   return {

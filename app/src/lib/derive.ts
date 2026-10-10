@@ -1,6 +1,8 @@
 // Logique pure de l'écran : états des réservations, bandeau du jour, ménage,
 // placement des barres, sélection de dates, calcul des prix relatifs.
 // Aucune dépendance à React : tout ici se teste seul.
+import { i18n } from "@lingui/core";
+import { t } from "@lingui/core/macro";
 import type { DayRate, IsoDate, ManualBlock, PlanningBooking, PlanningLinkBlock } from "../api/types";
 import { addDays, diffDays } from "./dates";
 import { roundTo5 } from "./money";
@@ -23,18 +25,25 @@ export function barKind(b: Pick<PlanningBooking, "status" | "source" | "channelL
 }
 
 export function channelName(b: { source: string; channelLabel: string | null }): string {
-  if (b.source === "direct") return "votre site";
-  if (b.source === "manual") return "par téléphone";
-  if (b.source === "import") return "l'ancien système";
-  return b.channelLabel?.trim() || "un autre site";
+  if (b.source === "direct") return t`votre site`;
+  if (b.source === "manual") return t`par téléphone`;
+  if (b.source === "import") return t`l'ancien système`;
+  return b.channelLabel?.trim() || t`un autre site`;
 }
 
-export const BAR_LABEL: Record<BarKind, string> = {
-  option: "Option, arrhes pas encore payées",
-  plat: "Airbnb, Booking ou autre site",
-  solde: "Solde à encaisser",
-  soldee: "Confirmée et payée",
-};
+/** Légende d'une barre du calendrier, dans la langue de l'écran. */
+export function barLabel(k: BarKind): string {
+  switch (k) {
+    case "option":
+      return t`Option, arrhes pas encore payées`;
+    case "plat":
+      return t`Airbnb, Booking ou autre site`;
+    case "solde":
+      return t`Solde à encaisser`;
+    default:
+      return t`Confirmée et payée`;
+  }
+}
 
 // --- occupation ----------------------------------------------------------------
 
@@ -101,16 +110,19 @@ export function dayEvents(
 
 /** Phrase du jour, maquette B : « Un départ et deux arrivées. » */
 export function daySentence(arrivals: number, departures: number): string {
-  const n = (k: number, un: string, une: string, pl: string) => (k === 0 ? "" : k === 1 ? `${une} ${un}` : `${nombre(k)} ${pl}`);
-  const parts = [n(departures, "départ", "Un", "départs"), n(arrivals, "arrivée", "une", "arrivées")].filter(Boolean);
-  if (parts.length === 0) return "Ni arrivée ni départ aujourd'hui.";
-  const s = parts.join(" et ");
+  if (arrivals === 0 && departures === 0) return t`Ni arrivée ni départ aujourd'hui.`;
+  const dep = departures === 0 ? "" : departures === 1 ? t`un départ` : t`${nombre(departures)} départs`;
+  const arr = arrivals === 0 ? "" : arrivals === 1 ? t`une arrivée` : t`${nombre(arrivals)} arrivées`;
+  const s = dep && arr ? t`${dep} et ${arr}` : dep || arr;
   return s.charAt(0).toUpperCase() + s.slice(1) + ".";
 }
 
-const NOMBRES = ["zéro", "un", "deux", "trois", "quatre", "cinq", "six", "sept", "huit", "neuf", "dix"];
+const NOMBRES = {
+  fr: ["zéro", "un", "deux", "trois", "quatre", "cinq", "six", "sept", "huit", "neuf", "dix"],
+  nl: ["nul", "een", "twee", "drie", "vier", "vijf", "zes", "zeven", "acht", "negen", "tien"],
+};
 export function nombre(n: number): string {
-  return NOMBRES[n] ?? String(n);
+  return (i18n.locale === "nl" ? NOMBRES.nl : NOMBRES.fr)[n] ?? String(n);
 }
 
 // --- ménage ------------------------------------------------------------------------
@@ -164,11 +176,11 @@ export function tapDay(
   day: IsoDate,
   ctx: { today: IsoDate; taken: (unitId: number, night: IsoDate) => boolean; unitName: string; label: (d: IsoDate) => string },
 ): SelectionResult {
-  if (day < ctx.today) return { ok: false, error: "Ce jour est passé : choisissez un jour à partir d'aujourd'hui.", selection: sel };
+  if (day < ctx.today) return { ok: false, error: t`Ce jour est passé : choisissez un jour à partir d'aujourd'hui.`, selection: sel };
   const restart = sel.departure != null || sel.first == null || sel.unitId !== unitId || day <= sel.first;
   if (restart) {
     if (ctx.taken(unitId, day)) {
-      return { ok: false, error: `Le ${ctx.label(day)} est déjà pris pour ${ctx.unitName}. Choisissez un jour libre.`, selection: sel };
+      return { ok: false, error: t`Le ${ctx.label(day)} est déjà pris pour ${ctx.unitName}. Choisissez un jour libre.`, selection: sel };
     }
     return { ok: true, selection: { unitId, first: day, departure: null } };
   }
@@ -176,7 +188,7 @@ export function tapDay(
     if (ctx.taken(unitId, n)) {
       return {
         ok: false,
-        error: `La nuit du ${ctx.label(n)} est déjà prise. Choisissez un jour de départ au plus tard le ${ctx.label(n)}.`,
+        error: t`La nuit du ${ctx.label(n)} est déjà prise. Choisissez un jour de départ au plus tard le ${ctx.label(n)}.`,
         selection: sel,
       };
     }

@@ -13,24 +13,26 @@
 import { cgvHtml } from "./cgv.js";
 import { mountPayment, paymentConfig } from "./pay-element.js";
 import { visionneuse } from "/galerie.js";
+import { apiHeaders, CGV_NOTE_NL, eur, LANG, LOCALE, mountLangSwitch, pl, t, translateStatic } from "./i18n.js";
 
 const params = new URLSearchParams(location.search);
 const PROPERTY = params.get("property");
 
-const eur = (c) => (c / 100).toLocaleString("fr-BE", { style: "currency", currency: "EUR" });
-const eurRound = (c) => `${Math.round(c / 100)} €`;
+const eurRound = (c) => (LANG === "nl" ? `€ ${Math.round(c / 100)}` : `${Math.round(c / 100)} €`);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 const dfr = (iso) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`;
 const nightsBetween = (a, b) => Math.round((Date.parse(b) - Date.parse(a)) / 86400000);
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const dow = (iso) => new Date(iso + "T12:00:00Z").getUTCDay(); // 0 = dimanche
-const JOURS = ["dimanche", "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi"];
+const JOURS = LANG === "nl"
+  ? ["zondag", "maandag", "dinsdag", "woensdag", "donderdag", "vrijdag", "zaterdag"]
+  : ["dimanche", "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi"];
 
 /** Règle d'arrivée en clair. Une liste VIDE n'est pas « aucune contrainte » :
  *  c'est « plus aucune arrivée possible » (règles de saison incompatibles). */
 function arrivalLabel(days) {
   const label = checkinDaysLabel(days);
-  return label ? `arrivée ${label}` : "aucune arrivée possible";
+  return label ? t("arrivée {jours}", { jours: label }) : t("aucune arrivée possible");
 }
 
 /** « le samedi », « le vendredi ou le samedi » — dire la règle, pas la subir. */
@@ -39,6 +41,10 @@ function checkinDaysLabel(days) {
     .sort((a, b) => ((a + 6) % 7) - ((b + 6) % 7))
     .map((d) => JOURS[d]);
   if (names.length === 0) return "";
+  if (LANG === "nl") {
+    if (names.length === 1) return `op ${names[0]}`;
+    return `op ${names.slice(0, -1).join(", ")} of ${names.at(-1)}`;
+  }
   if (names.length === 1) return `le ${names[0]}`;
   return `le ${names.slice(0, -1).join(", le ")} ou le ${names.at(-1)}`;
 }
@@ -90,14 +96,14 @@ async function mountTurnstile() {
   } catch {
     // Le contrôle est indispensable : le dire tout de suite plutôt que de
     // laisser découvrir le refus après avoir rempli tout le formulaire.
-    box.innerHTML = `<div class="note bad">Le contrôle anti-robot n'a pas pu se charger. Rechargez la page, ou contactez-nous : nous réservons pour vous.</div>`;
+    box.innerHTML = `<div class="note bad">${t("Le contrôle anti-robot n'a pas pu se charger. Rechargez la page, ou contactez-nous : nous réservons pour vous.")}</div>`;
     return;
   }
   // Script chargé mais API absente : bloqueur de contenu, extension de vie
   // privée… Le dire tout de suite, sinon le visiteur attend un widget qui ne
   // viendra jamais et ne comprend pas le refus au moment de payer.
   if (!window.turnstile) {
-    box.innerHTML = `<div class="note bad">Le contrôle anti-robot est bloqué par votre navigateur (extension de blocage ?). Autorisez challenges.cloudflare.com, ou contactez-nous : nous réservons pour vous.</div>`;
+    box.innerHTML = `<div class="note bad">${t("Le contrôle anti-robot est bloqué par votre navigateur (extension de blocage ?). Autorisez challenges.cloudflare.com, ou contactez-nous : nous réservons pour vous.")}</div>`;
     return;
   }
   try { if (turnstileWidget !== null) window.turnstile.remove(turnstileWidget); } catch { /* widget déjà retiré avec son conteneur */ }
@@ -126,11 +132,11 @@ function resetTurnstile() {
 async function api(path, body) {
   const res = await fetch(path, {
     method: body ? "POST" : "GET",
-    headers: body ? { "content-type": "application/json" } : {},
+    headers: apiHeaders(body ? { "content-type": "application/json" } : {}),
     body: body ? JSON.stringify(body) : undefined,
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || `erreur ${res.status}`);
+  if (!res.ok) throw new Error(data.error || t("erreur {status}", { status: res.status }));
   return data;
 }
 
@@ -216,8 +222,8 @@ function setPax(adults, children) {
 async function renderLanding() {
   const landing = $("landing");
   landing.style.display = "block";
-  $("propName").textContent = "Réservation en direct";
-  $("propSub").textContent = "Choisissez votre domaine";
+  $("propName").textContent = t("Réservation en direct");
+  $("propSub").textContent = t("Choisissez votre domaine");
   try {
     const { properties } = await api("/api/public/properties");
     landing.innerHTML = `<div class="domains">${properties
@@ -226,8 +232,8 @@ async function renderLanding() {
           <div class="ph" ${p.photoUrl ? `style="background-image:url('${esc(p.photoUrl)}')"` : ""}></div>
           <div class="bd"><b>${esc(p.name)}</b>
           <p>${esc(p.address ?? "")}</p>
-          <p>${p.unitsCount} hébergement${p.unitsCount > 1 ? "s" : ""} · jusqu'à ${p.capacityMax} personnes</p>
-          <p style="margin-top:8px"><span class="btn" style="padding:8px 16px">Voir & réserver</span></p></div>
+          <p>${pl(p.unitsCount, "hébergement", "hébergements")} · ${t("jusqu'à {n} personnes", { n: p.capacityMax })}</p>
+          <p style="margin-top:8px"><span class="btn" style="padding:8px 16px">${t("Voir & réserver")}</span></p></div>
         </a>`,
       )
       .join("")}</div>`;
@@ -277,7 +283,7 @@ async function renderOffers() {
     : "";
   const availability = avail?.sentence
     ? `<p class="avail">${esc(avail.sentence)}
-        <span class="src">Calculé à l'instant sur les réservations réelles — vérifiable dans le calendrier ci-dessous.</span></p>`
+        <span class="src">${t("Calculé à l'instant sur les réservations réelles — vérifiable dans le calendrier ci-dessous.")}</span></p>`
     : "";
   body.innerHTML = list + availability;
   card.hidden = false;
@@ -303,7 +309,7 @@ function monthShift(month, delta) {
 async function renderCalendar() {
   const data = await loadCalMonth(calMonth);
   const monthStart = `${calMonth}-01`;
-  const label = new Date(monthStart + "T12:00:00Z").toLocaleDateString("fr-BE", { month: "long", year: "numeric" });
+  const label = new Date(monthStart + "T12:00:00Z").toLocaleDateString(LOCALE, { month: "long", year: "numeric" });
   $("calLabel").textContent = label;
   $("calPrev").disabled = calMonth <= TODAY.slice(0, 7);
   $("calNext").disabled = calMonth >= monthShift(TODAY.slice(0, 7), 23);
@@ -336,7 +342,7 @@ async function renderCalendar() {
   }
 
   const firstDow = (new Date(monthStart + "T12:00:00Z").getUTCDay() + 6) % 7;
-  let html = ["L", "M", "M", "J", "V", "S", "D"].map((l) => `<div class="h">${l}</div>`).join("");
+  let html = (LANG === "nl" ? ["M", "D", "W", "D", "V", "Z", "Z"] : ["L", "M", "M", "J", "V", "S", "D"]).map((l) => `<div class="h">${l}</div>`).join("");
   for (let i = 0; i < firstDow; i++) html += `<div class="pday off"></div>`;
   for (const d of days) {
     const inRange = selIn && selOut && d.date > selIn && d.date < selOut;
@@ -344,12 +350,12 @@ async function renderCalendar() {
     const noArrival = !d.past && d.available && d.arrivalDays != null && !d.arrivalDays.includes(dow(d.date));
     const cls = ["pday", d.past ? "past" : "", !d.past && !d.available ? "full" : "",
       noArrival ? "noarr" : "", isSel ? "sel" : "", inRange ? "range" : ""].join(" ");
-    const sub = d.past ? "" : d.available ? (d.minPrice != null ? `dès ${eurRound(d.minPrice)}` : "") : "complet";
+    const sub = d.past ? "" : d.available ? (d.minPrice != null ? t("dès {prix}", { prix: eurRound(d.minPrice) }) : "") : t("complet");
     // Le minimum de nuits est écrit DANS la case : c'est la seule façon de le
     // voir avant d'avoir choisi ses dates (impasse n° 5 du parcours au clic).
-    const mn = !d.past && d.available && d.minNights > 1 ? `<span class="mn">min ${d.minNights} n</span>` : "";
+    const mn = !d.past && d.available && d.minNights > 1 ? `<span class="mn">${t("min {n} n", { n: d.minNights })}</span>` : "";
     const hints = d.past || !d.available ? [] : [
-      d.minNights > 1 ? `${d.minNights} nuits minimum` : "",
+      d.minNights > 1 ? t("{n} nuits minimum", { n: d.minNights }) : "",
       d.arrivalDays != null ? arrivalLabel(d.arrivalDays) : "",
     ].filter(Boolean);
     const title = hints.length ? ` title="${esc(hints.join(" · "))}"` : "";
@@ -382,11 +388,11 @@ function renderCalRules(days) {
     zone.innerHTML = "";
     return;
   }
-  const period = (s) => (s.from === s.to ? `le ${dfr(s.from)}` : `du ${dfr(s.from)} au ${dfr(s.to)}`);
+  const period = (s) => (s.from === s.to ? t("le {date}", { date: dfr(s.from) }) : t("du {du} au {au}", { du: dfr(s.from), au: dfr(s.to) }));
   zone.innerHTML = notable
     .map((s) => {
       const parts = [];
-      if (s.minNights > 1) parts.push(`<b>${s.minNights} nuits minimum</b>`);
+      if (s.minNights > 1) parts.push(`<b>${t("{n} nuits minimum", { n: s.minNights })}</b>`);
       if (s.arrivalDays != null) parts.push(esc(arrivalLabel(s.arrivalDays)));
       return `<span class="rule">${parts.join(", ")} ${esc(period(s))}</span>`;
     })
@@ -415,9 +421,9 @@ function updateSummary() {
   const zone = $("staySummary");
   if (selIn && selOut) {
     const n = nightsBetween(selIn, selOut);
-    zone.innerHTML = `<div class="stay-summary">Séjour du <b>${dfr(selIn)}</b> au <b>${dfr(selOut)}</b> — ${n} nuit${n > 1 ? "s" : ""}</div>`;
+    zone.innerHTML = `<div class="stay-summary">${t("Séjour du <b>{du}</b> au <b>{au}</b> — {nuits}", { du: dfr(selIn), au: dfr(selOut), nuits: pl(n, "nuit", "nuits") })}</div>`;
   } else if (selIn) {
-    zone.innerHTML = `<div class="stay-summary">Arrivée le <b>${dfr(selIn)}</b> — choisissez le jour de départ.</div>`;
+    zone.innerHTML = `<div class="stay-summary">${t("Arrivée le <b>{date}</b> — choisissez le jour de départ.", { date: dfr(selIn) })}</div>`;
   } else {
     zone.innerHTML = "";
   }
@@ -456,7 +462,7 @@ let searchSeq = 0;
 /** Énumération française : « A », « A et B », « A, B et C ». */
 function frList(items) {
   if (items.length <= 1) return items[0] ?? "";
-  return `${items.slice(0, -1).join(", ")} et ${items[items.length - 1]}`;
+  return `${items.slice(0, -1).join(", ")} ${t("et")} ${items[items.length - 1]}`;
 }
 
 /** Noms des unités LIÉES dont l'occupation rend celle-ci indisponible (#45). */
@@ -467,27 +473,27 @@ function blockerNames(u, units) {
 
 /** Étiquette courte : pourquoi cet hébergement n'est pas réservable. */
 function unavailableReason(u, nights, units = []) {
-  if (u.available && !u.fitsCapacity) return `Capacité maximale : ${u.capacityMax} personnes`;
+  if (u.available && !u.fitsCapacity) return t("Capacité maximale : {n} personnes", { n: u.capacityMax });
   const q = u.quote;
   if (q && !q.ok && q.errors.includes("min_nights")) {
-    return `Séjour trop court : ${q.minNights} nuits minimum à ces dates (vous en avez demandé ${nights})`;
+    return t("Séjour trop court : {min} nuits minimum à ces dates (vous en avez demandé {n})", { min: q.minNights, n: nights });
   }
   if (q && !q.ok && q.errors.includes("checkin_day")) {
     const jours = checkinDaysLabel(q.checkinDays);
     return jours
-      ? `Arrivée possible uniquement ${jours} à ces dates`
-      : "Aucun jour d'arrivée n'est autorisé à ces dates";
+      ? t("Arrivée possible uniquement {jours} à ces dates", { jours })
+      : t("Aucun jour d'arrivée n'est autorisé à ces dates");
   }
-  if (q && !q.ok && q.errors.includes("no_rate")) return "Tarifs pas encore publiés pour ces dates";
-  if (q && !q.ok) return "Non réservable en ligne sur ces dates";
+  if (q && !q.ok && q.errors.includes("no_rate")) return t("Tarifs pas encore publiés pour ces dates");
+  if (q && !q.ok) return t("Non réservable en ligne sur ces dates");
   // Issue #45 — la liaison A/B/Domaine, dite en clair. Le Domaine entier tombe
   // dès qu'UNE des deux maisons est prise : la carte se grisait sans un mot.
   // L'accord est volontairement porté par « ces nuits » (féminin pluriel,
   // invariable) : les noms d'hébergements viennent du back-office et leur genre
   // est inconnu du code.
   const blockers = blockerNames(u, units);
-  if (blockers.length) return `Ces nuits sont déjà prises sur ${frList(blockers)}`;
-  return "Déjà réservé sur ces dates";
+  if (blockers.length) return t("Ces nuits sont déjà prises sur {noms}", { noms: frList(blockers) });
+  return t("Déjà réservé sur ces dates");
 }
 
 /** Issue #45 — la sortie : ce qui reste réservable quand une unité liée tombe.
@@ -498,7 +504,7 @@ function unavailableDetail(u, units, bookable) {
   if (!blockerNames(u, units).length) return "";
   const libres = bookable.filter((b) => b.unitId !== u.unitId).map((b) => b.name);
   if (!libres.length) return "";
-  return `${frList(libres)} ${libres.length > 1 ? "restent libres" : "reste libre"} sur ces dates.`;
+  return libres.length > 1 ? t("{noms} restent libres sur ces dates.", { noms: frList(libres) }) : t("{noms} reste libre sur ces dates.", { noms: frList(libres) });
 }
 
 /** Plages réservables les plus proches, en un clic. */
@@ -507,10 +513,10 @@ function suggestionsBlock(u) {
   const buttons = u.suggestions
     .map(
       (s) => `<button type="button" class="btn o sugg-b" data-in="${s.checkin}" data-out="${s.checkout}">
-        Du ${dfr(s.checkin)} au ${dfr(s.checkout)} — ${s.nights} nuit${s.nights > 1 ? "s" : ""} · ${eur(s.totalCents)}</button>`,
+        ${t("Du {du} au {au}", { du: dfr(s.checkin), au: dfr(s.checkout) })} — ${pl(s.nights, "nuit", "nuits")} · ${eur(s.totalCents)}</button>`,
     )
     .join("");
-  return `<div class="sugg"><span class="small muted">Ces dates fonctionnent :</span>${buttons}</div>`;
+  return `<div class="sugg"><span class="small muted">${t("Ces dates fonctionnent :")}</span>${buttons}</div>`;
 }
 
 /** Applique une suggestion : dates pré-remplies, recherche relancée. */
@@ -535,7 +541,7 @@ function photosOf(unitId) {
 function galleryButton(unitId) {
   const n = photosOf(unitId).length;
   if (n < 2) return "";
-  return `<div class="gal-row"><button type="button" class="btn o sm gal" data-gal="${unitId}">Voir les ${n} photos</button></div>`;
+  return `<div class="gal-row"><button type="button" class="btn o sm gal" data-gal="${unitId}">${t("Voir les {n} photos", { n })}</button></div>`;
 }
 
 /** Visionneuse ouverte depuis les cartes de résultat, et l'hébergement qu'elle
@@ -584,7 +590,7 @@ async function search() {
   // aria-busy était figé à "false" dans le HTML : la région annonçait
   // « Recherche… » puis la liste, deux fois pour un seul geste (issue #47-6).
   $("results").setAttribute("aria-busy", "true");
-  $("results").innerHTML = `<div class="card muted">Recherche…</div>`;
+  $("results").innerHTML = `<div class="card muted">${t("Recherche…")}</div>`;
   let data;
   try {
     data = await api(
@@ -602,7 +608,7 @@ async function search() {
   setStep(2);
   if (data.ownHold && data.ownHold.checkin === selIn && data.ownHold.checkout === selOut) {
     $("searchMsg").innerHTML =
-      `<div class="note">Nous avons retrouvé votre réservation en cours (réf. ${esc(data.ownHold.reference)}) : ces dates vous restent réservées, vous reprenez là où vous en étiez.</div>`;
+      `<div class="note">${t("Nous avons retrouvé votre réservation en cours (réf. {ref}) : ces dates vous restent réservées, vous reprenez là où vous en étiez.", { ref: esc(data.ownHold.reference) })}</div>`;
   }
 
   const nights = nightsBetween(selIn, selOut);
@@ -612,25 +618,25 @@ async function search() {
     const photo = u.photoUrl ? `style="background-image:url('${esc(u.photoUrl)}')"` : "";
     if (u.available && u.fitsCapacity && u.quote?.ok) {
       return `<div class="prop" data-unit="${u.unitId}">
-        <div class="ph" ${photo}>${u.photoUrl ? "" : "photo"}</div>
+        <div class="ph" ${photo}>${u.photoUrl ? "" : t("photo")}</div>
         <div class="info"><b>${esc(u.name)}</b> · ${capacity}<br>
           <span class="muted small">${esc(u.description ?? "")}</span>
           ${galleryButton(u.unitId)}</div>
         <div class="price">${strikeThrough(u.quote.totalCents, u.quote.discountCents)}<b>${eur(u.quote.totalCents)}</b><br>
-          <span class="per">${nights} nuit${nights > 1 ? "s" : ""}, ménage et charges compris</span>
-          ${u.quote.autoDiscountApplied ? `<br><span class="savings">${esc(u.quote.autoDiscountApplied)} déduite</span>` : ""}<br>
-          <button class="btn" style="margin-top:6px" data-select="${u.unitId}" aria-pressed="false">Réserver</button></div>
+          <span class="per">${t("{nuits}, ménage et charges compris", { nuits: pl(nights, "nuit", "nuits") })}</span>
+          ${u.quote.autoDiscountApplied ? `<br><span class="savings">${t("{remise} déduite", { remise: esc(u.quote.autoDiscountApplied) })}</span>` : ""}<br>
+          <button class="btn" style="margin-top:6px" data-select="${u.unitId}" aria-pressed="false">${t("Réserver")}</button></div>
       </div>`;
     }
     const detail = unavailableDetail(u, data.units, bookable);
     return `<div class="prop off" data-unit="${u.unitId}">
-      <div class="ph" ${photo}>${u.photoUrl ? "" : "photo"}</div>
+      <div class="ph" ${photo}>${u.photoUrl ? "" : t("photo")}</div>
       <div class="info"><b>${esc(u.name)}</b> · ${capacity}<br><span class="tag t-bad">${esc(unavailableReason(u, nights, data.units))}</span>
         ${detail ? `<br><span class="small why">${esc(detail)}</span>` : ""}
         ${suggestionsBlock(u)}</div>
     </div>`;
   });
-  $("results").innerHTML = cards.join("") || `<div class="note">Aucun hébergement.</div>`;
+  $("results").innerHTML = cards.join("") || `<div class="note">${t("Aucun hébergement.")}</div>`;
   // La liste est complète : la région redevient « au repos » et c'est ce
   // basculement qui déclenche l'annonce, une seule fois (issue #47-6).
   $("results").setAttribute("aria-busy", "false");
@@ -641,7 +647,7 @@ async function search() {
   );
   if (bookable.length === 0 && data.units.some((u) => u.suggestions?.length)) {
     $("searchMsg").innerHTML =
-      `<div class="note">Aucun hébergement n'est réservable du ${dfr(selIn)} au ${dfr(selOut)} — les dates proposées ci-dessous fonctionnent, en un clic.</div>`;
+      `<div class="note">${t("Aucun hébergement n'est réservable du {du} au {au} — les dates proposées ci-dessous fonctionnent, en un clic.", { du: dfr(selIn), au: dfr(selOut) })}</div>`;
   }
 
   // Auto-sélection : l'unité demandée en deep-link, sinon la seule réservable.
@@ -672,7 +678,7 @@ function markSelected(unitId) {
     const b = el.querySelector("[data-select]");
     if (!b) return;
     b.setAttribute("aria-pressed", on ? "true" : "false");
-    b.textContent = on ? "Votre choix" : "Réserver";
+    b.textContent = on ? t("Votre choix") : t("Réserver");
   });
 }
 
@@ -690,7 +696,7 @@ async function openBookingPanel(unitId) {
       const input =
         o.pricingMode === "per_unit_qty"
           ? `<input type="number" min="0" max="${o.maxQty ?? 99}" value="0" class="opt" data-oid="${o.id}">`
-          : `<button type="button" class="opt-add" data-oid="${o.id}" aria-pressed="false">+ Ajouter</button>`;
+          : `<button type="button" class="opt-add" data-oid="${o.id}" aria-pressed="false">${t("+ Ajouter")}</button>`;
       return `<div class="opt-row"><span class="name">${esc(o.name)} <span class="muted small">${priceLabel}</span></span>${input}</div>`;
     })
     .join("");
@@ -705,43 +711,41 @@ async function openBookingPanel(unitId) {
   // d'un radio étiré sur toute la largeur du bloc (issue #42).
   const payChoices = [];
   if (PROP.settings.allowDeposit)
-    payChoices.push(`<label><input type="radio" name="payMode" value="deposit" checked><span><b>Arrhes de ${depositPct} %</b> maintenant — solde ${PROP.settings.balanceDueDays} jours avant l'arrivée</span></label>`);
+    payChoices.push(`<label><input type="radio" name="payMode" value="deposit" checked><span>${t("<b>Arrhes de {pct} %</b> maintenant — solde {jours} jours avant l'arrivée", { pct: depositPct, jours: PROP.settings.balanceDueDays })}</span></label>`);
   if (PROP.settings.allowFullPayment)
-    payChoices.push(`<label><input type="radio" name="payMode" value="full" ${!PROP.settings.allowDeposit ? "checked" : ""}><span><b>Totalité</b> maintenant</span></label>`);
+    payChoices.push(`<label><input type="radio" name="payMode" value="full" ${!PROP.settings.allowDeposit ? "checked" : ""}><span>${t("<b>Totalité</b> maintenant")}</span></label>`);
 
   $("bookingPanel").innerHTML = `
     <div class="panel-grid">
       <div class="panel-main">
-        ${PROP.options.length ? `<div class="card"><h3>Équipements du séjour</h3>${optionRows}</div>` : ""}
+        ${PROP.options.length ? `<div class="card"><h3>${t("Équipements du séjour")}</h3>${optionRows}</div>` : ""}
         <div class="card" id="guestCard">
-          <h3 id="step3Title" tabindex="-1">Vos coordonnées</h3>
+          <h3 id="step3Title" tabindex="-1">${t("Vos coordonnées")}</h3>
           <div class="formgrid">
-            <div><label class="f" for="gFirst">Prénom</label><input id="gFirst" autocomplete="given-name"></div>
-            <div><label class="f" for="gLast">Nom *</label><input id="gLast" autocomplete="family-name"></div>
-            <div><label class="f" for="gEmail">Email *</label><input id="gEmail" type="email" autocomplete="email" placeholder="pour recevoir votre confirmation"></div>
-            <div><label class="f" for="gPhone">Téléphone *</label><input id="gPhone" type="tel" autocomplete="tel" placeholder="pour l'accueil sur place"></div>
+            <div><label class="f" for="gFirst">${t("Prénom")}</label><input id="gFirst" autocomplete="given-name"></div>
+            <div><label class="f" for="gLast">${t("Nom *")}</label><input id="gLast" autocomplete="family-name"></div>
+            <div><label class="f" for="gEmail">${t("Email *")}</label><input id="gEmail" type="email" autocomplete="email" placeholder="${t("pour recevoir votre confirmation")}"></div>
+            <div><label class="f" for="gPhone">${t("Téléphone *")}</label><input id="gPhone" type="tel" autocomplete="tel" placeholder="${t("pour l'accueil sur place")}"></div>
           </div>
-          <details class="fold"><summary>Un message pour nous ? Un code promo ?</summary>
+          <details class="fold"><summary>${t("Un message pour nous ? Un code promo ?")}</summary>
             <div class="row" style="margin-top:10px">
-              <div class="n" style="width:180px"><label class="f" for="bPromo">Code promo</label><input id="bPromo" placeholder="facultatif"></div>
-              <div><label class="f" for="gNotes">Message</label><input id="gNotes" placeholder="heure d'arrivée, question…"></div>
+              <div class="n" style="width:180px"><label class="f" for="bPromo">${t("Code promo")}</label><input id="bPromo" placeholder="${t("facultatif")}"></div>
+              <div><label class="f" for="gNotes">${t("Message")}</label><input id="gNotes" placeholder="${t("heure d'arrivée, question…")}"></div>
             </div>
           </details>
           <div class="paybox">
-            <h4>💳 Paiement sécurisé <span class="badge-secure">Stripe</span></h4>
-            <fieldset class="paychoices"><legend class="sr-only">Montant à payer maintenant</legend>${payChoices.join("")}</fieldset>
-            <div class="cards">Bancontact · Visa · Mastercard — aucun montant n'est débité sans confirmation.</div>
+            <h4>💳 ${t("Paiement sécurisé")} <span class="badge-secure">Stripe</span></h4>
+            <fieldset class="paychoices"><legend class="sr-only">${t("Montant à payer maintenant")}</legend>${payChoices.join("")}</fieldset>
+            <div class="cards">${t("Bancontact · Visa · Mastercard — aucun montant n'est débité sans confirmation.")}</div>
           </div>
-          <div class="agree"><label class="small" id="cgvLabel"><input type="checkbox" id="gCgv" aria-describedby="cgvMsg"> J'accepte les <a href="#" id="cgvLink">conditions générales et le contrat de location</a> *</label>
+          <div class="agree"><label class="small" id="cgvLabel"><input type="checkbox" id="gCgv" aria-describedby="cgvMsg"> ${t('J\'accepte les <a href="#" id="cgvLink">conditions générales et le contrat de location</a> *')}</label>
           <div id="cgvMsg" class="field-msg" role="alert"></div>
           <div id="cgvBox" class="cgv-box" style="display:none"></div>
-          <label class="small optin"><input type="checkbox" id="gOptin"> Tenez-moi au courant des disponibilités et offres par email <span class="muted">(facultatif, désinscription à tout moment)</span></label></div>
+          <label class="small optin"><input type="checkbox" id="gOptin"> ${t('Tenez-moi au courant des disponibilités et offres par email <span class="muted">(facultatif, désinscription à tout moment)</span>')}</label></div>
           ${TURNSTILE_KEY ? `<div id="turnstileBox" class="turnstile"></div><div id="turnstileMsg" class="field-msg" role="alert"></div>` : ""}
           <div id="bookMsg" role="alert" aria-live="assertive"></div>
-          <button class="btn big" id="bPay" style="margin-top:14px" disabled>Payer et réserver</button>
-          <p class="reassure">Votre créneau est bloqué <b id="holdMin">30</b> minutes le temps du paiement.
-          Réservation ferme dès paiement — pas de droit de rétractation pour les hébergements datés (art. VI.53, 12° CDE) ;
-          conditions d'annulation dans les CGV.</p>
+          <button class="btn big" id="bPay" style="margin-top:14px" disabled>${t("Payer et réserver")}</button>
+          <p class="reassure">${t('Votre créneau est bloqué <b id="holdMin">30</b> minutes le temps du paiement. Réservation ferme dès paiement — pas de droit de rétractation pour les hébergements datés (art. VI.53, 12° CDE) ; conditions d\'annulation dans les CGV.')}</p>
         </div>
         <!-- Étape 4 : le formulaire de paiement s'y monte SANS quitter la page
              (issue #26). Reste vide — et invisible — tant que le serveur n'a
@@ -752,9 +756,9 @@ async function openBookingPanel(unitId) {
       <aside class="panel-side">
         <div class="card sum">
           <b class="sum-unit">${esc(SELECTED.name)}</b>
-          <p class="small muted sum-stay">Du ${dfr(SEARCH.checkin)} au ${dfr(SEARCH.checkout)} · ${SEARCH.adults} adulte${SEARCH.adults > 1 ? "s" : ""}${SEARCH.children ? ` + ${SEARCH.children} enfant${SEARCH.children > 1 ? "s" : ""}` : ""}<br>
-          Arrivée dès ${esc(PROP.settings.checkinTime)} · départ avant ${esc(PROP.settings.checkoutTime)} · <a href="#" id="editDates">modifier</a></p>
-          <div id="quoteZone" class="small muted" aria-live="polite" aria-atomic="true">Calcul du devis…</div>
+          <p class="small muted sum-stay">${t("Du {du} au {au}", { du: dfr(SEARCH.checkin), au: dfr(SEARCH.checkout) })} · ${pl(SEARCH.adults, "adulte", "adultes")}${SEARCH.children ? ` + ${pl(SEARCH.children, "enfant", "enfants")}` : ""}<br>
+          ${t("Arrivée dès {arr} · départ avant {dep}", { arr: esc(PROP.settings.checkinTime), dep: esc(PROP.settings.checkoutTime) })} · <a href="#" id="editDates">${t("modifier")}</a></p>
+          <div id="quoteZone" class="small muted" aria-live="polite" aria-atomic="true">${t("Calcul du devis…")}</div>
         </div>
       </aside>
     </div>`;
@@ -788,11 +792,12 @@ async function openBookingPanel(unitId) {
     box.style.display = box.style.display === "none" ? "block" : "none";
     if (!box.innerHTML) {
       box.innerHTML = PROP.cgvText?.trim()
-        ? cgvHtml(PROP.cgvText) +
+        ? (LANG === "nl" ? `<p class="cgv-h"><b>${CGV_NOTE_NL}</b></p>` : "") +
+          cgvHtml(PROP.cgvText) +
           // L'article 4.1 renvoie au « pourcentage affiché lors de la
           // réservation » : on le lui donne, pour cet hébergement-ci.
-          `<p class="cgv-h"><b>Pour ${esc(SELECTED.name)}, le pourcentage d'arrhes de l'article 4.1 est de ${depositPct} %.</b></p>`
-        : `<p>Les conditions générales et le contrat de location complets sont joints à la confirmation de réservation et consultables à tout moment sur votre voucher en ligne.</p>`;
+          `<p class="cgv-h"><b>${t("Pour {nom}, le pourcentage d'arrhes de l'article 4.1 est de {pct} %.", { nom: esc(SELECTED.name), pct: depositPct })}</b></p>`
+        : `<p>${t("Les conditions générales et le contrat de location complets sont joints à la confirmation de réservation et consultables à tout moment sur votre voucher en ligne.")}</p>`;
     }
   });
   $("gCgv").addEventListener("change", () => {
@@ -830,7 +835,7 @@ function payButtonRefresh() {
   if (!ok) return;
   const mode = document.querySelector('input[name="payMode"]:checked')?.value;
   const amount = mode === "full" || QUOTE.balanceDueDate == null ? QUOTE.totalCents : QUOTE.depositCents;
-  const label = `Payer ${eur(amount)} et réserver`;
+  const label = t("Payer {montant} et réserver", { montant: eur(amount) });
   $("bPay").textContent = label;
   $("mbAmount").textContent = eur(amount);
   $("mbLabel").textContent = mode === "full" || QUOTE.balanceDueDate == null ? "Totalité" : "Arrhes";
@@ -845,7 +850,7 @@ function payButtonRefresh() {
  */
 function lineLabel(l) {
   return l?.publicLabel && l.unitPriceCents != null
-    ? `${l.publicLabel} à ${eur(l.unitPriceCents)} la nuit`
+    ? t("{ligne} à {prix} la nuit", { ligne: l.publicLabel, prix: eur(l.unitPriceCents) })
     : (l?.label ?? "");
 }
 
@@ -863,7 +868,7 @@ async function refreshQuote() {
     if (seq !== quoteSeq) return; // une saisie plus récente a relancé un devis
     QUOTE = quote;
     if (!quote.ok) {
-      zone.innerHTML = `<div class="note bad">${quote.errors.includes("min_nights") ? `Minimum ${quote.minNights} nuits sur ces dates.` : "Séjour impossible à ces conditions."}</div>`;
+      zone.innerHTML = `<div class="note bad">${quote.errors.includes("min_nights") ? t("Minimum {n} nuits sur ces dates.", { n: quote.minNights }) : t("Séjour impossible à ces conditions.")}</div>`;
       payButtonRefresh();
       return;
     }
@@ -872,13 +877,13 @@ async function refreshQuote() {
       .join("");
     const depositLine =
       quote.balanceDueDate != null
-        ? `Arrhes de <b>${eur(quote.depositCents)}</b> à la réservation, solde de ${eur(quote.balanceCents)} pour le ${dfr(quote.balanceDueDate)}`
-        : `Paiement de la totalité à la réservation`;
+        ? t("Arrhes de <b>{arrhes}</b> à la réservation, solde de {solde} pour le {date}", { arrhes: eur(quote.depositCents), solde: eur(quote.balanceCents), date: dfr(quote.balanceDueDate) })
+        : t("Paiement de la totalité à la réservation");
     zone.innerHTML = `
-      <table class="quote">${rows}<tr class="tot"><td>Total</td>
+      <table class="quote">${rows}<tr class="tot"><td>${t("Total")}</td>
         <td class="r">${strikeThrough(quote.totalCents, quote.discountCents)}${eur(quote.totalCents)}</td></tr></table>
-      <p class="small muted" style="margin-top:8px">${depositLine}${quote.cautionCents > 0 ? ` · Caution : ${eur(quote.cautionCents)} (hors total, demandée avant l'arrivée)` : ""}</p>
-      ${quote.warnings.includes("promo_invalid") ? `<div class="note bad">Code promo invalide ou expiré — devis calculé sans le code.</div>` : ""}`;
+      <p class="small muted" style="margin-top:8px">${depositLine}${quote.cautionCents > 0 ? ` · ${t("Caution : {montant} (hors total, demandée avant l'arrivée)", { montant: eur(quote.cautionCents) })}` : ""}</p>
+      ${quote.warnings.includes("promo_invalid") ? `<div class="note bad">${t("Code promo invalide ou expiré — devis calculé sans le code.")}</div>` : ""}`;
     payButtonRefresh();
     document.querySelectorAll('input[name="payMode"]').forEach((r) => r.addEventListener("change", payButtonRefresh));
   } catch (e) {
@@ -904,7 +909,7 @@ async function submitBooking() {
   // Refus attaché à SA case : message à côté d'elle et focus posé dessus —
   // même comportement sur mobile et sur desktop (issue #41).
   if (!$("gCgv").checked) {
-    $("cgvMsg").textContent = "Cochez cette case pour continuer : c'est l'acceptation du contrat de location.";
+    $("cgvMsg").textContent = t("Cochez cette case pour continuer : c'est l'acceptation du contrat de location.");
     $("gCgv").setAttribute("aria-invalid", "true");
     $("cgvLabel").classList.add("err");
     $("gCgv").focus({ preventScroll: true });
@@ -917,7 +922,7 @@ async function submitBooking() {
   if (captcha === "") {
     // Le widget est là mais la vérification n'a pas (encore) abouti : inutile
     // d'envoyer la requête, le serveur la refuserait avec la même raison.
-    if (tsMsg) tsMsg.textContent = "Le contrôle anti-robot n'est pas encore validé — patientez un instant, puis relancez la réservation.";
+    if (tsMsg) tsMsg.textContent = t("Le contrôle anti-robot n'est pas encore validé — patientez un instant, puis relancez la réservation.");
     $("turnstileBox")?.scrollIntoView({ behavior: "smooth", block: "center" });
     return;
   }
@@ -925,14 +930,14 @@ async function submitBooking() {
   const email = $("gEmail").value.trim();
   const phone = $("gPhone").value.trim();
   if (lastName.length < 2 || !email || !phone) {
-    msg.innerHTML = `<div class="note bad">Nom, email et téléphone sont nécessaires — la confirmation part par email et nous vous accueillons par téléphone.</div>`;
+    msg.innerHTML = `<div class="note bad">${t("Nom, email et téléphone sont nécessaires — la confirmation part par email et nous vous accueillons par téléphone.")}</div>`;
     $("guestCard").scrollIntoView({ behavior: "smooth", block: "center" });
     return;
   }
   setStep(4);
   $("bPay").disabled = true;
   $("mbPay").disabled = true;
-  $("bPay").textContent = "Blocage du créneau…";
+  $("bPay").textContent = t("Blocage du créneau…");
   try {
     const res = await api("/api/public/bookings", {
       unitId: SELECTED.id,
@@ -947,6 +952,7 @@ async function submitBooking() {
         phone,
       },
       notes: $("gNotes").value,
+      lang: LANG,
       cgvAccepted: true,
       marketingOptIn: $("gOptin").checked,
       // Jeton anti-robot — absent quand la fonctionnalité n'est pas configurée
@@ -967,7 +973,7 @@ async function submitBooking() {
       await showPaymentElement(res.payment, res.amountDueCents);
       return;
     }
-    $("bPay").textContent = "Redirection vers le paiement sécurisé…";
+    $("bPay").textContent = t("Redirection vers le paiement sécurisé…");
     location.href = res.checkoutUrl;
   } catch (e) {
     setStep(3);
@@ -978,8 +984,8 @@ async function submitBooking() {
     // Un jeton Turnstile ne vaut qu'une fois : sans réarmement, un second essai
     // serait refusé en `timeout-or-duplicate` alors que le visiteur est humain.
     resetTurnstile();
-    if (String(e.message).includes("réservé")) {
-      msg.innerHTML = `<div class="note bad">😔 ${esc(e.message)} — le calendrier vient d'être mis à jour, relancez une recherche.</div>`;
+    if (/réservé|geboekt/.test(String(e.message))) {
+      msg.innerHTML = `<div class="note bad">😔 ${esc(e.message)} — ${t("le calendrier vient d'être mis à jour, relancez une recherche.")}</div>`;
       calCache.clear();
     } else {
       msg.innerHTML = `<div class="note bad">${esc(e.message)}</div>`;
@@ -1000,7 +1006,7 @@ async function submitBooking() {
 async function showPaymentElement(payment, amountCents) {
   const cfg = await paymentConfig();
   if (!cfg.enabled || !cfg.publishableKey) {
-    throw new Error("Le paiement en ligne est momentanément indisponible — nous pouvons finaliser votre réservation avec vous, écrivez-nous.");
+    throw new Error(t("Le paiement en ligne est momentanément indisponible — nous pouvons finaliser votre réservation avec vous, écrivez-nous."));
   }
   const card = $("payCard");
   await mountPayment(card, {
@@ -1008,7 +1014,7 @@ async function showPaymentElement(payment, amountCents) {
     clientSecret: payment.clientSecret,
     returnUrl: payment.returnUrl,
     amountLabel: eur(amountCents ?? payment.amountCents),
-    title: "Paiement sécurisé",
+    title: t("Paiement sécurisé"),
   });
   $("guestCard").hidden = true;
   $("mobileBar").style.display = "none";
@@ -1065,30 +1071,30 @@ function startHoldCountdown(hold) {
     lastSaid = step;
     say.textContent =
       step === "fin"
-        ? "Le blocage de votre créneau a expiré."
+        ? t("Le blocage de votre créneau a expiré.")
         : step === "1"
-          ? "Attention, il reste moins d'une minute avant l'expiration du blocage de votre créneau."
+          ? t("Attention, il reste moins d'une minute avant l'expiration du blocage de votre créneau.")
           : step === "5"
-            ? "Il reste moins de cinq minutes avant l'expiration du blocage de votre créneau."
-            : `Votre créneau est bloqué pour vous pendant ${minutes} minutes, le temps du paiement.`;
+            ? t("Il reste moins de cinq minutes avant l'expiration du blocage de votre créneau.")
+            : t("Votre créneau est bloqué pour vous pendant {n} minutes, le temps du paiement.", { n: minutes });
   };
 
   const tick = () => {
     const left = hold.expiresAtLocal - Date.now();
     if (left <= 0) {
       bar.classList.add("expired");
-      count.innerHTML = "⏳ Le blocage de votre créneau a <b>expiré</b> — ces dates sont de nouveau ouvertes à la vente. Relancez une réservation depuis le calendrier.";
+      count.innerHTML = `⏳ ${t("Le blocage de votre créneau a <b>expiré</b> — ces dates sont de nouveau ouvertes à la vente. Relancez une réservation depuis le calendrier.")}`;
       announce(0);
       clearHold();
       return;
     }
     const m = Math.floor(left / 60000);
     const s = Math.floor((left % 60000) / 1000);
-    const resume = hold.checkoutUrl ? ` · <a href="${esc(hold.checkoutUrl)}">reprendre le paiement</a>` : "";
+    const resume = hold.checkoutUrl ? ` · <a href="${esc(hold.checkoutUrl)}">${t("reprendre le paiement")}</a>` : "";
     bar.classList.remove("expired");
     count.innerHTML =
-      `⏳ Créneau bloqué pour vous encore <b>${m} min ${String(s).padStart(2, "0")} s</b>` +
-      `${hold.reference ? ` · réservation ${esc(hold.reference)}` : ""}${resume}`;
+      `⏳ ${t("Créneau bloqué pour vous encore <b>{m} min {s} s</b>", { m, s: String(s).padStart(2, "0") })}` +
+      `${hold.reference ? ` · ${t("réservation {ref}", { ref: esc(hold.reference) })}` : ""}${resume}`;
     announce(m + 1);
     holdTimer = setTimeout(tick, 1000);
   };
@@ -1147,26 +1153,26 @@ async function initFlow() {
   try {
     PROP = await api(`/api/public/properties/${encodeURIComponent(PROPERTY)}`);
   } catch {
-    $("flow").innerHTML = `<div class="note bad">Domaine introuvable. <a href="/book/">Retour à l'accueil</a></div>`;
+    $("flow").innerHTML = `<div class="note bad">${t('Domaine introuvable. <a href="/book/">Retour à l\'accueil</a>')}</div>`;
     return;
   }
-  document.title = `Réserver — ${PROP.property.name}`;
+  document.title = t("Réserver — {nom}", { nom: PROP.property.name });
   $("propName").textContent = PROP.property.name;
-  $("propSub").textContent = `Réservation directe — paiement sécurisé, sans création de compte`;
+  $("propSub").textContent = t("Réservation directe — paiement sécurisé, sans création de compte");
   $("contactLine").textContent = [PROP.property.contactEmail, PROP.property.contactPhone].filter(Boolean).join(" · ");
 
-  const t = await api("/api/public/today");
-  TODAY = t.today;
+  const today = await api("/api/public/today");
+  TODAY = today.today;
   calMonth = TODAY.slice(0, 7);
   // Anti-robot : la clé publique n'existe que si le propriétaire l'a
   // configurée. Sans elle, aucun script tiers n'est demandé (issue #6).
-  TURNSTILE_KEY = t.turnstileSiteKey || null;
+  TURNSTILE_KEY = today.turnstileSiteKey || null;
   if (TURNSTILE_KEY) loadTurnstile().catch(() => { /* signalé au montage du widget */ });
-  if (t.demo) {
+  if (today.demo) {
     const banner = document.createElement("div");
     banner.className = "note";
     banner.style.textAlign = "center";
-    banner.textContent = "⚠️ Version de démonstration — tarifs provisoires, paiement simulé (aucun débit réel).";
+    banner.textContent = t("⚠️ Version de démonstration — tarifs provisoires, paiement simulé (aucun débit réel).");
     $("flow").prepend(banner);
   }
   $("calPrev").addEventListener("click", () => { calMonth = monthShift(calMonth, -1); renderCalendar(); });
@@ -1187,7 +1193,7 @@ async function initFlow() {
         website: $("cWebsite").value, // pot de miel
       });
       $("cMsg").value = "";
-      note.textContent = "✅ Question envoyée — nous vous répondons par email au plus vite.";
+      note.textContent = t("✅ Question envoyée — nous vous répondons par email au plus vite.");
     } catch (e) {
       note.textContent = e.message;
     }
@@ -1209,6 +1215,8 @@ async function initFlow() {
   await renderCalendar();
 }
 
+translateStatic();
+mountLangSwitch($("langSwitch"));
 if (!PROPERTY) {
   renderLanding();
 } else {

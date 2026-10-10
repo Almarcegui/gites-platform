@@ -6,7 +6,7 @@
 // La recherche par téléphone (3) vit dans src/db/repo.ts, la garde par
 // adresse IP (7) dans src/core/ip-allow.ts, la PWA (6) dans app/.
 import { apiError, json, readJson, type Router } from "./router";
-import { currentUser, guard } from "./admin";
+import { currentUser, guard, isHuman } from "./admin";
 import { sha256hex, randomHex } from "../core/crypto";
 import { addDays, diffDays, isIsoDate, todayInZone } from "../core/dates";
 import { TASK_SYNC_MAX_DAYS, TASK_SYNC_MIN_DAYS } from "../db/tasks";
@@ -142,6 +142,9 @@ export function registerLot2AdminRoutes(router: Router): void {
   router.get("/api/admin/task-links", guard(async (_req, env) => json({ links: await listShareLinks(env.DB) })));
 
   router.post("/api/admin/task-links", guard(async (req, env, _p, url) => {
+    // Un lien public (sans mot de passe) ne se crée que depuis une session
+    // humaine : une clé de service fuitée ne doit pas pouvoir en fabriquer.
+    if (!isHuman(req)) return apiError(403, "un lien de partage se crée depuis une session humaine (page Ménage), pas par une clé de service");
     const body = await readJson<{ label?: unknown; propertyId?: unknown }>(req);
     const label = typeof body?.label === "string" ? body.label.trim() : "";
     if (label.length < 2 || label.length > 60) return apiError(400, "nom attendu (2 à 60 caractères)");

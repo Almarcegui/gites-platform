@@ -614,6 +614,8 @@ export interface BookingRow {
   guestId: number | null;
   guestName?: string | null;
   guestEmail?: string | null;
+  /** Langue du client (guests.lang) : mails et voucher en fr ou nl (lot 3). */
+  guestLang?: string | null;
   checkin: IsoDate;
   checkout: IsoDate;
   adults: number;
@@ -647,6 +649,7 @@ function mapBooking(r: Raw): BookingRow {
     guestId: numOrNull(r.guest_id),
     guestName: strOrNull(r.guest_name),
     guestEmail: strOrNull(r.guest_email),
+    guestLang: strOrNull(r.guest_lang),
     checkin: str(r.checkin), checkout: str(r.checkout),
     adults: num(r.adults), children: num(r.children),
     status: str(r.status) as BookingRow["status"],
@@ -665,7 +668,7 @@ function mapBooking(r: Raw): BookingRow {
 const BOOKING_JOIN = `
   SELECT b.*, u.name AS unit_name, u.property_id AS property_id,
          TRIM(COALESCE(g.first_name, '') || ' ' || g.last_name) AS guest_name,
-         g.email AS guest_email
+         g.email AS guest_email, COALESCE(b.lang, g.lang) AS guest_lang
     FROM bookings b
     JOIN units u ON u.id = b.unit_id
     LEFT JOIN guests g ON g.id = b.guest_id`;

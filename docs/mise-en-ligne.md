@@ -58,6 +58,15 @@ ne peuvent pas être faits depuis le dépôt.
       launchctl bootstrap gui/501 ~/Library/LaunchAgents/com.julien.gites-sauvegarde.plist
       ```
 
+      La même commande rapatrie aussi les **photos** (`UPLOADS_DIR`) en
+      archive `AAAA-MM-JJ-HHMMSS-gites-infomaniak-photos.tar`, même rotation
+      que la base (lot 3). Tant que le serveur n'a pas reçu le lot 3, l'archive
+      manque et la sauvegarde de nuit finit en ÉCHEC (la base, elle, est
+      sauvegardée) : c'est voulu ; `--photos-facultatives` le tolère à la main.
+      `make livrer` passe ce drapeau. Si `ADMIN_ALLOWED_IPS` est posé, rien à ajouter
+      pour le Mac : la garde IP ne vise que les humains, le compte
+      `sauvegarde` et les clés `svc:` passent depuis toute adresse.
+
       Jusque-là, le LaunchAgent chargé continue d'exporter l'ancienne base D1
       (`--cible prod`, ancien nom de `cloudflare`) et `make livrer` demande
       `SANS_SAUVEGARDE=oui`.

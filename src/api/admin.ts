@@ -8,6 +8,7 @@ import { blockingUnitIds, blocksAsSpans, isActiveBooking, isUnitFree } from "../
 import { rateCalendar, type RateOverride, type UnitPricingInfo } from "../core/pricing";
 import { detectDrift, type DriftSignal } from "../core/drift";
 import { imageSize } from "../core/image-size";
+import { ipDeniedResponse, isIpDenied } from "../core/ip-allow";
 import {
   GUEST_ID_TYPES,
   GUEST_ID_TYPE_FR,
@@ -132,7 +133,8 @@ import {
   type PromotionInput,
   type RateRuleInput,
 } from "../db/repo";
-import { Beds24Error, beds24Configured, beds24Setup, beds24Status, resetBeds24TokenCache } from "../services/beds24";
+import { Beds24Error, beds24Configured, beds24Setup, beds24Status, beds24WritesAllowed, resetBeds24TokenCache } from "../services/beds24";
+import { derivedLines, parsePriceLinking, PRICE_LINKING_KEY } from "../core/channel-promotions";
 import {
   createSession, deleteSession, deleteUserSessions, generatePassword, hashPassword, sessionUser, verifyPassword,
 } from "../services/admin-auth";
@@ -151,6 +153,7 @@ import { buildBalanceReminderEmail, queueEmail } from "../services/email";
 import { importElloha } from "../services/elloha-import";
 import { replyOnChannel } from "../services/beds24-messages";
 import { exportSql } from "../services/export-db";
+import { tarStream } from "../core/tar";
 import {
   createServiceKey, listServiceKeys, resolveServiceKey, revokeServiceKey, validServiceKeyName,
 } from "../services/service-keys";
@@ -158,6 +161,7 @@ import { processInboundEmail, type ParsedEmail } from "../services/inbound-email
 import { syncFeed } from "../services/ical";
 import { countDirectBookings, countSearchStages, listSearchLog } from "../services/search-log";
 import { registerLot2AdminRoutes } from "./admin-lot2";
+import { registerLot3AdminRoutes, sendPriceLinking } from "./admin-lot3";
 
 // --- garde d'authentification -------------------------------------------------
 
@@ -224,9 +228,9 @@ export function currentUser(req: Request): string {
 type AuthKind = "session" | "paire" | "nu" | "service" | "access";
 const REQUEST_KIND = new WeakMap<Request, AuthKind>();
 
-function isHuman(req: Request): boolean {
+export function isHuman(req: Request): boolean {
   const kind = REQUEST_KIND.get(req);
-  return (kind === "session" || kind === "paire" || kind === "nu") && currentUser(req) !== BACKUP_USER;
+  return (kind === "session" || kind === "paire" || kind === "nu" || kind === "access") && currentUser(req) !== BACKUP_USER;
 }
 
 /** Compte de la sauvegarde de nuit (scripts/sauvegarde_nuit.py, depuis le Mac) :
@@ -234,17 +238,31 @@ function isHuman(req: Request): boolean {
  *  déconnexion). Une fuite de son mot de passe donne une copie des données —
  *  c'est son métier — mais aucune écriture, aucun réglage, aucun compte. */
 export const BACKUP_USER = "sauvegarde";
-const BACKUP_ROUTES = new Set(["/api/admin/export.sqlite", "/api/admin/export.sql", "/api/admin/logout"]);
+const BACKUP_ROUTES = new Set(["/api/admin/export.sqlite", "/api/admin/export.sql", "/api/admin/export-uploads.tar", "/api/admin/logout"]);
 
 function backupAccountRefused(username: string, url: URL): Response | null {
   if (username !== BACKUP_USER || BACKUP_ROUTES.has(url.pathname)) return null;
   return apiError(403, "le compte « sauvegarde » n'ouvre que l'export de la base");
 }
 
-export function guard(handler: Handler): Handler {
+/** Garde IP (ADMIN_ALLOWED_IPS) appliquée APRÈS l'authentification, aux humains
+ *  seulement : une clé de service et le compte « sauvegarde » partent du Mac et
+ *  passent depuis toute adresse (lot 3 ; cf. src/core/ip-allow.ts). */
+function ipRefused(req: Request): Response | null {
+  if (!isIpDenied(req)) return null;
+  if (REQUEST_KIND.get(req) === "service" || currentUser(req) === BACKUP_USER) return null;
+  return ipDeniedResponse();
+}
+
+export function guard(inner: Handler): Handler {
   return async (req, env, params, url, ctx) => {
     const header = req.headers.get("authorization") ?? "";
     const presented = header.startsWith("Bearer ") ? header.slice(7) : "";
+    const handler: Handler = (r, e, p, u, c) => ipRefused(r) ?? inner(r, e, p, u, c);
+    // Adresse hors liste : seules une clé de service, une session ou une paire
+    // ADMIN_TOKEN peuvent encore se révéler exemptées ; tout le reste est
+    // refusé ici, sans lire la base.
+    if (isIpDenied(req) && !presented) return ipDeniedResponse();
 
     // 0) Accès de service (Claude, scripts du Mac) : clé svc:<clé>, droits admin.
     if (presented.startsWith("svc:")) {
@@ -301,7 +319,10 @@ export function guard(handler: Handler): Handler {
       if (ok) return handler(req, env, params, url, ctx);
       return apiError(401, "non autorisé");
     }
-    if (req.headers.get("cf-access-jwt-assertion")) return handler(req, env, params, url, ctx);
+    if (req.headers.get("cf-access-jwt-assertion")) {
+      REQUEST_KIND.set(req, "access");
+      return handler(req, env, params, url, ctx);
+    }
 
     // 3) Sans secret : fail-closed tant qu'aucun compte n'existe en base ;
     //    401 (→ page de login) dès que le verrou vit en base.
@@ -556,6 +577,8 @@ export function registerAdminRoutes(router: Router): void {
   // photos (src/api/admin-lot2.ts). Avant les routes historiques : la route
   // d'envoi de photos est plus précise que celles de la galerie.
   registerLot2AdminRoutes(router);
+  // Lot 3 : promotions Airbnb, prix dérivés par canal, avis (src/api/admin-lot3.ts).
+  registerLot3AdminRoutes(router);
 
   // --- connexion --------------------------------------------------------------
   // SEULE route /api/admin/* volontairement HORS guard : elle sert à obtenir
@@ -565,6 +588,9 @@ export function registerAdminRoutes(router: Router): void {
     const user = typeof body.user === "string" ? body.user.trim().toLowerCase() : "";
     const password = typeof body.password === "string" ? body.password : "";
     if (!user || !password) return apiError(400, "identifiant et mot de passe requis");
+    // Garde IP : depuis une adresse hors liste, seul le compte « sauvegarde »
+    // (tiré depuis le Mac, export seul) peut ouvrir une session.
+    if (isIpDenied(req) && user !== BACKUP_USER) return ipDeniedResponse();
 
     // 1) Comptes en base (gérés par la page Utilisateurs) → session de 30 jours.
     const row = await env.DB.prepare("SELECT id, username, password_hash, active FROM admin_users WHERE username = ?")
@@ -1168,6 +1194,22 @@ export function registerAdminRoutes(router: Router): void {
     if (wanted?.ok) await writePushChannel(env, req, wanted.value, channels);
 
     const after = await channelMarkupState(env.DB);
+    // Prix dérivés actifs (lot 3) : les multiplicateurs vivent chez Beds24, ils
+    // repartent avec la nouvelle majoration. Un échec n'annule pas
+    // l'enregistrement : il est dit, et l'écran Plateformes montre « à renvoyer ».
+    let linking: { resent: boolean; error?: string } | undefined;
+    if (parsePriceLinking(await getSetting(env.DB, PRICE_LINKING_KEY)).enabled && beds24WritesAllowed(env)) {
+      try {
+        await sendPriceLinking(env, true, { enabled: true, markups: before.channels });
+        const lines = derivedLines(channels);
+        await setSetting(env.DB, PRICE_LINKING_KEY, JSON.stringify({ enabled: true, sentMarkups: Object.fromEntries(lines.map((l) => [l.channel, l.markupPct])), sentAt: new Date().toISOString() }));
+        linking = { resent: true };
+      } catch (e) {
+        linking = { resent: false, error: e instanceof Error ? e.message : String(e) };
+        await audit(env.DB, "admin", "beds24.price_linking_failed", "app", { error: linking.error, par: currentUser(req) });
+      }
+    }
+    if (linking) return json({ ...after, linking });
     // Changer un pourcentage, ou retirer le canal appliqué de la liste, change
     // le prix qui part aux plateformes : sans ce push, Airbnb et Booking
     // garderaient l'ancien prix jusqu'au prochain cron.
@@ -2614,6 +2656,27 @@ export function registerAdminRoutes(router: Router): void {
         "content-disposition": `attachment; filename="gites-${new Date().toISOString().slice(0, 10)}.sqlite"`,
         "cache-control": "no-store",
         "x-content-type-options": "nosniff",
+      },
+    });
+  }));
+
+  // .tar des photos envoyées depuis le back-office (UPLOADS_DIR, Node
+  // seulement) : tirée par la sauvegarde de nuit juste après la base.
+  router.get("/api/admin/export-uploads.tar", guard(async (req, env) => {
+    const store = env.UPLOADS;
+    if (!store?.list || !store.read) {
+      return apiError(501, "photos indisponibles sur cette cible (seulement sur le serveur Node)", { code: "uploads_unavailable" });
+    }
+    const names = (await store.list()).filter((n) => /^[0-9a-f]{32}\.(?:jpg|png|webp)$/.test(n)).sort();
+    await audit(env.DB, "admin", "export.uploads", undefined, { fichiers: names.length, par: currentUser(req) });
+    const read = store.read.bind(store);
+    return new Response(tarStream(names, read), {
+      headers: {
+        "content-type": "application/x-tar",
+        "content-disposition": `attachment; filename="gites-photos-${new Date().toISOString().slice(0, 10)}.tar"`,
+        "cache-control": "no-store",
+        "x-content-type-options": "nosniff",
+        "x-gites-files": String(names.length),
       },
     });
   }));
