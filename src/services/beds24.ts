@@ -18,6 +18,7 @@
 import { getSetting } from "./settings";
 
 const BEDS24_API = "https://api.beds24.com/v2";
+const FETCH_TIMEOUT_MS = 30_000;
 
 /** Refresh token : la base (réglable depuis le back-office, page Canaux OTA)
  *  prime sur le secret d'environnement — le secret reste le repli. */
@@ -67,6 +68,10 @@ async function accessToken(env: Env): Promise<string> {
  *  ça, par accident (audit ECC 2026-07-30). Les lectures restent libres. */
 export function beds24WritesAllowed(env: Env): boolean {
   if (env.BEDS24_WRITE_ENABLED === "true") return true;
+  // Un « false » explicite l'emporte sur le https : l'environnement d'essai
+  // (https, BEDS24_WRITE_ENABLED=false) n'écrit jamais dans le compte réel,
+  // même si quelqu'un y colle un code d'invitation (contrôle 10/10/2026).
+  if (env.BEDS24_WRITE_ENABLED === "false") return false;
   return (env.PUBLIC_BASE_URL ?? "").startsWith("https://");
 }
 
@@ -139,11 +144,24 @@ export async function beds24Fetch<T>(
   const token = await accessToken(env);
   const url = new URL(`${BEDS24_API}${path}`);
   for (const [k, v] of Object.entries(init.query ?? {})) url.searchParams.set(k, v);
-  const res = await fetch(url, {
-    method,
-    headers: { token, ...(init.body ? { "content-type": "application/json" } : {}) },
-    body: init.body ? JSON.stringify(init.body) : undefined,
-  });
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method,
+      headers: { token, ...(init.body ? { "content-type": "application/json" } : {}) },
+      body: init.body ? JSON.stringify(init.body) : undefined,
+      // Un appel qui pend indéfiniment tiendrait un verrou (création de
+      // propriété) au-delà de son délai : on coupe à 30 s.
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    });
+  } catch (e) {
+    // Panne réseau ou délai dépassé : une Beds24Error, pour que l'appelant
+    // la journalise et l'affiche en clair au lieu d'un 500 opaque. Pour une
+    // écriture, l'issue est INCONNUE (Beds24 a pu l'appliquer).
+    throw new Beds24Error(
+      `Beds24 ${method} ${path} injoignable (${e instanceof Error ? e.message : String(e)})${method !== "GET" ? " — résultat inconnu côté Beds24" : ""}`,
+    );
+  }
   const data = (await res.json().catch(() => ({}))) as T & { success?: boolean; error?: string };
   if (!res.ok) throw new Beds24Error(`Beds24 ${path} → ${res.status} ${data.error ?? ""}`.trim(), res.status);
   const failures = collectFailures(data);
@@ -200,10 +218,20 @@ function readCompte(details: unknown): Beds24Compte {
 
 /** Liste des propriétés du compte, avec leurs rooms. */
 export async function beds24ListProperties(env: Env): Promise<Beds24PropertySummary[]> {
-  const props = await beds24Fetch<{ data?: Beds24PropertySummary[] }>(env, "/properties", {
-    query: { includeAllRooms: "true" },
-  });
-  return (props.data ?? []).map((p) => ({
+  // Réponse paginée (pages.nextPageExists) : une page manquée ferait croire
+  // à un mapping périmé ou cacherait un homonyme — d'où un doublon.
+  const all: Beds24PropertySummary[] = [];
+  for (let page = 1; page <= 20; page++) {
+    const props = await beds24Fetch<{ data?: Beds24PropertySummary[]; pages?: { nextPageExists?: boolean } }>(
+      env,
+      "/properties",
+      { query: { includeAllRooms: "true", ...(page > 1 ? { page: String(page) } : {}) } },
+    );
+    all.push(...(props.data ?? []));
+    if (!props.pages?.nextPageExists) break;
+    if (page === 20) throw new Beds24Error("liste des propriétés Beds24 trop longue (plus de 20 pages)");
+  }
+  return all.map((p) => ({
     id: Number(p.id),
     name: String(p.name ?? ""),
     roomTypes: (p.roomTypes ?? []).map((r) => ({ id: Number(r.id), name: String(r.name ?? "") })),

@@ -362,6 +362,8 @@ describe("Beds24 — garde-fou dev/prod et réponses partiellement refusées", (
     expect(beds24WritesAllowed(local)).toBe(false);
     expect(beds24WritesAllowed({ ...local, PUBLIC_BASE_URL: "https://gites.example" })).toBe(true);
     expect(beds24WritesAllowed({ ...local, BEDS24_WRITE_ENABLED: "true" })).toBe(true);
+    // Environnement d'essai : https mais « false » explicite → jamais d'écriture.
+    expect(beds24WritesAllowed({ ...local, PUBLIC_BASE_URL: "https://gites.example", BEDS24_WRITE_ENABLED: "false" })).toBe(false);
 
     const realFetch = globalThis.fetch;
     let calls = 0;

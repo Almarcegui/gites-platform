@@ -2673,7 +2673,7 @@ export function registerAdminRoutes(router: Router): void {
   // Ce que « Créer la propriété sur Beds24 » enverrait — aucun réseau sortant.
   router.get("/api/admin/beds24/creer-propriete/apercu", guard(async (_req, env, _p, url) => {
     try {
-      return json(await buildPropertyPlan(env.DB, intParam(url.searchParams.get("property"), 1)));
+      return json(await buildPropertyPlan(env.DB, intParam(url.searchParams.get("property"), 1), env.PUBLIC_BASE_URL));
     } catch (e) {
       if (e instanceof CreationRefusee) return apiError(e.status, e.message);
       throw e;
@@ -2729,9 +2729,15 @@ export function registerAdminRoutes(router: Router): void {
     const body = await readJson<{ propertyId?: number; days?: number }>(req);
     const propertyId = Number(body?.propertyId ?? 1);
     const days = Math.min(Math.max(Number(body?.days ?? 400), 1), 730);
-    const result = await pushCalendars(env.DB, env, propertyId, days);
-    await audit(env.DB, "admin", "beds24.push", `property:${propertyId}`, { days, rooms: result.pushed.length });
-    return json(result);
+    try {
+      const result = await pushCalendars(env.DB, env, propertyId, days);
+      await audit(env.DB, "admin", "beds24.push", `property:${propertyId}`, { days, rooms: result.pushed.length });
+      return json(result);
+    } catch (e) {
+      // Refus par élément (room inconnue du compte, valeur rejetée) : en clair.
+      if (e instanceof Beds24Error) return apiError(502, e.message);
+      throw e;
+    }
   }));
 
   // Pull manuel des résas canaux (Beds24 → notre base).
@@ -2740,14 +2746,25 @@ export function registerAdminRoutes(router: Router): void {
     const propertyId = Number(body?.propertyId ?? 1);
     const property = await getProperty(env.DB, propertyId);
     if (!property?.beds24PropertyId) return apiError(400, "propriété non mappée à Beds24");
-    const result = await pullBeds24Bookings(env.DB, env, propertyId, property.beds24PropertyId);
-    await pushCalendars(env.DB, env, propertyId);
-    return json(result);
+    try {
+      const result = await pullBeds24Bookings(env.DB, env, propertyId, property.beds24PropertyId);
+      // Le pull a réussi : un échec du push qui le suit ne doit pas le masquer.
+      try {
+        await pushCalendars(env.DB, env, propertyId);
+        return json(result);
+      } catch (e) {
+        if (e instanceof Beds24Error) return json({ ...result, pushError: e.message });
+        throw e;
+      }
+    } catch (e) {
+      if (e instanceof Beds24Error) return apiError(502, e.message);
+      throw e;
+    }
   }));
 
   // Vue « Canaux » : tout l'état local en un appel (aucun réseau sortant —
-  // la vue reste instantanée même hors ligne ; le test de connexion réel
-  // passe par GET /api/admin/beds24/status, déclenché par bouton).
+  // la vue reste instantanée même hors ligne ; l'état réel du compte passe par
+  // GET /api/admin/beds24/status, que la vue appelle APRÈS s'être affichée).
   // Conflits de synchronisation (issue #72) — la seule action possible depuis
   // le back-office est une DÉCISION : ignorer (avec motif) ou rouvrir. On ne
   // « résout » pas un conflit à la main : c'est la synchro qui constate qu'il

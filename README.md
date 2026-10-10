@@ -299,6 +299,19 @@ diagnostic `GET /api/admin/beds24/status` (détails compte + propriétés + sond
 réseau en cas d'échec). Auth validée en direct : `GET /properties` → 200.
 Révocation : écran Refresh Tokens de l'UI Beds24.
 
+**Nouveau compte (10/10/2026) — recréer la propriété depuis le back-office.**
+`GET /api/admin/beds24/status?property=1` rend aussi le compte relié (`compte` :
+numéro, nom du jeton, droits — l'API ne donne pas le nom d'utilisateur), l'état
+du mapping (`actif` / `perime` / `absent`) et `creationPossible`.
+`GET /api/admin/beds24/creer-propriete/apercu` montre ce qui partirait (aucun
+réseau) ; `POST /api/admin/beds24/creer-propriete { propertyId, confirmer: true }`
+crée la propriété et une room par maison (le Domaine entier reste direct-only),
+écrit le mapping, puis envoie textes et équipements
+(`src/services/beds24-propriete.ts`, contenu dans `src/core/beds24-contenu.ts`).
+Photos, GPS, lits, wifi : rendus sous « à compléter dans Beds24 ». Bouton dans
+Canaux OTA. `BEDS24_WRITE_ENABLED=false` bloque désormais toute écriture, même
+en https (environnement d'essai).
+
 ⚠️ **Piège dev local + VPN Emeria** : workerd (wrangler dev) lit `/etc/resolv.conf`
 (résolveurs VPN 100.64.0.x) qui renvoie des réponses **vides** pour les domaines
 publics → TOUS les fetch sortants du Worker local échouent en

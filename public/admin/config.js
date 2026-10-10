@@ -962,7 +962,10 @@ export function registerConfigViews() {
         ${m && m.etat === "perime" ? `<p class="small" style="margin-top:6px">L'identifiant enregistré n'existe pas dans ce compte (ancien compte résilié) : les calendriers ne partent nulle part tant que la propriété n'est pas recréée.</p>` : ""}
         ${s.ecriturePropriete === false ? `<p class="small" style="margin-top:6px"><span class="tag t-warn">Droits du jeton</span> le code d'invitation ne semble pas autoriser l'écriture des propriétés (${esc(s.compte.scopes.join(", "))}) : la création risque d'être refusée.</p>` : ""}
         ${s.creationPossible ? `<p style="margin-top:10px"><button class="btn sm" id="b24create">Créer la propriété sur Beds24</button>
-          <span id="b24createNote" class="small muted"></span></p>` : ""}`;
+          <span id="b24createNote" class="small muted"></span></p>` : ""}
+        ${s.mappingARefaire && !s.creationPossible ? `<p class="small muted" style="margin-top:6px">Création de la propriété indisponible ici : ${
+          !s.ecritureAutorisee ? "écriture Beds24 coupée sur ce serveur (elle se fait depuis le site en ligne)"
+            : s.jetonRestreint ? "le jeton Beds24 est restreint à une seule propriété — générer un code d'invitation sans restriction" : "liaison inactive"}.</p>` : ""}`;
       const btn = root.querySelector("#b24create");
       if (btn) btn.onclick = () => createProperty(btn);
     };
@@ -974,12 +977,19 @@ export function registerConfigViews() {
       } catch (e) { n.textContent = `⚠️ ${e.message}`; return; }
       const lines = plan.rooms.map((r) => `  • ${r.name} — ${r.maxPeople} pers. max`
         + (r.minStay ? `, ${r.minStay} nuit(s) min.` : "")
-        + (r.rackRate ? `, prix de base ${r.rackRate} ${plan.currency}` : ""));
+        + (r.rackRate ? `, prix de base ${r.rackRate} ${plan.currency}` : "")
+        + (r.cleaningFee ? `, ménage ${r.cleaningFee} ${plan.currency}` : "")
+        + (r.description ? ", description" : "")
+        + (r.featureCodes.length ? `, équipements ${r.featureCodes.join(" ")}` : ""));
       const direct = plan.directOnly.map((d) => `  • ${d.name} : ${d.raison}`);
+      const nPhotos = plan.rooms.reduce((n, r) => n + r.photos.length, 0);
       const ok = confirm(`Créer sur Beds24 (compte réel) :\n\n`
-        + `Propriété « ${plan.name} »\n  ${[plan.address, plan.city, plan.country].filter(Boolean).join(", ")} · ${plan.currency}\n\n`
+        + `Propriété « ${plan.name} »\n  ${[plan.address, plan.city, plan.country].filter(Boolean).join(", ")} · ${plan.currency}`
+        + (plan.checkInStart ? ` · arrivée ${plan.checkInStart}` : "") + (plan.checkOutEnd ? ` · départ ${plan.checkOutEnd}` : "")
+        + `\n  description et règlement intérieur\n\n`
         + `Hébergements vendus sur les canaux :\n${lines.join("\n")}\n`
         + (direct.length ? `\nNon créés :\n${direct.join("\n")}\n` : "")
+        + (nPhotos ? `\nPhotos (${nPhotos}) : l'API ne les accepte pas — la liste des adresses sera affichée pour l'import dans Beds24.\n` : "")
         + `\nLe mapping enregistré chez nous sera remplacé par les nouveaux identifiants. Si une propriété du même nom existe déjà dans le compte, elle est reprise (pas de doublon).`);
       if (!ok) return;
       btn.disabled = true;
@@ -990,7 +1000,17 @@ export function registerConfigViews() {
         });
         const recap = `Propriété #${r.propriete.beds24PropertyId} ${r.propriete.creee ? "créée" : "reprise"} · `
           + r.rooms.map((x) => `${x.name} → room #${x.beds24RoomId}${x.creee ? "" : " (existante)"}`).join(" · ");
+        const todoRooms = (r.aCompleter?.rooms ?? []).map((x) => `<li><b>${esc(x.name)}</b>
+            <ul>${x.points.map((pt) => `<li>${esc(pt)}</li>`).join("")}</ul>
+            ${x.photos.length ? `<ol class="mono" style="word-break:break-all">${x.photos.map((ph) => `<li>${esc(ph.url)} <span class="muted">— ${esc(ph.legende)}</span></li>`).join("")}</ol>` : ""}</li>`).join("");
         compteCard.insertAdjacentHTML("beforeend", `<p style="margin-top:10px"><span class="tag t-ok">Fait</span> ${esc(recap)}</p>
+          <p class="small">Envoyé : ${esc(r.envoye.propriete.join(", "))}.</p>
+          <ul class="small" style="margin:4px 0 0 18px">${r.envoye.rooms.map((x) => `<li>${esc(x.name)} : ${esc(x.champs.join(", "))}</li>`).join("")}</ul>
+          ${r.contenu.ok ? "" : `<p class="small"><span class="tag t-warn">Textes et équipements refusés</span> ${esc(r.contenu.erreur)}</p>`}
+          ${(r.avertissements ?? []).length ? `<p class="small muted">${r.avertissements.map(esc).join("<br>")}</p>` : ""}
+          <details open style="margin-top:8px"><summary><b>À compléter dans Beds24</b></summary>
+            <ul class="small" style="margin:6px 0 0 18px">${r.aCompleter.propriete.map((pt) => `<li>${esc(pt)}</li>`).join("")}${todoRooms}</ul>
+          </details>
           <p><button class="btn sm" id="b24pushAfter">⬆ Pousser les calendriers maintenant</button>
           <span id="b24pushNote" class="small muted">Beds24 n'a encore ni disponibilités ni prix : à pousser une fois.</span></p>`);
         btn.remove();
@@ -1001,8 +1021,8 @@ export function registerConfigViews() {
           pn.textContent = "push…";
           try {
             const p = await api("/api/admin/beds24/push", { method: "POST", body: { propertyId: currentPropertyId() } });
-            toast(`Calendriers poussés : ${p.pushed.map((x) => x.unitName).join(", ")}`);
-            location.reload();
+            // Pas de rechargement : la liste « à compléter » resterait perdue.
+            pn.textContent = `✅ calendriers poussés : ${p.pushed.map((x) => x.unitName).join(", ")}`;
           } catch (e) { ev.target.disabled = false; pn.textContent = `⚠️ ${e.message}`; }
         };
       } catch (e) {

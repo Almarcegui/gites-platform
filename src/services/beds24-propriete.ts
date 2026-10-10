@@ -4,27 +4,48 @@
 // créées à la main par l'API (migration 0010). Le compte d'alors est résilié ;
 // le nouveau compte (`gites-premore`) est vide et le mapping en base pointe
 // sur des identifiants qui n'existent plus. Ce module refait la création
-// depuis le back-office, sans jamais ouvrir Beds24 :
-//   - une propriété (nom, adresse, commune, pays, devise, contact) ;
-//   - un roomType par hébergement VENDABLE sur les canaux : les unités
-//     physiques actives (Scieur, Scierie). Le Domaine entier (unité composite)
-//     reste en vente directe : sa liaison est déjà reflétée dans les
-//     calendriers des deux rooms que notre moteur pousse (beds24-sync.ts).
+// depuis le back-office, sans jamais ouvrir Beds24, et la veut COMPLÈTE dès le
+// départ (consigne Julien : « reprends ce qu'on avait déjà fait ») :
+//   - propriété : nom, adresse, commune, pays, devise, contact, heures
+//     d'arrivée et de départ, description et règlement intérieur ;
+//   - un roomType par hébergement VENDABLE sur les canaux (unités physiques
+//     actives : Scieur, Scierie) : nom, capacité, min-nuits, prix de base,
+//     frais de ménage, description, équipements (featureCodes).
+//   Le Domaine entier (unité composite) reste en vente directe : sa liaison est
+//   déjà reflétée dans les calendriers des deux rooms (beds24-sync.ts).
+//   Ce que l'API ne couvre pas (photos : aucun champ image en écriture dans
+//   apiV2.yaml) ou que nos données ne disent pas (coordonnées GPS, code postal,
+//   wifi, lits…) est rendu sous « à compléter dans Beds24 ».
+//
+// Deux temps : (1) création du squelette (propriété + rooms, champs simples),
+// puis écriture du mapping ; (2) enrichissement (textes, équipements), au mieux :
+// un refus de la Beta y est rapporté, il ne défait ni la création ni le mapping.
 //
 // Garde-fous :
+//   - écriture interdite hors production (beds24WritesAllowed) ;
 //   - refus si la propriété mappée en base existe ENCORE dans le compte ;
-//   - idempotence : une propriété du compte portant notre nom est retrouvée
-//     (et complétée des rooms manquantes) au lieu d'être recréée — un second
-//     appel, ou une reprise après une panne entre la création et l'écriture
-//     du mapping, ne fabrique pas de doublon ;
-//   - le mapping n'est écrit qu'après RELECTURE du compte (les ids viennent de
-//     ce que Beds24 montre, pas de la réponse au POST, dont le format est flou
-//     dans la doc Beta) ;
-//   - verrou court en base contre le double clic (deux POST simultanés
-//     créeraient deux propriétés avant que l'un ne voie l'autre).
+//   - refus si le jeton est restreint à une propriété (il ne voit pas le
+//     reste du compte : un homonyme lui échapperait) ;
+//   - idempotence : une propriété du compte portant notre nom est reprise (et
+//     complétée des rooms manquantes) au lieu d'être recréée ;
+//   - marqueur de tentative posé AVANT le POST de création : si la relecture
+//     échoue (réponse perdue, nom transformé par Beds24), l'appel suivant
+//     reprend la propriété apparue depuis au lieu d'en créer une seconde ;
+//   - le mapping n'est écrit qu'après RELECTURE du compte ;
+//   - verrou en base (jeton aléatoire, 5 min) contre le double clic.
 
-import { listRateRules, listUnits, getProperty, audit, type PropertyRow, type UnitRow } from "../db/repo";
+import {
+  audit,
+  getProperty,
+  getSettings,
+  listRateRules,
+  listUnitPhotos,
+  listUnits,
+  type PropertyRow,
+  type UnitRow,
+} from "../db/repo";
 import { pushedPriceCents } from "../core/price-guardrails";
+import { HOUSE_RULES, PROPERTY_A_COMPLETER, PROPERTY_DESCRIPTION, unitContent } from "../core/beds24-contenu";
 import { resolvePushMarkup } from "./beds24-sync";
 import {
   Beds24Error,
@@ -35,20 +56,25 @@ import {
   type Beds24Compte,
   type Beds24PropertySummary,
 } from "./beds24";
+import { getSetting } from "./settings";
 
 /** Tous nos domaines sont en Belgique ; la base n'a pas de colonne pays.
  *  Beds24 attend un code ISO à 2 lettres (maxLength 2 dans le schéma). */
 const PAYS = "BE";
-
-/** Type de propriété Beds24 : un gîte rural = « cottage » dans l'énumération
- *  de l'API. Modifiable ensuite dans Beds24 sans effet sur la synchro. */
+/** Un gîte rural = « cottage » dans l'énumération propertyType de l'API. */
 const PROPERTY_TYPE = "cottage";
 const ROOM_TYPE = "holidayHome";
+const LANGUE = "fr";
 
 export class CreationRefusee extends Error {
   constructor(message: string, public status: number, public detail?: unknown) {
     super(message);
   }
+}
+
+export interface PhotoPlan {
+  url: string;
+  legende: string;
 }
 
 export interface RoomPlan {
@@ -61,6 +87,12 @@ export interface RoomPlan {
   /** Prix nuit de base (semaine, hors saison), majoration canal comprise —
    *  repli seulement : le push quotidien fixe le vrai prix jour par jour. */
   rackRate?: number;
+  /** Frais de ménage (« frais généraux ») de l'hébergement, en euros. */
+  cleaningFee?: number;
+  description?: string;
+  featureCodes: string[];
+  photos: PhotoPlan[];
+  aCompleter: string[];
 }
 
 export interface PropertyPlan {
@@ -73,56 +105,125 @@ export interface PropertyPlan {
   country: string;
   email?: string;
   phone?: string;
+  checkInStart?: string;
+  checkOutEnd?: string;
+  description: string;
+  houseRules: string;
   rooms: RoomPlan[];
   /** Unités actives laissées en vente directe (non créées chez Beds24). */
   directOnly: { unitId: number; name: string; raison: string }[];
+  /** Ce que l'API ne prend pas ou que nos données ne disent pas. */
+  aCompleter: string[];
 }
 
 const clean = (v: string | null | undefined): string | undefined => {
   const t = (v ?? "").trim();
   // Les valeurs de seed « TODO_… » ne doivent pas partir chez un tiers.
-  return t && !t.startsWith("TODO") ? t : undefined;
+  return t && !/TODO/i.test(t) ? t : undefined;
 };
 
-export const sameName = (a: string, b: string): boolean =>
-  a.normalize("NFC").trim().toLocaleLowerCase("fr") === b.normalize("NFC").trim().toLocaleLowerCase("fr");
-
-function sellable(units: UnitRow[]): UnitRow[] {
-  return units.filter((u) => u.active && !u.isComposite);
+const ENTITIES: Record<string, string> = {
+  amp: "&", apos: "'", quot: '"', rsquo: "'", lsquo: "'", nbsp: " ",
+  eacute: "é", egrave: "è", ecirc: "ê", euml: "ë", agrave: "à", acirc: "â",
+  icirc: "î", iuml: "ï", ocirc: "ô", ugrave: "ù", ucirc: "û", ccedil: "ç",
+};
+function decodeEntities(s: string): string {
+  return s.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (m, code: string) => {
+    if (code[0] === "#") {
+      const n = code[1]?.toLowerCase() === "x" ? parseInt(code.slice(2), 16) : parseInt(code.slice(1), 10);
+      return Number.isFinite(n) ? String.fromCodePoint(n) : m;
+    }
+    return ENTITIES[code.toLowerCase()] ?? m;
+  });
 }
 
-/** Ce qui serait créé chez Beds24 — pur lecture de notre base, aucun réseau. */
-export async function buildPropertyPlan(db: D1Database, propertyId: number): Promise<PropertyPlan> {
+/** Comparaison de noms tolérante : casse, espaces, Unicode, entités HTML
+ *  (Beds24 peut rendre « G&icirc;tes »). */
+export const sameName = (a: string, b: string): boolean => {
+  const n = (s: string) => decodeEntities(s).normalize("NFC").replace(/\s+/g, " ").trim().toLocaleLowerCase("fr");
+  return n(a) === n(b);
+};
+
+const sellable = (units: UnitRow[]): UnitRow[] => units.filter((u) => u.active && !u.isComposite);
+
+/** HH:MM au quart d'heure — les seules valeurs de l'énumération Beds24. */
+const quarterHour = (v: string | undefined): string | undefined =>
+  v && /^([01]\d|2[0-3]):(00|15|30|45)$/.test(v.trim()) ? v.trim() : undefined;
+
+const euros = (cents: number | null | undefined): number | undefined =>
+  cents != null && cents > 0 ? Math.round(cents) / 100 : undefined;
+
+/** Ce qui serait créé chez Beds24 — lecture de notre base, aucun réseau. */
+export async function buildPropertyPlan(db: D1Database, propertyId: number, publicBaseUrl: string): Promise<PropertyPlan> {
   const property = await getProperty(db, propertyId);
   if (!property) throw new CreationRefusee("domaine introuvable", 404);
-  const [units, rules, markup] = await Promise.all([
+  const [units, rules, markup, settings] = await Promise.all([
     listUnits(db, propertyId),
     listRateRules(db, propertyId),
     resolvePushMarkup(db),
+    getSettings(db, propertyId),
   ]);
-  const rooms: RoomPlan[] = sellable(units).map((u) => {
-    const base = rules.find((r) => r.unitId === u.id && r.seasonId == null);
-    const rack = base && base.priceWeekCents > 0 ? pushedPriceCents(base.priceWeekCents, markup.pct) / 100 : undefined;
+  const vendables = sellable(units);
+  const photos = await listUnitPhotos(db, vendables.map((u) => u.id));
+  const base = publicBaseUrl.replace(/\/+$/, "");
+  const aCompleter: string[] = [];
+
+  const rooms: RoomPlan[] = vendables.map((u) => {
+    const rule = rules.find((r) => r.unitId === u.id && r.seasonId == null);
+    const content = unitContent(u.slug, u.description);
+    const roomPhotos = photos
+      .filter((p) => p.unitId === u.id)
+      .map((p) => ({ url: `${base}${p.path.startsWith("/") ? "" : "/"}${p.path}`, legende: p.caption ?? p.alt }));
+    const todo = [...(content?.aCompleter ?? [])];
+    if (!content) todo.push("Description : ni page vitrine connue ni description en base");
+    if (roomPhotos.length > 0) {
+      todo.unshift(`Photos (${roomPhotos.length}) : l'API Beds24 n'a pas de champ image en écriture — à importer par URL dans Beds24, dans l'ordre de la liste`);
+    }
+    if (!rule) todo.push("Min-nuits et prix de base : aucun tarif hors saison en base");
+    const rack = rule && rule.priceWeekCents > 0 ? pushedPriceCents(rule.priceWeekCents, markup.pct) : null;
     return {
       unitId: u.id,
       name: u.name,
       qty: 1,
       roomType: ROOM_TYPE,
       maxPeople: Math.max(1, u.capacityMax),
-      ...(base && base.minNights >= 1 ? { minStay: Math.min(base.minNights, 365) } : {}),
-      ...(rack != null ? { rackRate: rack } : {}),
+      ...(rule && rule.minNights >= 1 ? { minStay: Math.min(rule.minNights, 365) } : {}),
+      ...(euros(rack) != null ? { rackRate: euros(rack) } : {}),
+      ...(euros(u.cleaningFeeCents) != null ? { cleaningFee: euros(u.cleaningFeeCents) } : {}),
+      ...(content ? { description: content.description } : {}),
+      featureCodes: content?.featureCodes ?? [],
+      photos: roomPhotos,
+      aCompleter: todo,
     };
   });
+
+  const address = clean(property.address);
+  const checkInStart = quarterHour(settings.checkinTime);
+  const checkOutEnd = quarterHour(settings.checkoutTime);
+  aCompleter.push(
+    "Coordonnées GPS (latitude, longitude) : absentes de notre base",
+    "Code postal et rue exacte : notre base n'a qu'une adresse libre" + (address ? ` (« ${address} »)` : ""),
+    "Heure limite d'arrivée (checkInEnd) : non définie chez nous",
+  );
+  if (!checkInStart || !checkOutEnd) aCompleter.push("Heures d'arrivée/départ : réglage absent ou hors quart d'heure");
+  if (!clean(property.contactEmail)) aCompleter.push("E-mail de contact : absent ou provisoire (TODO) dans notre base");
+  if (!clean(property.contactPhone)) aCompleter.push("Téléphone de contact : absent de notre base");
+  aCompleter.push(...PROPERTY_A_COMPLETER);
+
   return {
     propertyId: property.id,
     name: property.name,
     propertyType: PROPERTY_TYPE,
     currency: property.currency || "EUR",
-    address: clean(property.address),
+    address,
     city: clean(property.commune),
     country: PAYS,
     email: clean(property.contactEmail),
     phone: clean(property.contactPhone),
+    checkInStart,
+    checkOutEnd,
+    description: PROPERTY_DESCRIPTION,
+    houseRules: HOUSE_RULES,
     rooms,
     directOnly: units
       .filter((u) => u.active && u.isComposite)
@@ -131,6 +232,7 @@ export async function buildPropertyPlan(db: D1Database, propertyId: number): Pro
         name: u.name,
         raison: "vente directe uniquement — la liaison ferme les rooms des maisons qui le composent",
       })),
+    aCompleter,
   };
 }
 
@@ -173,8 +275,8 @@ function mappingStatus(
 }
 
 /** Le jeton a-t-il le droit d'écrire les propriétés ? null = on ne sait pas
- *  (aucun scope remonté). Sert d'avertissement, jamais de blocage : les noms
- *  de scopes ne sont pas listés dans la doc. */
+ *  (aucun scope remonté). Avertissement seulement : les noms de scopes ne
+ *  sont pas listés dans la doc. */
 function canWriteProperties(compte: Beds24Compte | undefined): boolean | null {
   if (!compte || compte.scopes.length === 0) return null;
   return compte.scopes.some((s) => /propert/i.test(s) && /^(write|all)/i.test(s));
@@ -187,39 +289,48 @@ export async function beds24Liaison(env: Env, propertyId: number) {
   const property = await getProperty(env.DB, propertyId);
   const units = property ? await listUnits(env.DB, propertyId) : [];
   const mapping = property ? mappingStatus(property, units, status.connected ? status.properties ?? [] : null) : null;
-  const ecriturePropriete = canWriteProperties(status.compte);
+  const ecritureAutorisee = beds24WritesAllowed(env);
+  const jetonRestreint = status.compte?.limiteAPropriete != null;
+  const mappingARefaire = Boolean(mapping && (mapping.etat === "absent" || mapping.etat === "perime"));
   return {
     ...status,
-    ecritureAutorisee: beds24WritesAllowed(env),
-    ecriturePropriete,
+    ecritureAutorisee,
+    ecriturePropriete: canWriteProperties(status.compte),
+    jetonRestreint,
     mapping,
-    // Le bouton « Créer la propriété » n'a de sens que liaison active ET
-    // mapping absent ou périmé (un mapping vivant se pousse, il ne se recrée pas).
-    creationPossible: Boolean(status.connected && mapping && (mapping.etat === "absent" || mapping.etat === "perime")),
+    mappingARefaire,
+    // Bouton « Créer la propriété » : liaison active, mapping absent ou
+    // périmé, écriture permise sur ce serveur, jeton qui voit tout le compte.
+    creationPossible: Boolean(status.connected && mappingARefaire && ecritureAutorisee && !jetonRestreint),
   };
 }
 
 const LOCK_KEY = "beds24_creation_verrou";
-const LOCK_TTL_SECONDS = 120;
+const LOCK_TTL_SECONDS = 300;
+const attemptKey = (propertyId: number) => `beds24_creation_tentative:${propertyId}`;
 
-async function takeLock(db: D1Database): Promise<boolean> {
+async function takeLock(db: D1Database): Promise<string | null> {
   // Un verrou plus vieux que le TTL (Worker tué en plein appel) est repris.
+  // Le TTL (5 min) dépasse largement la durée maximale d'un appel : six
+  // requêtes Beds24 au plus, chacune coupée à 30 s.
   await db
     .prepare(`DELETE FROM app_settings WHERE key = ?1 AND updated_at < datetime('now', ?2)`)
     .bind(LOCK_KEY, `-${LOCK_TTL_SECONDS} seconds`)
     .run();
+  const owner = crypto.randomUUID();
   const res = await db
-    .prepare(`INSERT INTO app_settings (key, value, updated_at) VALUES (?1, 'creation', datetime('now')) ON CONFLICT(key) DO NOTHING`)
-    .bind(LOCK_KEY)
+    .prepare(`INSERT INTO app_settings (key, value, updated_at) VALUES (?1, ?2, datetime('now')) ON CONFLICT(key) DO NOTHING`)
+    .bind(LOCK_KEY, owner)
     .run();
-  return (res.meta?.changes ?? 0) > 0;
+  return (res.meta?.changes ?? 0) > 0 ? owner : null;
 }
 
-async function releaseLock(db: D1Database): Promise<void> {
-  await db.prepare("DELETE FROM app_settings WHERE key = ?1").bind(LOCK_KEY).run();
+async function releaseLock(db: D1Database, owner: string): Promise<void> {
+  // Seul le détenteur libère : un verrou repris par un autre appel reste à lui.
+  await db.prepare("DELETE FROM app_settings WHERE key = ?1 AND value = ?2").bind(LOCK_KEY, owner).run();
 }
 
-function roomBody(r: RoomPlan): Record<string, unknown> {
+function roomCore(r: RoomPlan): Record<string, unknown> {
   return {
     name: r.name,
     roomType: r.roomType,
@@ -227,6 +338,70 @@ function roomBody(r: RoomPlan): Record<string, unknown> {
     maxPeople: r.maxPeople,
     ...(r.minStay != null ? { minStay: r.minStay } : {}),
     ...(r.rackRate != null ? { rackRate: r.rackRate } : {}),
+    ...(r.cleaningFee != null ? { cleaningFee: r.cleaningFee } : {}),
+  };
+}
+
+function propertyCore(plan: PropertyPlan, rooms: RoomPlan[]): Record<string, unknown> {
+  return {
+    name: plan.name,
+    propertyType: plan.propertyType,
+    currency: plan.currency,
+    ...(plan.address ? { address: plan.address } : {}),
+    ...(plan.city ? { city: plan.city } : {}),
+    country: plan.country,
+    ...(plan.email ? { email: plan.email } : {}),
+    ...(plan.phone ? { phone: plan.phone } : {}),
+    ...(plan.checkInStart ? { checkInStart: plan.checkInStart } : {}),
+    ...(plan.checkOutEnd ? { checkOutEnd: plan.checkOutEnd } : {}),
+    roomTypes: rooms.map(roomCore),
+  };
+}
+
+/** Messages d'une réponse d'écriture v2 (multiplePostResponse) qui ne sont
+ *  pas des échecs : `errors` sur un élément réussi, `warnings`, `info`. */
+function responseMessages(data: unknown): string[] {
+  const out: string[] = [];
+  if (!Array.isArray(data)) return out;
+  for (const item of data) {
+    if (!item || typeof item !== "object") continue;
+    for (const key of ["errors", "warnings", "info"] as const) {
+      const list = (item as Record<string, unknown>)[key];
+      if (!Array.isArray(list)) continue;
+      for (const m of list) {
+        const o = (m && typeof m === "object" ? m : {}) as Record<string, unknown>;
+        const text = typeof o.message === "string" ? o.message : JSON.stringify(m);
+        const label = key === "errors" ? "erreur" : key === "warnings" ? "avertissement" : "info";
+        out.push(`${label} Beds24${typeof o.field === "string" && o.field ? ` (${o.field})` : ""} : ${text}`);
+      }
+    }
+  }
+  return out;
+}
+
+/** Ce que la création envoie, en clair, pour le récapitulatif. */
+function sentSummary(plan: PropertyPlan) {
+  return {
+    propriete: [
+      "nom", "type (cottage)", `devise ${plan.currency}`, `pays ${plan.country}`,
+      ...(plan.address ? ["adresse"] : []), ...(plan.city ? ["commune"] : []),
+      ...(plan.email ? ["e-mail"] : []), ...(plan.phone ? ["téléphone"] : []),
+      ...(plan.checkInStart ? [`arrivée dès ${plan.checkInStart}`] : []),
+      ...(plan.checkOutEnd ? [`départ avant ${plan.checkOutEnd}`] : []),
+      "description", "règlement intérieur",
+    ],
+    rooms: plan.rooms.map((r) => ({
+      unitId: r.unitId,
+      name: r.name,
+      champs: [
+        `capacité ${r.maxPeople}`,
+        ...(r.minStay != null ? [`${r.minStay} nuit(s) min.`] : []),
+        ...(r.rackRate != null ? [`prix de base ${r.rackRate} ${plan.currency}`] : []),
+        ...(r.cleaningFee != null ? [`ménage ${r.cleaningFee} ${plan.currency}`] : []),
+        ...(r.description ? ["description"] : []),
+        ...(r.featureCodes.length ? [`équipements : ${r.featureCodes.join(", ")}`] : []),
+      ],
+    })),
   };
 }
 
@@ -236,27 +411,39 @@ export interface CreationResult {
   rooms: { unitId: number; name: string; beds24RoomId: number; creee: boolean }[];
   directOnly: PropertyPlan["directOnly"];
   ancienMapping: { beds24PropertyId: number | null; rooms: { unitId: number; beds24RoomId: number | null }[] };
+  envoye: ReturnType<typeof sentSummary>;
+  /** Textes et équipements : envoyés et acceptés, ou le refus de Beds24. */
+  contenu: { ok: boolean; erreur?: string };
+  /** « À compléter dans Beds24 » : propriété, puis par hébergement. */
+  aCompleter: { propriete: string[]; rooms: { unitId: number; name: string; points: string[]; photos: PhotoPlan[] }[] };
+  avertissements: string[];
 }
 
-/** Crée (ou retrouve) la propriété et ses rooms chez Beds24, puis écrit le
- *  mapping en base. Lève CreationRefusee (garde-fou) ou Beds24Error (refus de
- *  l'API, message en clair). */
+/** Crée (ou retrouve) la propriété et ses rooms chez Beds24, écrit le
+ *  mapping, puis envoie textes et équipements. Lève CreationRefusee
+ *  (garde-fou) ou Beds24Error (refus de l'API, message en clair). */
 export async function createBeds24Property(env: Env, propertyId: number, actor: string): Promise<CreationResult> {
   const db = env.DB;
   if (!beds24WritesAllowed(env)) {
-    throw new CreationRefusee(
-      "écriture Beds24 bloquée hors production — la création se fait depuis le site en ligne",
-      403,
-    );
+    throw new CreationRefusee("écriture Beds24 bloquée sur ce serveur — la création se fait depuis le site en ligne", 403);
   }
-  const plan = await buildPropertyPlan(db, propertyId);
+  const plan = await buildPropertyPlan(db, propertyId, env.PUBLIC_BASE_URL);
   if (plan.rooms.length === 0) throw new CreationRefusee("aucun hébergement vendable sur les canaux dans ce domaine", 400);
   const property = (await getProperty(db, propertyId))!;
   const units = await listUnits(db, propertyId);
 
-  if (!(await takeLock(db))) throw new CreationRefusee("une création Beds24 est déjà en cours — réessaie dans deux minutes", 409);
+  const owner = await takeLock(db);
+  if (!owner) throw new CreationRefusee("une création Beds24 est déjà en cours — réessaie dans cinq minutes", 409);
   try {
-    const before = await beds24ListProperties(env);
+    const status = await beds24Status(env);
+    if (!status.connected) throw new Beds24Error(`liaison Beds24 inactive : ${status.error ?? "inconnue"}`);
+    if (status.compte?.limiteAPropriete != null) {
+      throw new CreationRefusee(
+        `le jeton Beds24 est restreint à la propriété #${status.compte.limiteAPropriete} : il ne voit pas le reste du compte — générer un code d'invitation sans restriction`,
+        409,
+      );
+    }
+    const before = status.properties ?? [];
     const mapping = mappingStatus(property, units, before);
     if (mapping.etat === "actif") {
       throw new CreationRefusee(
@@ -265,53 +452,87 @@ export async function createBeds24Property(env: Env, propertyId: number, actor: 
         { beds24PropertyId: property.beds24PropertyId },
       );
     }
-    const homonymes = before.filter((p) => sameName(p.name, plan.name));
-    if (homonymes.length > 1) {
-      throw new CreationRefusee(
-        `plusieurs propriétés « ${plan.name} » dans le compte Beds24 (#${homonymes.map((p) => p.id).join(", #")}) — en supprimer les doublons dans Beds24 avant de relier`,
-        409,
-        { ids: homonymes.map((p) => p.id) },
-      );
+
+    // Tentative précédente inachevée : une propriété apparue depuis est la nôtre.
+    const avertissements: string[] = [];
+    let existing: Beds24PropertySummary | null = null;
+    const attemptRaw = await getSetting(db, attemptKey(propertyId));
+    if (attemptRaw) {
+      const knownIds = new Set<number>(((JSON.parse(attemptRaw) as { beforeIds?: number[] }).beforeIds ?? []).map(Number));
+      const appeared = before.filter((p) => !knownIds.has(p.id));
+      if (appeared.length > 1) {
+        throw new CreationRefusee(
+          `une création précédente n'a pas abouti et ${appeared.length} propriétés sont apparues depuis dans le compte (#${appeared.map((p) => p.id).join(", #")}) — vérifier dans Beds24 avant de relancer`,
+          409,
+        );
+      }
+      const candidate = appeared[0];
+      if (appeared.length === 1 && candidate) {
+        // On ne reprend d'office que si le nom concorde : une propriété créée
+        // à la main entre-temps (autre domaine) ne doit pas être captée.
+        if (!sameName(candidate.name, plan.name)) {
+          throw new CreationRefusee(
+            `une création précédente n'a pas abouti et la propriété #${candidate.id} (« ${candidate.name} ») est apparue depuis dans le compte — si c'est la nôtre, la renommer « ${plan.name} » dans Beds24 puis relancer ; sinon, vérifier avant de relancer`,
+            409,
+          );
+        }
+        existing = candidate;
+        avertissements.push(`reprise de la propriété #${candidate.id} apparue lors d'une tentative précédente inachevée`);
+      }
     }
-    const existing = homonymes[0] ?? null;
+    if (!existing) {
+      const homonymes = before.filter((p) => sameName(p.name, plan.name));
+      if (homonymes.length > 1) {
+        throw new CreationRefusee(
+          `plusieurs propriétés « ${plan.name} » dans le compte Beds24 (#${homonymes.map((p) => p.id).join(", #")}) — en supprimer les doublons dans Beds24 avant de relier`,
+          409,
+          { ids: homonymes.map((p) => p.id) },
+        );
+      }
+      existing = homonymes[0] ?? null;
+    }
     const missing = plan.rooms.filter((r) => !(existing?.roomTypes ?? []).some((rt) => sameName(rt.name, r.name)));
     const propertyCreated = existing == null;
 
+    let prop: Beds24PropertySummary;
     if (existing == null) {
-      await beds24Fetch(env, "/properties", {
-        method: "POST",
-        body: [
-          {
-            name: plan.name,
-            propertyType: plan.propertyType,
-            currency: plan.currency,
-            ...(plan.address ? { address: plan.address } : {}),
-            ...(plan.city ? { city: plan.city } : {}),
-            country: plan.country,
-            ...(plan.email ? { email: plan.email } : {}),
-            ...(plan.phone ? { phone: plan.phone } : {}),
-            roomTypes: plan.rooms.map(roomBody),
-          },
-        ],
-      });
+      // Marqueur AVANT le POST : si la suite échoue, on saura reconnaître la
+      // propriété créée au lieu d'en refaire une.
+      await db
+        .prepare(
+          "INSERT INTO app_settings (key, value, updated_at) VALUES (?1, ?2, datetime('now')) " +
+            "ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = datetime('now')",
+        )
+        .bind(attemptKey(propertyId), JSON.stringify({ beforeIds: before.map((p) => p.id), name: plan.name }))
+        .run();
+      const res = await beds24Fetch(env, "/properties", { method: "POST", body: [propertyCore(plan, plan.rooms)] });
+      avertissements.push(...responseMessages(res));
+      const after = await beds24ListProperties(env);
+      const knownIds = new Set(before.map((p) => p.id));
+      const appeared = after.filter((p) => !knownIds.has(p.id));
+      const byName = after.filter((p) => sameName(p.name, plan.name));
+      const found = appeared.length === 1 ? appeared[0] : byName.length === 1 ? byName[0] : undefined;
+      if (!found) {
+        throw new Beds24Error(
+          `Beds24 a répondu à la création mais la propriété n'est pas identifiable à la relecture (${appeared.length} nouvelle(s)) — mapping non écrit ; un nouvel essai reprendra la propriété apparue sans en créer une autre`,
+        );
+      }
+      prop = found;
     } else if (missing.length > 0) {
-      await beds24Fetch(env, "/properties", {
+      const target = existing;
+      const res = await beds24Fetch(env, "/properties", {
         method: "POST",
-        body: [{ id: existing.id, roomTypes: missing.map(roomBody) }],
+        body: [{ id: target.id, roomTypes: missing.map(roomCore) }],
       });
+      avertissements.push(...responseMessages(res));
+      const after = await beds24ListProperties(env);
+      const found = after.find((p) => p.id === target.id);
+      if (!found) throw new Beds24Error(`propriété Beds24 #${target.id} introuvable à la relecture — mapping non écrit`);
+      prop = found;
+    } else {
+      prop = existing;
     }
 
-    // Relecture : les ids viennent de ce que le compte montre.
-    const after = existing != null && missing.length === 0 ? before : await beds24ListProperties(env);
-    const target = after.filter((p) => sameName(p.name, plan.name));
-    const prop = target[0];
-    if (target.length !== 1 || !prop) {
-      throw new Beds24Error(
-        target.length === 0
-          ? `Beds24 a accepté la création mais la propriété « ${plan.name} » n'apparaît pas à la relecture — vérifier le compte avant de relancer`
-          : `plusieurs propriétés « ${plan.name} » à la relecture (#${target.map((p) => p.id).join(", #")}) — mapping non écrit`,
-      );
-    }
     const rooms = plan.rooms.map((r) => {
       const rt = (prop.roomTypes ?? []).filter((x) => sameName(x.name, r.name));
       const room = rt[0];
@@ -327,8 +548,10 @@ export async function createBeds24Property(env: Env, propertyId: number, actor: 
       beds24PropertyId: property.beds24PropertyId,
       rooms: units.filter((u) => u.beds24RoomId != null).map((u) => ({ unitId: u.id, beds24RoomId: u.beds24RoomId })),
     };
-    // Écriture atomique : propriété, rooms des maisons, et effacement de tout
-    // ancien room id resté sur une autre unité du domaine (mapping périmé).
+    const propriete = { beds24PropertyId: prop.id, name: prop.name, creee: propertyCreated };
+    // Écriture atomique : propriété, rooms des maisons, effacement de tout
+    // ancien room id resté sur une autre unité du domaine, journal, et levée
+    // du marqueur de tentative.
     const keep = new Set(rooms.map((r) => r.unitId));
     await db.batch([
       db.prepare("UPDATE properties SET beds24_property_id = ?1 WHERE id = ?2").bind(prop.id, propertyId),
@@ -336,22 +559,67 @@ export async function createBeds24Property(env: Env, propertyId: number, actor: 
       ...units
         .filter((u) => !keep.has(u.id) && u.beds24RoomId != null)
         .map((u) => db.prepare("UPDATE units SET beds24_room_id = NULL WHERE id = ?1").bind(u.id)),
+      db
+        .prepare("INSERT INTO audit_log (actor, action, entity, detail) VALUES ('admin', 'beds24.creer_propriete', ?1, ?2)")
+        .bind(`property:${propertyId}`, JSON.stringify({
+          par: actor,
+          propriete,
+          rooms: rooms.map((r) => ({ unitId: r.unitId, beds24RoomId: r.beds24RoomId, creee: r.creee })),
+          ancienMapping,
+          avertissements,
+        })),
+      db.prepare("DELETE FROM app_settings WHERE key = ?1").bind(attemptKey(propertyId)),
     ]);
-    const result: CreationResult = {
+
+    // Enrichissement, au mieux : textes et équipements. Un refus est rapporté
+    // et journalisé ; la propriété et le mapping restent en place.
+    let contenu: CreationResult["contenu"] = { ok: true };
+    try {
+      const res = await beds24Fetch(env, "/properties", {
+        method: "POST",
+        body: [
+          {
+            id: prop.id,
+            texts: [{ language: LANGUE, propertyDescription: plan.description, houseRules: plan.houseRules }],
+            roomTypes: rooms.map((r) => {
+              const p = plan.rooms.find((x) => x.unitId === r.unitId)!;
+              return {
+                id: r.beds24RoomId,
+                ...(p.description ? { texts: [{ language: LANGUE, roomDescription: p.description }] } : {}),
+                // Une ligne de codes : forme du champ « Features » (wiki Beds24).
+                ...(p.featureCodes.length ? { featureCodes: [p.featureCodes] } : {}),
+              };
+            }),
+          },
+        ],
+      });
+      avertissements.push(...responseMessages(res));
+    } catch (e) {
+      if (!(e instanceof Beds24Error)) throw e;
+      contenu = { ok: false, erreur: e.message };
+    }
+    await audit(db, "admin", contenu.ok ? "beds24.creer_propriete_contenu" : "beds24.creer_propriete_contenu_echec", `property:${propertyId}`, {
+      par: actor, beds24PropertyId: prop.id, ...contenu,
+    });
+
+    return {
       ok: true,
-      propriete: { beds24PropertyId: prop.id, name: prop.name, creee: propertyCreated },
+      propriete,
       rooms,
       directOnly: plan.directOnly,
       ancienMapping,
+      envoye: sentSummary(plan),
+      contenu,
+      aCompleter: {
+        propriete: [
+          ...(contenu.ok ? [] : [`Textes et équipements refusés par Beds24 (${contenu.erreur}) : à saisir à la main`]),
+          ...plan.aCompleter,
+        ],
+        rooms: plan.rooms.map((r) => ({ unitId: r.unitId, name: r.name, points: r.aCompleter, photos: r.photos })),
+      },
+      avertissements,
     };
-    await audit(db, "admin", "beds24.creer_propriete", `property:${propertyId}`, {
-      par: actor,
-      propriete: result.propriete,
-      rooms: rooms.map((r) => ({ unitId: r.unitId, beds24RoomId: r.beds24RoomId, creee: r.creee })),
-      ancienMapping,
-    });
-    return result;
   } finally {
-    await releaseLock(db);
+    await releaseLock(db, owner);
   }
 }
