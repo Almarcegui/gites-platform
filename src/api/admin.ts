@@ -149,6 +149,11 @@ import {
 } from "../services/booking-flow";
 import { buildBalanceReminderEmail, queueEmail } from "../services/email";
 import { importElloha } from "../services/elloha-import";
+import { replyOnChannel } from "../services/beds24-messages";
+import { exportSql } from "../services/export-db";
+import {
+  createServiceKey, listServiceKeys, resolveServiceKey, revokeServiceKey, validServiceKeyName,
+} from "../services/service-keys";
 import { processInboundEmail, type ParsedEmail } from "../services/inbound-email";
 import { syncFeed } from "../services/ical";
 import { countDirectBookings, countSearchStages, listSearchLog } from "../services/search-log";
@@ -212,16 +217,51 @@ function currentUser(req: Request): string {
   return REQUEST_USER.get(req) ?? "admin";
 }
 
+/** Comment la requête s'est authentifiée. « humain » = session de la page de
+ *  connexion, ou secret ADMIN_TOKEN (couple nommé ou jeton nu historique : l'accès
+ *  de secours du propriétaire) ; jamais une clé de service ni le compte sauvegarde. */
+type AuthKind = "session" | "paire" | "nu" | "service" | "access";
+const REQUEST_KIND = new WeakMap<Request, AuthKind>();
+
+function isHuman(req: Request): boolean {
+  const kind = REQUEST_KIND.get(req);
+  return (kind === "session" || kind === "paire" || kind === "nu") && currentUser(req) !== BACKUP_USER;
+}
+
+/** Compte de la sauvegarde de nuit (scripts/sauvegarde_nuit.py, depuis le Mac) :
+ *  identifiant réservé, qui n'ouvre QUE l'export de la base (et sa propre
+ *  déconnexion). Une fuite de son mot de passe donne une copie des données —
+ *  c'est son métier — mais aucune écriture, aucun réglage, aucun compte. */
+export const BACKUP_USER = "sauvegarde";
+const BACKUP_ROUTES = new Set(["/api/admin/export.sqlite", "/api/admin/export.sql", "/api/admin/logout"]);
+
+function backupAccountRefused(username: string, url: URL): Response | null {
+  if (username !== BACKUP_USER || BACKUP_ROUTES.has(url.pathname)) return null;
+  return apiError(403, "le compte « sauvegarde » n'ouvre que l'export de la base");
+}
+
 function guard(handler: Handler): Handler {
   return async (req, env, params, url, ctx) => {
     const header = req.headers.get("authorization") ?? "";
     const presented = header.startsWith("Bearer ") ? header.slice(7) : "";
 
+    // 0) Accès de service (Claude, scripts du Mac) : clé svc:<clé>, droits admin.
+    if (presented.startsWith("svc:")) {
+      const name = await resolveServiceKey(env.DB, presented.slice(4));
+      if (!name) return apiError(401, "clé de service inconnue ou révoquée");
+      REQUEST_USER.set(req, `svc:${name}`);
+      REQUEST_KIND.set(req, "service");
+      return handler(req, env, params, url, ctx);
+    }
+
     // 1) Session de la page de login (comptes en base — page Utilisateurs).
     if (presented.startsWith("session:")) {
       const username = await sessionUser(env.DB, presented.slice(8));
       if (!username) return apiError(401, "session expirée ou révoquée");
+      const refused = backupAccountRefused(username, url);
+      if (refused) return refused;
       REQUEST_USER.set(req, username);
+      REQUEST_KIND.set(req, "session");
       return handler(req, env, params, url, ctx);
     }
 
@@ -233,10 +273,29 @@ function guard(handler: Handler): Handler {
       let ok = false;
       if (sep > 0) {
         ok = checkCredentials(raw, presented.slice(0, sep), presented.slice(sep + 1));
-        if (ok) REQUEST_USER.set(req, presented.slice(0, sep));
+        if (ok) {
+          const refused = backupAccountRefused(presented.slice(0, sep), url);
+          if (refused) return refused;
+          REQUEST_USER.set(req, presented.slice(0, sep));
+          REQUEST_KIND.set(req, "paire");
+        }
       } else {
         // Pas de sortie anticipée : chaque candidat est comparé à temps constant.
-        for (const e of parseAdminEntries(raw)) ok = safeEqual(presented, e.password) || ok;
+        // Le mot de passe nu de la paire « sauvegarde:… » reste celui du compte
+        // de sauvegarde : il n'ouvre que l'export, comme la paire complète.
+        let matched: string | null = null;
+        for (const e of parseAdminEntries(raw)) {
+          if (safeEqual(presented, e.password)) {
+            ok = true;
+            if (matched === null || e.user !== BACKUP_USER) matched = e.user;
+          }
+        }
+        if (ok && matched === BACKUP_USER) {
+          const refused = backupAccountRefused(BACKUP_USER, url);
+          if (refused) return refused;
+          REQUEST_USER.set(req, BACKUP_USER);
+        }
+        if (ok) REQUEST_KIND.set(req, "nu");
       }
       if (ok) return handler(req, env, params, url, ctx);
       return apiError(401, "non autorisé");
@@ -546,6 +605,7 @@ export function registerAdminRoutes(router: Router): void {
   }));
 
   router.post("/api/admin/users", guard(async (req, env) => {
+    if (!isHuman(req)) return apiError(403, "les comptes du back-office se gèrent depuis une session humaine (pas par une clé de service)");
     const body = (await req.json().catch(() => ({}))) as { username?: unknown };
     const username = typeof body.username === "string" ? body.username.trim().toLowerCase() : "";
     if (!/^[a-z0-9][a-z0-9._-]{1,19}$/.test(username)) {
@@ -563,6 +623,7 @@ export function registerAdminRoutes(router: Router): void {
   }));
 
   router.post("/api/admin/users/:id/reset-password", guard(async (req, env, p) => {
+    if (!isHuman(req)) return apiError(403, "les comptes du back-office se gèrent depuis une session humaine (pas par une clé de service)");
     const id = Number(p.id);
     const row = await env.DB.prepare("SELECT id, username FROM admin_users WHERE id = ?").bind(id)
       .first<{ id: number; username: string }>();
@@ -575,6 +636,7 @@ export function registerAdminRoutes(router: Router): void {
   }));
 
   router.patch("/api/admin/users/:id", guard(async (req, env, p) => {
+    if (!isHuman(req)) return apiError(403, "les comptes du back-office se gèrent depuis une session humaine (pas par une clé de service)");
     const id = Number(p.id);
     const body = (await req.json().catch(() => ({}))) as { active?: unknown };
     if (typeof body.active !== "boolean") return apiError(400, "champ active (booléen) requis");
@@ -589,6 +651,7 @@ export function registerAdminRoutes(router: Router): void {
   }));
 
   router.delete("/api/admin/users/:id", guard(async (req, env, p) => {
+    if (!isHuman(req)) return apiError(403, "les comptes du back-office se gèrent depuis une session humaine (pas par une clé de service)");
     const id = Number(p.id);
     const row = await env.DB.prepare("SELECT id, username FROM admin_users WHERE id = ?").bind(id)
       .first<{ id: number; username: string }>();
@@ -1741,7 +1804,7 @@ export function registerAdminRoutes(router: Router): void {
     if (!booking) return apiError(404, "réservation inconnue");
     const done = await cancelBooking(env.DB, id, String(body?.reason ?? "annulation admin"));
     if (!done) return apiError(409, "déjà annulée");
-    await audit(env.DB, "admin", "booking.cancel", `booking:${id}`, { reason: body?.reason });
+    await audit(env.DB, "admin", "booking.cancel", `booking:${id}`, { reason: body?.reason, par: currentUser(req) });
     if (booking.propertyId != null) triggerBeds24Push(env.DB, env, execCtx, booking.propertyId);
     return json({ ok: true, note: "Remboursement éventuel à traiter manuellement dans Stripe (politique d'annulation : TODO Julien)." });
   }));
@@ -2502,6 +2565,66 @@ export function registerAdminRoutes(router: Router): void {
     return json({ result });
   }));
 
+  // --- accès de service (Claude, scripts du Mac) -------------------------------------
+  // Liste : tout accès admin. Création et révocation : humains seulement (une clé
+  // ne fabrique pas d'autres clés). La clé en clair n'est rendue qu'une fois.
+  router.get("/api/admin/service-keys", guard(async (_req, env) => {
+    return json({ keys: await listServiceKeys(env.DB) });
+  }));
+
+  router.post("/api/admin/service-keys", guard(async (req, env) => {
+    if (!isHuman(req)) return apiError(403, "une clé de service se crée depuis une session humaine (page Utilisateurs)");
+    const body = await readJson<{ name?: unknown }>(req);
+    const name = typeof body?.name === "string" ? body.name.trim().toLowerCase() : "";
+    if (!validServiceKeyName(name)) return apiError(400, "nom invalide — 2 à 40 caractères parmi a-z, 0-9, point, tiret, underscore");
+    const exists = await env.DB.prepare("SELECT 1 FROM service_keys WHERE name = ?1").bind(name).first();
+    if (exists) return apiError(409, "ce nom existe déjà (une clé révoquée garde son nom : en choisir un autre)");
+    const { key, row } = await createServiceKey(env.DB, name, currentUser(req));
+    await audit(env.DB, "admin", "service_key.create", `service_key:${row.id}`, { name, par: currentUser(req) });
+    return json({ ok: true, key, serviceKey: row, header: "Authorization: Bearer svc:<clé>" });
+  }));
+
+  router.post("/api/admin/service-keys/:id/revoke", guard(async (req, env, p) => {
+    if (!isHuman(req)) return apiError(403, "une clé de service se révoque depuis une session humaine (page Utilisateurs)");
+    const id = intParam(p.id, 0);
+    if (!(await revokeServiceKey(env.DB, id, currentUser(req)))) return apiError(404, "clé inconnue ou déjà révoquée");
+    await audit(env.DB, "admin", "service_key.revoke", `service_key:${id}`, { par: currentUser(req) });
+    return json({ ok: true });
+  }));
+
+  // --- export de la base (sauvegarde de nuit, tirée depuis le Mac) ------------------
+  // .sqlite : fichier SQLite complet et cohérent (VACUUM INTO), Node seulement.
+  // .sql : schéma + données en SQL, les deux cibles (seule voie sur Workers).
+  // Ouvert à tout compte du back-office, et au compte réservé « sauvegarde ».
+  router.get("/api/admin/export.sqlite", guard(async (req, env) => {
+    if (!env.SQLITE_SNAPSHOT) {
+      return apiError(501, "export SQLite indisponible sur cette cible (Cloudflare) : utiliser /api/admin/export.sql");
+    }
+    const bytes = await env.SQLITE_SNAPSHOT();
+    await audit(env.DB, "admin", "export.sqlite", undefined, { octets: bytes.byteLength, par: currentUser(req) });
+    return new Response(bytes, {
+      headers: {
+        "content-type": "application/vnd.sqlite3",
+        "content-disposition": `attachment; filename="gites-${new Date().toISOString().slice(0, 10)}.sqlite"`,
+        "cache-control": "no-store",
+        "x-content-type-options": "nosniff",
+      },
+    });
+  }));
+
+  router.get("/api/admin/export.sql", guard(async (req, env) => {
+    const dump = await exportSql(env.DB);
+    await audit(env.DB, "admin", "export.sql", undefined, { tables: dump.tables, lignes: dump.rows, par: currentUser(req) });
+    return new Response(dump.sql, {
+      headers: {
+        "content-type": "application/sql; charset=utf-8",
+        "content-disposition": `attachment; filename="gites-${new Date().toISOString().slice(0, 10)}.sql"`,
+        "cache-control": "no-store",
+        "x-content-type-options": "nosniff",
+      },
+    });
+  }));
+
   // --- messages : les échanges clients vivent dans la plateforme --------------------
   router.get("/api/admin/messages", guard(async (_req, env, _p, url) => {
     const propertyId = intParam(url.searchParams.get("property"), 0) || undefined;
@@ -2546,14 +2669,15 @@ export function registerAdminRoutes(router: Router): void {
     const property = await getProperty(db, opts.propertyId);
     let delivery = "aucune";
     if (opts.toEmail && /@/.test(opts.toEmail)) {
-      await queueEmail(db, env, {
+      // Le statut réel de l'envoi (SMTP ou Resend), et non plus une déduction
+      // des variables : un échec d'envoi se voit comme tel dans le fil.
+      delivery = await queueEmail(db, env, {
         bookingId: opts.bookingId,
         to: opts.toEmail,
         subject: opts.subject,
         bodyText: opts.body,
         kind: "reply",
       });
-      delivery = env.EMAILS_ENABLED === "true" && env.RESEND_API_KEY ? "sent" : "stub";
     }
     const id = await insertOutboundMessage(db, {
       propertyId: opts.propertyId,
@@ -2576,6 +2700,21 @@ export function registerAdminRoutes(router: Router): void {
     const body = await readJson<{ body?: string }>(req);
     const text = String(body?.body ?? "").trim();
     if (text.length < 2) return apiError(400, "réponse vide");
+    // Message d'un canal (Airbnb, Booking…) : la réponse repart par Beds24, sur
+    // le canal du voyageur, et jamais par mail (l'adresse est souvent un relais).
+    if (original.channel === "beds24") {
+      try {
+        const result = await replyOnChannel(env, original, text);
+        await markMessage(env.DB, id, "traité");
+        return json({ ok: true, ...result });
+      } catch (e) {
+        if (e instanceof Beds24Error) {
+          await audit(env.DB, "admin", "message.reply.beds24.error", `message:${id}`, { error: e.message });
+          return apiError(502, `réponse non partie vers ${original.canal ?? "le canal"} : ${e.message}`);
+        }
+        throw e;
+      }
+    }
     const result = await sendTeamReply(env, {
       propertyId: original.propertyId ?? 1,
       bookingId: original.bookingId,

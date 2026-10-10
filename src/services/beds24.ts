@@ -142,7 +142,13 @@ function collectFailures(data: unknown): string[] {
 export async function beds24Fetch<T>(
   env: Env,
   path: string,
-  init: { method?: "GET" | "POST" | "DELETE"; body?: unknown; query?: Record<string, string> } = {},
+  init: {
+    method?: "GET" | "POST" | "PATCH" | "DELETE";
+    body?: unknown;
+    query?: Record<string, string>;
+    /** Reçoit les en-têtes de la réponse (quota X-FiveMinCreditLimit…), même en erreur. */
+    onHeaders?: (headers: Headers) => void;
+  } = {},
 ): Promise<T> {
   if (!(await beds24Configured(env))) throw new Beds24Error("Beds24 non configuré (aucun refresh token en base ni en secret)");
   const method = init.method ?? "GET";
@@ -174,6 +180,7 @@ export async function beds24Fetch<T>(
       "inconnu",
     );
   }
+  init.onHeaders?.(res.headers);
   const data = (await res.json().catch(() => ({}))) as T & { success?: boolean; error?: string };
   if (!res.ok) {
     throw new Beds24Error(`Beds24 ${path} → ${res.status} ${data.error ?? ""}`.trim(), res.status, res.status >= 500 ? "inconnu" : "refus");
@@ -286,4 +293,29 @@ export async function beds24Status(env: Env): Promise<{
     };
     return { connected: false, error: (e instanceof Error ? e.message : String(e)) + " | sondes: " + JSON.stringify(probes) };
   }
+}
+
+/** Quota de l'API v2 : des crédits sur une fenêtre glissante de 5 minutes,
+ *  partagés par tous les jetons du compte. Lu dans les en-têtes de chaque
+ *  réponse ; null quand Beds24 ne les envoie pas. */
+export interface Beds24Credit {
+  limit: number | null;
+  remaining: number | null;
+  resetsIn: number | null;
+  cost: number | null;
+}
+
+export function readBeds24Credit(h: Headers): Beds24Credit {
+  const n = (name: string): number | null => {
+    const v = h.get(name);
+    if (v == null || v.trim() === "") return null;
+    const x = Number(v);
+    return Number.isFinite(x) ? x : null;
+  };
+  return {
+    limit: n("X-FiveMinCreditLimit"),
+    remaining: n("X-FiveMinCreditLimit-Remaining"),
+    resetsIn: n("X-FiveMinCreditLimit-ResetsIn"),
+    cost: n("X-RequestCost"),
+  };
 }

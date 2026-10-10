@@ -4,6 +4,7 @@
 //   GITES_URL  (https://gites-platform.j-decartier.workers.dev, ou http://localhost:PORT)
 //   GITES_ID   identifiant admin (compte de la page Utilisateurs, ou couple ADMIN_TOKEN)
 //   GITES_MDP  mot de passe
+//   GITES_SERVICE_KEY  à la place des deux : clé d'accès de service (Bearer svc:<clé>)
 // stdout est réservé au protocole MCP ; le journal (sans donnée client) va sur stderr.
 
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";

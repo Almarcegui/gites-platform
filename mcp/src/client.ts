@@ -1,6 +1,10 @@
 // Client HTTP de l'API admin de la plateforme Gîtes.
 //
-// Authentification : POST /api/admin/login {user, password}.
+// Authentification, au choix :
+//  - GITES_SERVICE_KEY (clé d'accès de service, page Utilisateurs › Accès de
+//    service) : `Bearer svc:<clé>` à chaque requête, sans connexion ; une
+//    réponse 401 veut dire clé révoquée, jamais rejouée ;
+//  - sinon POST /api/admin/login {user, password} :
 //  - compte en base → { session } : on présente `Bearer session:<jeton>` ;
 //  - accès de secours ADMIN_TOKEN → pas de session : on présente `Bearer id:mdp`
 //    (la garde du Worker revérifie le couple à chaque requête).
@@ -15,6 +19,8 @@ export interface GitesConfig {
   baseUrl: string;
   user: string;
   password: string;
+  /** Clé d'accès de service : remplace user/password quand elle est posée. */
+  serviceKey?: string;
   timeoutMs?: number;
 }
 
@@ -34,13 +40,16 @@ export class NetworkError extends Error {}
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): GitesConfig {
   const baseUrl = (env.GITES_URL ?? "").trim().replace(/\/+$/, "");
+  const serviceKey = (env.GITES_SERVICE_KEY ?? "").trim();
   const user = (env.GITES_ID ?? "").trim();
   let password = env.GITES_MDP ?? "";
   // Variante sans mot de passe en clair dans un fichier de configuration :
   // GITES_MDP_TROUSSEAU=<service> lit le trousseau macOS (compte = GITES_ID).
   const service = (env.GITES_MDP_TROUSSEAU ?? "").trim();
-  if (!password && service && user) password = readKeychain(service, user);
-  const missing = [!baseUrl && "GITES_URL", !user && "GITES_ID", !password && "GITES_MDP (ou GITES_MDP_TROUSSEAU)"].filter(Boolean);
+  if (!serviceKey && !password && service && user) password = readKeychain(service, user);
+  const missing = serviceKey
+    ? [!baseUrl && "GITES_URL"].filter(Boolean)
+    : [!baseUrl && "GITES_URL", !user && "GITES_ID", !password && "GITES_MDP (ou GITES_MDP_TROUSSEAU, ou GITES_SERVICE_KEY)"].filter(Boolean);
   if (missing.length) throw new Error(`variables d'environnement manquantes : ${missing.join(", ")}`);
   let url: URL;
   try {
@@ -57,7 +66,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): GitesConfig {
     throw new Error("GITES_URL doit être en https:// (http:// accepté seulement pour localhost)");
   }
   const timeoutMs = Number(env.GITES_TIMEOUT_MS ?? "") || undefined;
-  return { baseUrl: url.origin, user, password, timeoutMs };
+  return { baseUrl: url.origin, user, password, timeoutMs, ...(serviceKey ? { serviceKey } : {}) };
 }
 
 function readKeychain(service: string, account: string): string {
@@ -119,6 +128,10 @@ export class GitesClient {
   }
 
   async #ensureLogin(force = false): Promise<void> {
+    if (this.cfg.serviceKey) {
+      this.#bearer = `svc:${this.cfg.serviceKey}`;
+      return;
+    }
     if (this.#bearer && !force) return;
     if (!this.#login) {
       this.#login = this.#doLogin().finally(() => {
@@ -172,7 +185,7 @@ export class GitesClient {
     await this.#ensureLogin();
     const started = Date.now();
     let res = await this.#raw(method, path, body, this.#bearer);
-    if (res.status === 401) {
+    if (res.status === 401 && !this.cfg.serviceKey) {
       // Session expirée / révoquée (ou mot de passe changé) : une seule reconnexion.
       logEvent("session.renouvelee");
       this.#bearer = null;

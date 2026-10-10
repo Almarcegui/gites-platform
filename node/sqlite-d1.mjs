@@ -11,6 +11,8 @@
 // la garantie anti-surbooking reste celle de SQLite — un seul écrivain à la
 // fois, donc aucune fenêtre entre le contrôle de disponibilité et l'insertion.
 
+import { readFileSync, rmSync } from "node:fs";
+import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
 /** node:sqlite peut renvoyer des BigInt pour les entiers ; le code métier
@@ -148,4 +150,22 @@ export class SqliteD1 {
 
 export function openDatabase(filePath) {
   return new SqliteD1(filePath);
+}
+
+/** Copie cohérente de toute la base, en octets (fichier SQLite complet).
+ *
+ *  `VACUUM INTO` écrit un instantané transactionnel : les écritures qui
+ *  arrivent pendant la copie ne s'y mêlent pas, et le WAL est intégré (pas de
+ *  fichier -wal à rapatrier à côté). La copie passe par un fichier temporaire
+ *  dans `dir` (le dossier de la base, inscriptible par définition), supprimé
+ *  avant de rendre la main, même en cas d'échec. Sert à
+ *  GET /api/admin/export.sqlite (sauvegarde de nuit tirée depuis le Mac). */
+export function snapshotSqlite(d1, dir) {
+  const tmp = join(dir, `.export-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.sqlite`);
+  try {
+    d1.raw.exec(`VACUUM INTO '${tmp.replaceAll("'", "''")}'`);
+    return new Uint8Array(readFileSync(tmp));
+  } finally {
+    rmSync(tmp, { force: true });
+  }
 }
