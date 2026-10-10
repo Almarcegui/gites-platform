@@ -210,7 +210,10 @@ export interface Message {
   id: number;
   propertyId: number | null;
   direction: "in" | "out";
-  channel: "email" | "form";
+  /** 'beds24' : message d'un canal OTA (Airbnb, Booking…) relevé par Beds24 — cf. canaux/canal.ts. */
+  channel: "email" | "form" | "beds24";
+  /** Nom du canal d'un message 'beds24' (« Airbnb »), sinon null. */
+  canal?: string | null;
   fromEmail: string;
   fromName: string | null;
   toEmail: string | null;

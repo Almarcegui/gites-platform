@@ -40,7 +40,9 @@ jobs:
     steps:
       - name: Interroger le contrôle de santé
         env:
-          URL: https://gites-platform.j-decartier.workers.dev/api/public/health
+          # La production est le site Node chez Infomaniak depuis le 10/10/2026
+          # (décision de Julien) ; le Mac la sonde aussi (scripts/gites_sonde.py, Telegram).
+          URL: https://dev1.mdcdy.be/api/public/health
           # Le cron tourne toutes les 15 min : 45 min = trois passages manqués.
           # Assez large pour absorber un retard de planification côté Cloudflare,
           # assez court pour ne pas découvrir la panne le lendemain.

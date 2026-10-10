@@ -2192,7 +2192,8 @@ export async function listBeds24Bookings(db: D1Database): Promise<BookingRow[]> 
 
 // ---------------------------------------------------------------------------
 // Messages — les échanges clients vivent dans la plateforme.
-// direction 'in' (client) / 'out' (équipe) · channel 'email' / 'form'
+// direction 'in' (client) / 'out' (équipe) · channel 'email' / 'form' / 'beds24'
+// ('beds24' = message d'un canal OTA relevé par le cron, cf. services/beds24-messages.ts)
 // ---------------------------------------------------------------------------
 
 export interface MessageRow {
@@ -2200,7 +2201,9 @@ export interface MessageRow {
   propertyId: number | null;
   messageId: string | null;
   direction: "in" | "out";
-  channel: "email" | "form";
+  channel: "email" | "form" | "beds24";
+  /** Canal d'origine d'un message 'beds24' (« Airbnb », « Booking.com »…), sinon null. */
+  canal: string | null;
   fromEmail: string;
   fromName: string | null;
   toEmail: string | null;
@@ -2220,7 +2223,8 @@ function mapMessage(r: Raw): MessageRow {
   return {
     id: num(r.id), propertyId: numOrNull(r.property_id), messageId: strOrNull(r.message_id),
     direction: str(r.direction) === "out" ? "out" : "in",
-    channel: str(r.channel) === "form" ? "form" : "email",
+    channel: str(r.channel) === "form" ? "form" : str(r.channel) === "beds24" ? "beds24" : "email",
+    canal: str(r.channel) === "beds24" ? strOrNull(r.canal) ?? "Canal Beds24" : null,
     fromEmail: str(r.from_email), fromName: strOrNull(r.from_name), toEmail: strOrNull(r.to_email),
     subject: str(r.subject), bodyText: str(r.body_text),
     bookingId: numOrNull(r.booking_id), bookingReference: strOrNull(r.booking_reference),
@@ -2232,7 +2236,8 @@ function mapMessage(r: Raw): MessageRow {
   };
 }
 
-const MESSAGE_JOIN = `SELECT e.*, b.reference AS booking_reference
+const MESSAGE_JOIN = `SELECT e.*, b.reference AS booking_reference,
+           (SELECT cm.channel_label FROM channel_messages cm WHERE cm.message_id = e.id LIMIT 1) AS canal
     FROM messages e LEFT JOIN bookings b ON b.id = e.booking_id`;
 
 export async function listMessages(

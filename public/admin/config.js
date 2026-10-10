@@ -8,6 +8,7 @@ import {
   openBooking, openModal, registerView, state, toCents, toast, todayIso,
 } from "./app.js";
 import { pctFr, readMarkupEdits } from "./markups.js";
+import { renderServiceKeys } from "./acces-service.js";
 
 const MODE_FR = {
   per_stay: "par séjour",
@@ -986,7 +987,9 @@ export function registerConfigViews() {
         ${data.users.length
           ? `<table><tr><th>Identifiant</th><th>État</th><th>Dernière connexion</th><th>Sessions actives</th><th class="r">Actions</th></tr>${rows}</table>`
           : `<p class="muted">Aucun compte en base — les accès actuels passent par le secret serveur.</p>`}
-      </div>`;
+      </div>
+      <div id="svcKeys"></div>`;
+    renderServiceKeys(root.querySelector("#svcKeys"));
 
     const showPassword = (username, password, titre) => {
       const bg = openModal(`

@@ -8,6 +8,18 @@ Ce registre ne contient ni donnée de voyageur, ni montant réel, ni identifiant
 compte. Les questions juridiques (obligations légales, CGV) se traitent hors de
 ce dépôt : il n'en garde que la conséquence pour le code.
 
+## 2026-10-10 — Une seule version : Infomaniak
+
+- **La production est le site Node.js chez Infomaniak** (`https://dev1.mdcdy.be`,
+  hébergement de Matthieu, clone de `main`) ; redéployer = merger dans `main` puis
+  redémarrer le site dans le Manager ; le Planificateur Infomaniak tient lieu de
+  cron. **Cloudflare s'éteint** (liste des étapes : `docs/mise-en-ligne.md`).
+- Pas d'accès SSH : sauvegarde de nuit tirée depuis le Mac par HTTPS (compte
+  réservé `sauvegarde`), sonde depuis le Mac avec alerte Telegram, mails par la
+  boîte SMTP Infomaniak (`reservations@` sur le domaine définitif).
+- Les messages Airbnb / Booking (par Beds24) arrivent dans la boîte Messages de
+  la plateforme et se répondent depuis elle.
+
 ## 2026-10-09 — Méthode de travail
 
 - **« Go » pour reprendre la méthode de l'application Greffe** : un `Makefile` aux

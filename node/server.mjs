@@ -11,8 +11,9 @@ import { existsSync, mkdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, extname, join, normalize, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { openDatabase } from "./sqlite-d1.mjs";
+import { openDatabase, snapshotSqlite } from "./sqlite-d1.mjs";
 import { applyMigrations } from "./migrate.mjs";
+import { smtpConfigFromEnv, smtpTransport } from "./smtp.mjs";
 
 const ROOT = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const PUBLIC_DIR = join(ROOT, "public");
@@ -67,6 +68,20 @@ const env = {
   BEDS24_REFRESH_TOKEN: process.env.BEDS24_REFRESH_TOKEN,
   BEDS24_WEBHOOK_KEY: process.env.BEDS24_WEBHOOK_KEY,
   BEDS24_WRITE_ENABLED: process.env.BEDS24_WRITE_ENABLED,
+  TURNSTILE_SITE_KEY: process.env.TURNSTILE_SITE_KEY,
+  TURNSTILE_SECRET_KEY: process.env.TURNSTILE_SECRET_KEY,
+  STRIPE_PUBLISHABLE_KEY: process.env.STRIPE_PUBLISHABLE_KEY,
+  STRIPE_UI: process.env.STRIPE_UI,
+  // Mails par SMTP (Infomaniak) : actif quand les quatre sont posés et
+  // EMAILS_ENABLED=true — cf. src/services/smtp.ts. Prime sur Resend.
+  SMTP_HOST: process.env.SMTP_HOST,
+  SMTP_PORT: process.env.SMTP_PORT,
+  SMTP_USER: process.env.SMTP_USER,
+  SMTP_PASSWORD: process.env.SMTP_PASSWORD,
+  MAIL_FROM: process.env.MAIL_FROM,
+  SMTP_SEND: smtpConfigFromEnv() ? smtpTransport(smtpConfigFromEnv()) : undefined,
+  // Instantané de la base pour GET /api/admin/export.sqlite (Node seulement).
+  SQLITE_SNAPSHOT: async () => snapshotSqlite(db, dirname(resolve(SQLITE_PATH))),
 };
 
 // --- routeur métier (code compilé depuis src/) ------------------------------
@@ -257,7 +272,8 @@ server.listen(PORT, () => {
   console.log(`[gites] écoute sur le port ${PORT}`);
   console.log(`[gites] base   : ${SQLITE_PATH}`);
   console.log(`[gites] URL    : ${env.PUBLIC_BASE_URL}`);
-  console.log(`[gites] emails : ${env.EMAILS_ENABLED === "true" ? "ACTIFS" : "stub (journalisés)"}`);
+  const transport = env.EMAILS_ENABLED !== "true" ? null : env.SMTP_SEND ? `SMTP ${env.SMTP_HOST}` : env.RESEND_API_KEY ? "Resend" : null;
+  console.log(`[gites] emails : ${transport ? `ACTIFS (${transport})` : "stub (journalisés)"}`);
   if (!env.ADMIN_TOKEN) console.warn("[gites] ⚠️ ADMIN_TOKEN absent — le back-office refusera tout (garde fail-closed)");
   if (!CRON_KEY) console.warn("[gites] ⚠️ CRON_KEY absente — /internal/cron est désactivé");
 });

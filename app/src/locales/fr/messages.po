@@ -55,10 +55,6 @@ msgstr ", déjà pris"
 msgid ", en retard"
 msgstr ", en retard"
 
-#: src/pages/Messages.tsx
-msgid ", et s'affiche sur la page du client"
-msgstr ", et s'affiche sur la page du client"
-
 #: src/calendar/Weeks.tsx
 msgid ", libre"
 msgstr ", libre"
@@ -1042,12 +1038,6 @@ msgstr "La liste n'a pas pu être lue. Réessayez."
 msgid "la nuit"
 msgstr "la nuit"
 
-#. placeholder {0}: message.fromEmail
-#. placeholder {1}: message.bookingId ? t`, et s'affiche sur la page du client` : ""
-#: src/pages/Messages.tsx
-msgid "La réponse part par mail à {0} quand l'envoi des mails est actif{1}."
-msgstr "La réponse part par mail à {0} quand l'envoi des mails est actif{1}."
-
 #. placeholder {0}: errorText(e)
 #: src/sale/SaleFlow.tsx
 msgid "La réservation est enregistrée, mais le lien de paiement n'a pas pu être créé : {0} Créez-le depuis la fiche."
@@ -1147,8 +1137,8 @@ msgid "Les deux maisons, après le Domaine"
 msgstr "Les deux maisons, après le Domaine"
 
 #: src/pages/Messages.tsx
-msgid "Les messages de votre site et les mails des clients arrivent ici. Ceux d'Airbnb et de Booking suivront."
-msgstr "Les messages de votre site et les mails des clients arrivent ici. Ceux d'Airbnb et de Booking suivront."
+msgid "Les messages de votre site, les mails des clients et les messages d'Airbnb et de Booking (par Beds24) arrivent ici."
+msgstr "Les messages de votre site, les mails des clients et les messages d'Airbnb et de Booking (par Beds24) arrivent ici."
 
 #: src/pages/Messages.tsx
 msgid "Les messages n'ont pas pu être lus."
@@ -1411,6 +1401,10 @@ msgstr "Pas de mail sur cette réservation : le message s'affichera seulement su
 #: src/calendar/Grid.tsx
 msgid "pas de prix"
 msgstr "pas de prix"
+
+#: src/pages/Messages.tsx
+msgid "Pas de réservation liée chez nous pour ce message."
+msgstr "Pas de réservation liée chez nous pour ce message."
 
 #. placeholder {0}: message.fromEmail
 #: src/pages/Messages.tsx

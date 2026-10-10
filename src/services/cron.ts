@@ -2,7 +2,8 @@
 //  1. expiration des holds périmés (filet de sécurité — la dispo n'en dépend pas)
 //  2. import des flux iCal actifs
 //  3. rappels de solde à l'échéance (une seule fois par résa, mode stub par défaut)
-//  4. push Beds24 des calendriers mappés (dispo + prix — inactif sans token)
+//  4. push Beds24 des calendriers mappés (dispo + prix — inactif sans token),
+//     puis relève des messages des canaux (services/beds24-messages.ts)
 //
 // Plus trois ménages : sessions admin périmées, sessions de paiement restées
 // « en attente » au-delà de leur durée de vie (issue #69), et purge du
@@ -22,6 +23,7 @@ import {
 } from "../db/repo";
 import { beds24Configured } from "./beds24";
 import { purgeExpiredSessions } from "./admin-auth";
+import { pullChannelMessages } from "./beds24-messages";
 import { pullBeds24Bookings, pushCalendars } from "./beds24-sync";
 import { runDailyDigest } from "./digest";
 import { runGuestRegisterPurge } from "./guest-register";
@@ -156,6 +158,14 @@ export async function runScheduled(env: Env, now: Date = new Date(), fetcher: ty
       } catch (e) {
         await audit(db, "cron", "beds24.push.error", `property:${p.id}`, { error: e instanceof Error ? e.message : String(e) });
       }
+    }
+    // Messages des canaux (Airbnb, Booking…) : UNE relève par passage, pour tout
+    // le compte, APRÈS le pull des réservations — un message d'une résa qui
+    // vient d'arriver trouve ainsi sa réservation. L'échec est déjà journalisé.
+    try {
+      await pullChannelMessages(env, now);
+    } catch {
+      /* beds24.messages.error au journal */
     }
   }
 

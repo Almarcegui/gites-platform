@@ -30,4 +30,20 @@ interface Env {
   /** Autorise les ÉCRITURES vers Beds24 (compte réel, pas de bac à sable).
    *  Déduit sinon de PUBLIC_BASE_URL en https:// — cf. beds24WritesAllowed(). */
   BEDS24_WRITE_ENABLED?: string;
+  /** Mails par SMTP (Infomaniak, site Node seulement) : actif quand les quatre
+   *  SMTP_HOST, SMTP_USER, SMTP_PASSWORD, MAIL_FROM sont posés, EMAILS_ENABLED
+   *  vaut "true" et que node/server.mjs a fourni SMTP_SEND. Prime sur Resend. */
+  SMTP_HOST?: string;
+  /** 465 (TLS direct, le défaut) ou 587 (STARTTLS obligatoire). */
+  SMTP_PORT?: string;
+  SMTP_USER?: string;
+  SMTP_PASSWORD?: string;
+  /** Expéditeur, « Nom <adresse> » ; sur Node, remplace RESEND_FROM. */
+  MAIL_FROM?: string;
+  /** Transport SMTP injecté par node/server.mjs (node:net/node:tls, absent sur
+   *  Workers, dont le runtime n'ouvre pas de socket SMTP sortante). */
+  SMTP_SEND?: (mail: { to: string; subject: string; text: string }) => Promise<{ id: string }>;
+  /** Instantané complet de la base SQLite (VACUUM INTO), injecté par
+   *  node/server.mjs ; absent sur Workers (export SQL à la place). */
+  SQLITE_SNAPSHOT?: () => Promise<Uint8Array>;
 }

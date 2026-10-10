@@ -1,9 +1,28 @@
 #!/opt/homebrew/bin/python3
-# Livraison de la plateforme (make livrer : production ; make livrer-essai : essai) sous un verrou par cible : gardes, sauvegarde, migrations distantes, déploiement, sonde.
-# Usage : /opt/homebrew/bin/python3 scripts/livrer.py --cible prod|essai   ·   /opt/homebrew/bin/python3 scripts/livrer.py --sonde prod|essai
-"""Livraison de la plateforme des gîtes, production ou essai.
+# Livraison de la plateforme sous un verrou par cible — make livrer : production Infomaniak (gardes, sauvegarde, push de main, geste Manager, sonde) ; make livrer-cloudflare / livrer-essai : Workers (gardes, sauvegarde, migrations distantes, wrangler deploy, sonde).
+# Usage : /opt/homebrew/bin/python3 scripts/livrer.py --cible prod|cloudflare|essai [--sans-sauvegarde]   ·   /opt/homebrew/bin/python3 scripts/livrer.py --sonde prod|cloudflare|essai
+"""Livraison de la plateforme des gîtes.
 
-La chaîne, dans cet ordre, et elle s'arrête à la première étape en échec :
+**Production = le site Node.js chez Infomaniak** (https://dev1.mdcdy.be,
+décision de Julien du 10/10/2026) : le serveur est un clone de `main` du dépôt
+GitHub, et se redéploie quand on le redémarre dans le Manager Infomaniak. Il
+applique lui-même les migrations au démarrage (node/migrate.mjs). Nous n'avons
+pas d'accès SSH. `make livrer` fait donc, dans cet ordre :
+1. gardes : arbre propre ; `make check` vert sur ce commit (marque
+   .wrangler/check-ok = HEAD) ; branche main ; `origin/main` est un ancêtre de
+   HEAD (rien à écraser, jamais de push forcé) ;
+2. verrou de la cible ;
+3. sauvegarde de la base de production (scripts/sauvegarde_nuit.py --cible
+   infomaniak, compte « sauvegarde ») : sans elle, rien ne part — sauf
+   `--sans-sauvegarde` (SANS_SAUVEGARDE=oui), le temps que le compte existe ;
+4. `git push origin main` (si HEAD n'y est pas déjà) ;
+5. le geste de Julien, rappelé : redémarrer le site dans le Manager ;
+   on attend Entrée (refus sans terminal : la sonde verrait l'ancienne version) ;
+6. sonde publique /api/public/health (statut 2xx, `ok` vaut true, une minute),
+   puis scripts/gites_sonde.py : traitement planifié rouge = sortie en échec.
+
+`make livrer-cloudflare` (l'ancien Worker, tant qu'il existe) et
+`make livrer-essai` gardent la chaîne Workers :
 1. gardes : arbre propre ; `make check` vert sur ce commit (marque
    .wrangler/check-ok = HEAD) ; production : branche main seulement ; wrangler
    du dépôt présent (node_modules/.bin, jamais un wrangler global ni un
@@ -38,9 +57,11 @@ WRANGLER = RACINE / "node_modules" / ".bin" / "wrangler"
 MARQUE_CHECK = RACINE / ".wrangler" / "check-ok"
 SECRETS_ESSAI = RACINE / ".secrets.essai"
 URLS = {
-    "prod": "https://gites-platform.j-decartier.workers.dev",
+    "prod": "https://dev1.mdcdy.be",
+    "cloudflare": "https://gites-platform.j-decartier.workers.dev",
     "essai": "https://gites-platform-essai.j-decartier.workers.dev",
 }
+MANAGER = "https://manager.infomaniak.com"
 
 
 class Refus(Exception):
@@ -68,11 +89,18 @@ def gardes(cible: str) -> str:
     marque = MARQUE_CHECK.read_text().strip() if MARQUE_CHECK.is_file() else ""
     if not head or marque != head:
         raise Refus(f"make check n'est pas passé sur ce commit ({head[:8]}) : lancer make check, seul, puis relivrer.")
-    if cible == "prod":
+    if cible in ("prod", "cloudflare"):
         branche = git("rev-parse", "--abbrev-ref", "HEAD")
         if branche != "main":
             raise Refus(f"la production ne se livre que depuis main (branche actuelle : {branche}).")
-    if not WRANGLER.exists():
+    if cible == "prod":
+        git("fetch", "--quiet", "origin", "main")
+        distant = git("rev-parse", "origin/main")
+        r = subprocess.run(["git", "merge-base", "--is-ancestor", distant, head], cwd=RACINE)
+        if r.returncode != 0:
+            raise Refus(f"origin/main ({distant[:8]}) n'est pas un ancêtre de HEAD ({head[:8]}) : "
+                        "git pull d'abord (jamais de push forcé).")
+    elif not WRANGLER.exists():
         raise Refus("node_modules/.bin/wrangler absent : make installer d'abord.")
     if cible == "essai" and not SECRETS_ESSAI.is_file():
         raise Refus(".secrets.essai manque (ADMIN_TOKEN d'essai ; il vit dans le clone principal, à recopier ici).")
@@ -155,6 +183,44 @@ def sonder(cible: str, duree_s: float = 60.0, pause_s: float = 5.0) -> None:
     raise Refus(f"sonde ROUGE : {url} ne répond pas ok après une minute (dernier : {dernier}).")
 
 
+def geste_manager() -> None:
+    print(
+        "\n── Geste de Julien : redémarrer le site dans le Manager Infomaniak\n"
+        f"   {MANAGER} → Hébergement web → site Node.js dev1.mdcdy.be → Redémarrer.\n"
+        "   Au démarrage, le serveur reprend main et applique lui-même les migrations en attente.",
+        flush=True,
+    )
+    input("   Entrée quand le site est redémarré (la sonde suit)… ")
+
+
+def livrer_infomaniak(sans_sauvegarde: bool) -> None:
+    # La sonde n'a de sens qu'après le redémarrage, que seul Julien fait : sans
+    # terminal pour l'attendre, elle validerait l'ancienne version.
+    if not sys.stdin.isatty():
+        raise Refus("make livrer se lance dans un terminal : il attend le redémarrage du site dans le Manager avant la sonde.")
+    head = gardes("prod")
+    verrou = verrou_de("prod")
+    try:
+        if sans_sauvegarde:
+            print("\n── Sauvegarde : SAUTÉE (--sans-sauvegarde) — à ne faire que tant que le compte « sauvegarde » n'existe pas.", flush=True)
+        else:
+            etape("Sauvegarde", [PYTHON, str(RACINE / "scripts" / "sauvegarde_nuit.py"), "--cible", "infomaniak", "--origine", "livraison"])
+        meme_arbre(head)
+        if git("rev-parse", "origin/main") == head:
+            print(f"\n── Push : origin/main est déjà {head[:8]}, rien à pousser.", flush=True)
+        else:
+            etape("Push de main", ["git", "push", "origin", f"{head}:refs/heads/main"])
+        geste_manager()
+        sonder("prod")
+        r = subprocess.run([PYTHON, str(RACINE / "scripts" / "gites_sonde.py"), "--url", URLS["prod"], "--sans-telegram"], cwd=RACINE)
+        if r.returncode != 0:
+            raise Refus(f"{head[:8]} est poussé et le site répond, mais la sonde complète est ROUGE "
+                        "(traitement planifié absent ou en retard : Planificateur Infomaniak ?). À régler avant de considérer la livraison faite.")
+        print(f"\nLivré : {head[:8]} sur la production ({URLS['prod']}).")
+    finally:
+        verrou.close()
+
+
 def livrer(cible: str) -> None:
     head = gardes(cible)
     verrou = verrou_de(cible)
@@ -162,16 +228,17 @@ def livrer(cible: str) -> None:
         if cible == "essai":
             verifier_secrets_essai()
         sauvegarde = [PYTHON, str(RACINE / "scripts" / "sauvegarde_nuit.py"), "--cible", cible, "--origine", "livraison"]
+        # cible « cloudflare » : l'ancien Worker de production et sa base D1
         if cible == "essai":
             sauvegarde.append("--base-vide-admise")  # première livraison : la base d'essai n'a encore aucune table
         etape("Sauvegarde", sauvegarde)
         meme_arbre(head)
-        if cible == "prod":
+        if cible == "cloudflare":
             etape("Migrations distantes", ["npm", "run", "-s", "db:migrate:remote"])
         else:
             etape("Migrations distantes", [str(WRANGLER), "d1", "migrations", "apply", "gites-platform-essai", "--remote", "--env", "essai"])
         meme_arbre(head)
-        if cible == "prod":
+        if cible == "cloudflare":
             etape("Déploiement", [str(WRANGLER), "deploy", "--env", "production"])
         else:
             meme_arbre(head)
@@ -187,10 +254,16 @@ def main() -> int:
     g = p.add_mutually_exclusive_group(required=True)
     g.add_argument("--cible", choices=sorted(URLS))
     g.add_argument("--sonde", choices=sorted(URLS))
+    p.add_argument("--sans-sauvegarde", action="store_true",
+                   help="prod seulement : livrer sans sauvegarde préalable (tant que le compte « sauvegarde » n'existe pas)")
     a = p.parse_args()
+    if a.sans_sauvegarde and a.cible != "prod":
+        p.error("--sans-sauvegarde ne vaut que pour --cible prod")
     try:
         if a.sonde:
             sonder(a.sonde)
+        elif a.cible == "prod":
+            livrer_infomaniak(a.sans_sauvegarde)
         else:
             livrer(a.cible)
     except Refus as e:
