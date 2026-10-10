@@ -212,27 +212,212 @@ export function derivedLines(markups: readonly ChannelMarkup[]): DerivedLine[] {
   return out;
 }
 
-/** `priceRules` d'une chambre : ligne 1 = prix direct poussé par le calendrier
- *  (ouverte aux canaux sans ligne dérivée), une ligne par canal relié, liée à la
- *  ligne 1. `enabled: false` défait les liens et rend la ligne 1 à tous les canaux. */
-export function priceRulesFor(lines: readonly DerivedLine[], enabled: boolean): unknown[] {
-  const base: Record<string, { enabled: boolean }> = {};
-  for (const l of lines) base[l.beds24Channel] = { enabled: !enabled };
-  return [
-    { id: 1, channels: base },
-    ...lines.map((l) => ({
-      id: l.priceId,
-      name: `${l.label} (prix direct × ${String(l.multiplier).replace(".", ",")})`,
-      priceLinking: enabled ? { roomId: null, priceId: 1, offsetMultiplier: l.multiplier, offsetAmount: 0 } : { priceId: null },
-      bookingPage: { direct: false, agent: false },
-      channels: { [l.beds24Channel]: { enabled } },
-    })),
-  ];
+// --- règles de prix d'une chambre Beds24 (priceRules) ------------------------
+//
+// Contrôle du 10/10/2026 (502 en production sur la propriété 359805) : le
+// premier envoi recréait les lignes 2 à 4 « à l'aveugle », sans lire ce que
+// Beds24 avait déjà, et le retour arrière renvoyait des lignes neuves avec un
+// lien nul — refusé à son tour. Désormais tout part de l'état LU chez Beds24
+// (GET /properties?includePriceRules=true) :
+//  - activer : ligne 1 fermée aux canaux reliés, une ligne par canal liée à la
+//    ligne 1 de la MÊME chambre (roomId explicite) ; une ligne créée reprend
+//    l'occupation et les séjours min./max. de la ligne 1 ;
+//  - désactiver : ligne 1 rouverte, et seules les lignes dérivées QUI EXISTENT
+//    sont déliées et fermées — jamais de ligne créée pour être aussitôt défaite ;
+//  - retour arrière : on relit, et on ne renvoie que l'écart à l'état d'avant.
+// Une ligne 2 à 16 qui n'est pas à nous (autre nom, pas liée à la ligne 1)
+// n'est jamais écrasée : refus avant tout envoi.
+
+/** Une ligne de prix telle que Beds24 la renvoie, réduite à ce qui nous sert. */
+export interface LiveRule {
+  id: number;
+  name: string | null;
+  link: { roomId: number | null; priceId: number; offsetMultiplier: number | null; offsetAmount: number | null } | null;
+  /** canal Beds24 → ouvert ou non (seuls les canaux présents dans la réponse). */
+  channels: Record<string, boolean>;
+  /** Champs recopiés sur une ligne créée (occupation, séjours, suppléments). */
+  copy: Record<string, unknown>;
 }
 
-/** Corps de `POST /properties` qui pose (ou défait) les prix dérivés d'une propriété. */
-export function priceLinkingBody(beds24PropertyId: number, roomIds: number[], lines: readonly DerivedLine[], enabled: boolean): unknown[] {
-  return [{ id: beds24PropertyId, roomTypes: roomIds.map((id) => ({ id, priceRules: priceRulesFor(lines, enabled) })) }];
+const COPIED_FIELDS = ["priceFor", "minimumStay", "maximumStay", "extraPerson", "extraChild"] as const;
+
+function num(v: unknown): number | null {
+  return typeof v === "number" && Number.isFinite(v) ? v : null;
+}
+
+/** Lignes de prix d'une chambre lues dans `GET /properties` (roomTypes[].priceRules). */
+export function parseLiveRules(raw: unknown): LiveRule[] {
+  if (!Array.isArray(raw)) return [];
+  const out: LiveRule[] = [];
+  for (const r of raw) {
+    if (!r || typeof r !== "object") continue;
+    const o = r as Record<string, unknown>;
+    const id = num(o.id);
+    if (id == null) continue;
+    const pl = (o.priceLinking && typeof o.priceLinking === "object" ? o.priceLinking : null) as Record<string, unknown> | null;
+    const linkedId = pl ? num(pl.priceId) : null;
+    const channels: Record<string, boolean> = {};
+    if (o.channels && typeof o.channels === "object") {
+      for (const [k, v] of Object.entries(o.channels as Record<string, unknown>)) {
+        if (v && typeof v === "object" && typeof (v as Record<string, unknown>).enabled === "boolean") channels[k] = (v as { enabled: boolean }).enabled;
+      }
+    }
+    const copy: Record<string, unknown> = {};
+    for (const f of COPIED_FIELDS) if (o[f] != null) copy[f] = o[f];
+    out.push({
+      id,
+      name: typeof o.name === "string" ? o.name : null,
+      link: linkedId != null && pl ? { roomId: num(pl.roomId), priceId: linkedId, offsetMultiplier: num(pl.offsetMultiplier), offsetAmount: num(pl.offsetAmount) } : null,
+      channels,
+      copy,
+    });
+  }
+  return out;
+}
+
+// « × » du premier envoi (10/10/2026) reconnu ; le nom envoyé est en ASCII,
+// un caractère de moins que Beds24 pourrait refuser dans un nom de ligne.
+const OUR_NAME = /\(prix direct [×x] [\d,]+\)$/;
+
+/** Ligne posée par nous : notre nom, ou liée à la ligne 1 de la même chambre. */
+export function isOurRule(rule: LiveRule, roomId: number): boolean {
+  if (rule.id === 1) return false;
+  if (rule.name != null && OUR_NAME.test(rule.name)) return true;
+  return rule.link != null && rule.link.priceId === 1 && (rule.link.roomId == null || rule.link.roomId === roomId);
+}
+
+export function derivedRuleName(l: DerivedLine): string {
+  return `${l.label} (prix direct x ${String(l.multiplier).replace(".", ",")})`;
+}
+
+export type RulesPlan = { ok: true; rules: Record<string, unknown>[] } | { ok: false; message: string };
+
+/** `priceRules` à envoyer pour une chambre, à partir de son état lu chez Beds24. */
+export function priceRulesFor(lines: readonly DerivedLine[], enabled: boolean, roomId: number, live: readonly LiveRule[]): RulesPlan {
+  const byId = new Map(live.map((r) => [r.id, r]));
+  const base = byId.get(1);
+  if (enabled) {
+    for (const l of lines) {
+      const existing = byId.get(l.priceId);
+      if (existing && !isOurRule(existing, roomId)) {
+        return { ok: false, message: `chambre Beds24 #${roomId} : la ligne de prix ${l.priceId} est déjà utilisée (« ${existing.name ?? "sans nom"} ») — rien n'est envoyé, libérer cette ligne dans Beds24 d'abord` };
+      }
+    }
+    const closed: Record<string, { enabled: boolean }> = {};
+    for (const l of lines) closed[l.beds24Channel] = { enabled: false };
+    const wanted = new Set(lines.map((l) => l.priceId));
+    // Une de nos lignes qui ne sert plus (canal retiré, ordre changé) est
+    // déliée et fermée : jamais deux lignes ouvertes au même canal.
+    const stale = live.filter((r) => isOurRule(r, roomId) && !wanted.has(r.id));
+    return {
+      ok: true,
+      rules: [
+        { id: 1, channels: closed },
+        ...lines.map((l) => {
+          const channels: Record<string, { enabled: boolean }> = {};
+          for (const [ch, on] of Object.entries(byId.get(l.priceId)?.channels ?? {})) if (on && ch !== l.beds24Channel) channels[ch] = { enabled: false };
+          channels[l.beds24Channel] = { enabled: true };
+          return {
+            id: l.priceId,
+            ...(byId.has(l.priceId) ? {} : (base?.copy ?? {})),
+            name: derivedRuleName(l),
+            priceLinking: { roomId, priceId: 1, offsetMultiplier: l.multiplier, offsetAmount: 0 },
+            bookingPage: { direct: false, agent: false },
+            channels,
+          };
+        }),
+        ...stale.map((r) => {
+          const shut: Record<string, { enabled: boolean }> = {};
+          for (const [ch, on] of Object.entries(r.channels)) if (on) shut[ch] = { enabled: false };
+          return { id: r.id, priceLinking: { priceId: null }, ...(Object.keys(shut).length ? { channels: shut } : {}) };
+        }),
+      ],
+    };
+  }
+  // Désactiver : « prix direct sur tous les canaux ».
+  const ours = live.filter((r) => isOurRule(r, roomId));
+  const open: Record<string, { enabled: boolean }> = {};
+  for (const l of lines) open[l.beds24Channel] = { enabled: true };
+  for (const r of ours) for (const [ch, on] of Object.entries(r.channels)) if (on) open[ch] = { enabled: true };
+  return {
+    ok: true,
+    rules: [
+      { id: 1, channels: open },
+      ...ours.map((r) => {
+        const shut: Record<string, { enabled: boolean }> = {};
+        for (const [ch, on] of Object.entries(r.channels)) if (on) shut[ch] = { enabled: false };
+        return { id: r.id, priceLinking: { priceId: null }, ...(Object.keys(shut).length ? { channels: shut } : {}) };
+      }),
+    ],
+  };
+}
+
+function sameLink(a: LiveRule["link"], b: LiveRule["link"]): boolean {
+  if (a == null || b == null) return a == null && b == null;
+  return a.priceId === b.priceId && (a.offsetMultiplier ?? 1) === (b.offsetMultiplier ?? 1) && (a.offsetAmount ?? 0) === (b.offsetAmount ?? 0);
+}
+
+/** Retour arrière : ce qu'il faut renvoyer pour que `current` redevienne
+ *  `before` sur les lignes `ids`. Vide si rien n'a bougé : rejouable à volonté. */
+export function restoreRules(before: readonly LiveRule[], current: readonly LiveRule[], ids: readonly number[]): Record<string, unknown>[] {
+  const was = new Map(before.map((r) => [r.id, r]));
+  const out: Record<string, unknown>[] = [];
+  for (const id of ids) {
+    const now = current.find((r) => r.id === id);
+    if (!now) continue; // jamais créée : rien à défaire
+    const old = was.get(id);
+    const rule: Record<string, unknown> = { id };
+    const channels: Record<string, { enabled: boolean }> = {};
+    for (const [ch, on] of Object.entries(now.channels)) {
+      const target = old ? old.channels[ch] : false; // une ligne créée par nous repart fermée
+      if (target !== undefined && target !== on) channels[ch] = { enabled: target };
+    }
+    if (Object.keys(channels).length) rule.channels = channels;
+    const targetLink = old ? old.link : null;
+    if (id !== 1 && !sameLink(now.link, targetLink)) {
+      rule.priceLinking = targetLink
+        ? { roomId: targetLink.roomId, priceId: targetLink.priceId, offsetMultiplier: targetLink.offsetMultiplier ?? 1, offsetAmount: targetLink.offsetAmount ?? 0 }
+        : { priceId: null };
+    }
+    if (Object.keys(rule).length > 1) out.push(rule);
+  }
+  return out;
+}
+
+export interface RoomRulesState {
+  roomId: number;
+  /** direct : prix direct partout ; derive : prix dérivés en place ; partiel : entre les deux (à remettre). */
+  etat: "direct" | "derive" | "partiel";
+  lignes: Array<{ id: number; nom: string | null; lieeA: number | null; multiplicateur: number | null; canauxOuverts: string[] }>;
+}
+
+/** Ce que Beds24 a réellement pour une chambre, comparé aux lignes attendues. */
+export function describeRoomRules(roomId: number, live: readonly LiveRule[], lines: readonly DerivedLine[]): RoomRulesState {
+  const base = live.find((r) => r.id === 1);
+  const ours = live.filter((r) => isOurRule(r, roomId));
+  const linkedOpen = ours.filter((r) => r.link != null && Object.values(r.channels).some(Boolean));
+  const baseOpenAll = lines.every((l) => base?.channels[l.beds24Channel] !== false);
+  const derivedComplete = lines.every((l) => {
+    const r = live.find((x) => x.id === l.priceId);
+    return r != null && r.link?.priceId === 1 && r.link.offsetMultiplier === l.multiplier && r.channels[l.beds24Channel] === true && base?.channels[l.beds24Channel] === false;
+  });
+  const etat = linkedOpen.length === 0 && baseOpenAll ? "direct" : lines.length > 0 && derivedComplete ? "derive" : "partiel";
+  return {
+    roomId,
+    etat,
+    lignes: live.map((r) => ({
+      id: r.id,
+      nom: r.name,
+      lieeA: r.link?.priceId ?? null,
+      multiplicateur: r.link?.offsetMultiplier ?? null,
+      canauxOuverts: Object.entries(r.channels).filter(([, on]) => on).map(([ch]) => ch),
+    })),
+  };
+}
+
+/** Corps de `POST /properties` qui pose (ou défait) des lignes de prix d'une propriété. */
+export function priceLinkingBody(beds24PropertyId: number, rooms: ReadonlyArray<{ id: number; priceRules: Record<string, unknown>[] }>): unknown[] {
+  return [{ id: beds24PropertyId, roomTypes: rooms.map((r) => ({ id: r.id, priceRules: r.priceRules })) }];
 }
 
 /** Majoration effective sur Airbnb : sa ligne dérivée si les prix dérivés sont

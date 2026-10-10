@@ -161,7 +161,7 @@ import { processInboundEmail, type ParsedEmail } from "../services/inbound-email
 import { syncFeed } from "../services/ical";
 import { countDirectBookings, countSearchStages, listSearchLog } from "../services/search-log";
 import { registerLot2AdminRoutes } from "./admin-lot2";
-import { registerLot3AdminRoutes, sendPriceLinking } from "./admin-lot3";
+import { PriceLinkingError, registerLot3AdminRoutes, sendPriceLinking } from "./admin-lot3";
 
 // --- garde d'authentification -------------------------------------------------
 
@@ -1200,13 +1200,13 @@ export function registerAdminRoutes(router: Router): void {
     let linking: { resent: boolean; error?: string } | undefined;
     if (parsePriceLinking(await getSetting(env.DB, PRICE_LINKING_KEY)).enabled && beds24WritesAllowed(env)) {
       try {
-        await sendPriceLinking(env, true, { enabled: true, markups: before.channels });
+        await sendPriceLinking(env, true);
         const lines = derivedLines(channels);
         await setSetting(env.DB, PRICE_LINKING_KEY, JSON.stringify({ enabled: true, sentMarkups: Object.fromEntries(lines.map((l) => [l.channel, l.markupPct])), sentAt: new Date().toISOString() }));
         linking = { resent: true };
       } catch (e) {
         linking = { resent: false, error: e instanceof Error ? e.message : String(e) };
-        await audit(env.DB, "admin", "beds24.price_linking_failed", "app", { error: linking.error, par: currentUser(req) });
+        await audit(env.DB, "admin", "beds24.price_linking_failed", "app", { error: linking.error, journal: e instanceof PriceLinkingError ? e.journal : undefined, par: currentUser(req) });
       }
     }
     if (linking) return json({ ...after, linking });

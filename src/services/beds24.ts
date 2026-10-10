@@ -43,7 +43,14 @@ let cachedToken: { value: string; expiresAt: number } | null = null;
 export class Beds24Error extends Error {
   /** `refus` : Beds24 a répondu non, rien n'a été appliqué. `inconnu` : panne
    *  réseau, délai ou erreur 5xx — une écriture a PU être appliquée. */
-  constructor(message: string, public status?: number, public issue: "refus" | "inconnu" = "refus") {
+  constructor(
+    message: string,
+    public status?: number,
+    public issue: "refus" | "inconnu" = "refus",
+    /** Corps de la réponse Beds24 tel quel (tronqué), pour l'audit et le
+     *  diagnostic : un refus sans `errors` se lit ici mot pour mot. */
+    public response?: unknown,
+  ) {
     super(message);
   }
 }
@@ -83,6 +90,35 @@ export function beds24WritesAllowed(env: Env): boolean {
   return env.BEDS24_WRITE_ENABLED === "true";
 }
 
+/** Texte d'un élément refusé qui ne porte ni `errors` ni `error` ni
+ *  `message` (10/10/2026 : POST /properties a répondu 201 avec un élément
+ *  `success: false` sans `errors`, et l'écran n'affichait que « échec ») :
+ *  ses `warnings` et `info` s'il en a, sinon l'élément entier, tel quel. */
+function withoutErrors(item: Record<string, unknown>): string {
+  const notes: string[] = [];
+  for (const key of ["warnings", "info"] as const) {
+    const list = item[key];
+    if (!Array.isArray(list)) continue;
+    for (const m of list) {
+      const o = (m && typeof m === "object" ? m : {}) as Record<string, unknown>;
+      const field = typeof o.field === "string" && o.field ? `${o.field} : ` : "";
+      notes.push(`${key === "warnings" ? "avertissement" : "info"} ${field}${typeof o.message === "string" ? o.message : JSON.stringify(m)}`);
+    }
+  }
+  if (notes.length) return notes.join(" ; ");
+  return `réponse sans motif : ${truncate(JSON.stringify(item), 600)}`;
+}
+
+export function truncate(text: string, max: number): string {
+  return text.length > max ? `${text.slice(0, max)}… (${text.length - max} caractères coupés)` : text;
+}
+
+/** Réponse Beds24 gardée pour l'audit : JSON tronqué à 4 000 caractères. */
+export function rawForAudit(data: unknown): unknown {
+  const text = JSON.stringify(data ?? null);
+  return text.length <= 4000 ? data : truncate(text, 4000);
+}
+
 /** L'API v2 répond parfois 200 avec un échec par élément
  *  ({ success:false, errors:[…] } par room) : un calendrier partiellement
  *  rejeté passait pour un push réussi. On remonte ces échecs en erreur. */
@@ -107,7 +143,9 @@ function collectFailures(data: unknown): string[] {
           .join(" ; ")
       : typeof errs === "string"
         ? errs
-        : JSON.stringify(errs ?? "échec");
+        : errs != null
+          ? JSON.stringify(errs)
+          : withoutErrors(item);
     return `${target != null ? `#${String(target)} ` : ""}${text}`;
   };
   // Les POST v2 (POST /properties, POST /inventory/rooms/calendar…) répondent
@@ -184,7 +222,7 @@ export async function beds24Fetch<T>(
   init.onHeaders?.(res.headers);
   const data = (await res.json().catch(() => ({}))) as T & { success?: boolean; error?: string };
   if (!res.ok) {
-    throw new Beds24Error(`Beds24 ${path} → ${res.status} ${data.error ?? ""}`.trim(), res.status, res.status >= 500 ? "inconnu" : "refus");
+    throw new Beds24Error(`Beds24 ${path} → ${res.status} ${data.error ?? ""}`.trim(), res.status, res.status >= 500 ? "inconnu" : "refus", rawForAudit(data));
   }
   const failures = collectFailures(data);
   if (failures.length > 0) {
@@ -195,6 +233,7 @@ export async function beds24Fetch<T>(
       `Beds24 ${path} → ${res.status} mais ${failures.length} élément(s) refusé(s) : ${failures.slice(0, 3).join(" · ")}`,
       res.status,
       partial ? "inconnu" : "refus",
+      rawForAudit(data),
     );
   }
   return data;
