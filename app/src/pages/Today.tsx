@@ -16,6 +16,7 @@ import { addDays, hourLabel, longDate, stayRange, titleDate, todayBrussels, week
 import { channelName, cleaningTasks, dayEvents, daySentence, isChannel, nombre, type CleaningTask, type DayEvent } from "../lib/derive";
 import { eur } from "../lib/money";
 import { useLayout } from "../lib/useLayout";
+import { HealthStrip } from "../shell/Health";
 import { useOpenBooking } from "../shell/Shell";
 
 function useDay() {
@@ -45,7 +46,7 @@ function useDay() {
     ...overdue.filter((o) => !arrivals.some((e) => e.booking.id === o.id)).map((o) => ({ id: o.id, name: o.guestName ?? o.reference, cents: o.balanceCents, late: true })),
   ];
   const holds = overviews.list.flatMap((o) => o.alerts.activeHolds);
-  return { incomplete, today, domains, isLoading, error, events, arrivals, departures, cleaning, toCollect, overdue, holds, messages };
+  return { overviews: overviews.list, incomplete, today, domains, isLoading, error, events, arrivals, departures, cleaning, toCollect, overdue, holds, messages };
 }
 
 function unitName(domains: DomainData[], b: PlanningBooking): string {
@@ -69,14 +70,17 @@ function TodayA() {
   const navigate = useNavigate();
   const openBooking = useOpenBooking();
   const total = d.toCollect.reduce((s, x) => s + x.cents, 0);
-  const list = (xs: string[]) => (xs.length > 2 ? [...xs.slice(0, 1), t`et ${xs.length - 1} autres`] : xs);
-  const items: { k: string; icon: ReactNode; title: string; count: string; lines: string[]; onClick: () => void }[] = [
+  // Bandeau du jour : un titre, un chiffre en grand, deux lignes au plus
+  // (« qui », puis « où et quand ») ; le reste se lit dans la fiche ou l'écran.
+  type Line = { main: string; sub?: string };
+  const list = (xs: Line[]): Line[] => (xs.length > 2 ? [xs[0]!, { main: t`et ${xs.length - 1} autres` }] : xs);
+  const items: { k: string; icon: ReactNode; title: string; count: string; lines: Line[]; onClick: () => void }[] = [
     {
       k: "arrive",
       icon: <IconLogin2 size={22} />,
       title: t`Arrivent`,
       count: String(d.arrivals.length),
-      lines: d.arrivals.length ? list(d.arrivals.map((e) => `${hourLabel(e.time)}, ${unitName(d.domains, e.booking)} : ${e.booking.guestName}${isChannel(e.booking) ? t`, via ${channelName(e.booking)}` : ""}`)) : [t`Personne aujourd'hui.`],
+      lines: d.arrivals.length ? list(d.arrivals.map((e) => ({ main: e.booking.guestName, sub: `${unitName(d.domains, e.booking)}, ${hourLabel(e.time)}${isChannel(e.booking) ? t`, via ${channelName(e.booking)}` : ""}` }))) : [{ main: t`Personne aujourd'hui.` }],
       onClick: () => (d.arrivals[0] ? openBooking(d.arrivals[0].booking.id) : undefined),
     },
     {
@@ -84,7 +88,7 @@ function TodayA() {
       icon: <IconLogout2 size={22} />,
       title: t`Partent`,
       count: String(d.departures.length),
-      lines: d.departures.length ? list(d.departures.map((e) => `${hourLabel(e.time)}, ${unitName(d.domains, e.booking)} : ${e.booking.guestName}`)) : [t`Personne aujourd'hui.`],
+      lines: d.departures.length ? list(d.departures.map((e) => ({ main: e.booking.guestName, sub: `${unitName(d.domains, e.booking)}, ${hourLabel(e.time)}` }))) : [{ main: t`Personne aujourd'hui.` }],
       onClick: () => (d.departures[0] ? openBooking(d.departures[0].booking.id) : undefined),
     },
     {
@@ -92,7 +96,7 @@ function TodayA() {
       icon: <IconBrush size={22} />,
       title: t`Ménage`,
       count: String(d.cleaning.length),
-      lines: d.cleaning.length ? list(d.cleaning.map((c) => (c.tight && c.next ? t`${c.unitName}, à finir avant ${hourLabel(c.next.checkinTime)}` : t`${c.unitName}, après ${hourLabel(c.time)}`))) : [t`Aucun ménage aujourd'hui.`],
+      lines: d.cleaning.length ? list(d.cleaning.map((c) => ({ main: c.unitName, sub: c.tight && c.next ? t`à finir avant ${hourLabel(c.next.checkinTime)}` : t`après ${hourLabel(c.time)}` }))) : [{ main: t`Aucun ménage aujourd'hui.` }],
       onClick: () => void navigate({ to: "/menage" }),
     },
     {
@@ -100,7 +104,7 @@ function TodayA() {
       icon: <IconCurrencyEuro size={22} />,
       title: t`À encaisser`,
       count: eur(total),
-      lines: d.toCollect.length ? list(d.toCollect.map((x) => `${x.name} : ${eur(x.cents)}${x.late ? t`, en retard` : t` à l'arrivée`}`)) : [t`Rien à encaisser aujourd'hui.`],
+      lines: d.toCollect.length ? list(d.toCollect.map((x) => ({ main: x.name, sub: `${eur(x.cents)}${x.late ? t`, en retard` : t`, à l'arrivée`}` }))) : [{ main: t`Rien aujourd'hui.` }],
       onClick: () => (d.toCollect[0] ? openBooking(d.toCollect[0].id) : undefined),
     },
     {
@@ -108,7 +112,7 @@ function TodayA() {
       icon: <IconMessage size={22} />,
       title: t`Messages`,
       count: String(d.messages.length),
-      lines: d.messages.length ? list(d.messages.map((m) => `${m.fromName || m.fromEmail} : ${m.subject}`)) : [t`Aucun message en attente.`],
+      lines: d.messages.length ? list(d.messages.map((m) => ({ main: m.fromName || m.fromEmail, sub: m.subject }))) : [{ main: t`Aucun en attente.` }],
       onClick: () => void navigate({ to: "/messages" }),
     },
   ];
@@ -118,16 +122,20 @@ function TodayA() {
       before={
         <>
         {d.incomplete ? <ErrorLine text={t`Une partie des données n'a pas pu être lue : les chiffres ci-dessous peuvent être incomplets. Rechargez la page.`} /> : null}
+        <HealthStrip overviews={d.overviews} />
         <div className="today" aria-label={t`La journée`}>
           {items.map((x) => (
             <button key={x.k} type="button" className="t-item" data-k={x.k} onClick={x.onClick}>
               <span className="t-h">
                 {x.icon}
                 {x.title}
-                <b>{x.count}</b>
               </span>
+              <b className="t-n">{x.count}</b>
               {x.lines.map((l, i) => (
-                <p key={i}>{l}</p>
+                <p key={i}>
+                  <span>{l.main}</span>
+                  {l.sub ? <small>{l.sub}</small> : null}
+                </p>
               ))}
             </button>
           ))}
@@ -296,6 +304,7 @@ function TodayB() {
           {daySentence(d.arrivals.length, d.departures.length)} {tight && tight.next ? <b>{t`${tight.unitName} doit être prête pour ${hourLabel(tight.next.checkinTime)}.`}</b> : null} {tailText}
         </p>
         {d.incomplete ? <ErrorLine text={t`Une partie des données n'a pas pu être lue : la journée peut être incomplète. Rechargez la page.`} /> : null}
+        <HealthStrip overviews={d.overviews} />
         {d.isLoading && rail.length === 0 ? <p className="loading">{t`Chargement de la journée…`}</p> : null}
         {rail.length ? (
           <ol className="rail">

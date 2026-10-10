@@ -32,6 +32,7 @@ import { eur } from "../lib/money";
 import { fillTemplate, templateLabels, type TemplateId } from "../lib/templates";
 import { useToast } from "../lib/toasts";
 import { useLayout } from "../lib/useLayout";
+import { RegisterSection } from "./Register";
 
 export type BookingState = "option" | "solde" | "soldee" | "plat" | "annulee";
 
@@ -269,12 +270,7 @@ function Fiche({ detail, dialog, setDialog }: { detail: BookingDetail; dialog: D
           {b.guestNotes ? <p className="note">{t`Demande du client : ${b.guestNotes}`}</p> : null}
         </Fold>
         <Fold title={t`Voyageurs inscrits`} count={t`registre`}>
-          <p className="note">
-            <Trans>La liste des voyageurs se remplit à l'arrivée (registre obligatoire). Pour le pilote, elle se saisit dans l'ancien écran.</Trans>
-          </p>
-          <a className="btn" href={`/admin/#/resa`} style={{ marginBottom: 14 }}>
-            <Trans>Ouvrir l'ancien écran</Trans>
-          </a>
+          <RegisterSection b={b} />
         </Fold>
         <Fold title={t`Historique`} count={String(detail.history.length)}>
           <ul>
@@ -445,7 +441,7 @@ function MoreMenu({ b, setDialog }: { b: Booking; setDialog: (d: Dialog) => void
 function Box({ open, onClose, title, children }: { open: boolean; onClose: () => void; title: string; children: ReactNode }) {
   const layout = useLayout();
   return (
-    <Modal opened={open} onClose={onClose} title={<b style={{ fontSize: 20 }}>{title}</b>} closeOnClickOutside={false} centered fullScreen={layout === "B"} size="lg" zIndex={400}>
+    <Modal opened={open} onClose={onClose} title={<b style={{ fontSize: 20 }}>{title}</b>} closeOnClickOutside={false} closeOnEscape={false} centered fullScreen={layout === "B"} size="lg" zIndex={400}>
       {children}
     </Modal>
   );

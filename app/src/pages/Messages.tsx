@@ -35,7 +35,11 @@ export function MessagesPage() {
     if (layout === "A" && selected == null && list[0]) setSelected(list[0].id);
   }, [layout, list, selected]);
   const current = (all.data ?? []).find((m) => m.id === selected) ?? list.find((m) => m.id === selected) ?? null;
-  useEffect(() => setSelected(wanted), [wanted]);
+  // Un lien ?msg= ouvre ce message ; sans lien, on garde la sélection (à
+  // l'ordinateur, le premier message s'ouvre de lui-même).
+  useEffect(() => {
+    if (wanted != null) setSelected(wanted);
+  }, [wanted]);
   const loaded = !!all.data && !!pending.data;
   // Message demandé introuvable (autre domaine, déjà supprimé) : retour à la liste.
   useEffect(() => {
