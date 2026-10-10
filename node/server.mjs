@@ -8,6 +8,7 @@
 
 import { createServer } from "node:http";
 import { existsSync, mkdirSync, readFileSync, statSync } from "node:fs";
+import { writeFile } from "node:fs/promises";
 import { dirname, extname, join, normalize, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -42,6 +43,16 @@ loadEnvFile();
 const PORT = Number(process.env.PORT || 3000);
 const SQLITE_PATH = process.env.SQLITE_PATH || join(ROOT, "data", "gites.db");
 const CRON_KEY = (process.env.CRON_KEY || "").trim();
+// Photos envoyées depuis le back-office : HORS du dossier déployé (un
+// redéploiement ne doit pas les effacer), servies sous /uploads/.
+const UPLOADS_DIR = resolve(ROOT, process.env.UPLOADS_DIR || "../gites-data/uploads");
+// Derrière le proxy d'Infomaniak, l'adresse du client est la dernière entrée
+// de X-Forwarded-For (celle qu'a vue le proxy). Sans TRUST_PROXY=true, on
+// garde l'adresse de la socket : un X-Forwarded-For envoyé par le client ne
+// trompe alors pas la garde ADMIN_ALLOWED_IPS.
+const TRUST_PROXY = (process.env.TRUST_PROXY || "").trim() === "true";
+/** Corps de requête accepté au plus : une photo de 8 Mo et son enveloppe. */
+const MAX_BODY_BYTES = 9 * 1024 * 1024;
 
 // --- base de données --------------------------------------------------------
 
@@ -67,6 +78,16 @@ const env = {
   BEDS24_REFRESH_TOKEN: process.env.BEDS24_REFRESH_TOKEN,
   BEDS24_WEBHOOK_KEY: process.env.BEDS24_WEBHOOK_KEY,
   BEDS24_WRITE_ENABLED: process.env.BEDS24_WRITE_ENABLED,
+  ADMIN_ALLOWED_IPS: process.env.ADMIN_ALLOWED_IPS,
+  // Dépôt des photos (src/api/admin-lot2.ts). Le nom arrive déjà validé ;
+  // on le revérifie ici, et « wx » refuse d'écraser un fichier existant.
+  UPLOADS: {
+    async put(name, bytes) {
+      if (!/^[0-9a-f]{32}\.(jpg|png|webp)$/.test(name)) throw new Error("nom de fichier refusé");
+      mkdirSync(UPLOADS_DIR, { recursive: true });
+      await writeFile(join(UPLOADS_DIR, name), bytes, { flag: "wx" });
+    },
+  },
 };
 
 // --- routeur métier (code compilé depuis src/) ------------------------------
@@ -74,7 +95,8 @@ const env = {
 const { Router, apiError } = await import("../dist/api/router.js");
 const { registerPublicRoutes } = await import("../dist/api/public.js");
 const { registerAdminRoutes } = await import("../dist/api/admin.js");
-const { runScheduled } = await import("../dist/services/cron.js");
+const { runAllScheduled } = await import("../dist/jobs/scheduled.js");
+const { adminIpGate } = await import("../dist/core/ip-allow.js");
 
 const router = new Router();
 registerPublicRoutes(router);
@@ -109,6 +131,7 @@ const MIME = {
   ".txt": "text/plain; charset=utf-8",
   ".xml": "application/xml; charset=utf-8",
   ".woff2": "font/woff2",
+  ".webmanifest": "application/manifest+json; charset=utf-8",
 };
 
 /** Résout un chemin d'URL vers un fichier de public/, en refusant toute
@@ -141,7 +164,9 @@ function staticHeaders(file) {
   };
   if (file.startsWith(join(PUBLIC_DIR, "img"))) {
     headers["cache-control"] = "public, max-age=31536000, immutable";
-  } else if (ext === ".html") {
+  } else if (ext === ".html" || file.endsWith("/sw.js")) {
+    // Le service worker de /admin2/ doit être relu à chaque visite, sinon une
+    // nouvelle version de l'écran ne s'installe pas.
     headers["cache-control"] = "no-cache";
   } else {
     headers["cache-control"] = "public, max-age=86400";
@@ -150,6 +175,26 @@ function staticHeaders(file) {
 }
 
 // --- pont node:http ↔ Request/Response --------------------------------------
+
+class BodyTooLarge extends Error {}
+
+/** Adresse du client, pour la garde ADMIN_ALLOWED_IPS. */
+function clientIp(req) {
+  if (TRUST_PROXY) {
+    const xff = String(req.headers["x-forwarded-for"] || "").split(",").map((s) => s.trim()).filter(Boolean);
+    if (xff.length) return xff[xff.length - 1];
+  }
+  return req.socket.remoteAddress || "";
+}
+
+/** Fichier de UPLOADS_DIR pour /uploads/<nom>, ou null (nom strict : pas de
+ *  sous-dossier, pas de traversée possible). */
+function resolveUpload(pathname) {
+  const m = /^\/uploads\/([0-9a-f]{32}\.(?:jpg|png|webp))$/.exec(pathname);
+  if (!m) return null;
+  const full = join(UPLOADS_DIR, m[1]);
+  return existsSync(full) && statSync(full).isFile() ? full : null;
+}
 
 async function toRequest(req, origin) {
   const url = new URL(req.url, origin);
@@ -161,8 +206,14 @@ async function toRequest(req, origin) {
   const hasBody = req.method !== "GET" && req.method !== "HEAD";
   let body;
   if (hasBody) {
+    if (Number(req.headers["content-length"] || 0) > MAX_BODY_BYTES) throw new BodyTooLarge();
     const chunks = [];
-    for await (const chunk of req) chunks.push(chunk);
+    let total = 0;
+    for await (const chunk of req) {
+      total += chunk.length;
+      if (total > MAX_BODY_BYTES) throw new BodyTooLarge();
+      chunks.push(chunk);
+    }
     body = Buffer.concat(chunks);
   }
   return new Request(url, { method: req.method, headers, body });
@@ -201,7 +252,7 @@ const server = createServer(async (req, res) => {
         res.writeHead(401, { "content-type": "application/json" }).end(JSON.stringify({ error: "clé invalide" }));
         return;
       }
-      await runScheduled(env);
+      await runAllScheduled(env);
       res.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify({ ok: true, at: new Date().toISOString() }));
       return;
     }
@@ -213,15 +264,46 @@ const server = createServer(async (req, res) => {
       return;
     }
 
-    // 3. Routes dynamiques (API, iCal) — même routeur que sur Cloudflare.
-    const request = await toRequest(req, origin);
+    // 3. Accès administrateur fermé au public (ADMIN_ALLOWED_IPS, vide = ouvert).
+    const denied = adminIpGate(url.pathname, env.ADMIN_ALLOWED_IPS, clientIp(req));
+    if (denied) {
+      await sendResponse(res, denied);
+      return;
+    }
+
+    // 3 bis. Photos envoyées depuis le back-office.
+    if (url.pathname.startsWith("/uploads/")) {
+      const file = resolveUpload(url.pathname);
+      if (!file) {
+        res.writeHead(404, { "content-type": "text/plain; charset=utf-8" }).end("introuvable");
+        return;
+      }
+      res.writeHead(200, {
+        "content-type": MIME[extname(file)] || "application/octet-stream",
+        "x-content-type-options": "nosniff",
+        "cache-control": "public, max-age=31536000, immutable",
+      });
+      res.end(req.method === "HEAD" ? undefined : readFileSync(file));
+      return;
+    }
+
+    // 4. Routes dynamiques (API, iCal) — même routeur que sur Cloudflare.
+    let request;
+    try {
+      request = await toRequest(req, origin);
+    } catch (e) {
+      if (!(e instanceof BodyTooLarge)) throw e;
+      res.writeHead(413, { "content-type": "application/json", connection: "close" }).end(JSON.stringify({ error: "requête trop lourde (9 Mo au plus)" }));
+      req.destroy();
+      return;
+    }
     const response = await router.handle(request, env, execCtx);
     if (response) {
       await sendResponse(res, response);
       return;
     }
 
-    // 4. Fichiers statiques.
+    // 5. Fichiers statiques.
     const file = resolveStatic(url.pathname);
     if (file) {
       const headers = staticHeaders(file);
@@ -258,6 +340,8 @@ server.listen(PORT, () => {
   console.log(`[gites] base   : ${SQLITE_PATH}`);
   console.log(`[gites] URL    : ${env.PUBLIC_BASE_URL}`);
   console.log(`[gites] emails : ${env.EMAILS_ENABLED === "true" ? "ACTIFS" : "stub (journalisés)"}`);
+  console.log(`[gites] photos : ${UPLOADS_DIR}`);
+  console.log(`[gites] admin  : ${(env.ADMIN_ALLOWED_IPS || "").trim() ? `réservé à ${env.ADMIN_ALLOWED_IPS}${TRUST_PROXY ? " (via X-Forwarded-For)" : ""}` : "ouvert à toute adresse"}`);
   if (!env.ADMIN_TOKEN) console.warn("[gites] ⚠️ ADMIN_TOKEN absent — le back-office refusera tout (garde fail-closed)");
   if (!CRON_KEY) console.warn("[gites] ⚠️ CRON_KEY absente — /internal/cron est désactivé");
 });

@@ -500,6 +500,7 @@ h2.sub { margin: 0 0 6px; font: 700 22px/1.25 var(--police-titres); }
 
 .loading { padding: 40px 0; color: var(--ink-2); display: flex; align-items: center; gap: 10px; }
 .mk { position: relative; z-index: 3; justify-self: center; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; background: var(--surface); border: 1.5px solid var(--ink-2); color: var(--ink-2); margin-top: 30px; }
+.mk.ok { background: var(--pine); border-color: var(--pine); color: var(--on, #fff); }
 @media (max-width: 899.98px) { .dom-ic { display: none; } }
 @media (max-width: 899.98px) { .top .dom small { display: block; } }
 
@@ -678,3 +679,13 @@ fieldset.wd legend { font-weight: 600; margin-bottom: 8px; padding: 0; }
 .health ul { margin: 0 0 12px; padding-left: 22px; }
 .health li { margin: 6px 0; }
 .health li button { border: 0; background: none; padding: 2px 0; text-align: left; color: inherit; text-decoration: underline; text-underline-offset: 3px; min-height: 32px; }
+
+/* Lot 2 : dépôt de photos (glisser-déposer) */
+.drop { display: grid; grid-template-columns: auto 1fr auto; gap: 8px 14px; align-items: center; border: 2px dashed var(--line); border-radius: 14px; padding: 14px 16px; margin: 16px 0; background: var(--surface); }
+.drop.over { border-color: var(--pine); background: var(--pine-soft); }
+.drop p { margin: 0; }
+.drop small { display: block; color: var(--ink-2); font-size: 15px; }
+.drop .err { grid-column: 1 / -1; }
+@media (max-width: 600px) { .drop { grid-template-columns: auto 1fr; } .drop .btn { grid-column: 1 / -1; } }
+/* Lot 2 : bandeau hors ligne */
+.offline { background: var(--genet-soft, #fff3cd); color: var(--ink); border-bottom: 1px solid var(--line); padding: 8px 16px; font-size: 16px; text-align: center; }

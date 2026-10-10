@@ -1,7 +1,7 @@
 // Logique pure de l'écran : états des réservations, bandeau du jour, ménage,
 // placement des barres, sélection de dates, calcul des prix relatifs.
 // Aucune dépendance à React : tout ici se teste seul.
-import type { DayRate, IsoDate, ManualBlock, PlanningBooking, PlanningLinkBlock, UnitLink } from "../api/types";
+import type { DayRate, IsoDate, ManualBlock, PlanningBooking, PlanningLinkBlock } from "../api/types";
 import { addDays, diffDays } from "./dates";
 import { roundTo5 } from "./money";
 
@@ -114,66 +114,8 @@ export function nombre(n: number): string {
 }
 
 // --- ménage ------------------------------------------------------------------------
-
-export interface CleaningTask {
-  key: string;
-  bookingId: number;
-  propertyId: number;
-  unitId: number;
-  unitName: string;
-  isComposite: boolean;
-  date: IsoDate;
-  time: string;
-  /** Arrivée suivante sur ce bien ou un bien lié, s'il y en a une. */
-  next: { checkin: IsoDate; unitName: string; persons: number; checkinTime: string } | null;
-  /** Nouveaux voyageurs le jour même : le ménage a une heure limite. */
-  tight: boolean;
-}
-
-/** Biens qui partagent les mêmes murs que `unitId` (lui compris). */
-export function relatedUnits(unitId: number, links: UnitLink[]): Set<number> {
-  const s = new Set([unitId]);
-  for (const l of links) {
-    if (l.unitId === unitId) s.add(l.blocksUnitId);
-    if (l.blocksUnitId === unitId) s.add(l.unitId);
-  }
-  return s;
-}
-
-/** Un ménage par départ, de `from` à `from + days` exclu. */
-export function cleaningTasks(
-  data: { propertyId: number; bookings: PlanningBooking[]; links: UnitLink[]; unitNames: Map<number, string>; checkinTime: string; checkoutTime: string }[],
-  from: IsoDate,
-  days: number,
-): CleaningTask[] {
-  const to = addDays(from, days);
-  const out: CleaningTask[] = [];
-  for (const p of data) {
-    const active = p.bookings.filter((b) => b.status !== "cancelled");
-    for (const b of active) {
-      if (b.checkout < from || b.checkout >= to) continue;
-      const rel = relatedUnits(b.unitId, p.links);
-      const next = active
-        .filter((x) => x.id !== b.id && rel.has(x.unitId) && x.checkin >= b.checkout)
-        .sort((x, y) => (x.checkin < y.checkin ? -1 : 1))[0];
-      out.push({
-        key: `${b.id}:${b.checkout}`,
-        bookingId: b.id,
-        propertyId: p.propertyId,
-        unitId: b.unitId,
-        unitName: p.unitNames.get(b.unitId) ?? "",
-        isComposite: b.isComposite,
-        date: b.checkout,
-        time: p.checkoutTime,
-        next: next
-          ? { checkin: next.checkin, unitName: p.unitNames.get(next.unitId) ?? "", persons: next.persons, checkinTime: p.checkinTime }
-          : null,
-        tight: !!next && next.checkin === b.checkout,
-      });
-    }
-  }
-  return out.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : a.unitName.localeCompare(b.unitName)));
-}
+// Calculé côté serveur depuis le lot 2 (src/core/cleaning.ts, tâches en base) :
+// l'écran lit /api/admin/tasks, cf. lib/tasks.ts.
 
 // --- placement des barres (grille en demi-journées) --------------------------------
 

@@ -1,5 +1,5 @@
 // Messages : la liste, le fil, la réponse à partir d'un modèle, « traité ».
-// PILOTE : les quatre modèles sont en constantes (lib/templates.ts).
+// Les modèles viennent de la base (Réglages › Modèles de réponse).
 import { Trans, useLingui } from "@lingui/react/macro";
 import { IconChevronLeft, IconSend } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
@@ -12,7 +12,7 @@ import type { Message } from "../api/types";
 import { ActionButton, ErrorLine, useAction } from "../lib/action";
 import { hourLabel, longDate, todayBrussels, whenLabel } from "../lib/dates";
 import { eur } from "../lib/money";
-import { fillTemplate, templateLabels, type TemplateId } from "../lib/templates";
+import { TemplateChips } from "../messages/TemplateChips";
 import { useLayout } from "../lib/useLayout";
 import { deliveryText } from "../booking/BookingPanel";
 import { useOpenBooking } from "../shell/Shell";
@@ -106,7 +106,6 @@ function Thread({ message, onBack }: { message: Message; onBack?: () => void }) 
     staleTime: 5 * 60_000,
   }).data;
   const [text, setText] = useState("");
-  const [tpl, setTpl] = useState<TemplateId | null>(null);
   const send = useAction();
   const balance = booking ? booking.totalCents - booking.paidCents : 0;
   const ctx = {
@@ -152,25 +151,7 @@ function Thread({ message, onBack }: { message: Message; onBack?: () => void }) 
           {m.bodyText}
         </div>
       ))}
-      <p className="tpl" id="tpl-l">
-        <Trans>Partir d'un modèle</Trans>
-      </p>
-      <div className="chips" role="group" aria-labelledby="tpl-l">
-        {templateLabels().map((x) => (
-          <button
-            key={x.id}
-            type="button"
-            className="chip"
-            aria-pressed={tpl === x.id}
-            onClick={() => {
-              setTpl(x.id);
-              setText(fillTemplate(x.id, ctx));
-            }}
-          >
-            {x.label}
-          </button>
-        ))}
-      </div>
+      <TemplateChips propertyId={booking?.propertyId ?? message.propertyId} ctx={ctx} onPick={setText} />
       <label htmlFor="rep" className="tpl">
         <Trans>Votre réponse</Trans>
       </label>

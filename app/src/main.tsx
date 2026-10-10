@@ -21,3 +21,11 @@ createRoot(racine).render(
     <App router={makeRouter()} />
   </StrictMode>,
 );
+
+// PWA (lot 2) : le service worker ne s'installe que sur l'écran construit
+// (pas en développement, où il garderait de vieilles versions des modules).
+if (import.meta.env.PROD && "serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`, { scope: import.meta.env.BASE_URL }).catch(() => undefined);
+  });
+}

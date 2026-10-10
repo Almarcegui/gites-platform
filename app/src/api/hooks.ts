@@ -9,10 +9,12 @@ import type {
   Guest,
   IsoDate,
   Message,
+  MessageTemplate,
   Overview,
   Planning,
   Property,
   RateCalendarUnit,
+  Task,
   Unit,
   UnitLink,
 } from "./types";
@@ -125,6 +127,27 @@ export function useGuest(id: number | null | undefined) {
     queryKey: ["guest", id],
     queryFn: () => api<{ guest: Guest }>(`/guests/${id}`).then((r) => r.guest),
     enabled: id != null,
+  });
+}
+
+/** Ménages des domaines visés sur [from, to). La lecture régénère côté
+ *  serveur les ménages des derniers départs (route idempotente). */
+export function useTasks(from: IsoDate, to: IsoDate) {
+  const { properties } = useScopedProperties();
+  const { scope } = useScope();
+  return useQuery({
+    queryKey: ["tasks", scope, from, to],
+    queryFn: () => api<{ tasks: Task[] }>("/tasks", { query: { property: scope === "all" ? undefined : scope, from, to } }).then((r) => r.tasks),
+    enabled: properties.length > 0,
+  });
+}
+
+/** Modèles de réponse proposés pour un domaine (communs + propres), actifs. */
+export function useTemplates(propertyId: number | null | undefined) {
+  return useQuery({
+    queryKey: ["templates", propertyId ?? "all", "active"],
+    queryFn: () => api<{ templates: MessageTemplate[] }>("/message-templates", { query: { property: propertyId ?? undefined, active: 1 } }).then((r) => r.templates),
+    staleTime: 60_000,
   });
 }
 

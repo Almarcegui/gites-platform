@@ -29,7 +29,7 @@ import { ErrorLine, useAction } from "../lib/action";
 import { diffDays, hourLabel, longDate, todayBrussels } from "../lib/dates";
 import { channelName, isChannel } from "../lib/derive";
 import { eur } from "../lib/money";
-import { fillTemplate, templateLabels, type TemplateId } from "../lib/templates";
+import { TemplateChips } from "../messages/TemplateChips";
 import { useToast } from "../lib/toasts";
 import { useLayout } from "../lib/useLayout";
 import { RegisterSection } from "./Register";
@@ -577,11 +577,9 @@ function WriteDialog({ open, b, guest, times, onClose }: { open: boolean; b: Boo
   const { t } = useLingui();
   const a = useAction();
   const [text, setText] = useState("");
-  const [tpl, setTpl] = useState<TemplateId | null>(null);
   useEffect(() => {
     if (open) {
       setText("");
-      setTpl(null);
       a.reset();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -599,25 +597,7 @@ function WriteDialog({ open, b, guest, times, onClose }: { open: boolean; b: Boo
   const email = b.guestEmail ?? guest?.email;
   return (
     <Box open={open} onClose={onClose} title={t`Écrire à ${b.guestName ?? t`ce client`}`}>
-      <p className="tpl">
-        <Trans>Partir d'un modèle</Trans>
-      </p>
-      <div className="chips" role="group" aria-label={t`Modèles de réponse`}>
-        {templateLabels().map((m) => (
-          <button
-            key={m.id}
-            type="button"
-            className="chip"
-            aria-pressed={tpl === m.id}
-            onClick={() => {
-              setTpl(m.id);
-              setText(fillTemplate(m.id, ctx));
-            }}
-          >
-            {m.label}
-          </button>
-        ))}
-      </div>
+      {open ? <TemplateChips propertyId={b.propertyId} ctx={ctx} onPick={setText} labelId="tpl-w" /> : null}
       <Textarea mt="md" label={t`Votre message`} autosize minRows={8} size="md" value={text} onChange={(e) => setText(e.currentTarget.value)} />
       <div className="send">
         <p>{email ? t`Le message s'affiche sur la page du client et part par mail à ${email} quand l'envoi des mails est actif.` : t`Pas de mail sur cette réservation : le message s'affichera seulement sur la page du client.`}</p>

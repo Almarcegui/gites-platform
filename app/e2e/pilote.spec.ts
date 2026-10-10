@@ -45,6 +45,6 @@ test("téléphone : la journée et les semaines", async ({ page }) => {
   await expect(page.getByRole("list", { name: "Étapes" })).toBeVisible();
   await page.screenshot({ path: shots("B-semaines-390") });
   await page.getByRole("navigation", { name: "Menu principal" }).last().getByRole("link", { name: "Ménage" }).click();
-  await expect(page.getByText(/Pilote : « fait » est noté sur cet appareil/)).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Ménage", level: 1 })).toBeVisible();
   await page.screenshot({ path: shots("B-menage-390") });
 });

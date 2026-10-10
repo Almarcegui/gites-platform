@@ -96,6 +96,29 @@ export async function api<T>(path: string, init: { method?: string; body?: unkno
   return data as T;
 }
 
+/** Envoi d'un formulaire multipart (photos) : même garde et mêmes erreurs que api(). */
+export async function apiUpload<T>(path: string, form: FormData): Promise<T> {
+  const headers: Record<string, string> = { accept: "application/json" };
+  const auth = authHeader();
+  if (auth) headers.authorization = auth;
+  let res: Response;
+  try {
+    res = await fetch(new URL(`/api/admin${path}`, window.location.origin), { method: "POST", headers, body: form });
+  } catch {
+    throw new ApiError(0, "Pas de connexion avec le serveur. Vérifiez internet, puis réessayez.", null);
+  }
+  const data: unknown = await res.json().catch(() => null);
+  if (!res.ok) {
+    if (res.status === 401) {
+      clearSession();
+      unauthorizedListeners.forEach((fn) => fn());
+    }
+    const msg = data && typeof data === "object" && "error" in data ? String((data as { error: unknown }).error) : `erreur ${res.status}`;
+    throw new ApiError(res.status, msg, data);
+  }
+  return data as T;
+}
+
 export async function login(user: string, password: string): Promise<void> {
   const data = await api<{ ok: boolean; user: string; session?: string }>("/login", { method: "POST", body: { user, password } });
   ecrire(USER_KEY, data.user);
@@ -118,6 +141,12 @@ export async function logout(): Promise<void> {
     /* la session locale est effacée de toute façon */
   }
   clearSession();
+  // Les lectures gardées pour le hors-ligne (service worker) partent avec la session.
+  try {
+    for (const k of await caches.keys()) if (k.startsWith("gites-admin2")) await caches.delete(k);
+  } catch {
+    /* pas de cache (navigateur ancien, page non sécurisée) */
+  }
 }
 
 /** Message lisible pour une erreur quelconque. */

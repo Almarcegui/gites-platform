@@ -1,9 +1,10 @@
-// Modèles de réponse (plan v4, fonction 2) — PILOTE : en constantes, en
-// attendant la table `message_templates` et son écran dans Réglages.
-import { i18n } from "@lingui/core";
-import { msg } from "@lingui/core/macro";
-
-export type TemplateId = "acces" | "horaires" | "solde" | "apres";
+// Modèles de réponse (plan v4, fonction 2) : le texte vient de la base
+// (Réglages › Modèles de réponse, migration 0023) ; ici, seulement le
+// remplissage des variables à partir de la réservation.
+//
+// Variables : {prenom} {bien} {arrivee} {solde} {heure_arrivee}
+// {heure_depart} {signature}. Une variable inconnue reste visible telle quelle :
+// mieux vaut « {code} » à corriger qu'un trou dans le message.
 
 export interface TemplateContext {
   firstName: string;
@@ -15,25 +16,28 @@ export interface TemplateContext {
   signature: string;
 }
 
-export const templateLabels = (): { id: TemplateId; label: string }[] => [
-  { id: "acces", label: i18n._(msg`Accès et clés`) },
-  { id: "horaires", label: i18n._(msg`Horaires`) },
-  { id: "solde", label: i18n._(msg`Rappel du solde`) },
-  { id: "apres", label: i18n._(msg`Après le séjour`) },
+export const TEMPLATE_VARIABLES: { key: string; label: string }[] = [
+  { key: "prenom", label: "prénom du client" },
+  { key: "bien", label: "nom du bien" },
+  { key: "arrivee", label: "jour d'arrivée" },
+  { key: "solde", label: "solde restant" },
+  { key: "heure_arrivee", label: "heure d'arrivée" },
+  { key: "heure_depart", label: "heure de départ" },
+  { key: "signature", label: "signature" },
 ];
 
-export function fillTemplate(id: TemplateId, c: TemplateContext): string {
-  const hello = c.firstName ? `Bonjour ${c.firstName},` : "Bonjour,";
-  switch (id) {
-    case "acces":
-      return `${hello}\n\n${c.unitName} vous attend ${c.arrival}, à partir de ${c.checkinTime}.\nLes clés sont dans la boîte à code, à côté de la porte d'entrée. Le code vous parvient par SMS le matin de votre arrivée.\nVous pouvez vous garer devant la maison.\n\nBonne route,\n${c.signature}`;
-    case "horaires":
-      return `${hello}\n\nL'arrivée se fait à partir de ${c.checkinTime} et le départ avant ${c.checkoutTime}.\nSi vous avez besoin d'un peu plus de souplesse, dites-le-nous : nous regardons ce qui est possible selon les voyageurs suivants.\n\nÀ bientôt,\n${c.signature}`;
-    case "solde":
-      return c.balance
-        ? `${hello}\n\nPetit rappel : le solde de votre séjour à ${c.unitName}, soit ${c.balance}, reste à régler avant votre arrivée. Le lien de paiement figure dans votre confirmation de réservation.\n\nMerci, et à bientôt,\n${c.signature}`
-        : `${hello}\n\nVotre séjour à ${c.unitName} est entièrement payé : vous n'avez rien à régler sur place.\n\nÀ bientôt,\n${c.signature}`;
-    case "apres":
-      return `${hello}\n\nMerci d'avoir séjourné à ${c.unitName}. Nous espérons que tout vous a plu.\nUn mot sur votre séjour nous aide beaucoup, et vous êtes toujours les bienvenus.\n\nAu plaisir de vous revoir,\n${c.signature}`;
-  }
+export function fillTemplate(body: string, c: TemplateContext): string {
+  const values: Record<string, string> = {
+    prenom: c.firstName.trim(),
+    bien: c.unitName,
+    arrivee: c.arrival,
+    solde: c.balance ?? "0 €",
+    heure_arrivee: c.checkinTime,
+    heure_depart: c.checkoutTime,
+    signature: c.signature,
+  };
+  // « Bonjour {prenom}, » sans prénom connu : « Bonjour, », pas « Bonjour , ».
+  let out = values.prenom ? body : body.replace(/ \{prenom\}/g, "");
+  out = out.replace(/\{([a-z_]+)\}/g, (all, k: string) => (k in values ? (values[k] ?? "") : all));
+  return out;
 }

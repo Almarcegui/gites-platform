@@ -27,6 +27,7 @@ import {
   type SyncConflictSource,
   type SyncConflictStatus,
 } from "../core/sync-conflicts";
+import { phoneCore, sqlPhoneDigits } from "../core/phone";
 
 type Raw = Record<string, unknown>;
 
@@ -351,6 +352,9 @@ export async function createUnitPhoto(
     webpWidths: number[];
     width: number | null;
     height: number | null;
+    /** Faux pour une photo envoyée depuis l'ordinateur : masquée tant que
+     *  son texte n'est pas écrit. Vrai par défaut. */
+    active?: boolean;
   },
 ): Promise<number | null> {
   const next = await db
@@ -360,8 +364,8 @@ export async function createUnitPhoto(
   const res = await db
     .prepare(
       `INSERT OR IGNORE INTO unit_photos
-         (unit_id, path, alt, caption, webp_widths, width, height, sort_order)
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)`,
+         (unit_id, path, alt, caption, webp_widths, width, height, sort_order, active)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)`,
     )
     .bind(
       p.unitId,
@@ -372,6 +376,7 @@ export async function createUnitPhoto(
       p.width,
       p.height,
       num((next as Raw | null)?.n ?? 10),
+      p.active === false ? 0 : 1,
     )
     .run();
   return res.meta.changes > 0 ? res.meta.last_row_id : null;
@@ -810,7 +815,15 @@ export async function listBookings(db: D1Database, f: BookingFilters = {}): Prom
   if (f.search) {
     binds.push(`%${f.search}%`);
     const i = binds.length;
-    where.push(`(b.reference LIKE ?${i} OR g.last_name LIKE ?${i} OR g.first_name LIKE ?${i} OR g.email LIKE ?${i})`);
+    // Un numéro de téléphone se compare en chiffres, sans indicatif belge ni
+    // 0 de tête (src/core/phone.ts) : « 0475 12 » trouve « +32 475 12 34 56 ».
+    const core = phoneCore(f.search);
+    let phone = "";
+    if (core) {
+      binds.push(`%${core}%`);
+      phone = ` OR ${sqlPhoneDigits("g.phone")} LIKE ?${binds.length}`;
+    }
+    where.push(`(b.reference LIKE ?${i} OR g.last_name LIKE ?${i} OR g.first_name LIKE ?${i} OR g.email LIKE ?${i}${phone})`);
   }
   if (f.period) {
     // « En cours » = ce qui occupe la journée d'aujourd'hui, arrivée ET départ
@@ -1055,8 +1068,12 @@ export async function listGuests(db: D1Database, search?: string): Promise<Guest
   const base = `
     SELECT g.*, COUNT(b.id) AS bookings_count, COALESCE(SUM(CASE WHEN b.status != 'cancelled' THEN b.total_cents ELSE 0 END), 0) AS total_spent
       FROM guests g LEFT JOIN bookings b ON b.guest_id = g.id`;
+  const core = search ? phoneCore(search) : null;
+  const phone = core ? ` OR ${sqlPhoneDigits("g.phone")} LIKE ?2` : "";
   const stmt = search
-    ? db.prepare(`${base} WHERE g.last_name LIKE ?1 OR g.first_name LIKE ?1 OR g.email LIKE ?1 GROUP BY g.id ORDER BY g.last_name`).bind(`%${search}%`)
+    ? db
+        .prepare(`${base} WHERE g.last_name LIKE ?1 OR g.first_name LIKE ?1 OR g.email LIKE ?1${phone} GROUP BY g.id ORDER BY g.last_name`)
+        .bind(`%${search}%`, ...(core ? [`%${core}%`] : []))
     : db.prepare(`${base} GROUP BY g.id ORDER BY g.last_name`);
   const { results } = await stmt.all();
   return (results as Raw[]).map((r) => ({

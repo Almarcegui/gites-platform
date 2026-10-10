@@ -30,4 +30,16 @@ interface Env {
   /** Autorise les ÉCRITURES vers Beds24 (compte réel, pas de bac à sable).
    *  Déduit sinon de PUBLIC_BASE_URL en https:// — cf. beds24WritesAllowed(). */
   BEDS24_WRITE_ENABLED?: string;
+  /** Adresses ou plages CIDR autorisées sur /api/admin/*, /admin/ et /admin2/
+   *  (virgules ou espaces). Vide = ouvert. Cf. src/core/ip-allow.ts. */
+  ADMIN_ALLOWED_IPS?: string;
+  /** Dépôt des photos envoyées depuis le back-office. Fourni par
+   *  node/server.mjs (dossier UPLOADS_DIR, servi sous /uploads/) ; absent sur
+   *  Workers, où l'envoi répond 501. */
+  UPLOADS?: UploadStore;
+}
+
+/** Écriture d'un fichier envoyé. `name` est déjà validé (hexadécimal + extension). */
+interface UploadStore {
+  put(name: string, bytes: Uint8Array): Promise<void>;
 }

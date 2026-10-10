@@ -5,11 +5,11 @@
 // son propre bouton (ils n'attendent pas l'enregistrement de la page).
 import { Trans, useLingui } from "@lingui/react/macro";
 import { Checkbox, NumberInput, Select, Switch, Textarea, TextInput } from "@mantine/core";
-import { IconArrowDown, IconArrowUp, IconPhoto, IconPlus } from "@tabler/icons-react";
+import { IconArrowDown, IconArrowUp, IconPhoto, IconPlus, IconUpload } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
-import { api, errorText } from "../../api/client";
+import { api, apiUpload, errorText } from "../../api/client";
 import { useRefresh } from "../../api/hooks";
 import type { UnitLink } from "../../api/types";
 import type { FullSettings, Photo, PropertyFull, UnitFull } from "../../api/types2";
@@ -366,6 +366,7 @@ function PhotosPanel({ unit, onClose }: { unit: UnitFull; onClose: () => void })
           <li key={p.id} className={p.active ? "" : "off"}>
             <img src={p.path} alt="" width={96} height={72} />
             <div>
+              {p.alt.endsWith(", à décrire") ? <p className="hint" style={{ margin: "0 0 4px", color: "var(--danger)" }}>{t`Nouvelle photo : décrivez-la, puis cochez « Affichée ».`}</p> : null}
               <TextInput size="sm" label={t`Texte de la photo`} value={p.alt} onChange={(e) => setList(list!.map((x) => (x.id === p.id ? { ...x, alt: e.currentTarget.value } : x)))} />
               <TextInput size="sm" mt={6} label={t`Légende (facultatif)`} value={p.caption ?? ""} onChange={(e) => setList(list!.map((x) => (x.id === p.id ? { ...x, caption: e.currentTarget.value } : x)))} />
               <Switch mt={8} size="sm" label={t`Affichée`} checked={p.active} onChange={(e) => setList(list!.map((x) => (x.id === p.id ? { ...x, active: e.currentTarget.checked } : x)))} />
@@ -381,8 +382,17 @@ function PhotosPanel({ unit, onClose }: { unit: UnitFull; onClose: () => void })
           </li>
         ))}
       </ol>
+      <PhotoDrop
+        unitId={unit.id}
+        beforeUpload={async () => {
+          if (dirty) {
+            await putAll();
+            setBase(list);
+          }
+        }}
+      />
       <Fold title={t`Rattacher une photo déjà déposée`}>
-        <p className="hint">{t`Le fichier doit déjà être sur le site (dossier des images, préparé par le script d'optimisation). L'envoi d'une photo depuis l'ordinateur n'existe pas encore.`}</p>
+        <p className="hint">{t`Pour un fichier déjà sur le site (dossier des images, préparé par le script d'optimisation).`}</p>
         <TextInput size="md" label={t`Chemin du fichier`} placeholder="/img/gites/la-scierie/jardin.jpg" value={path} onChange={(e) => setPath(e.currentTarget.value)} />
         <TextInput mt="sm" size="md" label={t`Texte de la photo`} value={alt} onChange={(e) => setAlt(e.currentTarget.value)} />
         <TextInput mt="sm" size="md" label={t`Légende (facultatif)`} value={cap} onChange={(e) => setCap(e.currentTarget.value)} />
@@ -411,6 +421,96 @@ function PhotosPanel({ unit, onClose }: { unit: UnitFull; onClose: () => void })
         {add.state.status === "error" ? <ErrorLine text={add.state.text} /> : null}
       </Fold>
     </SidePanel>
+  );
+}
+
+const UPLOAD_MAX = 8 * 1024 * 1024;
+const UPLOAD_TYPES = ["image/jpeg", "image/png", "image/webp"];
+
+/** Glisser-déposer (ou choisir) des photos depuis l'ordinateur. Chaque photo
+ *  arrive masquée tant que son texte n'est pas écrit : rien n'apparaît sur le
+ *  site sans description. */
+function PhotoDrop({ unitId, beforeUpload }: { unitId: number; beforeUpload: () => Promise<void> }) {
+  const { t } = useLingui();
+  const [over, setOver] = useState(false);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [errors, setErrors] = useState<string[]>([]);
+  const a = useAction();
+  const input = useRef<HTMLInputElement>(null);
+  const send = async (files: File[]) => {
+    if (!files.length || busy) return;
+    const bad: string[] = [];
+    const ok = files.filter((f) => {
+      if (!UPLOAD_TYPES.includes(f.type)) bad.push(t`${f.name} : format non accepté (JPEG, PNG ou WebP).`);
+      else if (f.size > UPLOAD_MAX) bad.push(t`${f.name} : trop lourde (8 Mo au plus).`);
+      else return true;
+      return false;
+    });
+    setErrors(bad);
+    if (!ok.length) return;
+    let sent = 0;
+    await a.run(
+      async () => {
+        await beforeUpload();
+        for (const [i, f] of ok.entries()) {
+          setBusy(t`Envoi ${i + 1} sur ${ok.length}…`);
+          const form = new FormData();
+          form.set("file", f);
+          try {
+            await apiUpload(`/units/${unitId}/photos/upload`, form);
+            sent++;
+          } catch (e) {
+            bad.push(`${f.name} : ${errorText(e)}`);
+          }
+        }
+        setBusy(null);
+        setErrors([...bad]);
+        if (!sent) throw new Error(t`Aucune photo envoyée.`);
+      },
+      () => (sent > 1 ? t`C'est fait. ${sent} photos envoyées : décrivez-les pour les afficher.` : t`C'est fait. Photo envoyée : décrivez-la pour l'afficher.`),
+    );
+    setBusy(null);
+  };
+  return (
+    <div
+      className={`drop${over ? " over" : ""}`}
+      onDragOver={(e) => {
+        e.preventDefault();
+        setOver(true);
+      }}
+      onDragLeave={() => setOver(false)}
+      onDrop={(e) => {
+        e.preventDefault();
+        setOver(false);
+        void send([...e.dataTransfer.files]);
+      }}
+    >
+      <IconUpload size={28} aria-hidden="true" />
+      <p>
+        <b>{busy ?? t`Glissez des photos ici`}</b>
+        <small>{t`JPEG, PNG ou WebP, 8 Mo au plus chacune.`}</small>
+      </p>
+      <button type="button" className="btn" disabled={!!busy} onClick={() => input.current?.click()}>
+        {t`Choisir sur l'ordinateur`}
+      </button>
+      <input
+        ref={input}
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        multiple
+        hidden
+        data-testid="photo-file"
+        onChange={(e) => {
+          const files = [...(e.currentTarget.files ?? [])];
+          e.currentTarget.value = "";
+          void send(files);
+        }}
+      />
+      {errors.map((x) => (
+        <ErrorLine key={x} text={x} />
+      ))}
+      {a.state.status === "error" && !errors.length ? <ErrorLine text={a.state.text} /> : null}
+    </div>
   );
 }
 

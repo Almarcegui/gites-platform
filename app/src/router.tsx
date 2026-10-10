@@ -28,6 +28,8 @@ import { RegisterPage } from "./pages/settings/Register";
 import { StartupPage } from "./pages/settings/Startup";
 import { StatsPage } from "./pages/settings/Stats";
 import { TarifsPage } from "./pages/settings/Tarifs";
+import { TemplatesPage } from "./pages/settings/Templates";
+import { MyAccountPage } from "./pages/settings/MyAccount";
 
 export interface RootSearch {
   resa?: number;
@@ -81,6 +83,8 @@ const settingsRoutes = [
   sub("import", ImportPage),
   sub("mise-en-route", StartupPage),
   sub("journaux", LogsPage),
+  sub("modeles", TemplatesPage),
+  sub("mon-compte", MyAccountPage),
 ];
 
 const routeTree = rootRoute.addChildren([
