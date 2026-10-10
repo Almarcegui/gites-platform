@@ -9,6 +9,7 @@ import { api } from "../../api/client";
 import type { AuditRow, EmailLogRow } from "../../api/types2";
 import { ErrorLine } from "../../lib/action";
 import { useOpenBooking } from "../../shell/Shell";
+import { eur } from "../../lib/money";
 import { Empty, Loading, Page, SidePanel, sqlWhen } from "../../ui/kit";
 
 const ACTIONS: Record<string, string> = {
@@ -98,7 +99,7 @@ export function LogsPage() {
                     <b>{actionLabel(e.action)}</b>
                     <small>
                       {sqlWhen(e.createdAt)}
-                      {e.entity ? `, ${e.entity}` : ""}
+                      {e.entity ? `, ${entityText(e.entity)}` : ""}
                     </small>
                   </span>
                   <small>{actorOf(e)}</small>
@@ -153,12 +154,41 @@ function MailPill({ m }: { m: EmailLogRow }) {
   return <span className="pill option">{m.status}</span>;
 }
 
+const KEYS: Record<string, string> = {
+  from: "du", to: "au", checkin: "arrivée", checkout: "départ", reason: "motif", name: "nom", status: "état",
+  priceCents: "prix", priceWeekCents: "prix en semaine", priceWeekendCents: "prix du week-end", holidayPct: "fériés (%)",
+  minNights: "nuits minimum", weekdays: "jours", days: "jours", removed: "jours remis au prix de saison", dateStart: "début",
+  dateEnd: "fin", label: "libellé", code: "code", discountPct: "remise (%)", discountCents: "remise", threshold: "seuil",
+  active: "actif", occupants: "voyageurs", lignes: "lignes", property: "domaine", channel: "plateforme", markupPct: "majoration (%)",
+  amountCents: "montant", method: "moyen", unitId: "bien", seasonId: "saison", partnerIds: "biens liés", capacityBase: "personnes",
+  capacityMax: "personnes au plus", cleaningFeeCents: "ménage", depositPct: "arrhes (%)", note: "note", corrections: "corrections",
+};
+const HIDDEN = new Set(["par", "rooms", "pushed", "updated", "created"]);
+
+function valueText(k: string, v: unknown): string {
+  if (v == null) return "aucun";
+  if (typeof v === "boolean") return v ? "oui" : "non";
+  if (typeof v === "number" && /Cents$/.test(k)) return eur(v);
+  if (Array.isArray(v)) return v.map((x) => (typeof x === "object" ? "…" : String(x))).join(", ");
+  if (typeof v === "object") return "…";
+  return String(v);
+}
+
+function entityText(e: string | null): string {
+  if (!e) return "l'ensemble";
+  const [kind, id] = e.split(":");
+  const k = ({ booking: "réservation", unit: "bien", season: "saison", rate: "prix", promotion: "remise", option: "option", user: "compte", guest: "client", property: "domaine", feed: "calendrier relié", conflict: "désaccord", checklist: "démarche" } as Record<string, string>)[kind ?? ""];
+  return k ? `${k} ${id}` : "réglage général";
+}
+
 function AuditPanel({ e, onClose }: { e: AuditRow; onClose: () => void }) {
   const { t } = useLingui();
   let detail: [string, string][] = [];
   try {
     const d = e.detail ? (JSON.parse(e.detail) as Record<string, unknown>) : {};
-    detail = Object.entries(d).map(([k, v]) => [k, typeof v === "object" ? JSON.stringify(v) : String(v)]);
+    detail = Object.entries(d)
+      .filter(([k]) => !HIDDEN.has(k))
+      .map(([k, v]) => [KEYS[k] ?? k.replace(/([A-Z])/g, " $1").toLowerCase(), valueText(k, v)]);
   } catch {
     if (e.detail) detail = [["détail", e.detail]];
   }
@@ -171,14 +201,14 @@ function AuditPanel({ e, onClose }: { e: AuditRow; onClose: () => void }) {
         </div>
         <div>
           <dt>{t`Sur`}</dt>
-          <dd>{e.entity ?? t`l'ensemble`}</dd>
+          <dd>{entityText(e.entity)}</dd>
         </div>
       </dl>
       {detail.length ? (
         <table className="tbl">
           <tbody>
-            {detail.map(([k, v]) => (
-              <tr key={k}>
+            {detail.map(([k, v], i) => (
+              <tr key={i}>
                 <td>{k}</td>
                 <td style={{ overflowWrap: "anywhere" }}>{v}</td>
               </tr>

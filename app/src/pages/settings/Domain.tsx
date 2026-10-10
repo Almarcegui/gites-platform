@@ -97,7 +97,8 @@ const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
 
 export function DomainPage() {
   const { t } = useLingui();
-  const { property, picker } = useWorkingProperty();
+  const [locked, setLocked] = useState(false);
+  const { property, picker } = useWorkingProperty(locked);
   const pid = property?.id;
   const sq = useSettingsFull(pid);
   const uq = useUnitsFull(pid);
@@ -105,12 +106,12 @@ export function DomainPage() {
   return (
     <Page title={t`Le domaine et les biens`} back tools={picker} width={900}>
       {sq.error || uq.error ? <ErrorLine text={t`Les réglages n'ont pas pu être lus.`} /> : null}
-      {!init ? <Loading /> : <DomainForm key={pid} propertyId={pid!} init={init} units={sq.data!.units} />}
+      {!init ? <Loading /> : <DomainForm key={pid} propertyId={pid!} init={init} units={sq.data!.units} onDirty={setLocked} />}
     </Page>
   );
 }
 
-function DomainForm({ propertyId, init, units }: { propertyId: number; init: Form; units: UnitFull[] }) {
+function DomainForm({ propertyId, init, units, onDirty }: { propertyId: number; init: Form; units: UnitFull[]; onDirty: (d: boolean) => void }) {
   const { t } = useLingui();
   const toast = useToast();
   const refresh = useRefresh();
@@ -129,6 +130,7 @@ function DomainForm({ propertyId, init, units }: { propertyId: number; init: For
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [init]);
+  useEffect(() => onDirty(dirty), [dirty, onDirty]);
   const setS = <K extends keyof Form["set"]>(k: K, v: Form["set"][K]) => setF({ ...f, set: { ...f.set, [k]: v } });
   const setP = (k: keyof Form["prop"], v: string) => setF({ ...f, prop: { ...f.prop, [k]: v } });
   const setU = (id: number, patch: Partial<UnitForm>) => setF({ ...f, units: { ...f.units, [id]: { ...f.units[id]!, ...patch } } });
@@ -314,15 +316,22 @@ function PhotosPanel({ unit, onClose }: { unit: UnitFull; onClose: () => void })
   const { t } = useLingui();
   const q = useQuery({ queryKey: ["photos", unit.id], queryFn: () => api<{ photos: Photo[] }>(`/units/${unit.id}/photos`).then((r) => r.photos) });
   const [list, setList] = useState<Photo[] | null>(null);
+  const [base, setBase] = useState<Photo[] | null>(null);
+  const changedList = !!list && !!base && !same(list, base);
+  // Une relecture ne remplace la liste que si rien n'a été touché ici.
   useEffect(() => {
-    if (q.data) setList(q.data);
+    if (q.data && !changedList) {
+      setList(q.data);
+      setBase(q.data);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q.data]);
   const [path, setPath] = useState("");
   const [alt, setAlt] = useState("");
   const [cap, setCap] = useState("");
   const a = useAction();
   const add = useAction();
-  const dirty = !!list && !!q.data && !same(list, q.data);
+  const dirty = changedList;
   const move = (i: number, d: number) => {
     if (!list) return;
     const j = i + d;
@@ -340,9 +349,9 @@ function PhotosPanel({ unit, onClose }: { unit: UnitFull; onClose: () => void })
       label={t`Photos`}
       top={t`Photos`}
       title={unit.name}
-      dirty={dirty || path.length > 0}
+      dirty={dirty || path.trim().length > 0 || alt.trim().length > 0 || cap.trim().length > 0}
       actions={
-        <button type="button" className="btn pri wide" disabled={!dirty || missingAlt || a.state.status === "busy"} onClick={() => void a.run(putAll, t`C'est fait. Ordre et textes des photos enregistrés.`)}>
+        <button type="button" className="btn pri wide" disabled={!dirty || missingAlt || a.state.status === "busy"} onClick={async () => { if (await a.run(putAll, t`C'est fait. Ordre et textes des photos enregistrés.`)) setBase(list); }}>
           {a.state.status === "busy" ? t`Un instant…` : t`Enregistrer l'ordre et les textes`}
         </button>
       }
@@ -384,7 +393,10 @@ function PhotosPanel({ unit, onClose }: { unit: UnitFull; onClose: () => void })
           disabled={!path.trim() || alt.trim().length < 3 || add.state.status === "busy"}
           onClick={async () => {
             const ok = await add.run(async () => {
-              if (dirty) await putAll();
+              if (dirty) {
+                await putAll();
+                setBase(list);
+              }
               return api(`/units/${unit.id}/photos`, { method: "POST", body: { path: path.trim(), alt: alt.trim(), caption: cap.trim() } });
             }, t`C'est fait. Photo rattachée.`);
             if (ok) {

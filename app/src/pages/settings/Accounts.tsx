@@ -101,7 +101,7 @@ function PasswordBox({ shown, onClose }: { shown: { username: string; password: 
   const { t } = useLingui();
   const toast = useToast();
   return (
-    <Box open={shown != null} onClose={onClose} title={shown?.created ? t`Compte créé` : t`Nouveau mot de passe`} size="md">
+    <Box open={shown != null} onClose={onClose} title={shown?.created ? t`Compte créé` : t`Nouveau mot de passe`} size="md" noClose>
       <p className="lead">{t`Mot de passe de ${shown?.username ?? ""}. Il ne sera plus jamais affiché : notez-le ou transmettez-le maintenant.`}</p>
       <p className="secret">{shown?.password}</p>
       <div className="acts" style={{ marginTop: 16 }}>

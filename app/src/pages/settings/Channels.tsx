@@ -35,6 +35,9 @@ export function ChannelsPage() {
   const d = ov.data;
   const open = (d?.conflicts ?? []).filter((c) => c.status === "open");
   const ignored = (d?.conflicts ?? []).filter((c) => c.status === "ignored");
+  // La route renvoie les réservations Beds24 de tous les domaines : on ne
+  // garde que celles des biens de celui-ci.
+  const channelBookings = (d?.channelBookings ?? []).filter((b) => d?.units.some((u) => u.name === b.unitName));
   return (
     <Page title={t`Airbnb, Booking et Vrbo`} back tools={picker} width={1000} lead={t`Les plateformes reçoivent vos disponibilités et vos prix par Beds24, un service de liaison. Vous n'avez pas à ouvrir Beds24 : tout se suit ici.`}>
       {ov.error ? <ErrorLine text={t`L'état des plateformes n'a pas pu être lu.`} /> : null}
@@ -82,13 +85,13 @@ export function ChannelsPage() {
             ) : null}
           </Section>
           <Section title={t`Réservations venues des plateformes`}>
-            {d.channelBookings.length === 0 ? (
+            {channelBookings.length === 0 ? (
               <Empty title={t`Aucune pour l'instant`}>
                 <p>{t`Elles apparaîtront ici, dans le calendrier et dans Réservations dès que les annonces seront reliées.`}</p>
               </Empty>
             ) : (
               <div className="panel">
-                {d.channelBookings.map((b) => (
+                {channelBookings.map((b) => (
                   <div key={b.reference} className="list-row two static">
                     <span>
                       <b>{b.guestName || b.reference}</b>
@@ -239,7 +242,15 @@ function MarkupsCard({ m }: { m: MarkupState }) {
   const { t } = useLingui();
   const init = useMemo(() => Object.fromEntries(m.channels.map((c) => [c.channel, c.markupPct as number | string])), [m]);
   const [v, setV] = useState(init);
-  useEffect(() => setV(init), [init]);
+  const [base, setBase] = useState(init);
+  const dirtyNow = JSON.stringify(v) !== JSON.stringify(base);
+  // Une relecture (après un test Beds24, par exemple) n'efface jamais une
+  // saisie en cours : elle ne remplace le formulaire que s'il est intact.
+  useEffect(() => {
+    if (!dirtyNow) setV(init);
+    setBase(init);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [init]);
   const [apply, setApply] = useState<string | null | undefined>(undefined);
   const save = useAction();
   const app = useAction();
@@ -303,7 +314,7 @@ function MarkupsCard({ m }: { m: MarkupState }) {
         busy={save.state.status === "busy"}
         error={save.state.status === "error" ? save.state.text : null}
         label={t`Enregistrer les pourcentages`}
-        onReset={() => setV(init)}
+        onReset={() => setV(base)}
         onSave={() => {
           if (bad) return;
           if (appliedChange) setConfirmSave(true);

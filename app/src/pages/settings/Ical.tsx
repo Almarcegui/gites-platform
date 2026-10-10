@@ -71,7 +71,19 @@ export function IcalPage() {
             hint={t`Lus toutes les 15 minutes. Si une date lue est déjà prise ici, elle est refusée et signalée.`}
             tools={
               <>
-                <button type="button" className="btn" disabled={all.state.status === "busy" || q.data.feeds.length === 0} onClick={() => void all.run(() => api<{ results: unknown[] }>("/ical-sync", { method: "POST" }), (r) => t`C'est fait. ${(r as { results: unknown[] }).results.length} calendrier(s) relu(s).`)}>
+                <button type="button" className="btn" disabled={all.state.status === "busy" || !q.data.feeds.some((f) => f.active)} onClick={() =>
+                    void all.run(async () => {
+                      // Seulement les calendriers de ce domaine (/ical-sync relirait tous les domaines).
+                      const feeds = q.data!.feeds.filter((f) => f.active);
+                      const bad: string[] = [];
+                      for (const f of feeds) {
+                        const r = await api<{ result: FeedSyncResult }>(`/ical-feeds/${f.id}/sync`, { method: "POST" });
+                        if (r.result.error) bad.push(f.name);
+                      }
+                      if (bad.length) throw new Error(t`Relu, sauf : ${bad.join(", ")} (voir leur fiche).`);
+                      return feeds.length;
+                    }, (n) => t`C'est fait. ${n as number} calendrier(s) relu(s).`)
+                  }>
                   {all.state.status === "busy" ? t`Un instant…` : t`Tout relire maintenant`}
                 </button>
                 <button type="button" className="btn pri" onClick={() => setOpen("new")}>

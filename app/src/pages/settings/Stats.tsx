@@ -31,6 +31,10 @@ export function StatsPage() {
     const sign = diff > 0 ? "+" : diff < 0 ? "−" : "";
     return t`${sign} ${fr(Math.abs(diff), d)}${unit} par rapport à ${year - 1}`;
   };
+  const pctChange = (a: number, b: number) => {
+    const p = Math.round(((a - b) / b) * 100);
+    return p === 0 ? t`comme en ${year - 1}` : t`${p > 0 ? "+" : "−"} ${fr(Math.abs(p))} % par rapport à ${year - 1}`;
+  };
   const max = Math.max(10, ...(cur?.months.map((m) => m.occupancyPct) ?? []), ...(prev?.months.map((m) => m.occupancyPct) ?? []));
   return (
     <Page
@@ -63,7 +67,7 @@ export function StatsPage() {
             <div className="kpi">
               <span>{t`Revenus`}</span>
               <b>{eur(cur.revenueCents)}</b>
-              <small>{prev.revenueCents > 0 ? cmp(Math.round(((cur.revenueCents - prev.revenueCents) / prev.revenueCents) * 100), 0, " %") : t`pas de chiffre en ${year - 1}`}</small>
+              <small>{prev.revenueCents > 0 ? pctChange(cur.revenueCents, prev.revenueCents) : t`pas de chiffre en ${year - 1}`}</small>
             </div>
             <div className="kpi">
               <span>{t`Prix moyen d'une nuit`}</span>

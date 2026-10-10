@@ -21,6 +21,23 @@ export interface Suggestion {
   from: IsoDate;
   to: IsoDate;
   prefill: { minNights?: number; priceCents?: number };
+  /** Changement de prix jour par jour, regroupé en plages contiguës au même
+   *  nouveau prix : seules les nuits visées bougent (pas les nuits vendues ni
+   *  les jours ordinaires entre deux fériés). */
+  runs?: { from: IsoDate; to: IsoDate; priceCents: number }[];
+}
+
+/** Nouveau prix de chaque jour retenu, en plages contiguës homogènes. */
+export function runsOf(days: readonly DayRate[], pct: number): { from: IsoDate; to: IsoDate; priceCents: number }[] {
+  const out: { from: IsoDate; to: IsoDate; priceCents: number }[] = [];
+  for (const d of [...days].sort((a, b) => (a.date < b.date ? -1 : 1))) {
+    if (d.priceCents == null) continue;
+    const p = Math.round((d.priceCents * (100 + pct)) / 100);
+    const last = out[out.length - 1];
+    if (last && last.priceCents === p && addDays(last.to, 1) === d.date) last.to = d.date;
+    else out.push({ from: d.date, to: d.date, priceCents: p });
+  }
+  return out;
 }
 
 export function buildSuggestions(input: {
@@ -70,26 +87,28 @@ export function buildSuggestions(input: {
     out.push({
       kind: "derniere-minute",
       title: `Dernière minute : ${proches.length} nuits encore libres d'ici le ${dfr(last.date)}`,
-      why: `Remise bornée à ${LAST_MINUTE_PCT} % sur ces dates proches : ${eur(first.priceCents!)} − ${LAST_MINUTE_PCT} % = ${eur(cut)}. Au-delà, vous vendez moins cher que votre prix de base.`,
+      why: `− ${LAST_MINUTE_PCT} % sur chacune de ces nuits libres, par exemple ${eur(first.priceCents!)} → ${eur(cut)}. Au-delà, vous vendriez moins cher que votre prix de base. Les nuits déjà vendues ne bougent pas.`,
       action: `Proposer − ${LAST_MINUTE_PCT} %`,
       from: first.date,
       to: last.date,
-      prefill: { priceCents: cut },
+      prefill: {},
+      runs: runsOf(proches, -LAST_MINUTE_PCT),
     });
   }
 
-  const fortes = days.filter((d) => d.holidayRated && d.date >= today && d.priceCents != null && d.overridePriceCents == null);
+  const fortes = days.filter((d) => d.holidayRated && d.date >= today && libre(d.date) && d.priceCents != null && d.overridePriceCents == null);
   if (fortes.length > 0) {
     const up = Math.round((fortes[0]!.priceCents! * (100 + STRONG_DATE_PCT)) / 100);
     const s = fortes.length > 1 ? "s" : "";
     out.push({
       kind: "dates-fortes",
       title: `Dates fortes : ${fortes.length} jour${s} férié${s} ou pont`,
-      why: `Le prix est déjà majoré ces jours-là. Un cran de plus se justifie le ${dfr(fortes[0]!.date)} : ${eur(fortes[0]!.priceCents!)} + ${STRONG_DATE_PCT} % = ${eur(up)}.`,
+      why: `Le prix est déjà majoré ces jours-là. Un cran de plus (+ ${STRONG_DATE_PCT} %) sur chacun d'eux seulement, par exemple le ${dfr(fortes[0]!.date)} : ${eur(fortes[0]!.priceCents!)} → ${eur(up)}.`,
       action: `Proposer + ${STRONG_DATE_PCT} %`,
       from: fortes[0]!.date,
       to: fortes[fortes.length - 1]!.date,
-      prefill: { priceCents: up },
+      prefill: {},
+      runs: runsOf(fortes, STRONG_DATE_PCT),
     });
   }
   return out;

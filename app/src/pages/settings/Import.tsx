@@ -12,18 +12,31 @@ import { Page, Section, UnsavedGuard, useWorkingProperty } from "../../ui/kit";
 
 export function ImportPage() {
   const { t } = useLingui();
-  const { property, picker } = useWorkingProperty();
-  const [csv, setCsv] = useState("");
+  const [csv, setCsvRaw] = useState("");
+  const [imported, setImported] = useState(false);
+  // Le domaine ne change pas tant qu'un texte attend : l'import vise le domaine testé.
+  const { property, picker } = useWorkingProperty(csv.trim().length > 0 && !imported);
   const [res, setRes] = useState<ImportResult | null>(null);
-  const [tested, setTested] = useState<string | null>(null);
+  // Un test vaut pour un texte ET un domaine : changer l'un ou l'autre l'efface.
+  const [tested, setTested] = useState<{ csv: string; propertyId: number } | null>(null);
+  const setCsv = (v: string) => {
+    setCsvRaw(v);
+    setRes(null);
+    setTested(null);
+    setImported(false);
+  };
+  const testOk = !!tested && !!property && tested.csv === csv && tested.propertyId === property.id;
   const a = useAction();
   const run = (dryRun: boolean) =>
     a.run(
       async () => {
         const r = await api<{ result: ImportResult }>("/import/elloha", { method: "POST", query: { property: property?.id }, body: { csv, dryRun } });
         setRes(r.result);
-        if (dryRun) setTested(csv);
-        else setTested(null);
+        if (dryRun) setTested({ csv, propertyId: property!.id });
+        else {
+          setTested(null);
+          setImported(true);
+        }
         return r.result;
       },
       (r) => {
@@ -35,16 +48,16 @@ export function ImportPage() {
   const tone = (s: string) => (s === "importé" || s === "ok_simulé" ? "soldee" : s === "déjà_importé" ? "muted-pill" : "annulee");
   return (
     <Page title={t`Importer depuis elloha`} back tools={picker} lead={property ? t`Vers ${property.name}. Collez l'export des réservations à venir (une ligne par réservation, colonnes unite, arrivee, depart, nom, prenom, email, telephone, adultes, enfants, total, paye, reference).` : undefined}>
-      <UnsavedGuard dirty={csv.trim().length > 0 && !res} />
+      <UnsavedGuard dirty={csv.trim().length > 0 && !imported} />
       <Section title={t`1. Coller le fichier`}>
         <Textarea size="md" autosize minRows={8} maxRows={20} aria-label={t`Contenu du fichier elloha`} placeholder="unite;arrivee;depart;nom;…" value={csv} onChange={(e) => setCsv(e.currentTarget.value)} styles={{ input: { fontFamily: "ui-monospace, monospace", fontSize: 14 } }} />
       </Section>
       <Section title={t`2. Tester, puis importer`} hint={t`Le test ne change rien. L'import n'est possible qu'après un test du même texte.`}>
         <div className="acts">
-          <button type="button" className="btn" disabled={!csv.trim() || a.state.status === "busy"} onClick={() => void run(true)}>
+          <button type="button" className="btn" disabled={!csv.trim() || !property || a.state.status === "busy"} onClick={() => void run(true)}>
             {a.state.status === "busy" ? t`Un instant…` : t`Tester`}
           </button>
-          <button type="button" className="btn pri" disabled={tested !== csv || !res || res.imported === 0 || a.state.status === "busy"} onClick={() => void run(false)}>
+          <button type="button" className="btn pri" disabled={!testOk || !res || res.imported === 0 || a.state.status === "busy"} onClick={() => void run(false)}>
             {t`Importer pour de bon`}
           </button>
         </div>

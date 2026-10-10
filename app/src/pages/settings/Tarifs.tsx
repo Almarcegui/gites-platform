@@ -9,7 +9,8 @@ import { IconAlertTriangle, IconPlus } from "@tabler/icons-react";
 import { Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 
-import { api } from "../../api/client";
+import { api, errorText } from "../../api/client";
+import { useRefresh } from "../../api/hooks";
 import type { DayRate, IsoDate } from "../../api/types";
 import type { RateRule, Season, UnitFull } from "../../api/types2";
 import { ErrorLine, useAction } from "../../lib/action";
@@ -372,12 +373,38 @@ function SeasonPanel({ propertyId, season, units, rules, onClose }: { propertyId
   const pricesOk = units.every((u) => !v.per[u.id]!.on || !!parseEuros(v.per[u.id]!.f.week));
   const valid = v.name.trim().length >= 2 && datesOk && pricesOk;
 
+  const refresh = useRefresh();
   async function save() {
     let id = season?.id;
+    let created = false;
     if (!id) {
       const r = await api<{ id: number }>("/seasons", { method: "POST", query: { property: propertyId }, body: { name: v.name.trim(), dateStart: v.from, dateEnd: v.to, priority: 0 } });
       id = r.id;
-    } else if (v.name !== init.name || v.from !== init.from || v.to !== init.to) {
+      created = true;
+    }
+    try {
+      await saveRest(id, created);
+    } catch (e) {
+      // Plusieurs écritures, pas de transaction : on ne laisse jamais une
+      // saison à moitié créée, et on dit ce qui est resté.
+      if (created) {
+        let undone = false;
+        try {
+          await api(`/seasons/${id}`, { method: "DELETE" });
+          undone = true;
+        } catch {
+          /* dit ci-dessous */
+        }
+        await refresh();
+        throw new Error(undone ? t`La saison n'a pas été créée : ${errorText(e)}` : t`La saison a été créée mais ses prix n'ont pas tous été enregistrés (${errorText(e)}). Ouvrez-la pour vérifier.`);
+      }
+      await refresh();
+      throw new Error(t`Enregistré en partie : ${errorText(e)} Rouvrez la saison pour vérifier ses prix.`);
+    }
+  }
+
+  async function saveRest(id: number, created: boolean) {
+    if (!created && (v.name !== init.name || v.from !== init.from || v.to !== init.to)) {
       await api(`/seasons/${id}`, { method: "PATCH", body: { name: v.name.trim(), dateStart: v.from, dateEnd: v.to } });
     }
     for (const u of units) {
@@ -719,6 +746,7 @@ function IdeasTab({ propertyId, units }: { propertyId: number; units: UnitFull[]
   const cal = useRateCalendar(propertyId, today, addDays(end, 1));
   const plan = usePlanning(propertyId, addDays(today, -30), addDays(end, 31));
   const [open, setOpen] = useState<DayEdit | null>(null);
+  const [runs, setRuns] = useState<{ unit: UnitFull; s: Suggestion } | null>(null);
   const list: { unit: UnitFull; s: Suggestion; days: DayRate[] }[] = [];
   if (cal.data && plan.data) {
     for (const u of units) {
@@ -748,7 +776,11 @@ function IdeasTab({ propertyId, units }: { propertyId: number; units: UnitFull[]
               <button
                 type="button"
                 className="btn"
-                onClick={() => setOpen({ unit: { id: unit.id, name: unit.name }, from: s.from, to: s.to, priceCents: first?.overridePriceCents ?? null, minNights: first?.overrideMinNights ?? null, fallbackCents: first?.priceCents ?? null, prefill: s.prefill, why: s.why })}
+                onClick={() =>
+                  s.runs
+                    ? setRuns({ unit, s })
+                    : setOpen({ unit: { id: unit.id, name: unit.name }, from: s.from, to: s.to, priceCents: first?.overridePriceCents ?? null, minNights: first?.overrideMinNights ?? null, fallbackCents: first?.priceCents ?? null, prefill: s.prefill, why: s.why })
+                }
               >
                 {s.action}
               </button>
@@ -757,6 +789,60 @@ function IdeasTab({ propertyId, units }: { propertyId: number; units: UnitFull[]
         })}
       </div>
       {open ? <DayPanel edit={open} onClose={() => setOpen(null)} /> : null}
+      {runs ? <RunsPanel unit={runs.unit} s={runs.s} onClose={() => setRuns(null)} /> : null}
     </Section>
+  );
+}
+
+/** Une suggestion de prix : la liste exacte des nuits qui changeront, puis un
+ *  geste pour les appliquer. Rien d'autre ne bouge. */
+function RunsPanel({ unit, s, onClose }: { unit: UnitFull; s: Suggestion; onClose: () => void }) {
+  const { t } = useLingui();
+  const refresh = useRefresh();
+  const a = useAction();
+  const runs = s.runs ?? [];
+  const nights = runs.reduce((n, r) => n + diffDays(r.from, r.to) + 1, 0);
+  return (
+    <SidePanel
+      opened
+      onClose={onClose}
+      label={t`Suggestion`}
+      top={unit.name}
+      title={s.title}
+      actions={
+        <button
+          type="button"
+          className="btn pri wide"
+          disabled={a.state.status === "busy" || nights === 0}
+          onClick={async () => {
+            let done = 0;
+            const ok = await a.run(async () => {
+              try {
+                for (const r of runs) {
+                  await api("/rate-overrides", { method: "PATCH", body: { unitId: unit.id, from: r.from, to: r.to, priceCents: r.priceCents } });
+                  done += diffDays(r.from, r.to) + 1;
+                }
+              } catch (e) {
+                await refresh();
+                throw new Error(done ? t`Appliqué en partie : ${done} nuit(s) sur ${nights}. ${errorText(e)}` : errorText(e));
+              }
+            }, t`C'est fait. Prix changé sur ${nights} nuit(s).`);
+            if (ok) onClose();
+          }}
+        >
+          {a.state.status === "busy" ? t`Un instant…` : t`Appliquer à ${nights} nuit(s)`}
+        </button>
+      }
+    >
+      <p className="lead">{s.why}</p>
+      <ul className="plain-list">
+        {runs.map((r) => (
+          <li key={r.from}>
+            {r.from === r.to ? t`Nuit du ${longDate(r.from)}` : t`Du ${longDate(r.from)} au ${longDate(r.to)}`} : <b>{eur(r.priceCents)}</b>
+          </li>
+        ))}
+      </ul>
+      {a.state.status === "error" ? <ErrorLine text={a.state.text} /> : null}
+    </SidePanel>
   );
 }

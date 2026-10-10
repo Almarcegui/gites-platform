@@ -123,6 +123,13 @@ msgstr "{0} : la majoration va de 0 à {1} %."
 msgid "{0} : réservation enregistrée"
 msgstr "{0} : réservation enregistrée"
 
+#. placeholder {0}: p > 0 ? "+" : "−"
+#. placeholder {1}: fr(Math.abs(p))
+#. placeholder {2}: year - 1
+#: src/pages/settings/Stats.tsx
+msgid "{0} {1} % par rapport à {2}"
+msgstr "{0} {1} % par rapport à {2}"
+
 #. placeholder {0}: MONTHS[i]
 #. placeholder {1}: fr(m.occupancyPct, 1)
 #. placeholder {2}: m.occupiedNights
@@ -804,6 +811,11 @@ msgstr "Appareils connectés"
 msgid "Appeler"
 msgstr "Appeler"
 
+#. placeholder {0}: errorText(e)
+#: src/pages/settings/Tarifs.tsx
+msgid "Appliqué en partie : {done} nuit(s) sur {nights}. {0}"
+msgstr "Appliqué en partie : {done} nuit(s) sur {nights}. {0}"
+
 #: src/pages/settings/Channels.tsx
 msgid "appliquée"
 msgstr "appliquée"
@@ -811,6 +823,10 @@ msgstr "appliquée"
 #: src/pages/settings/Channels.tsx
 msgid "Appliquer"
 msgstr "Appliquer"
+
+#: src/pages/settings/Tarifs.tsx
+msgid "Appliquer à {nights} nuit(s)"
+msgstr "Appliquer à {nights} nuit(s)"
 
 #: src/calendar/PricePanel.tsx
 msgid "Appliquer à {total} nuits"
@@ -1163,11 +1179,6 @@ msgstr "Bloquer ces nuits"
 msgid "C'est fait"
 msgstr "C'est fait"
 
-#. placeholder {0}: (r as { results: unknown[] }).results.length
-#: src/pages/settings/Ical.tsx
-msgid "C'est fait. {0} calendrier(s) relu(s)."
-msgstr "C'est fait. {0} calendrier(s) relu(s)."
-
 #. placeholder {0}: eur(cents)
 #: src/booking/BookingPanel.tsx
 msgid "C'est fait. {0} encaissés."
@@ -1200,6 +1211,10 @@ msgstr "C'est fait. {0} voyageur(s) inscrit(s) au registre."
 #: src/pages/settings/Ical.tsx
 msgid "C'est fait. {0}{1}."
 msgstr "C'est fait. {0}{1}."
+
+#: src/pages/settings/Ical.tsx
+msgid "C'est fait. {n} calendrier(s) relu(s)."
+msgstr "C'est fait. {n} calendrier(s) relu(s)."
 
 #: src/pages/settings/Accounts.tsx
 msgid "C'est fait. Accès coupé."
@@ -1354,6 +1369,10 @@ msgstr "C'est fait. Photo rattachée."
 #: src/pages/settings/Channels.tsx
 msgid "C'est fait. Pourcentages enregistrés."
 msgstr "C'est fait. Pourcentages enregistrés."
+
+#: src/pages/settings/Tarifs.tsx
+msgid "C'est fait. Prix changé sur {nights} nuit(s)."
+msgstr "C'est fait. Prix changé sur {nights} nuit(s)."
 
 #. placeholder {0}: unit.name
 #: src/pages/settings/Tarifs.tsx
@@ -1714,6 +1733,11 @@ msgstr "Code promo"
 msgid "Codes promo"
 msgstr "Codes promo"
 
+#. placeholder {0}: year - 1
+#: src/pages/settings/Stats.tsx
+msgid "comme en {0}"
+msgstr "comme en {0}"
+
 #: src/pages/settings/Register.tsx
 msgid "Comment le registre est tenu"
 msgstr "Comment le registre est tenu"
@@ -2058,6 +2082,12 @@ msgstr "Donner un nouveau mot de passe"
 msgid "Du"
 msgstr "Du"
 
+#. placeholder {0}: longDate(r.from)
+#. placeholder {1}: longDate(r.to)
+#: src/pages/settings/Tarifs.tsx
+msgid "Du {0} au {1}"
+msgstr "Du {0} au {1}"
+
 #. placeholder {0}: longDate(s.dateStart)
 #. placeholder {1}: longDate(s.dateEnd)
 #. placeholder {2}: seasonNights(s)
@@ -2169,6 +2199,11 @@ msgstr "Enfants"
 msgid "Enregistré : {0}. Puis refusé : {1} Le reste n'est pas enregistré."
 msgstr "Enregistré : {0}. Puis refusé : {1} Le reste n'est pas enregistré."
 
+#. placeholder {0}: errorText(e)
+#: src/pages/settings/Tarifs.tsx
+msgid "Enregistré en partie : {0} Rouvrez la saison pour vérifier ses prix."
+msgstr "Enregistré en partie : {0} Rouvrez la saison pour vérifier ses prix."
+
 #: src/ui/kit.tsx
 msgid "Enregistrement"
 msgstr "Enregistrement"
@@ -2218,6 +2253,10 @@ msgstr "Enregistrez d'abord la page"
 #: src/pages/settings/Channels.tsx
 msgid "Enregistrez d'abord les pourcentages"
 msgstr "Enregistrez d'abord les pourcentages"
+
+#: src/ui/kit.tsx
+msgid "Enregistrez ou annulez d'abord vos modifications"
+msgstr "Enregistrez ou annulez d'abord vos modifications"
 
 #: src/pages/settings/Logs.tsx
 msgid "Entrée du journal"
@@ -2548,10 +2587,6 @@ msgstr "L'annulation libère les dates tout de suite, ici et sur Airbnb et Booki
 msgid "L'arrivée est dans le passé."
 msgstr "L'arrivée est dans le passé."
 
-#: src/pages/settings/Logs.tsx
-msgid "l'ensemble"
-msgstr "l'ensemble"
-
 #: src/pages/settings/Channels.tsx
 msgid "L'état des plateformes n'a pas pu être lu."
 msgstr "L'état des plateformes n'a pas pu être lu."
@@ -2630,6 +2665,16 @@ msgstr "La réservation est enregistrée, mais le lien de paiement n'a pas pu ê
 #: src/sale/SaleFlow.tsx
 msgid "La réservation est enregistrée, mais le paiement n'a pas été noté : {0} Notez-le dans la fiche."
 msgstr "La réservation est enregistrée, mais le paiement n'a pas été noté : {0} Notez-le dans la fiche."
+
+#. placeholder {0}: errorText(e)
+#: src/pages/settings/Tarifs.tsx
+msgid "La saison a été créée mais ses prix n'ont pas tous été enregistrés ({0}). Ouvrez-la pour vérifier."
+msgstr "La saison a été créée mais ses prix n'ont pas tous été enregistrés ({0}). Ouvrez-la pour vérifier."
+
+#. placeholder {0}: errorText(e)
+#: src/pages/settings/Tarifs.tsx
+msgid "La saison n'a pas été créée : {0}"
+msgstr "La saison n'a pas été créée : {0}"
 
 #: src/pages/settings/Domain.tsx
 msgid "La somme des maisons qu'il regroupe"
@@ -3996,6 +4041,11 @@ msgstr "relié (chambre n° {0})"
 msgid "Relire maintenant"
 msgstr "Relire maintenant"
 
+#. placeholder {0}: bad.join(", ")
+#: src/pages/settings/Ical.tsx
+msgid "Relu, sauf : {0} (voir leur fiche)."
+msgstr "Relu, sauf : {0} (voir leur fiche)."
+
 #: src/pages/settings/Payments.tsx
 msgid "Remboursement"
 msgstr "Remboursement"
@@ -4392,6 +4442,10 @@ msgstr "Solde, à payer avant le {0}"
 #: src/pages/Settings.tsx
 msgid "Sombre"
 msgstr "Sombre"
+
+#: src/pages/settings/Tarifs.tsx
+msgid "Suggestion"
+msgstr "Suggestion"
 
 #: src/pages/settings/Tarifs.tsx
 msgid "Suggestions"

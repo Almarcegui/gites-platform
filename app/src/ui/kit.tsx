@@ -180,10 +180,10 @@ export function SidePanel(props: {
 // --- boîtes ----------------------------------------------------------------------
 
 /** Boîte de saisie : jamais fermée au clic à côté. */
-export function Box({ open, onClose, title, children, size = "lg" }: { open: boolean; onClose: () => void; title: string; children: ReactNode; size?: string }) {
+export function Box({ open, onClose, title, children, size = "lg", noClose }: { open: boolean; onClose: () => void; title: string; children: ReactNode; size?: string; noClose?: boolean }) {
   const layout = useLayout();
   return (
-    <Modal opened={open} onClose={onClose} title={<b style={{ fontSize: 20 }}>{title}</b>} closeOnClickOutside={false} closeOnEscape={false} centered fullScreen={layout === "B"} size={size} zIndex={400}>
+    <Modal opened={open} onClose={onClose} title={<b style={{ fontSize: 20 }}>{title}</b>} closeOnClickOutside={false} closeOnEscape={false} withCloseButton={!noClose} centered fullScreen={layout === "B"} size={size} zIndex={400}>
       {children}
     </Modal>
   );
@@ -260,7 +260,9 @@ export function SaveBar({ dirty, busy, error, onSave, onReset, label }: { dirty:
 
 /** Les réglages d'un domaine se font domaine par domaine : en « Tous mes
  *  gîtes », l'écran propose de choisir lequel, sans toucher au sélecteur. */
-export function useWorkingProperty(): { property: Property | undefined; properties: Property[]; picker: ReactNode } {
+/** `locked` : une saisie est en cours pour le domaine affiché ; changer de
+ *  domaine la perdrait, le choix est donc suspendu jusqu'à l'enregistrement. */
+export function useWorkingProperty(locked = false): { property: Property | undefined; properties: Property[]; picker: ReactNode } {
   const { t } = useLingui();
   const { scope } = useScope();
   const { data: properties = [] } = useProperties();
@@ -272,7 +274,7 @@ export function useWorkingProperty(): { property: Property | undefined; properti
     !fixed && properties.length > 1 ? (
       <div className="chips" role="group" aria-label={t`Domaine réglé`}>
         {properties.map((p) => (
-          <button key={p.id} type="button" className="chip" aria-pressed={property?.id === p.id} onClick={() => setLocal(p.id)}>
+          <button key={p.id} type="button" className="chip" aria-pressed={property?.id === p.id} disabled={locked && property?.id !== p.id} title={locked ? t`Enregistrez ou annulez d'abord vos modifications` : undefined} onClick={() => setLocal(p.id)}>
             {p.name}
           </button>
         ))}
