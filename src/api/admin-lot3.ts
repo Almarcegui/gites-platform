@@ -12,7 +12,7 @@ import { audit, getProperty, listProperties, listUnits } from "../db/repo";
 import { getSetting, setSetting } from "../services/settings";
 import { Beds24Error, beds24Configured, beds24Fetch, beds24WritesAllowed } from "../services/beds24";
 import { triggerBeds24PushAll } from "../services/beds24-sync";
-import { CHANNEL_MARKUPS_KEY, PUSH_CHANNEL_KEY, parseChannelMarkups, parsePushChannel, pushMarkupPct } from "../core/price-guardrails";
+import { CHANNEL_MARKUPS_KEY, PUSH_CHANNEL_KEY, parseChannelMarkups, parsePushChannel, pushMarkupPct, type ChannelMarkup } from "../core/price-guardrails";
 import {
   AIRBNB_PROMOTIONS_KEY,
   AIRBNB_PROMOTIONS_SENT_KEY,
@@ -91,9 +91,16 @@ async function markupContext(db: D1Database) {
  *  (prix direct poussé ou non) reste vrai partout — sinon la commission serait
  *  comptée deux fois sur une partie des annonces. Si ce retour arrière échoue
  *  aussi, l'erreur le dit : à vérifier dans Beds24. */
-export async function sendPriceLinking(env: Env, enabled: boolean): Promise<{ properties: number; rooms: number }> {
-  const { markups } = await markupContext(env.DB);
+export async function sendPriceLinking(
+  env: Env,
+  enabled: boolean,
+  /** État d'avant, remis en cas d'échec : actif ou non, et avec quelles majorations. */
+  previous?: { enabled: boolean; markups: readonly ChannelMarkup[] },
+): Promise<{ properties: number; rooms: number }> {
+  const { markups, linking } = await markupContext(env.DB);
   const lines = derivedLines(markups);
+  const prev = previous ?? { enabled: linking.enabled, markups };
+  const prevLines = derivedLines(prev.markups);
   const linked = await linkedRooms(env.DB);
   const done: typeof linked = [];
   for (const l of linked) {
@@ -101,10 +108,13 @@ export async function sendPriceLinking(env: Env, enabled: boolean): Promise<{ pr
       await beds24Fetch(env, "/properties", { method: "POST", body: priceLinkingBody(l.beds24PropertyId, l.roomIds, lines, enabled) });
       done.push(l);
     } catch (e) {
+      // La propriété en échec « inconnu » a pu être modifiée : elle est
+      // compensée aussi. Chaque propriété touchée revient à l'état d'avant.
+      if (e instanceof Beds24Error && e.issue === "inconnu") done.push(l);
       const undone: number[] = [];
       for (const d of done) {
         try {
-          await beds24Fetch(env, "/properties", { method: "POST", body: priceLinkingBody(d.beds24PropertyId, d.roomIds, lines, !enabled) });
+          await beds24Fetch(env, "/properties", { method: "POST", body: priceLinkingBody(d.beds24PropertyId, d.roomIds, prevLines, prev.enabled) });
         } catch {
           undone.push(d.beds24PropertyId);
         }

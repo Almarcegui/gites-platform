@@ -7,6 +7,8 @@
 // Cloudflare reste possible à tout moment, sans divergence de code métier.
 
 import { createServer } from "node:http";
+import { Readable } from "node:stream";
+import { pipeline } from "node:stream/promises";
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { readFile, stat, unlink, writeFile } from "node:fs/promises";
 import { dirname, extname, join, normalize, resolve } from "node:path";
@@ -258,18 +260,12 @@ async function sendResponse(res, response) {
     return;
   }
   // En flux, avec contre-pression : une grosse réponse (archive des photos)
-  // ne passe jamais tout entière en mémoire.
-  const reader = response.body.getReader();
+  // ne passe jamais tout entière en mémoire. pipeline() annule la source si
+  // le client ferme la connexion en cours de route.
   try {
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      if (!res.write(value)) await new Promise((r) => res.once("drain", r));
-    }
-    res.end();
+    await pipeline(Readable.fromWeb(response.body), res);
   } catch (e) {
     console.error("[gites] réponse interrompue :", e instanceof Error ? e.message : e);
-    res.destroy(e instanceof Error ? e : undefined);
   }
 }
 

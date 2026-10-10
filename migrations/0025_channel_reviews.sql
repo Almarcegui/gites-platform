@@ -1,5 +1,4 @@
--- Migration 0025 — Avis des plateformes (Airbnb, Booking.com) relevés par Beds24 (lot 3),
--- et langue de chaque réservation (fin du fichier).
+-- Migration 0025 — Avis des plateformes (Airbnb, Booking.com) relevés par Beds24 (lot 3).
 -- Lecture seule : Beds24 ne permet pas d'y répondre par l'API (findings Beds24 § 5) ;
 -- la carte « Avis » d'Aujourd'hui renvoie vers Beds24 pour répondre.
 --
@@ -34,9 +33,3 @@ CREATE TABLE channel_reviews (
   UNIQUE (channel, external_id)
 );
 CREATE INDEX idx_channel_reviews_property ON channel_reviews(property_id, submitted_at);
-
--- Langue dans laquelle la réservation a été faite (tunnel public FR/NL, lot 3) :
--- mails et voucher de CETTE réservation dans sa langue, même si le client en fait
--- une autre plus tard dans l'autre langue (guests.lang = dernier choix, repli).
--- NULL pour les réservations antérieures : on retombe sur guests.lang.
-ALTER TABLE bookings ADD COLUMN lang TEXT CHECK (lang IS NULL OR lang IN ('fr', 'nl'));

@@ -1200,7 +1200,7 @@ export function registerAdminRoutes(router: Router): void {
     let linking: { resent: boolean; error?: string } | undefined;
     if (parsePriceLinking(await getSetting(env.DB, PRICE_LINKING_KEY)).enabled && beds24WritesAllowed(env)) {
       try {
-        await sendPriceLinking(env, true);
+        await sendPriceLinking(env, true, { enabled: true, markups: before.channels });
         const lines = derivedLines(channels);
         await setSetting(env.DB, PRICE_LINKING_KEY, JSON.stringify({ enabled: true, sentMarkups: Object.fromEntries(lines.map((l) => [l.channel, l.markupPct])), sentAt: new Date().toISOString() }));
         linking = { resent: true };

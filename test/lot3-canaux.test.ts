@@ -319,3 +319,39 @@ describe("revue Codex 1", () => {
     expect(res!.status).toBe(201);
   });
 });
+
+describe("revue Codex 2", () => {
+  it("un renvoi de majorations refusé en partie remet les ANCIENS multiplicateurs, pas un état désactivé", async () => {
+    expect((await api("POST", "/api/admin/channels/price-linking", { enabled: true })).status).toBe(200);
+    await t.db.prepare("UPDATE properties SET beds24_property_id = 999001 WHERE id = 2").run();
+    const unit = await t.db.prepare("SELECT id FROM units WHERE property_id = 2 AND is_composite = 0 LIMIT 1").first<{ id: number }>();
+    await t.db.prepare("UPDATE units SET beds24_room_id = 999101 WHERE id = ?1").bind(unit!.id).run();
+    try {
+      const before = (await api("GET", "/api/admin/channel-markups")).data.channels as Array<{ channel: string; label: string; markupPct: number }>;
+      const old = before.find((c) => c.channel === "airbnb")!.markupPct;
+      calls = [];
+      refuseProperty = 999001;
+      const r = await api("PUT", "/api/admin/channel-markups", { channels: before.map((c) => (c.channel === "airbnb" ? { ...c, markupPct: 25 } : c)) });
+      expect(r.data.linking.resent).toBe(false);
+      const posts = calls.filter((c) => c.path === "/properties").map((c) => (c.body as Array<{ id: number; roomTypes: Array<{ priceRules: Array<Record<string, any>> }> }>)[0]!);
+      expect(posts.map((p) => p.id)).toEqual([344555, 999001, 344555]);
+      expect(posts[0]!.roomTypes[0]!.priceRules[1]!.priceLinking.offsetMultiplier).toBe(1.25);
+      expect(posts[2]!.roomTypes[0]!.priceRules[1]!.priceLinking).toMatchObject({ priceId: 1, offsetMultiplier: 1 + old / 100 });
+      expect((await api("GET", "/api/admin/channels/price-linking")).data.upToDate).toBe(false);
+    } finally {
+      await t.db.prepare("UPDATE properties SET beds24_property_id = NULL WHERE id = 2").run();
+      await t.db.prepare("UPDATE units SET beds24_room_id = NULL WHERE id = ?1").bind(unit!.id).run();
+      refuseProperty = null;
+      await api("POST", "/api/admin/channels/price-linking", { enabled: false });
+    }
+  });
+
+  it("plus de pages d'avis que la limite : la source échoue et son curseur n'avance pas", async () => {
+    await t.db.prepare("DELETE FROM app_settings WHERE key = ?1").bind(REVIEWS_STATE_KEY).run();
+    reviewPages = { "/channels/airbnb/reviews?711713": Array.from({ length: 25 }, () => []) };
+    const r = await pullChannelReviews(env(false), new Date("2026-10-13T08:00:00Z"));
+    expect(r.errors.some((e) => e.includes("relève incomplète"))).toBe(true);
+    const state = JSON.parse((await t.db.prepare("SELECT value FROM app_settings WHERE key = ?1").bind(REVIEWS_STATE_KEY).first<{ value: string }>())!.value);
+    expect(state.ok["airbnb:711713"]).toBeUndefined();
+  });
+});

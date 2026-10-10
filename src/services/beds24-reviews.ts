@@ -130,7 +130,7 @@ export interface ReviewsPullResult {
 }
 
 /** Pages lues au plus par source et par relève (100 avis par page chez Beds24). */
-const MAX_PAGES = 5;
+const MAX_PAGES = 20;
 
 interface ReviewsState {
   /** Dernière tentative (règle les 6 h entre deux relèves). */
@@ -147,9 +147,11 @@ async function allPages<T>(env: Env, path: string, query: Record<string, string>
   for (let page = 1; page <= MAX_PAGES; page += 1) {
     const res = await beds24Fetch<{ data?: T[]; pages?: { nextPageExists?: boolean } }>(env, path, { query: page > 1 ? { ...query, page: String(page) } : query });
     out.push(...(res.data ?? []));
-    if (!res.pages?.nextPageExists) break;
+    if (!res.pages?.nextPageExists) return out;
   }
-  return out;
+  // Limite de sécurité atteinte : relève incomplète, le curseur de la source
+  // ne doit pas avancer (revue Codex 2).
+  throw new Error(`plus de ${MAX_PAGES} pages d'avis : relève incomplète, reprise au prochain passage`);
 }
 
 /** La relève du cron : sans Beds24 configuré, ou moins de 6 h après la dernière, ne fait rien. */
