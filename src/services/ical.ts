@@ -141,10 +141,18 @@ export function parseIcs(text: string): IcsEvent[] {
   return events;
 }
 
-/** '20260810' ou '20260810T140000Z' → '2026-08-10' (la composante date). */
+/** '20260810' → '2026-08-10' ; '20260810T140000Z' → la date de cet instant
+    à Bruxelles (un '20261101T230000Z' Google est le 2 novembre à minuit chez
+    nous, pas le 1er : lu en UTC, il chevauchait la réservation précédente —
+    constaté le 10/10/2026 sur l'agenda Google de papa). Sans 'Z', l'heure
+    est déjà locale : on garde la composante date. */
 function parseIcsDate(value: string): IsoDate | undefined {
-  const m = value.trim().match(/^(\d{4})(\d{2})(\d{2})/);
+  const m = value.trim().match(/^(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2})(Z)?)?/);
   if (!m) return undefined;
+  if (m[7] === "Z") {
+    const utc = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Number(m[4]), Number(m[5]), Number(m[6])));
+    return todayInZone(utc);
+  }
   return `${m[1]}-${m[2]}-${m[3]}`;
 }
 

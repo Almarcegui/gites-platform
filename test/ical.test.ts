@@ -78,6 +78,17 @@ describe("parseIcs", () => {
     expect(events[0]?.dtstart).toBe("2026-08-10");
     expect(events[0]?.dtend).toBe("2026-08-12");
   });
+
+  it("convertit un date-time UTC à la date de Bruxelles (minuit local = 23:00Z la veille)", () => {
+    const ics = [
+      "BEGIN:VCALENDAR", "BEGIN:VEVENT",
+      "UID:google@x", "DTSTART:20261101T230000Z", "DTEND:20261108T090000Z",
+      "END:VEVENT", "END:VCALENDAR",
+    ].join("\n");
+    const events = parseIcs(ics);
+    expect(events[0]?.dtstart).toBe("2026-11-02");
+    expect(events[0]?.dtend).toBe("2026-11-08");
+  });
 });
 
 describe("buildIcs", () => {

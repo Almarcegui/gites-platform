@@ -2556,6 +2556,20 @@ export function registerAdminRoutes(router: Router): void {
     });
   }));
 
+  // Régénère le secret de l'URL d'export iCal d'un bien (les jetons du seed
+  // « local-dev-token-* » ne doivent jamais rester en production). L'ancienne
+  // adresse cesse de répondre : à réabonner côté Google/Airbnb après coup.
+  router.post("/api/admin/units/:id/ical-token", guard(async (req, env, p) => {
+    const unitId = intParam(p.id, 0);
+    if (!unitId) return apiError(400, "bien inconnu");
+    const bytes = crypto.getRandomValues(new Uint8Array(24));
+    const token = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+    const res = await env.DB.prepare("UPDATE units SET ical_token = ?1 WHERE id = ?2").bind(token, unitId).run();
+    if (!res.meta.changes) return apiError(404, "bien inconnu");
+    await audit(env.DB, "admin", "unit.ical_token.regenerate", `unit:${unitId}`, { par: currentUser(req) });
+    return json({ unitId, url: `${env.PUBLIC_BASE_URL}/ical/${token}.ics` });
+  }));
+
   router.post("/api/admin/ical-feeds", guard(async (req, env) => {
     const body = await readJson<{ unitId?: number; name?: string; url?: string }>(req);
     const unitId = intParam(String(body?.unitId ?? ""), 0);
