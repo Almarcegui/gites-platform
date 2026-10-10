@@ -186,7 +186,7 @@ describe("les images de la page sont locales et sous le plafond de 300 Ko", () =
 function pagesVitrine(): string[] {
   const out = ["index.html"];
   for (const entry of readdirSync(publicDir, { withFileTypes: true })) {
-    if (!entry.isDirectory() || ["admin", "book", "img"].includes(entry.name)) continue;
+    if (!entry.isDirectory() || ["admin", "admin2", "book", "img"].includes(entry.name)) continue;
     const rel = join(entry.name, "index.html");
     if (existsSync(join(publicDir, rel))) out.push(rel);
   }

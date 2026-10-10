@@ -6,7 +6,11 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
-    "build": "tsc -p tsconfig.build.json && node node/fix-esm-imports.mjs",
+    "build": "tsc -p tsconfig.build.json && node node/fix-esm-imports.mjs && npm run build:app",
+    "build:app": "(test -d app/node_modules || npm --prefix app ci --no-audit --no-fund) && npm --prefix app run build",
+    "dev:app": "npm --prefix app run dev",
+    "dev:pilote": "wrangler dev --port 8795 --ip 127.0.0.1 --var EMAILS_ENABLED:false --var BEDS24_WRITE_ENABLED:false --var PUBLIC_BASE_URL:http://127.0.0.1:8795",
+    "pilote:donnees": "node scripts/pilote-donnees.mjs",
     "start": "node node/server.mjs",
     "serve:local": "PORT=8790 SQLITE_PATH=data/gites-local.db npm run start",
     "test": "vitest run",

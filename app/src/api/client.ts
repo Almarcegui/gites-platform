@@ -1,0 +1,140 @@
+// Accès à l'API admin JSON (/api/admin/*), même origine que l'écran.
+//
+// La session est celle de l'ancien back-office : `POST /api/admin/login`
+// renvoie un jeton, envoyé ensuite en `Authorization: Bearer session:<jeton>`.
+// Les clés de stockage sont partagées avec /admin/ (gp_session, gp_token,
+// gp_user) : se connecter à l'un connecte l'autre.
+
+const SESSION_KEY = "gp_session";
+const TOKEN_KEY = "gp_token";
+const USER_KEY = "gp_user";
+const LAST_USER_KEY = "gp_last_user";
+
+function lire(cle: string): string | null {
+  try {
+    return localStorage.getItem(cle);
+  } catch {
+    return null;
+  }
+}
+function ecrire(cle: string, valeur: string | null): void {
+  try {
+    if (valeur == null) localStorage.removeItem(cle);
+    else localStorage.setItem(cle, valeur);
+  } catch {
+    /* navigation privée : la session ne survivra pas au rechargement */
+  }
+}
+
+export function authHeader(): string | null {
+  const session = lire(SESSION_KEY);
+  if (session) return `Bearer session:${session}`;
+  const token = lire(TOKEN_KEY);
+  const user = lire(USER_KEY);
+  if (token) return `Bearer ${user ? `${user}:${token}` : token}`;
+  return null;
+}
+
+export function isLoggedIn(): boolean {
+  return authHeader() != null;
+}
+
+export function currentUser(): string | null {
+  return lire(USER_KEY);
+}
+
+export function lastUser(): string {
+  return lire(LAST_USER_KEY) ?? "";
+}
+
+export function clearSession(): void {
+  ecrire(SESSION_KEY, null);
+  ecrire(TOKEN_KEY, null);
+}
+
+/** Erreur d'API : le message du serveur (déjà en français) et le statut. */
+export class ApiError extends Error {
+  readonly status: number;
+  readonly body: unknown;
+  constructor(status: number, message: string, body: unknown) {
+    super(message);
+    this.status = status;
+    this.body = body;
+  }
+}
+
+/** Prévenu à chaque 401 : la coque renvoie alors vers la connexion. */
+type Listener = () => void;
+const unauthorizedListeners = new Set<Listener>();
+export function onUnauthorized(fn: Listener): () => void {
+  unauthorizedListeners.add(fn);
+  return () => unauthorizedListeners.delete(fn);
+}
+
+export async function api<T>(path: string, init: { method?: string; body?: unknown; query?: Record<string, string | number | undefined> } = {}): Promise<T> {
+  const url = new URL(`/api/admin${path}`, window.location.origin);
+  for (const [k, v] of Object.entries(init.query ?? {})) if (v !== undefined && v !== "") url.searchParams.set(k, String(v));
+  const headers: Record<string, string> = { accept: "application/json" };
+  const auth = authHeader();
+  if (auth) headers.authorization = auth;
+  if (init.body !== undefined) headers["content-type"] = "application/json";
+  let res: Response;
+  try {
+    res = await fetch(url, { method: init.method ?? "GET", headers, body: init.body !== undefined ? JSON.stringify(init.body) : undefined });
+  } catch {
+    throw new ApiError(0, "Pas de connexion avec le serveur. Vérifiez internet, puis réessayez.", null);
+  }
+  const data: unknown = await res.json().catch(() => null);
+  if (!res.ok) {
+    if (res.status === 401) {
+      clearSession();
+      unauthorizedListeners.forEach((fn) => fn());
+    }
+    const msg = data && typeof data === "object" && "error" in data ? String((data as { error: unknown }).error) : `erreur ${res.status}`;
+    throw new ApiError(res.status, msg, data);
+  }
+  return data as T;
+}
+
+export async function login(user: string, password: string): Promise<void> {
+  const data = await api<{ ok: boolean; user: string; session?: string }>("/login", { method: "POST", body: { user, password } });
+  ecrire(USER_KEY, data.user);
+  ecrire(LAST_USER_KEY, data.user);
+  if (data.session) {
+    ecrire(SESSION_KEY, data.session);
+    ecrire(TOKEN_KEY, null);
+  } else {
+    // Accès de secours (ADMIN_TOKEN) : pas de session, le mot de passe est
+    // gardé comme le fait l'ancien écran.
+    ecrire(TOKEN_KEY, password);
+    ecrire(SESSION_KEY, null);
+  }
+}
+
+export async function logout(): Promise<void> {
+  try {
+    await api("/logout", { method: "POST" });
+  } catch {
+    /* la session locale est effacée de toute façon */
+  }
+  clearSession();
+}
+
+/** Message lisible pour une erreur quelconque. */
+export function errorText(e: unknown): string {
+  if (e instanceof ApiError) return humanize(e.message, e.status);
+  if (e instanceof Error) return e.message;
+  return "Quelque chose n'a pas marché. Réessayez.";
+}
+
+/** Les messages du serveur sont en français mais parfois en termes de
+ *  développeur : on reformule les plus courants pour l'écran. */
+function humanize(msg: string, status: number): string {
+  const m = msg.trim();
+  if (status === 0) return m;
+  if (status === 401) return "Votre session a expiré. Reconnectez-vous.";
+  if (/créneau (déjà occupé|indisponible)/.test(m)) return "Ces nuits sont déjà prises. Rien n'a été changé.";
+  if (/^devis impossible/.test(m)) return "Ces dates ne se vendent pas telles quelles (minimum de nuits ou jour d'arrivée). Rien n'a été changé.";
+  if (status >= 500) return "Le serveur n'a pas pu le faire. Rien n'a été changé ; réessayez dans un instant.";
+  return m.charAt(0).toUpperCase() + m.slice(1) + (/[.!?]$/.test(m) ? "" : ".");
+}

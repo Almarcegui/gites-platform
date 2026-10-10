@@ -29,7 +29,7 @@ const LIENS = ["/mentions-legales/", "/confidentialite/", "/conditions-generales
 function pagesVitrine(): string[] {
   const out = ["index.html"];
   for (const entry of readdirSync(publicDir, { withFileTypes: true })) {
-    if (!entry.isDirectory() || entry.name === "admin" || entry.name === "book" || entry.name === "img") continue;
+    if (!entry.isDirectory() || entry.name === "admin" || entry.name === "admin2" || entry.name === "book" || entry.name === "img") continue;
     const rel = join(entry.name, "index.html");
     if (existsSync(join(publicDir, rel))) out.push(rel);
   }
