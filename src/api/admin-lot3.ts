@@ -120,7 +120,9 @@ async function readLiveRules(env: Env, l: Linked, journal: LinkingStep[]): Promi
   for (const roomId of l.roomIds) {
     const room = prop?.roomTypes?.find((r) => r.id === roomId);
     if (!room) throw new Beds24Error(`Beds24 GET /properties : la chambre #${roomId} de la propriété #${l.beds24PropertyId} est absente de la réponse — rien n'est envoyé`);
-    out.set(roomId, parseLiveRules(room.priceRules));
+    const rules = parseLiveRules(room.priceRules);
+    if (!rules) throw new Beds24Error(`Beds24 GET /properties : pas de liste priceRules lisible pour la chambre #${roomId} — rien n'est envoyé`, undefined, "refus", rawForAudit(room));
+    out.set(roomId, rules);
   }
   return out;
 }
@@ -205,11 +207,15 @@ export async function sendPriceLinking(
   if (opts.essai) return { properties: planned.plans.length, rooms: planned.rooms, journal, envois };
   const touched: LinkingPlan[] = [];
   for (const p of planned.plans) {
-    touched.push(p);
     try {
       const reponse = await beds24Fetch(env, "/properties", { method: "POST", body: p.body });
       journal.push({ beds24PropertyId: p.beds24PropertyId, etape: "envoi", envoi: p.body, reponse: rawForAudit(reponse) });
+      touched.push(p);
     } catch (e) {
+      // Refus certain : rien n'a été appliqué ici, on n'y touche pas. Issue
+      // inconnue (réseau, 5xx, élément refusé à côté d'un `modified`) : la
+      // propriété a pu changer en partie, elle est remise aussi.
+      if (!(e instanceof Beds24Error) || e.issue === "inconnu") touched.push(p);
       journal.push({ beds24PropertyId: p.beds24PropertyId, etape: "envoi", envoi: p.body, erreur: e instanceof Error ? e.message : String(e), ...(e instanceof Beds24Error ? { reponse: e.response } : {}) });
       const failed: string[] = [];
       for (const d of touched) {
@@ -353,6 +359,7 @@ export function registerLot3AdminRoutes(router: Router): void {
   router.post("/api/admin/channels/price-linking", guard(async (req, env, _p, _url, execCtx) => {
     const body = await readJson<{ enabled?: unknown; essai?: unknown }>(req);
     if (typeof body?.enabled !== "boolean") return apiError(400, "enabled (vrai ou faux) attendu");
+    if (body.essai !== undefined && typeof body.essai !== "boolean") return apiError(400, "essai : vrai ou faux attendu (rien n'est parti)");
     const essai = body.essai === true;
     const w = await writeState(env);
     if (essai ? !w.configured : !w.writesAllowed) return apiError(409, `rien n'est parti : ${w.reason}`, { code: "beds24_writes_closed" });

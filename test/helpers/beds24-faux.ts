@@ -49,6 +49,8 @@ export class FauxBeds24 {
   props = new Map<number, Map<number, Json[]>>();
   /** Refus « métier » d'un élément POST (null = accepté). Forme libre : c'est l'élément de réponse. */
   refuser: ((propertyId: number, element: Json) => Json | null) | null = null;
+  /** Refus APRÈS application de la première chambre seulement (refus partiel, issue inconnue). */
+  partialRefusal: ((propertyId: number) => Json | null) | null = null;
   /** Panne de lecture (GET /properties) pour cette propriété. */
   readFails = new Set<number>();
 
@@ -94,7 +96,8 @@ export class FauxBeds24 {
     if (errors.length) return { success: false, errors };
     const refused = this.refuser?.(pid, el);
     if (refused) return refused;
-    for (const rt of (el.roomTypes as Json[] | undefined) ?? []) {
+    const partial = this.partialRefusal?.(pid) ?? null;
+    for (const rt of ((el.roomTypes as Json[] | undefined) ?? []).slice(0, partial ? 1 : undefined)) {
       const list = rooms.get(rt.id as number)!;
       for (const r of (rt.priceRules as Json[] | undefined) ?? []) {
         let cur = list.find((x) => x.id === r.id);
@@ -116,6 +119,7 @@ export class FauxBeds24 {
         }
       }
     }
+    if (partial) return partial;
     return { success: true, modified: { id: pid } };
   }
 }

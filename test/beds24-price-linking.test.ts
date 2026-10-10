@@ -67,6 +67,7 @@ afterAll(async () => {
 beforeEach(async () => {
   calls = [];
   faux.refuser = null;
+  faux.partialRefusal = null;
   faux.readFails.clear();
   faux.props.clear();
   faux.seed(PROP, [SCIEUR, SCIERIE]);
@@ -74,6 +75,7 @@ beforeEach(async () => {
   await t.db.prepare("UPDATE properties SET beds24_property_id = NULL WHERE id = 2").run();
   await t.db.prepare("UPDATE units SET beds24_room_id = NULL WHERE property_id = 2").run();
   await t.db.prepare("DELETE FROM app_settings WHERE key = 'channels.price_linking'").run();
+  await t.db.prepare("DELETE FROM app_settings WHERE key = 'pricing.channel_markups'").run();
 });
 
 /** Relie une deuxième propriété Beds24 (999001) pour tester le tout ou rien. */
@@ -202,5 +204,53 @@ describe("prix dérivés contre le faux Beds24", () => {
     expect(r.status).toBe(502);
     expect(r.data.error).toContain("rien n'a été envoyé");
     expect(calls.filter((c) => c.method === "POST")).toHaveLength(0);
+  });
+});
+
+describe("contrôle Codex 10/10", () => {
+  it("essai non booléen : 400, rien ne part", async () => {
+    const r = await api("POST", "/api/admin/channels/price-linking", { enabled: true, essai: "true" });
+    expect(r.status).toBe(400);
+    expect(calls).toHaveLength(0);
+  });
+
+  it("une ligne faite à la main liée à la ligne 1 n'est jamais touchée, ni à l'activation ni à la désactivation", async () => {
+    const manuelle = { id: 6, name: "Tarif ami", priceLinking: { roomId: null, priceId: 1, offsetMultiplier: 0.9, offsetAmount: 0 }, channels: { booking: { enabled: true } } };
+    faux.seed(PROP, [SCIEUR, SCIERIE], [DEFAULT_RULE_1, manuelle]);
+    expect((await api("POST", "/api/admin/channels/price-linking", { enabled: true })).status).toBe(200);
+    expect((await api("POST", "/api/admin/channels/price-linking", { enabled: false })).status).toBe(200);
+    expect(posts().flatMap((p) => p.roomTypes.flatMap((rt) => rt.priceRules.map((x) => x.id)))).not.toContain(6);
+    expect(faux.rules(SCIEUR).find((x) => x.id === 6)).toEqual(manuelle);
+  });
+
+  it("retirer un canal des majorations : sa ligne est fermée ET le canal revient sur la ligne 1 (lignes fixes par canal)", async () => {
+    expect((await api("POST", "/api/admin/channels/price-linking", { enabled: true })).status).toBe(200);
+    const r = await api("PUT", "/api/admin/channel-markups", { channels: [{ channel: "booking", label: "Booking.com", markupPct: 18 }, { channel: "abritel", label: "Abritel / Vrbo", markupPct: 15 }] });
+    expect(r.data.linking).toEqual({ resent: true });
+    const scieur = faux.rules(SCIEUR);
+    expect(scieur.find((x) => x.id === 1)!.channels).toMatchObject({ airbnb: { enabled: true }, booking: { enabled: false }, vrbo: { enabled: false } });
+    expect(scieur.find((x) => x.id === 2)).toMatchObject({ channels: { airbnb: { enabled: false } } });
+    expect(scieur.find((x) => x.id === 2)!.priceLinking).toBeUndefined();
+    expect(scieur.find((x) => x.id === 3)).toMatchObject({ priceLinking: { priceId: 1, offsetMultiplier: 1.18 }, channels: { booking: { enabled: true } } });
+    expect(await etats()).toEqual([`${SCIEUR}:derive`, `${SCIERIE}:derive`]);
+    expect((await api("POST", "/api/admin/channels/price-linking", { enabled: false })).status).toBe(200);
+    expect(await etats()).toEqual([`${SCIEUR}:direct`, `${SCIERIE}:direct`]);
+  });
+
+  it("refus partiel (une chambre appliquée, élément refusé) : la propriété qui a refusé est remise, et rien ne reste dérivé", async () => {
+    faux.partialRefusal = (pid) => (pid === PROP ? { success: false, modified: { id: PROP }, errors: [{ action: "modify", field: "priceRules", message: "refus partiel" }] } : null);
+    const r = await api("POST", "/api/admin/channels/price-linking", { enabled: true });
+    expect(r.status).toBe(502);
+    expect(r.data.error).toContain("refus partiel");
+    expect(posts().map((p) => p.id)).toEqual([PROP, PROP]);
+    faux.partialRefusal = null;
+    expect(await etats()).toEqual([`${SCIEUR}:direct`, `${SCIERIE}:direct`]);
+  });
+
+  it("refus certain : la propriété qui a refusé n'est pas réécrite", async () => {
+    faux.refuser = () => ({ success: false, errors: [{ action: "modify", field: "priceRules", message: "non" }] });
+    const r = await api("POST", "/api/admin/channels/price-linking", { enabled: true });
+    expect(r.status).toBe(502);
+    expect(posts().map((p) => p.id)).toEqual([PROP]);
   });
 });

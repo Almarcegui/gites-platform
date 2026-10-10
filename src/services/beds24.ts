@@ -106,17 +106,30 @@ function withoutErrors(item: Record<string, unknown>): string {
     }
   }
   if (notes.length) return notes.join(" ; ");
-  return `réponse sans motif : ${truncate(JSON.stringify(item), 600)}`;
+  return `réponse sans motif : ${truncate(JSON.stringify(rawForAudit(item)), 600)}`;
 }
 
 export function truncate(text: string, max: number): string {
   return text.length > max ? `${text.slice(0, max)}… (${text.length - max} caractères coupés)` : text;
 }
 
-/** Réponse Beds24 gardée pour l'audit : JSON tronqué à 4 000 caractères. */
+/** Champs gardés d'une réponse d'écriture ou d'erreur Beds24 : statut, ids,
+ *  motifs. Liste blanche : rien d'autre (aucun champ de voyageur) n'entre dans
+ *  l'audit ni dans le 502. Les motifs, eux, sont gardés en entier. */
+const KEPT_FIELDS = ["success", "id", "roomId", "propertyId", "new", "modified", "errors", "warnings", "info", "action", "field", "subField", "error", "message", "code", "type"] as const;
+
+function keepFields(v: unknown, depth = 0): unknown {
+  if (Array.isArray(v)) return v.slice(0, 50).map((x) => keepFields(x, depth));
+  if (!v || typeof v !== "object") return typeof v === "string" ? truncate(v, 2000) : v;
+  if (depth > 4) return "…";
+  const out: Record<string, unknown> = {};
+  for (const k of KEPT_FIELDS) if (k in (v as Record<string, unknown>)) out[k] = keepFields((v as Record<string, unknown>)[k], depth + 1);
+  return out;
+}
+
+/** Réponse Beds24 gardée pour l'audit et le diagnostic (liste blanche ci-dessus). */
 export function rawForAudit(data: unknown): unknown {
-  const text = JSON.stringify(data ?? null);
-  return text.length <= 4000 ? data : truncate(text, 4000);
+  return keepFields(data);
 }
 
 /** L'API v2 répond parfois 200 avec un échec par élément
@@ -220,7 +233,15 @@ export async function beds24Fetch<T>(
     );
   }
   init.onHeaders?.(res.headers);
-  const data = (await res.json().catch(() => ({}))) as T & { success?: boolean; error?: string };
+  // Le texte d'abord : un corps qui n'est pas du JSON reste lisible dans l'erreur.
+  const text = await res.text().catch(() => "");
+  let parsed: unknown;
+  try {
+    parsed = text ? JSON.parse(text) : {};
+  } catch {
+    parsed = { error: `réponse non JSON : ${truncate(text, 2000)}` };
+  }
+  const data = parsed as T & { success?: boolean; error?: string };
   if (!res.ok) {
     throw new Beds24Error(`Beds24 ${path} → ${res.status} ${data.error ?? ""}`.trim(), res.status, res.status >= 500 ? "inconnu" : "refus", rawForAudit(data));
   }

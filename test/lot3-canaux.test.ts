@@ -68,6 +68,10 @@ afterAll(async () => {
   await t.dispose();
 });
 beforeEach(() => {
+  // État Beds24 explicite à chaque test : lignes de prix d'origine (ligne 1 seule).
+  faux.props.clear();
+  faux.seed(344555, [711713, 711714]);
+  faux.seed(999001, [999101]);
   calls = [];
   refuse = null;
   refuseProperty = null;
@@ -228,6 +232,7 @@ describe("prix dérivés par canal (routes)", () => {
   });
 
   it("désactiver : les liens sont défaits, la ligne 1 rendue à tous les canaux", async () => {
+    expect((await api("POST", "/api/admin/channels/price-linking", { enabled: true })).status).toBe(200);
     calls = [];
     const r = await api("POST", "/api/admin/channels/price-linking", { enabled: false });
     expect(r.data.enabled).toBe(false);

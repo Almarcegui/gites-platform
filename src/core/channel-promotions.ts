@@ -168,6 +168,10 @@ export function airbnbPreview(stayCents: number, nights: number, markupPct: numb
 /** Nos canaux → nom du canal chez Beds24 (`priceRules[].channels.<nom>`). */
 export const BEDS24_CHANNEL_OF: Record<string, string> = { airbnb: "airbnb", booking: "booking", abritel: "vrbo", vrbo: "vrbo", expedia: "expedia" };
 
+/** Ligne de prix FIXE de chaque canal Beds24 (contrôle Codex 10/10/2026) :
+ *  retirer ou réordonner une majoration ne réaffecte jamais une ligne à un autre canal. */
+export const BEDS24_PRICE_ID_OF: Record<string, number> = { airbnb: 2, booking: 3, vrbo: 4, expedia: 5 };
+
 export interface PriceLinkingState {
   enabled: boolean;
   /** Majorations envoyées au dernier envoi réussi (pour dire si Beds24 est à jour). */
@@ -207,7 +211,7 @@ export function derivedLines(markups: readonly ChannelMarkup[]): DerivedLine[] {
     const b = BEDS24_CHANNEL_OF[m.channel];
     if (!b || used.has(b) || out.length >= 15) continue;
     used.add(b);
-    out.push({ channel: m.channel, label: m.label, beds24Channel: b, markupPct: m.markupPct, multiplier: linkMultiplier(m.markupPct), priceId: out.length + 2 });
+    out.push({ channel: m.channel, label: m.label, beds24Channel: b, markupPct: m.markupPct, multiplier: linkMultiplier(m.markupPct), priceId: BEDS24_PRICE_ID_OF[b]! });
   }
   return out;
 }
@@ -235,6 +239,7 @@ export interface LiveRule {
   link: { roomId: number | null; priceId: number; offsetMultiplier: number | null; offsetAmount: number | null } | null;
   /** canal Beds24 → ouvert ou non (seuls les canaux présents dans la réponse). */
   channels: Record<string, boolean>;
+  bookingPage: { direct?: boolean; agent?: boolean } | null;
   /** Champs recopiés sur une ligne créée (occupation, séjours, suppléments). */
   copy: Record<string, unknown>;
 }
@@ -245,9 +250,10 @@ function num(v: unknown): number | null {
   return typeof v === "number" && Number.isFinite(v) ? v : null;
 }
 
-/** Lignes de prix d'une chambre lues dans `GET /properties` (roomTypes[].priceRules). */
-export function parseLiveRules(raw: unknown): LiveRule[] {
-  if (!Array.isArray(raw)) return [];
+/** Lignes de prix d'une chambre lues dans `GET /properties` (roomTypes[].priceRules).
+ *  `null` si la réponse n'en porte pas de liste lisible : on n'écrit rien à l'aveugle. */
+export function parseLiveRules(raw: unknown): LiveRule[] | null {
+  if (!Array.isArray(raw)) return null;
   const out: LiveRule[] = [];
   for (const r of raw) {
     if (!r || typeof r !== "object") continue;
@@ -262,6 +268,8 @@ export function parseLiveRules(raw: unknown): LiveRule[] {
         if (v && typeof v === "object" && typeof (v as Record<string, unknown>).enabled === "boolean") channels[k] = (v as { enabled: boolean }).enabled;
       }
     }
+    const bp = o.bookingPage && typeof o.bookingPage === "object" ? (o.bookingPage as Record<string, unknown>) : null;
+    const bookingPage = bp ? { ...(typeof bp.direct === "boolean" ? { direct: bp.direct } : {}), ...(typeof bp.agent === "boolean" ? { agent: bp.agent } : {}) } : null;
     const copy: Record<string, unknown> = {};
     for (const f of COPIED_FIELDS) if (o[f] != null) copy[f] = o[f];
     out.push({
@@ -269,6 +277,7 @@ export function parseLiveRules(raw: unknown): LiveRule[] {
       name: typeof o.name === "string" ? o.name : null,
       link: linkedId != null && pl ? { roomId: num(pl.roomId), priceId: linkedId, offsetMultiplier: num(pl.offsetMultiplier), offsetAmount: num(pl.offsetAmount) } : null,
       channels,
+      bookingPage,
       copy,
     });
   }
@@ -279,11 +288,12 @@ export function parseLiveRules(raw: unknown): LiveRule[] {
 // un caractère de moins que Beds24 pourrait refuser dans un nom de ligne.
 const OUR_NAME = /\(prix direct [×x] [\d,]+\)$/;
 
-/** Ligne posée par nous : notre nom, ou liée à la ligne 1 de la même chambre. */
-export function isOurRule(rule: LiveRule, roomId: number): boolean {
-  if (rule.id === 1) return false;
-  if (rule.name != null && OUR_NAME.test(rule.name)) return true;
-  return rule.link != null && rule.link.priceId === 1 && (rule.link.roomId == null || rule.link.roomId === roomId);
+/** Ligne posée par nous : sur une des lignes fixes des canaux, avec le nom que
+ *  nous lui donnons. Un simple lien vers la ligne 1 ne suffit pas (une ligne
+ *  faite à la main peut être liée aussi) : elle n'est alors jamais touchée. */
+export function isOurRule(rule: LiveRule, _roomId: number): boolean {
+  if (!Object.values(BEDS24_PRICE_ID_OF).includes(rule.id)) return false;
+  return rule.name != null && OUR_NAME.test(rule.name);
 }
 
 export function derivedRuleName(l: DerivedLine): string {
@@ -297,6 +307,7 @@ export function priceRulesFor(lines: readonly DerivedLine[], enabled: boolean, r
   const byId = new Map(live.map((r) => [r.id, r]));
   const base = byId.get(1);
   if (enabled) {
+    if (!base) return { ok: false, message: `chambre Beds24 #${roomId} : pas de ligne de prix 1 chez Beds24 — rien n'est envoyé` };
     for (const l of lines) {
       const existing = byId.get(l.priceId);
       if (existing && !isOurRule(existing, roomId)) {
@@ -309,6 +320,9 @@ export function priceRulesFor(lines: readonly DerivedLine[], enabled: boolean, r
     // Une de nos lignes qui ne sert plus (canal retiré, ordre changé) est
     // déliée et fermée : jamais deux lignes ouvertes au même canal.
     const stale = live.filter((r) => isOurRule(r, roomId) && !wanted.has(r.id));
+    // Un canal que portait une ligne retirée revient sur la ligne 1 : jamais un canal sans prix.
+    const linkedChannels = new Set(lines.map((l) => l.beds24Channel));
+    for (const r of stale) for (const [ch, on] of Object.entries(r.channels)) if (on && !linkedChannels.has(ch)) closed[ch] = { enabled: true };
     return {
       ok: true,
       rules: [
@@ -342,7 +356,8 @@ export function priceRulesFor(lines: readonly DerivedLine[], enabled: boolean, r
   return {
     ok: true,
     rules: [
-      { id: 1, channels: open },
+      // Ligne 1 absente chez Beds24 : on ne la crée pas.
+      ...(base ? [{ id: 1, channels: open }] : []),
       ...ours.map((r) => {
         const shut: Record<string, { enabled: boolean }> = {};
         for (const [ch, on] of Object.entries(r.channels)) if (on) shut[ch] = { enabled: false };
@@ -354,11 +369,12 @@ export function priceRulesFor(lines: readonly DerivedLine[], enabled: boolean, r
 
 function sameLink(a: LiveRule["link"], b: LiveRule["link"]): boolean {
   if (a == null || b == null) return a == null && b == null;
-  return a.priceId === b.priceId && (a.offsetMultiplier ?? 1) === (b.offsetMultiplier ?? 1) && (a.offsetAmount ?? 0) === (b.offsetAmount ?? 0);
+  return a.priceId === b.priceId && (a.roomId ?? null) === (b.roomId ?? null) && (a.offsetMultiplier ?? 1) === (b.offsetMultiplier ?? 1) && (a.offsetAmount ?? 0) === (b.offsetAmount ?? 0);
 }
 
 /** Retour arrière : ce qu'il faut renvoyer pour que `current` redevienne
- *  `before` sur les lignes `ids`. Vide si rien n'a bougé : rejouable à volonté. */
+ *  `before` sur les lignes `ids` (lien, canaux, nom, page de réservation).
+ *  Vide si rien n'a bougé : rejouable à volonté. */
 export function restoreRules(before: readonly LiveRule[], current: readonly LiveRule[], ids: readonly number[]): Record<string, unknown>[] {
   const was = new Map(before.map((r) => [r.id, r]));
   const out: Record<string, unknown>[] = [];
@@ -368,16 +384,24 @@ export function restoreRules(before: readonly LiveRule[], current: readonly Live
     const old = was.get(id);
     const rule: Record<string, unknown> = { id };
     const channels: Record<string, { enabled: boolean }> = {};
-    for (const [ch, on] of Object.entries(now.channels)) {
-      const target = old ? old.channels[ch] : false; // une ligne créée par nous repart fermée
-      if (target !== undefined && target !== on) channels[ch] = { enabled: target };
+    for (const ch of new Set([...Object.keys(now.channels), ...Object.keys(old?.channels ?? {})])) {
+      // Absent avant : fermé sur une ligne dérivée (créée ou ouverte par nous),
+      // laissé tel quel sur la ligne 1 (prix direct, jamais fermé par défaut).
+      const target = old?.channels[ch] ?? (id === 1 ? undefined : false);
+      const cur = now.channels[ch];
+      if (target !== undefined && target !== (cur ?? (id === 1 ? true : false))) channels[ch] = { enabled: target };
     }
     if (Object.keys(channels).length) rule.channels = channels;
-    const targetLink = old ? old.link : null;
-    if (id !== 1 && !sameLink(now.link, targetLink)) {
-      rule.priceLinking = targetLink
-        ? { roomId: targetLink.roomId, priceId: targetLink.priceId, offsetMultiplier: targetLink.offsetMultiplier ?? 1, offsetAmount: targetLink.offsetAmount ?? 0 }
-        : { priceId: null };
+    if (id !== 1) {
+      const targetLink = old ? old.link : null;
+      if (!sameLink(now.link, targetLink)) {
+        rule.priceLinking = targetLink
+          ? { roomId: targetLink.roomId, priceId: targetLink.priceId, offsetMultiplier: targetLink.offsetMultiplier ?? 1, offsetAmount: targetLink.offsetAmount ?? 0 }
+          : { priceId: null };
+      }
+      if (old && old.name != null && old.name !== now.name) rule.name = old.name;
+      const bpOld = old?.bookingPage;
+      if (bpOld && (Object.keys(bpOld) as Array<keyof typeof bpOld>).some((k) => now.bookingPage?.[k] !== bpOld[k])) rule.bookingPage = bpOld;
     }
     if (Object.keys(rule).length > 1) out.push(rule);
   }
@@ -395,13 +419,19 @@ export interface RoomRulesState {
 export function describeRoomRules(roomId: number, live: readonly LiveRule[], lines: readonly DerivedLine[]): RoomRulesState {
   const base = live.find((r) => r.id === 1);
   const ours = live.filter((r) => isOurRule(r, roomId));
-  const linkedOpen = ours.filter((r) => r.link != null && Object.values(r.channels).some(Boolean));
+  const linkOk = (r: LiveRule | undefined, l: DerivedLine) =>
+    r?.link != null && r.link.priceId === 1 && (r.link.roomId == null || r.link.roomId === roomId) && r.link.offsetMultiplier === l.multiplier && (r.link.offsetAmount ?? 0) === 0;
+  // Chaque canal observé doit avoir au moins une ligne ouverte (la 1, ou une ligne liée à la 1).
+  const observed = new Set([...Object.keys(base?.channels ?? {}), ...ours.flatMap((r) => Object.keys(r.channels)), ...lines.map((l) => l.beds24Channel)]);
+  const orphan = [...observed].some((ch) => base?.channels[ch] === false && !ours.some((r) => r.link?.priceId === 1 && r.channels[ch] === true));
+  const ourOpen = ours.filter((r) => Object.values(r.channels).some(Boolean) || r.link != null);
   const baseOpenAll = lines.every((l) => base?.channels[l.beds24Channel] !== false);
   const derivedComplete = lines.every((l) => {
     const r = live.find((x) => x.id === l.priceId);
-    return r != null && r.link?.priceId === 1 && r.link.offsetMultiplier === l.multiplier && r.channels[l.beds24Channel] === true && base?.channels[l.beds24Channel] === false;
+    return linkOk(r, l) && r!.channels[l.beds24Channel] === true && base?.channels[l.beds24Channel] === false;
   });
-  const etat = linkedOpen.length === 0 && baseOpenAll ? "direct" : lines.length > 0 && derivedComplete ? "derive" : "partiel";
+  const extraOurs = ours.some((r) => !lines.some((l) => l.priceId === r.id) && (r.link != null || Object.values(r.channels).some(Boolean)));
+  const etat = orphan ? "partiel" : ourOpen.length === 0 && baseOpenAll ? "direct" : lines.length > 0 && derivedComplete && !extraOurs ? "derive" : "partiel";
   return {
     roomId,
     etat,
