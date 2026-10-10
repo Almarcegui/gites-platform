@@ -5,11 +5,11 @@
 // vérifie ce que le SERVEUR accepte, refuse, écrit et renvoie.
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { createTestDb, type TestDb } from "./helpers/d1";
-import { horsSaisonsDuSeed } from "./helpers/dates";
 import { Router } from "../src/api/router";
 import { registerAdminRoutes } from "../src/api/admin";
 import { buildCalendarPush } from "../src/services/beds24-sync";
 import { addDays, todayInZone } from "../src/core/dates";
+import { zeroUnitRules } from "./helpers/rate-rules";
 
 const router = new Router();
 registerAdminRoutes(router);
@@ -146,14 +146,20 @@ describe("issue #50 — un tarif à 0 € n'est jamais publiable", () => {
 
   it("un prix nul en base ne part pas vers le connecteur externe", async () => {
     // Règle héritée du temps où le POST tolérait 0 : elle contourne l'API.
-    const id = await baseRuleId(1);
-    await t.db.prepare("UPDATE rate_rules SET price_week_cents = 0, price_weekend_cents = 0 WHERE id = ?1").bind(id).run();
-    const from = horsSaisonsDuSeed(300);
-    const rooms = await buildCalendarPush(t.db, 1, from, 3);
-    const scieur = rooms.find((r) => r.unitName.includes("Scieur"));
-    expect(scieur).toBeDefined();
-    for (const span of scieur!.calendar) expect(span.price1).toBeUndefined();
-    await t.db.prepare("UPDATE rate_rules SET price_week_cents = 18000, price_weekend_cents = 22000 WHERE id = ?1").bind(id).run();
+    // TOUTES les règles de l'unité passent à 0, pas seulement la règle de
+    // base : la fenêtre « J+300 » tombe tôt ou tard dans une saison du seed
+    // (le 09/10/2026, J+300 = août 2027, haute saison), dont la règle propre
+    // donnerait un prix et ferait échouer le test selon le jour où il tourne.
+    const restore = await zeroUnitRules(t.db, 1);
+    try {
+      const from = addDays(todayInZone(), 300);
+      const rooms = await buildCalendarPush(t.db, 1, from, 3);
+      const scieur = rooms.find((r) => r.unitName.includes("Scieur"));
+      expect(scieur).toBeDefined();
+      for (const span of scieur!.calendar) expect(span.price1).toBeUndefined();
+    } finally {
+      await restore();
+    }
   });
 });
 

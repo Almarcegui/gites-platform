@@ -13,7 +13,6 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { D1Database } from "@cloudflare/workers-types";
 import { createTestDb, type TestDb } from "./helpers/d1";
-import { horsSaisonsDuSeed } from "./helpers/dates";
 import { Router } from "../src/api/router";
 import { registerPublicRoutes } from "../src/api/public";
 import { addDays, todayInZone } from "../src/core/dates";
@@ -98,14 +97,17 @@ function stubSiteverifyRaw(body: string): void {
 
 /** Réservation publique sur la Maison du Scieur. */
 async function book(env: Env, opts: { token?: string; offset?: number } = {}): Promise<Response> {
-  const checkin = horsSaisonsDuSeed(opts.offset ?? 300);
+  const checkin = addDays(todayInZone(), opts.offset ?? 300);
   const req = new Request("http://test.local/api/public/bookings", {
     method: "POST",
     headers: { "content-type": "application/json", "cf-connecting-ip": "203.0.113.42" },
     body: JSON.stringify({
       unitId: 1,
       checkin,
-      checkout: addDays(checkin, 3),
+      // 7 nuits : le plus long minimum du seed (juillet-août). J+300 tombe dans
+      // la haute saison selon le jour où la suite tourne (août 2027 vu du
+      // 09/10/2026) — avec 3 nuits, le test passait au rouge en 409.
+      checkout: addDays(checkin, 7),
       adults: 2,
       children: 0,
       paymentMode: "deposit",
