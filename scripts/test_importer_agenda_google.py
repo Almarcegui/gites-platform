@@ -15,8 +15,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import importer_agenda_google as m  # noqa: E402
 
 
+PROPRIO = "proprietaire@example.invalid"
+
+
 def jour(eid: str, debut: str, fin: str, titre: str, invites: list[str] | None = None) -> dict:
-    ev = {"id": eid, "status": "confirmed", "summary": titre, "start": {"date": f"{debut}T00:00:00Z"}, "end": {"date": f"{fin}T00:00:00Z"}}
+    ev = {"id": eid, "status": "confirmed", "summary": titre, "start": {"date": f"{debut}T00:00:00Z"}, "end": {"date": f"{fin}T00:00:00Z"},
+          "creator": {"email": PROPRIO}, "organizer": {"email": "agenda@group.calendar.google.com"}}
     if invites:
         ev["attendees"] = [{"email": e} for e in invites]
     return ev
@@ -87,6 +91,17 @@ class Paiements(unittest.TestCase):
         self.assertEqual(pay(l), [])
         self.assertEqual([c for c, _ in l.dus], [64000, 35000])
 
+    def test_solde_et_charges_regle(self):
+        self.assertEqual(pay(une("solde et charges 1118 19/10 rg@example.be 6/8", "2025-10-28", "2025-10-31")), [(111800, "2025-10-19")])
+
+    def test_demande_avant_l_arrivee(self):
+        self.assertEqual(une("sm1@example.com 25/8", "2026-08-17", "2026-08-24").demande, "2025-08-25")
+
+    def test_du_l_emporte_sur_la_date_qui_suit(self):
+        l = une("à payer 884 18/7 a.b@example.com", "2025-11-08", "2025-11-12")
+        self.assertEqual((pay(l), [c for c, _ in l.dus]), ([], [88400]))
+        self.assertEqual(pay(une("supplément 223 5/8 a.b@example.com", "2026-09-08", "2026-09-12")), [])
+
     def test_point_coupe_le_lien_et_adresse_aussi(self):
         l = une("a payer 412.  572   rzz3@example.com 3/11", "2025-11-08", "2025-11-12")
         self.assertEqual(pay(l), [(57200, None)])
@@ -120,7 +135,7 @@ class Adresses(unittest.TestCase):
         self.assertEqual((l.email, l.nom), ("sophie.c@example.com", "Sophie C"))
 
     def test_adresse_de_papa_ignoree(self):
-        l = une("complément location 30/8  495 jeudi soir au mardi 18h", "2025-10-17", "2025-10-21", ["de.cartier@skynet.be", "jan.x@example.com"])
+        l = une("complément location 30/8  495 jeudi soir au mardi 18h", "2025-10-17", "2025-10-21", [PROPRIO, "jan.x@example.com"])
         self.assertEqual(l.email, "jan.x@example.com")
         self.assertEqual(pay(l), [(49500, "2025-08-30")])
 
@@ -178,6 +193,13 @@ class Dates(unittest.TestCase):
         l = m.interpreter(export([heure("e1", "2025-12-26T21:00:00+01:00", "2026-01-02T21:00:00+01:00", "a.b@example.com")]))[0]
         self.assertEqual((l.checkin, l.checkout), ("2025-12-26", "2026-01-02"))
 
+    def test_une_nuit_a_l_heure_gardee(self):
+        l = m.interpreter(export([heure("e1", "2026-03-06T16:00:00+01:00", "2026-03-07T10:00:00+01:00", "a.b@example.com")]))[0]
+        self.assertEqual((l.statut, l.checkin, l.checkout), ("confirmee", "2026-03-06", "2026-03-07"))
+
+    def test_mot_de_blocage_dans_une_adresse_ignore(self):
+        self.assertEqual(une("640 2/2 paul.cartier@example.com").statut, "confirmee")
+
     def test_rendez_vous_ignore(self):
         for d, f in [("2025-01-15T10:30:00+01:00", "2025-01-15T11:30:00+01:00"), ("2025-05-25T23:33:55+02:00", "2025-05-26T00:33:55+02:00")]:
             self.assertEqual(m.interpreter(export([heure("e1", d, f, "Rdv électricien 0495000000")]))[0].statut, "ignoree")
@@ -205,11 +227,20 @@ class PassesCroisees(unittest.TestCase):
     def test_fusion_meme_client_meme_maison(self):
         lignes = m.interpreter(export([], [
             jour("a", "2025-10-17", "2025-10-20", "payé 611 25/2 de BIKES jy@example.com 24/2/25"),
-            jour("b", "2025-10-17", "2025-10-21", "complément location 30/8  495 jeudi soir au mardi 18h", ["de.cartier@skynet.be", "jy@example.com"]),
+            jour("b", "2025-10-17", "2025-10-21", "complément location 30/8  495 jeudi soir au mardi 18h", [PROPRIO, "jy@example.com"]),
         ]))
         par_id = {l.event_id: l for l in lignes}
         self.assertEqual(par_id["a"].statut, "ignoree")
         self.assertEqual(sorted(pay(par_id["b"])), [(49500, "2025-08-30"), (61100, "2025-02-25")])
+
+    def test_fusion_a_venir_inscrit_l_autre_annule(self):
+        lignes = m.interpreter(export([], [
+            jour("a", "2027-10-17", "2027-10-20", "611 25/2 jy@example.com"),
+            jour("b", "2027-10-17", "2027-10-21", "495 30/8 jy@example.com"),
+        ]))
+        par_id = {l.event_id: l for l in lignes}
+        self.assertEqual((par_id["a"].statut, par_id["a"].paiements), ("annulee", []))
+        self.assertEqual(sorted(pay(par_id["b"])), [(49500, "2026-08-30"), (61100, "2026-02-25")])
 
     def test_chevauchement_d_un_jour_passe_depart_avance(self):
         lignes = m.interpreter(export([

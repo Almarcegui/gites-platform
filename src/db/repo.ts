@@ -803,7 +803,8 @@ export async function insertCancelledBooking(
                    (SELECT p2.ref_prefix FROM units u2 JOIN properties p2 ON p2.id = u2.property_id WHERE u2.id = ?1)
                    || '-' || ?2 || '-%'
               )),
-         ?1, ?6, ?3, ?4, ?7, ?8, 'cancelled', ?9, ?10, ?11, ?12, ?13, ?5, ?14, ?5, ?5`,
+         ?1, ?6, ?3, ?4, ?7, ?8, 'cancelled', ?9, ?10, ?11, ?12, ?13, ?5, ?14, ?5, ?5
+       WHERE ?11 IS NULL OR NOT EXISTS (SELECT 1 FROM bookings x WHERE x.external_uid = ?11)`,
     )
     .bind(
       input.unitId, year, input.checkin, input.checkout, now, input.guestId ?? null,
@@ -811,6 +812,12 @@ export async function insertCancelledBooking(
       input.totalCents ?? 0, input.internalNotes ?? null, input.cancelReason,
     )
     .run();
+  if (res.meta.changes !== 1) {
+    // Un appel concurrent a inscrit le même UID : on rend la ligne gagnante.
+    const won = await db.prepare("SELECT id, reference FROM bookings WHERE external_uid = ?1").bind(input.externalUid ?? null).first<{ id: number; reference: string }>();
+    if (!won) throw new Error("insertCancelledBooking: insertion refusée");
+    return { id: Number(won.id), reference: won.reference };
+  }
   const id = res.meta.last_row_id;
   const row = await db.prepare("SELECT reference FROM bookings WHERE id = ?1").bind(id).first<{ reference: string }>();
   return { id, reference: row?.reference ?? "" };
@@ -1679,6 +1686,9 @@ export interface CreateManualBlockInput {
   createdBy: string;
   /** Événement d'agenda externe représenté (import agenda Google). */
   externalUid?: string | null;
+  /** Réservation que ce blocage REMPLACE (import agenda : la « Busy » du même
+   *  événement) : ignorée par le garde, puis annulée par l'appelant. */
+  replacesBookingId?: number | null;
   now?: Date;
 }
 
@@ -1709,6 +1719,7 @@ export async function createManualBlockAtomic(
          SELECT 1 FROM bookings b
           WHERE b.checkin < ?3
             AND b.checkout > ?2
+            AND b.id != ?8
             AND (b.status = 'confirmed' OR (b.status = 'pending' AND b.hold_expires_at > ?4))
             AND b.unit_id IN (
               SELECT ?1
@@ -1718,10 +1729,44 @@ export async function createManualBlockAtomic(
        )
          AND ${manualBlockConflictSql("?1", "?2", "?3")}`,
     )
-    .bind(input.unitId, input.checkin, input.checkout, now, input.reason, input.createdBy, input.externalUid ?? null)
+    .bind(input.unitId, input.checkin, input.checkout, now, input.reason, input.createdBy, input.externalUid ?? null, input.replacesBookingId ?? -1)
     .run();
   if (res.meta.changes !== 1) return { ok: false, reason: "conflict" };
   return { ok: true, id: res.meta.last_row_id };
+}
+
+/** Déplace un blocage actif (l'événement d'agenda qu'il représente a bougé),
+ *  avec le même garde-fou que sa pose — lui-même exclu. false ⇒ conflit. */
+export async function moveManualBlockAtomic(
+  db: D1Database,
+  id: number,
+  unitId: number,
+  checkin: IsoDate,
+  checkout: IsoDate,
+  now: string = sqlNow(),
+): Promise<boolean> {
+  if (!isIsoDate(checkin) || !isIsoDate(checkout) || checkin >= checkout) {
+    throw new Error(`moveManualBlockAtomic: dates invalides ${checkin} → ${checkout}`);
+  }
+  const res = await db
+    .prepare(
+      `UPDATE manual_blocks SET checkin = ?3, checkout = ?4, updated_at = ?5
+        WHERE id = ?2 AND unit_id = ?1 AND active = 1
+          AND NOT EXISTS (
+            SELECT 1 FROM bookings b
+             WHERE b.checkin < ?4 AND b.checkout > ?3
+               AND (b.status = 'confirmed' OR (b.status = 'pending' AND b.hold_expires_at > ?5))
+               AND b.unit_id IN (SELECT ?1 UNION ALL SELECT ul.unit_id FROM unit_links ul WHERE ul.blocks_unit_id = ?1)
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM manual_blocks k
+             WHERE k.id != ?2 AND k.active = 1 AND k.checkin < ?4 AND k.checkout > ?3
+               AND k.unit_id IN (SELECT ?1 UNION ALL SELECT ul.unit_id FROM unit_links ul WHERE ul.blocks_unit_id = ?1)
+          )`,
+    )
+    .bind(unitId, id, checkin, checkout, now)
+    .run();
+  return res.meta.changes === 1;
 }
 
 /** Blocage (actif OU levé) qui représente cet événement d'agenda externe. */

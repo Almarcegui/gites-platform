@@ -34,7 +34,6 @@ import {
   getManualBlockByExternalUid,
   getUnit,
   insertCancelledBooking,
-  reactivateBookingAtomic,
   type BookingRow,
   type FeedRow,
   type UnitRow,
@@ -43,6 +42,7 @@ import { AGENDA_BLOCK_REASON, AGENDA_CANCEL_REASON } from "./ical";
 
 export const MAX_AGENDA_EVENTS = 500;
 const NOTE_MARKER = "— Import agenda Google";
+const NOTE_END = "— fin de l'import agenda Google —";
 const PAYMENT_METHODS = new Set(["transfer", "cash", "other"]);
 
 export type AgendaStatut = "confirmee" | "annulee" | "blocage";
@@ -103,9 +103,10 @@ function texte(v: unknown, max: number): string | null {
   return s ? s.slice(0, max) : null;
 }
 
+/** Entier JSON strict : absent → null ; autre chose qu'un entier → NaN (refus). */
 function entier(v: unknown): number | null {
-  const n = Number(v);
-  return v != null && v !== "" && Number.isFinite(n) ? Math.round(n) : null;
+  if (v == null) return null;
+  return typeof v === "number" && Number.isInteger(v) ? v : NaN;
 }
 
 export function parseAgendaEvenement(raw: unknown): { ok: true; ev: AgendaEvenement } | { ok: false; uid: string; raison: string } {
@@ -120,18 +121,20 @@ export function parseAgendaEvenement(raw: unknown): { ok: true; ev: AgendaEvenem
   const email = texte(r.email, 200)?.toLowerCase() ?? null;
   if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { ok: false, uid, raison: "adresse e-mail illisible" };
   const personnes = entier(r.personnes);
-  if (personnes != null && (personnes < 1 || personnes > 60)) return { ok: false, uid, raison: "nombre de personnes invalide" };
+  if (personnes != null && !(personnes >= 1 && personnes <= 60)) return { ok: false, uid, raison: "nombre de personnes invalide" };
   const totalCents = entier(r.totalCents);
-  if (totalCents != null && (totalCents < 0 || totalCents > 10_000_000)) return { ok: false, uid, raison: "total invalide" };
+  if (totalCents != null && !(totalCents >= 0 && totalCents <= 10_000_000)) return { ok: false, uid, raison: "total invalide" };
+  if (r.paiements != null && !Array.isArray(r.paiements)) return { ok: false, uid, raison: "paiements : liste attendue" };
   const paiements: AgendaPaiement[] = [];
-  for (const p of Array.isArray(r.paiements) ? r.paiements : []) {
+  for (const p of (r.paiements as unknown[] | undefined) ?? []) {
     const q = (p ?? {}) as Record<string, unknown>;
     const cents = entier(q.cents);
-    if (cents == null || cents <= 0 || cents > 10_000_000) return { ok: false, uid, raison: "montant de paiement invalide" };
-    const date = q.date == null || q.date === "" ? null : String(q.date);
+    if (cents == null || !(cents > 0 && cents <= 10_000_000)) return { ok: false, uid, raison: "montant de paiement invalide" };
+    const date = q.date == null ? null : typeof q.date === "string" ? q.date : "?";
     if (date != null && !isIsoDate(date)) return { ok: false, uid, raison: "date de paiement invalide" };
-    const methode = PAYMENT_METHODS.has(String(q.methode)) ? (String(q.methode) as AgendaPaiement["methode"]) : "transfer";
-    paiements.push({ cents, date, methode });
+    const methode = q.methode == null ? "transfer" : String(q.methode);
+    if (!PAYMENT_METHODS.has(methode)) return { ok: false, uid, raison: `méthode de paiement inconnue « ${methode} »` };
+    paiements.push({ cents, date, methode: methode as AgendaPaiement["methode"] });
   }
   const motif = texte(r.motif, 200);
   if (statut === "blocage" && (!motif || motif.length < 2)) return { ok: false, uid, raison: "motif de blocage requis" };
@@ -151,13 +154,17 @@ export function parseAgendaEvenement(raw: unknown): { ok: true; ev: AgendaEvenem
 // Écritures
 // ---------------------------------------------------------------------------
 
+async function fillPhone(db: D1Database, guestId: number, ev: AgendaEvenement): Promise<void> {
+  if (ev.telephone) await db.prepare("UPDATE guests SET phone = COALESCE(phone, ?2) WHERE id = ?1").bind(guestId, ev.telephone).run();
+}
+
 /** Client de la réservation : retrouvé par e-mail (jamais renommé : un nom
  *  déduit d'une adresse ne remplace pas un nom saisi), sinon créé. */
 async function guestFor(db: D1Database, ev: AgendaEvenement): Promise<number | null> {
   if (ev.email) {
     const existing = await db.prepare("SELECT id FROM guests WHERE lower(email) = ?1 ORDER BY id LIMIT 1").bind(ev.email).first<{ id: number }>();
     if (existing) {
-      if (ev.telephone) await db.prepare("UPDATE guests SET phone = COALESCE(phone, ?2) WHERE id = ?1").bind(existing.id, ev.telephone).run();
+      await fillPhone(db, existing.id, ev);
       return existing.id;
     }
   }
@@ -176,14 +183,22 @@ function noteBlock(ev: AgendaEvenement, feed: FeedRow, personnesParDefaut: numbe
   const lignes = [`${NOTE_MARKER} (${feed.name}, ${ev.uid}) —`];
   if (ev.notes) lignes.push(ev.notes);
   if (personnesParDefaut != null) lignes.push(`Nombre de personnes à vérifier (capacité par défaut du bien : ${personnesParDefaut}).`);
+  lignes.push(NOTE_END);
   return lignes.join("\n");
 }
 
-/** Notes existantes + bloc d'import, une seule fois. La ligne « iCal : Busy »
- *  posée par la synchro ne dit rien : elle s'efface devant le vrai texte. */
-function mergedNotes(existing: string | null, block: string): string | null {
-  if (existing?.includes(NOTE_MARKER)) return null; // déjà fait
-  const garde = (existing ?? "")
+/** Notes existantes avec le bloc d'import de CET événement remplacé (ou
+ *  ajouté) : un nouvel import reprend les corrections faites dans Google, les
+ *  notes saisies à la main hors du bloc restent intactes. La ligne
+ *  « iCal : Busy » posée par la synchro ne dit rien : elle s'efface. */
+export function mergedNotes(existing: string | null, block: string, uid: string): string {
+  let reste = existing ?? "";
+  const debut = reste.indexOf(`${NOTE_MARKER} (`);
+  if (debut >= 0 && reste.slice(debut, reste.indexOf("\n", debut) >>> 0).includes(uid)) {
+    const fin = reste.indexOf(NOTE_END, debut);
+    reste = reste.slice(0, debut) + (fin >= 0 ? reste.slice(fin + NOTE_END.length) : "");
+  }
+  const garde = reste
     .split("\n")
     .filter((l) => !/^iCal : Busy\s*$/i.test(l.trim()))
     .join("\n")
@@ -191,11 +206,19 @@ function mergedNotes(existing: string | null, block: string): string | null {
   return garde ? `${garde}\n\n${block}` : block;
 }
 
-/** Paiements de l'agenda, une fois chacun : la note porte la clé uid + rang. */
+/** Paiements de l'agenda, une fois chacun. La clé (dans la note) est le
+ *  CONTENU — montant, date, méthode, rang parmi les paiements identiques —
+ *  pas la position dans la liste : un paiement ajouté en tête du titre ne
+ *  décale rien. Un import se lance à la main, un lot à la fois : pas de
+ *  verrou contre deux imports simultanés du même événement. */
 async function addPayments(db: D1Database, bookingId: number, ev: AgendaEvenement): Promise<number> {
   let added = 0;
-  for (const [i, p] of ev.paiements.entries()) {
-    const note = `Agenda Google ${ev.uid} — paiement ${i + 1}`;
+  const rangs = new Map<string, number>();
+  for (const p of ev.paiements) {
+    const base = `${p.cents / 100} € le ${p.date ?? "?"} (${p.methode})`;
+    const rang = (rangs.get(base) ?? 0) + 1;
+    rangs.set(base, rang);
+    const note = `Agenda Google ${ev.uid} — ${base}${rang > 1 ? ` #${rang}` : ""}`;
     const exists = await db.prepare("SELECT 1 AS x FROM payments WHERE booking_id = ?1 AND note = ?2").bind(bookingId, note).first();
     if (exists) continue;
     await addPayment(db, {
@@ -225,14 +248,18 @@ async function completeBooking(
     warnings.push(`dates de la plateforme gardées (${b.checkin}→${b.checkout}), l'agenda dit ${ev.checkin}→${ev.checkout}`);
   }
   const guestId = b.guestId ?? (await guestFor(db, ev));
+  if (b.guestId != null) await fillPhone(db, b.guestId, ev);
   const sansPersonnes = b.adults === 0 && b.children === 0;
   const adults = sansPersonnes ? (ev.personnes ?? unit.capacityBase) : b.adults;
-  const notes = mergedNotes(b.internalNotes, noteBlock(ev, feed, sansPersonnes && ev.personnes == null ? unit.capacityBase : null));
+  // « Personnes à vérifier » tant que l'import a dû prendre la capacité par
+  // défaut — y compris au second passage, où adults n'est plus à 0.
+  const defaut = ev.personnes == null && (sansPersonnes || (b.internalNotes ?? "").includes("capacité par défaut du bien"));
+  const notes = mergedNotes(b.internalNotes, noteBlock(ev, feed, defaut ? unit.capacityBase : null), ev.uid);
   const total = Math.max(b.totalCents, ev.totalCents ?? 0, paidTotal(ev));
   await db
     .prepare(
       `UPDATE bookings SET guest_id = ?2, adults = ?3, total_cents = ?4,
-              internal_notes = COALESCE(?5, internal_notes), updated_at = ?6
+              internal_notes = ?5, updated_at = ?6
         WHERE id = ?1`,
     )
     .bind(b.id, guestId, adults, total, notes, nowSql)
@@ -280,15 +307,15 @@ async function importOne(
       if (bs.length || ks.length) return { ...base, action: "ignoree", raison: conflictLabel(bs, ks) };
       return { ...base, action: "blocage", reference: active?.reference, raison: active ? `remplace la réservation « Busy » ${active.reference}` : undefined };
     }
-    // La réservation « Busy » de la synchro libère le créneau, puis le blocage
-    // le reprend ; si le blocage échoue, la réservation revient telle quelle.
-    if (active) await cancelBooking(db, active.id, AGENDA_BLOCK_REASON, nowSql);
+    // Le blocage se pose D'ABORD, en ignorant la seule « Busy » qu'il remplace
+    // (même événement) ; elle n'est annulée qu'ensuite. Le créneau n'est donc
+    // jamais libre entre les deux écritures.
     const created = await createManualBlockAtomic(db, {
       unitId: unit.id, checkin: ev.checkin, checkout: ev.checkout, reason: ev.motif ?? "agenda",
-      createdBy: "import agenda Google", externalUid: extUid, now,
+      createdBy: "import agenda Google", externalUid: extUid, replacesBookingId: active?.id ?? null, now,
     });
+    if (created.ok && active) await cancelBooking(db, active.id, AGENDA_BLOCK_REASON, nowSql);
     if (!created.ok) {
-      if (active) await reactivateBookingAtomic(db, active.id, active.unitId, active.checkin, active.checkout, nowSql);
       const [bs, ks] = await Promise.all([
         blockingBookings(db, unit.id, ev.checkin, ev.checkout, nowSql),
         blockingManualBlocks(db, unit.id, ev.checkin, ev.checkout),
@@ -311,6 +338,12 @@ async function importOne(
     if (existing) {
       const warnings = await completeBooking(db, existing, ev, feed, unit, nowSql);
       const done = active ? await cancelBooking(db, active.id, AGENDA_CANCEL_REASON, nowSql) : false;
+      if (!active && existing.cancelReason !== AGENDA_CANCEL_REASON) {
+        // Déjà annulée pour une autre raison (« ical_removed »…) : le motif
+        // devient celui de l'agenda, que syncFeed ne rouvre pas.
+        await db.prepare("UPDATE bookings SET cancel_reason = ?2, updated_at = ?3 WHERE id = ?1 AND status = 'cancelled'")
+          .bind(existing.id, AGENDA_CANCEL_REASON, nowSql).run();
+      }
       await audit(db, "admin", done ? "agenda.import.annulee" : "agenda.import.completee", `booking:${existing.id}`, {
         feedId: feed.id, uid: ev.uid, reference: existing.reference, paiements: ev.paiements.length,
       });

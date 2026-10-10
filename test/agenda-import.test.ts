@@ -52,6 +52,14 @@ describe("lecture d'une ligne", () => {
     expect(parseAgendaEvenement({ ...ok, nom: null, email: null })).toMatchObject({ ok: false });
     expect(parseAgendaEvenement({ ...ok, email: "pas-une-adresse" }).ok).toBe(false);
   });
+  it("refuse les montants qui ne sont pas des entiers JSON, une méthode inconnue, des paiements qui ne sont pas une liste", () => {
+    expect(parseAgendaEvenement({ ...ok, paiements: [{ cents: "137900", date: null }] }).ok).toBe(false);
+    expect(parseAgendaEvenement({ ...ok, paiements: [{ cents: 1379.5, date: null }] }).ok).toBe(false);
+    expect(parseAgendaEvenement({ ...ok, paiements: [{ cents: 137900, date: null, methode: "bitcoin" }] })).toMatchObject({ ok: false });
+    expect(parseAgendaEvenement({ ...ok, paiements: { cents: 1 } })).toMatchObject({ ok: false, raison: "paiements : liste attendue" });
+    expect(parseAgendaEvenement({ ...ok, personnes: "4" }).ok).toBe(false);
+    expect(parseAgendaEvenement({ ...ok, paiements: [{ cents: 137900, date: null }] }).ok).toBe(true);
+  });
 });
 
 for (const [backend, create] of [
@@ -135,6 +143,25 @@ for (const [backend, create] of [
       expect((await bookingByUid(feed1, "busy1@google.com"))!.internal_notes).toBe(notes);
     });
 
+    it("un paiement ajouté en tête du titre ne double pas les autres ; notes et téléphone repris, notes à la main gardées", async () => {
+      const b = (await bookingByUid(feed1, "busy1@google.com"))!;
+      await t.db.prepare("UPDATE bookings SET internal_notes = internal_notes || '\n\nNote à la main' WHERE id = ?1").bind(b.id).run();
+      const plus = ev("busy1@google.com", 10, 13, {
+        totalCents: 300000, telephone: "+32470000000", notes: "Agenda Google : « titre corrigé »",
+        paiements: [{ cents: 5000, date: D(-90), methode: "cash" }, { cents: 137900, date: D(-30), methode: "transfer" }, { cents: 103900, date: null, methode: "transfer" }],
+      });
+      expect(res(await imp(feed1, [plus])).completees).toBe(1);
+      expect((await listPayments(t.db, { bookingId: Number(b.id) })).length).toBe(3);
+      const notes = String((await bookingByUid(feed1, "busy1@google.com"))!.internal_notes);
+      expect(notes).toContain("titre corrigé");
+      expect(notes).not.toContain("1379 25/12");
+      expect(notes).toContain("Note à la main");
+      expect(notes.match(/Import agenda Google/g)?.length).toBe(1);
+      expect(notes).toContain("capacité par défaut du bien");
+      const g = await t.db.prepare("SELECT phone FROM guests WHERE id = ?1").bind(b.guest_id).first<{ phone: string }>();
+      expect(g?.phone).toBe("+32470000000");
+    });
+
     it("crée une réservation iCal portant l'UID du flux, que syncFeed reconnaît ensuite", async () => {
       const r = res(await imp(feed1, [ev("neuf@google.com", 20, 23, { email: "autre.client@example.test", nom: "Autre Client", paiements: [] })]));
       expect(r.creees).toBe(1);
@@ -174,6 +201,17 @@ for (const [backend, create] of [
       expect(direct.ok).toBe(true);
     });
 
+    it("annulée alors que la synchro l'avait déjà libérée (ical_removed) : motif remplacé, la synchro ne la rouvre plus", async () => {
+      await syncFeed(t.db, feed2, fetchOf(ics([{ uid: "parti@google.com", from: D(54), to: D(56) }])));
+      await syncFeed(t.db, feed2, fetchOf(ics([{ uid: "autre@google.com", from: D(57), to: D(58) }])));
+      expect(await bookingByUid(feed2, "parti@google.com")).toMatchObject({ status: "cancelled", cancel_reason: "ical_removed" });
+      res(await imp(feed2, [ev("parti@google.com", 54, 56, { statut: "annulee", paiements: [] })]));
+      expect(await bookingByUid(feed2, "parti@google.com")).toMatchObject({ status: "cancelled", cancel_reason: "agenda_annulee" });
+      const sync = await syncFeed(t.db, feed2, fetchOf(ics([{ uid: "parti@google.com", from: D(54), to: D(56) }])));
+      expect(sync.reactivated).toBe(0);
+      expect((await bookingByUid(feed2, "parti@google.com"))!.status).toBe("cancelled");
+    });
+
     it("annulée alors que la synchro l'avait créée : annulée et complétée", async () => {
       await syncFeed(t.db, feed2, fetchOf(ics([{ uid: "a2@google.com", from: D(50), to: D(52) }])));
       const r = res(await imp(feed2, [ev("a2@google.com", 50, 52, { statut: "annulee", paiements: [] })]));
@@ -200,6 +238,17 @@ for (const [backend, create] of [
       // Idempotent.
       expect(res(await imp(feed2, [{ uid: "tlf@google.com", checkin: D(60), checkout: D(62), statut: "blocage", motif: "TLF" }]))).toMatchObject({ blocages: 0, ignorees: 1 });
       expect(await count("SELECT COUNT(*) AS n FROM manual_blocks")).toBe(1);
+    });
+
+    it("blocage importé : suit l'événement déplacé dans l'agenda ; levé à la main, la synchro ne le recrée pas", async () => {
+      const moved = await syncFeed(t.db, feed2, fetchOf(ics([{ uid: "tlf@google.com", from: D(63), to: D(65) }])));
+      expect(moved).toMatchObject({ updated: 1, imported: 0, conflicts: [] });
+      const k = (await t.db.prepare("SELECT * FROM manual_blocks WHERE external_uid = ?1").bind(`feed${feed2.id}:tlf@google.com`).first<Record<string, unknown>>())!;
+      expect(k).toMatchObject({ checkin: D(63), checkout: D(65), active: 1 });
+      await t.db.prepare("UPDATE manual_blocks SET active = 0 WHERE id = ?1").bind(k.id).run();
+      const after = await syncFeed(t.db, feed2, fetchOf(ics([{ uid: "tlf@google.com", from: D(63), to: D(65) }])));
+      expect(after).toMatchObject({ imported: 0, reactivated: 0 });
+      expect((await bookingByUid(feed2, "tlf@google.com"))!.status).toBe("cancelled");
     });
 
     it("conflit : rien n'est écrit, la raison nomme ce qui occupe le créneau", async () => {

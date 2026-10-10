@@ -14,6 +14,7 @@ import {
   getBookingByExternalUid,
   getManualBlockByExternalUid,
   listFeedBookings,
+  moveManualBlockAtomic,
   listLinks,
   manualBlocksInWindow,
   reactivateBookingAtomic,
@@ -251,8 +252,27 @@ export async function syncFeed(
     const known = byUid.get(extUid);
     if (!known) {
       // Événement tenu par un blocage manuel (import des agendas Google :
-      // famille, usage de papa) : ce n'est pas une vente, rien à créer.
-      if (await getManualBlockByExternalUid(db, extUid)) continue;
+      // famille, usage de papa) : ce n'est pas une vente, rien à créer. Un
+      // blocage levé à la main reste une décision : le flux ne le rouvre pas.
+      // Un blocage actif suit l'événement s'il a bougé.
+      const block = await getManualBlockByExternalUid(db, extUid);
+      if (block) {
+        if (block.active && (block.checkin !== ev.dtstart || block.checkout !== ev.dtend)) {
+          const moved = await moveManualBlockAtomic(db, block.id, block.unitId, ev.dtstart, ev.dtend, nowSql);
+          if (moved) {
+            result.updated += 1;
+          } else {
+            const label = `blocage « ${block.reason} » : déplacement ${ev.dtstart}→${ev.dtend} impossible (conflit)`;
+            result.conflicts.push(label);
+            registerOk = (await noteSyncConflict(db, {
+              source: "ical", scope, kind: "move", unitId: block.unitId,
+              checkin: ev.dtstart, checkout: ev.dtend, externalUid: extUid,
+              channelLabel: feed.name, label,
+            }, nowSql)) && registerOk;
+          }
+        }
+        continue;
+      }
       // L'événement est peut-être connu mais ANNULÉ (disparu du flux puis
       // réapparu) : listFeedBookings filtre les annulées, et une création
       // violerait l'unicité de external_uid — l'exception faisait échouer

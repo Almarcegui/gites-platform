@@ -49,7 +49,6 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 BRUXELLES = ZoneInfo("Europe/Brussels")
-ADRESSES_PAPA = {"de.cartier@skynet.be"}
 # Locaux d'adresse qui ne disent rien de la personne : le nom vient alors du texte.
 LOCAUX_GENERIQUES = {"info", "contact", "reservation", "reservations", "booking", "admin", "mail", "hello", "office", "bonjour"}
 # Famille, amis et usages propres de papa : un blocage, jamais une vente.
@@ -62,7 +61,7 @@ MOIS = {
     "aout": 8, "août": 8, "septembre": 9, "octobre": 10, "novembre": 11, "decembre": 12, "décembre": 12,
 }
 PAIEMENT_APRES_DEPART_JOURS = 21  # une date sans année se lit au plus tard trois semaines après le départ
-RDV_MAX_HEURES = 20  # un événement à l'heure plus court est un rendez-vous, pas un séjour
+RDV_MAX_HEURES = 6  # un événement à l'heure plus court (ou sur un seul jour) est un rendez-vous, pas un séjour
 
 RE_EMAIL = re.compile(r"[A-Za-z0-9][A-Za-z0-9._%+\-]*@[A-Za-z0-9\-]+(?:\.[A-Za-z0-9\-]+)*\.[A-Za-z]{2,}")
 RE_TEL = re.compile(r"(?<!\d)(?:\+32|0032|0)4\d{2}[ ./]?\d{2}[ ./]?\d{2}[ ./]?\d{2}(?!\d)")
@@ -176,8 +175,15 @@ def nettoyer_titre(titre: str) -> str:
     return s
 
 
+def adresses_du_proprietaire(ev: dict) -> set[str]:
+    """Le créateur et l'organisateur de l'événement : papa (ou l'agenda
+    lui-même), jamais le client. Lu dans l'événement, pas écrit dans le code."""
+    return {str((ev.get(k) or {}).get("email", "")).lower() for k in ("creator", "organizer")} - {""}
+
+
 def emails_de(ev: dict, texte: str) -> list[str]:
     vus: list[str] = []
+    proprietaire = adresses_du_proprietaire(ev)
     candidats = [m.group(0) for m in RE_EMAIL.finditer(texte)]
     for a in ev.get("attendees", []) or []:
         e = str(a.get("email", "")).replace('"', "").replace("mailto:", "")
@@ -185,7 +191,7 @@ def emails_de(ev: dict, texte: str) -> list[str]:
             candidats.append(e)
     for e in candidats:
         e = e.strip(".").lower()
-        if e not in vus and e not in ADRESSES_PAPA:
+        if e not in vus and e not in proprietaire:
             vus.append(e)
     return vus
 
@@ -274,18 +280,20 @@ def lire_texte(texte: str, au_plus_tard: dt.date) -> dict:
         # montant et sa date ; une adresse (§) ou un point coupe le lien.
         lie_suivant = suivant is not None and re.fullmatch(r"[\s/]*(?:[A-Za-zÀ-ÿ'’\-]+\s+){0,2}?[\s/]*", entre_suivant + " ") is not None
         libelle = m.group(0).strip()
-        # Contexte « dû » : « à payer 884 », « Solde 640,00€ plus charges 350,00 ».
-        clause = re.split(r"[.]\s|\d{1,2}/\d{1,2}", avant)[-1]
-        du = RE_DU.search(clause.strip()) is not None or re.search(r"(?:reste\s+)?[àa]\s+payer|solde(?!\s+et)|suppl[ée]ment", clause, re.I) is not None
-        if lie_suivant and suivant[0] == "date":
+        # Contexte « dû » : le mot qui précède IMMÉDIATEMENT le montant (« à payer
+        # 884 », « Solde 640,00€ plus charges 350,00 », « supplément 223 ») ; il
+        # l'emporte sur une date qui suit (« à payer 884 18/7 » n'est pas payé).
+        # « solde et charges 1118 19/10 » : réglé, pas dû.
+        du = RE_DU.search(avant.rstrip()) is not None and not re.search(r"solde\s+et\s+charges$", avant.rstrip(), re.I)
+        if du:
+            for c in val:
+                dus.append((c, libelle))
+        elif lie_suivant and suivant[0] == "date":
             paiements.append(Paiement(sum(val), suivant[1], f"{libelle} {suivant[2].group(0).strip()}"))
             consommes.add(i + 1)
         elif lie_suivant and suivant[0] == "periode":
             paiements.append(Paiement(sum(val), None, f"{libelle} {suivant[2].group(0).strip()}"))
             consommes.add(i + 1)
-        elif du:
-            for c in val:
-                dus.append((c, libelle))
         elif precedent is not None and precedent[0] == "date" and (i - 1) not in consommes and re.fullmatch(r"\s*", texte[precedent[2].end(): m.start()]):
             # « complément location 30/8  495 », « Paye MARTIN 30/6 666 ».
             paiements.append(Paiement(sum(val), precedent[1], f"{precedent[2].group(0).strip()} {libelle}"))
@@ -340,11 +348,20 @@ def lire_evenement(cal: dict, ev: dict, au_plus_tard_export: dt.date) -> Ligne:
     ligne.sans_montant = not lu["paiements"] and not lu["dus"]
     ligne.mentions = lu["reste"]
     if lu["dates"]:
-        ligne.demande = lu["dates"][-1]
+        # La demande précède l'arrivée : une date sans année lue après l'arrivée
+        # (fenêtre des paiements) recule d'un an.
+        d = dt.date.fromisoformat(lu["dates"][-1])
+        if d > dt.date.fromisoformat(checkin):
+            try:
+                d = d.replace(year=d.year - 1)
+            except ValueError:
+                d = d.replace(year=d.year - 1, day=28)
+        ligne.demande = d.isoformat()
     if lu["periodes"] and not lu["dates"]:
         ligne.demande = lu["periodes"][-1]
 
-    texte_min = _sans_accents(titre)
+    # Les mots de blocage se cherchent hors des adresses (« x.cartier@… » est un client).
+    texte_min = _sans_accents(RE_EMAIL.sub(" ", texte))
     if any(re.search(p, texte_min) for p in MOTS_BLOCAGE):
         ligne.statut = "blocage"
         ligne.motif = re.sub(r"\s+", " ", titre).strip()[:200]
@@ -432,7 +449,7 @@ def passes_croisees(lignes: list[Ligne], aujourdhui: dt.date) -> None:
     # 1. Blocage supposé (ni adresse ni montant) dont l'autre maison porte une
     #    vraie location au même nom, aux mêmes dates : c'est une location.
     for l in lignes:
-        if l.statut != "blocage" or l.emails or not l.sans_montant or any(re.search(p, _sans_accents(l.titre)) for p in MOTS_BLOCAGE):
+        if l.statut != "blocage" or l.emails or not l.sans_montant or any(re.search(p, _sans_accents(RE_EMAIL.sub(" ", l.titre))) for p in MOTS_BLOCAGE):
             continue
         for o in lignes:
             if o.unit_id != l.unit_id and o.statut == "confirmee" and _chevauche(l, o) and _mots(l.titre) & _mots(o.titre):
@@ -456,7 +473,14 @@ def passes_croisees(lignes: list[Ligne], aujourdhui: dt.date) -> None:
             garde.dus += fond.dus
             garde.notes.append(f"Fusionnée avec l'événement {fond.event_id} (« {fond.titre} »)")
             garde.doutes.append(f"deux événements du même client sur la même maison fusionnés ({fond.event_id})")
-            fond.statut, fond.raison = "ignoree", f"fusionnée dans {garde.uid} (même client, même maison, dates incluses)"
+            if dt.date.fromisoformat(fond.checkout) > aujourdhui:
+                # À venir : son UID reste dans le flux iCal ; inscrit annulé (motif
+                # que la synchro ne rouvre pas), sans paiement, pour qu'elle ne le
+                # recrée pas en « Busy ».
+                fond.statut, fond.paiements, fond.dus = "annulee", [], []
+                fond.notes = [f"Fusionnée dans {garde.uid} : même client, même maison, dates incluses"]
+            else:
+                fond.statut, fond.raison = "ignoree", f"fusionnée dans {garde.uid} (même client, même maison, dates incluses)"
 
     # 3. Même client sur les deux maisons aux mêmes dates : deux réservations.
     for l in lignes:
