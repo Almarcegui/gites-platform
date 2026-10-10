@@ -153,7 +153,7 @@ push). Transfert prévu vers **`Almarcegui/gites-platform`**, en attente d'un ge
 de Julien depuis le compte propriétaire actuel ; ensuite,
 `git remote set-url origin https://github.com/Almarcegui/gites-platform.git`.
 
-## Lot 2 du nouvel écran (/admin2/, 10/10/2026)
+## Lot 2 de l'écran d'administration (10/10/2026)
 
 | Fonction | Où | Notes |
 |---|---|---|
@@ -164,7 +164,7 @@ de Julien depuis le compte propriétaire actuel ; ensuite,
 | **Mon mot de passe** | `GET /api/admin/me`, `POST /api/admin/me/password` | ancien exigé, 12 caractères au moins (ou proposé par la plateforme), autres sessions du compte coupées, 5 essais manqués par quart d'heure. Refusé (400) pour l'accès de secours `ADMIN_TOKEN` |
 | **Envoi de photos** | `POST /api/admin/units/:id/photos/upload` | Node seulement : fichiers dans `UPLOADS_DIR` (défaut `../gites-data/uploads`, hors du site), servis sous `/uploads/`, sauvegardés chaque nuit par `GET /api/admin/export-uploads.tar` (lot 3). JPEG/PNG/WebP lus dans les octets, 8 Mo, nom au hasard ; sans texte, la photo arrive masquée. Workers : 501 |
 | **PWA** | `app/public/manifest.webmanifest`, `app/public/sw.js` | installable (iPhone : Partager › Sur l'écran d'accueil), réseau d'abord, hors ligne en lecture pour Aujourd'hui ; cache vidé à la déconnexion |
-| **Accès admin fermé au public** | `src/core/ip-allow.ts`, `src/index.ts`, `node/server.mjs` | `ADMIN_ALLOWED_IPS` (CIDR v4/v6, vide = ouvert, **pas activé par défaut**) sur `/api/admin/*`, `/admin/`, `/admin2/` ; 403 explicite. **Humains seulement** : clés `svc:` et compte `sauvegarde` exemptés (refus de l'API reporté après l'authentification, lot 3). Node : `TRUST_PROXY=true` derrière le proxy d'Infomaniak. Cf. `.env.example` |
+| **Accès admin fermé au public** | `src/core/ip-allow.ts`, `src/index.ts`, `node/server.mjs` | `ADMIN_ALLOWED_IPS` (CIDR v4/v6, vide = ouvert, **pas activé par défaut**) sur `/api/admin/*` et `/admin/` ; 403 explicite. **Humains seulement** : clés `svc:` et compte `sauvegarde` exemptés (refus de l'API reporté après l'authentification, lot 3). Node : `TRUST_PROXY=true` derrière le proxy d'Infomaniak. Cf. `.env.example` |
 
 Vérifier : `make test` (la suite `test/lot2.test.ts` tourne sur D1 **et** sur
 `node:sqlite`), `npm run smoke:node` (vrai serveur Node, base temporaire), et le
@@ -193,7 +193,7 @@ Pré Moré se louent **seules ou ensemble** (« Domaine entier »).
 |---|---|
 | Runtime | Cloudflare Workers (TypeScript strict, zéro dépendance runtime) |
 | Base | Cloudflare D1 (SQLite) — migrations dans `migrations/` |
-| Front | HTML/CSS/JS vanilla servis en assets (`public/admin/`, `public/book/`) |
+| Front | Back-office : React + Mantine + TanStack (`app/`, construit dans `public/admin/`, servi sous `/admin/`) ; site et tunnel : HTML/CSS/JS vanilla (`public/`, `public/book/`) |
 | Paiement | Stripe par API REST — **Payment Element intégré** (carte, Bancontact, Apple/Google Pay) dès que les deux clés sont posées, sinon Checkout hébergé ; **mode stub** intégré sans clé. **Mode TEST uniquement** tant que l'entité n'est pas tranchée |
 | Emails | Resend — **mode stub par défaut** : tout est journalisé dans `email_log`, rien ne part sans `EMAILS_ENABLED=true` + accord Julien |
 | OTA | iCal export par unité + import cron 15 min (Airbnb Moulin, phase 3) |
@@ -224,8 +224,8 @@ npm run typecheck
   plusieurs paires séparées par des virgules. Le gabarit livre `dev:dev`, qui
   suffit en local. Laissé vide, tout `/api/admin/*` répond 503.
 - Première connexion : une base neuve n'a **aucun compte**. On entre par
-  `ADMIN_TOKEN` via `/admin/login.html`, puis on crée les vrais comptes dans
-  `/admin/#/users` (table `admin_users`, migration `0012`). Détail dans
+  `ADMIN_TOKEN` via `/admin/` (écran de connexion), puis on crée les vrais comptes dans
+  Réglages › Comptes (`/admin/#/reglages/comptes`) (table `admin_users`, migration `0012`). Détail dans
   `CONTRIBUTING.md` § « Première connexion au back-office ».
 - Le Moulin de Braives est seedé par la migration `0004` — il n'y a pas de
   script `db:seed:moulin` ni de dossier `seed/`.
@@ -241,7 +241,7 @@ src/db/repo.ts         toute la couche D1, dont l'INSERT atomique anti-course
 src/services/          stripe, email (stub), ical (export/parse/sync), cron,
                        booking-flow (checkout/webhook/voucher), elloha-import
 src/api/               router maison + routes publiques + routes admin
-public/admin/          back-office (11 vues + calendrier tarifs + multi-biens)
+app/                   back-office (React, construit dans public/admin/ par npm run build, non versionné)
 public/book/           landing domaines + réservation 4 étapes + voucher + dev-pay
 test/                  12 fichiers, 152 tests
 ```

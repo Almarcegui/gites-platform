@@ -77,7 +77,7 @@ describe("langue de l'écran", () => {
     await screen.findByRole("heading", { name: "Réglages" });
     await user.click(screen.getByRole("button", { name: "Nederlands" }));
     expect(await screen.findByRole("heading", { name: "Instellingen" })).toBeInTheDocument();
-    expect(screen.getByText("Dit toestel")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Dit toestel" })).toBeInTheDocument();
     expect(localStorage.getItem(LOCALE_KEY)).toBe("nl");
     expect(document.documentElement.lang).toBe("nl-BE");
     await user.click(screen.getByRole("button", { name: "Français" }));

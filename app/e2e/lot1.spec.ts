@@ -7,7 +7,7 @@ declare const process: { env: Record<string, string | undefined> };
 const shot = (name: string) => `docs/captures/lot1/${name}.png`;
 
 async function login(page: Page) {
-  await page.goto("/admin2/");
+  await page.goto("/admin/");
   await page.getByLabel("Identifiant").fill("pilote");
   await page.getByLabel("Mot de passe").fill(process.env.PILOTE_PASSWORD ?? "");
   await page.getByRole("button", { name: "Se connecter" }).click();
@@ -15,7 +15,7 @@ async function login(page: Page) {
 }
 
 async function go(page: Page, route: string) {
-  await page.goto(`/admin2/#/${route}`);
+  await page.goto(`/admin/#/${route}`);
 }
 
 const drawer = (page: Page) => page.locator(".mantine-Drawer-content");

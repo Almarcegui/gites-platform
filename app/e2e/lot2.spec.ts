@@ -9,7 +9,7 @@ const drawer = (page: Page) => page.locator(".mantine-Drawer-content");
 const modal = (page: Page) => page.locator(".mantine-Modal-content");
 
 async function login(page: Page) {
-  await page.goto("/admin2/");
+  await page.goto("/admin/");
   await page.getByLabel("Identifiant").fill("pilote");
   await page.getByLabel("Mot de passe").fill(process.env.PILOTE_PASSWORD ?? "");
   await page.getByRole("button", { name: "Se connecter" }).click();
@@ -22,7 +22,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 test("ménage : case « fait » en base, personne et note, lien de partage coché sans compte", async ({ page, browser }) => {
-  await page.goto("/admin2/#/menage");
+  await page.goto("/admin/#/menage");
   await expect(page.getByRole("heading", { name: "Ménage", level: 1 })).toBeVisible();
   const first = page.locator(".job").filter({ hasText: "La Scierie" }).first();
   await expect(first).toContainText("nouveaux voyageurs le jour même");
@@ -70,12 +70,12 @@ test("ménage : case « fait » en base, personne et note, lien de partage coch�
   await expect(page.locator(".job").filter({ hasText: "La Maison du Scieur" }).first()).toContainText("noté par Martine");
 
   // Le calendrier montre la pastille.
-  await page.goto("/admin2/#/calendrier");
+  await page.goto("/admin/#/calendrier");
   await expect(page.locator(".mk.ok").first()).toBeVisible();
   await page.screenshot({ path: shot("1280-calendrier-pastilles") });
 
   // Couper le lien.
-  await page.goto("/admin2/#/menage");
+  await page.goto("/admin/#/menage");
   await page.locator(".list-row").filter({ hasText: "Martine" }).getByRole("button", { name: "Couper" }).click();
   await modal(page).getByRole("button", { name: "Couper le lien" }).click();
   await expect(page.getByText("C'est fait. Lien coupé.").first()).toBeVisible();
@@ -86,7 +86,7 @@ test("ménage : case « fait » en base, personne et note, lien de partage coch�
 });
 
 test("modèles : créé dans Réglages, proposé dans Messages, supprimé", async ({ page }) => {
-  await page.goto("/admin2/#/reglages/modeles");
+  await page.goto("/admin/#/reglages/modeles");
   await expect(page.getByRole("heading", { name: "Modèles de réponse" })).toBeVisible();
   await expect(page.locator(".list-row")).toHaveCount(4);
   await page.getByRole("button", { name: "Nouveau modèle" }).click();
@@ -100,14 +100,14 @@ test("modèles : créé dans Réglages, proposé dans Messages, supprimé", asyn
   await expect(page.locator(".list-row")).toHaveCount(5);
   await page.screenshot({ path: shot("1280-reglages-modeles") });
 
-  await page.goto("/admin2/#/messages");
+  await page.goto("/admin/#/messages");
   await page.getByRole("button", { name: /Ombeline Vauchelard/ }).click();
   await page.getByRole("button", { name: "Code wifi" }).click();
   await expect(page.locator("#rep")).toHaveValue(/Le code wifi de .* est sur la porte du frigo/);
   await expect(page.locator("#rep")).toHaveValue(/^Bonjour Ombeline,/);
   await page.screenshot({ path: shot("1280-messages-modele") });
 
-  await page.goto("/admin2/#/reglages/modeles");
+  await page.goto("/admin/#/reglages/modeles");
   await page.locator(".list-row").filter({ hasText: "Code wifi" }).click();
   await drawer(page).getByRole("button", { name: "Plus" }).click();
   await page.getByRole("menuitem", { name: "Supprimer le modèle" }).click();
@@ -116,17 +116,17 @@ test("modèles : créé dans Réglages, proposé dans Messages, supprimé", asyn
 });
 
 test("recherche par téléphone dans les réservations et les clients", async ({ page }) => {
-  await page.goto("/admin2/#/reservations");
+  await page.goto("/admin/#/reservations");
   await page.getByLabel("Rechercher une réservation").fill("0470 00 01 02");
   await expect(page.getByText("Brugmondt").first()).toBeVisible();
   await page.screenshot({ path: shot("1280-reservations-telephone") });
-  await page.goto("/admin2/#/reglages/clients");
+  await page.goto("/admin/#/reglages/clients");
   await page.getByLabel("Rechercher un client").fill("+32470000105");
   await expect(page.getByText("Oudewaeter").first()).toBeVisible();
 });
 
 test("mon compte : l'ancien mot de passe est exigé", async ({ page }) => {
-  await page.goto("/admin2/#/reglages/mon-compte");
+  await page.goto("/admin/#/reglages/mon-compte");
   await expect(page.getByRole("heading", { name: "Mon compte" })).toBeVisible();
   await page.getByLabel("Mot de passe actuel").fill("pas-le-bon-mot-de-passe");
   await page.getByLabel("Nouveau mot de passe").fill("une-phrase-de-quatre-mots");
@@ -137,7 +137,7 @@ test("mon compte : l'ancien mot de passe est exigé", async ({ page }) => {
 });
 
 test("photos : envoi depuis l'ordinateur, masquée tant qu'elle n'est pas décrite", async ({ page }) => {
-  await page.goto("/admin2/#/reglages/domaine");
+  await page.goto("/admin/#/reglages/domaine");
   await page.locator("summary").filter({ hasText: "La Scierie" }).click();
   await page.getByRole("button", { name: "Photos" }).first().click();
   const d = drawer(page);
@@ -154,15 +154,15 @@ test("photos : envoi depuis l'ordinateur, masquée tant qu'elle n'est pas décri
 
 test("PWA : manifeste et service worker", async ({ page }) => {
   const manifest = await page.locator('link[rel="manifest"]').getAttribute("href");
-  expect(manifest).toBe("/admin2/manifest.webmanifest");
+  expect(manifest).toBe("/admin/manifest.webmanifest");
   const res = await page.request.get(manifest!);
   expect(res.ok()).toBe(true);
   expect((await res.json()).display).toBe("standalone");
-  await expect(page.locator('link[rel="apple-touch-icon"]')).toHaveAttribute("href", "/admin2/apple-touch-icon.png");
+  await expect(page.locator('link[rel="apple-touch-icon"]')).toHaveAttribute("href", "/admin/apple-touch-icon.png");
   const scope = await page.evaluate(async () => (await navigator.serviceWorker.ready).scope);
-  expect(scope).toMatch(/\/admin2\/$/);
+  expect(scope).toMatch(/\/admin\/$/);
   // Hors ligne : Aujourd'hui reste lisible depuis le cache.
-  await page.goto("/admin2/#/");
+  await page.goto("/admin/#/");
   await expect(page.getByRole("navigation", { name: "Menu principal" }).first()).toBeVisible();
   await page.waitForTimeout(1500);
   await page.context().setOffline(true);

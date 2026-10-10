@@ -11,7 +11,8 @@ import { api } from "../api/client";
 import type { Booking } from "../api/types";
 import { bookingState } from "../booking/BookingPanel";
 import { ErrorLine } from "../lib/action";
-import { stayRange } from "../lib/dates";
+import { stayPhase, type StayPhase } from "../../../src/core/stay-phase";
+import { stayRange, todayBrussels } from "../lib/dates";
 import { channelName } from "../lib/derive";
 import { eur } from "../lib/money";
 import { useScope } from "../lib/scope";
@@ -69,6 +70,12 @@ export function BookingsPage() {
   const nightsLabel = (a: string, b: string) => {
     const n = Math.round((Date.parse(b) - Date.parse(a)) / 86_400_000);
     return n > 1 ? t`${n} nuits` : t`1 nuit`;
+  };
+  const today = todayBrussels();
+  const PHASES: Record<StayPhase, string> = { "arrive-today": t`arrive aujourd'hui`, "arrive-tomorrow": t`arrive demain`, "leaves-today": t`part aujourd'hui` };
+  const phaseOf = (b: Booking) => {
+    const p = stayPhase(b, today);
+    return p ? PHASES[p] : null;
   };
   const pill: Record<string, string> = { option: t`Option`, solde: t`Solde à encaisser`, soldee: t`Payée`, plat: t`Autre site`, annulee: t`Annulée` };
   return (
@@ -154,7 +161,10 @@ export function BookingsPage() {
                     <td className="hide-s">{b.unitName}</td>
                     <td>
                       {stayRange(b.checkin, b.checkout)}
-                      <small>{nightsLabel(b.checkin, b.checkout)}</small>
+                      <small>
+                        {nightsLabel(b.checkin, b.checkout)}
+                        {phaseOf(b) ? <span className="phase"> · {phaseOf(b)}</span> : null}
+                      </small>
                     </td>
                     <td className="hide-s">
                       <span className={`pill ${st}`}>{pill[st]}</span>

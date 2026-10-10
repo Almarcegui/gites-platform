@@ -2,13 +2,18 @@
 //
 // La logique tient en trois comparaisons de chaînes, mais elle décide de ce
 // qu'un gestionnaire lit le matin sur trois écrans à la fois (liste, fiche,
-// tableau de bord). Elle est donc isolée dans `public/admin/badges.js` — sans
-// DOM ni import — précisément pour être testée ici (même parti pris que
-// `suggestions.js`).
+// tableau de bord). Elle est donc isolée dans `src/core/stay-phase.ts` — sans
+// DOM ni import — précisément pour être testée ici. L'écran d'administration
+// (app/, liste des réservations) s'en sert.
 import { describe, expect, it } from "vitest";
 
-// @ts-expect-error — module ESM du front, sans typage TypeScript
-import { stayBadge, stayPhase } from "../public/admin/badges.js";
+import { STAY_LABELS, stayPhase, type StayPhase } from "../src/core/stay-phase";
+
+/** Ce que l'écran affiche : le libellé de la phase, ou rien. */
+function stayBadge(booking: Parameters<typeof stayPhase>[0], today: unknown): string {
+  const phase: StayPhase | null = stayPhase(booking, today);
+  return phase ? STAY_LABELS[phase] : "";
+}
 
 const TODAY = "2026-08-28";
 
@@ -92,16 +97,10 @@ describe("stayPhase", () => {
 });
 
 describe("stayBadge", () => {
-  it("rend une pastille lisible, avec la classe de couleur attendue", () => {
-    expect(stayBadge(resa({ checkin: TODAY, checkout: "2026-09-04" }), TODAY)).toBe(
-      '<span class="tag t-now">Arrive aujourd’hui</span>',
-    );
-    expect(stayBadge(resa({ checkin: "2026-08-29", checkout: "2026-09-05" }), TODAY)).toBe(
-      '<span class="tag t-soon">Arrive demain</span>',
-    );
-    expect(stayBadge(resa({ checkin: "2026-08-21", checkout: TODAY }), TODAY)).toBe(
-      '<span class="tag t-now">Part aujourd’hui</span>',
-    );
+  it("rend un libellé lisible", () => {
+    expect(stayBadge(resa({ checkin: TODAY, checkout: "2026-09-04" }), TODAY)).toBe("Arrive aujourd’hui");
+    expect(stayBadge(resa({ checkin: "2026-08-29", checkout: "2026-09-05" }), TODAY)).toBe("Arrive demain");
+    expect(stayBadge(resa({ checkin: "2026-08-21", checkout: TODAY }), TODAY)).toBe("Part aujourd’hui");
   });
 
   it("rend une chaîne vide quand il n'y a rien à signaler — le badge financier reste seul", () => {

@@ -33,7 +33,7 @@ node_modules/
 .wrangler/
 dist/
 # Build du pilote du nouveau back-office (npm run build:app) — généré, jamais versionné.
-public/admin2/
+public/admin/
 app/test-results/
 app/playwright-report/
 _scratch/

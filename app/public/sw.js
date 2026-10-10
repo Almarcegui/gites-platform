@@ -1,15 +1,15 @@
-// Service worker du back-office /admin2/ (lot 2, point 6 : PWA).
+// Service worker du back-office /admin/ (lot 2, point 6 : PWA).
 //
 // Stratégie : RÉSEAU D'ABORD, toujours. Le cache ne sert qu'à afficher la
 // dernière version connue quand le réseau manque (« hors ligne en lecture »),
 // jamais à servir une vieille donnée quand le serveur répond.
 //
-// Ce qui est gardé pour le hors-ligne : l'écran lui-même (/admin2/…) et les
+// Ce qui est gardé pour le hors-ligne : l'écran lui-même (/admin/…) et les
 // lectures dont l'écran Aujourd'hui a besoin. Rien d'autre de l'API, aucune
 // écriture (POST, PATCH, PUT, DELETE ne passent jamais par le cache).
 // Le cache est vidé à la déconnexion (api/client.ts, logout).
-const CACHE = "gites-admin2-v1";
-const SHELL = ["/admin2/", "/admin2/index.html", "/admin2/manifest.webmanifest", "/admin2/icon-192.png"];
+const CACHE = "gites-admin-v1";
+const SHELL = ["/admin/", "/admin/index.html", "/admin/manifest.webmanifest", "/admin/icon-192.png"];
 // Les fiches complètes (réservation, client) ne sont PAS gardées : elles
 // portent paiements, adresses et notes. Hors ligne, Aujourd'hui se lit sans
 // elles (les boutons Appeler et SMS reviennent avec le réseau).
@@ -25,14 +25,14 @@ let generation = 0;
 async function precache() {
   const c = await caches.open(CACHE);
   await c.addAll(SHELL);
-  const html = await (await c.match("/admin2/index.html")).text();
-  const assets = [...html.matchAll(/(?:src|href)="(\/admin2\/assets\/[^"]+)"/g)].map((m) => m[1]);
+  const html = await (await c.match("/admin/index.html")).text();
+  const assets = [...html.matchAll(/(?:src|href)="(\/admin\/assets\/[^"]+)"/g)].map((m) => m[1]);
   if (assets.length) await c.addAll(assets);
   // Les polices citées par la feuille de style, au mieux (le texte reste lisible sans).
   for (const css of assets.filter((a) => a.endsWith(".css"))) {
     try {
       const text = await (await c.match(css)).text();
-      const fonts = [...text.matchAll(/url\((?:"|')?(\/admin2\/assets\/[^"')]+\.woff2)/g)].map((m) => m[1]);
+      const fonts = [...text.matchAll(/url\((?:"|')?(\/admin\/assets\/[^"')]+\.woff2)/g)].map((m) => m[1]);
       await c.addAll([...new Set(fonts)]);
     } catch {
       /* polices de repli du système */
@@ -48,14 +48,14 @@ self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches
       .keys()
-      .then((keys) => Promise.all(keys.filter((k) => k.startsWith("gites-admin2") && k !== CACHE).map((k) => caches.delete(k))))
+      .then((keys) => Promise.all(keys.filter((k) => k.startsWith("gites-admin") && k !== CACHE).map((k) => caches.delete(k))))
       .then(() => self.clients.claim()),
   );
 });
 
 function cacheable(url) {
   if (url.origin !== self.location.origin) return false;
-  if (url.pathname.startsWith("/admin2/")) return true;
+  if (url.pathname.startsWith("/admin/")) return true;
   return READS.test(url.pathname) || READS.test(`${url.pathname}?`);
 }
 
@@ -87,7 +87,7 @@ self.addEventListener("fetch", (event) => {
         const hit = await caches.match(req);
         if (hit) return hit;
         if (req.mode === "navigate") {
-          const shell = (await caches.match("/admin2/index.html")) || (await caches.match("/admin2/"));
+          const shell = (await caches.match("/admin/index.html")) || (await caches.match("/admin/"));
           if (shell) return shell;
         }
         return Response.error();

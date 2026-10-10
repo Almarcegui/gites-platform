@@ -92,7 +92,9 @@ try {
   check("santé", (await fetch(`${base}/internal/health`)).ok);
   check("admin sans jeton : 401", (await fetch(`${base}/api/admin/units`)).status === 401);
   check("admin avec jeton : 200", (await fetch(`${base}/api/admin/units?property=1`, { headers: auth })).status === 200);
-  check("écran /admin2/ servi ou absent proprement", [200, 404].includes((await fetch(`${base}/admin2/`)).status));
+  check("écran /admin/ servi ou absent proprement", [200, 404].includes((await fetch(`${base}/admin/`)).status));
+  const moved = await fetch(`${base}/admin2/`, { redirect: "manual" });
+  check("ancienne adresse : 301 vers /admin/", moved.status === 301 && moved.headers.get("location") === "/admin/");
 
   const tasks = await fetch(`${base}/api/admin/tasks`, { headers: auth });
   check("ménage : GET /api/admin/tasks", tasks.status === 200, String(tasks.status));
@@ -131,7 +133,7 @@ try {
   await waitUp(base2);
   const denied = await fetch(`${base2}/api/admin/units`, { headers: auth });
   check("garde IP : 403 sur /api/admin", denied.status === 403);
-  check("garde IP : 403 sur /admin2/", (await fetch(`${base2}/admin2/`)).status === 403);
+  check("garde IP : 403 sur /admin/", (await fetch(`${base2}/admin/`)).status === 403);
   check("garde IP : X-Forwarded-For ignoré sans TRUST_PROXY", (await fetch(`${base2}/api/admin/units`, { headers: { ...auth, "x-forwarded-for": "10.9.9.9" } })).status === 403);
   check("garde IP : le public reste ouvert", (await fetch(`${base2}/internal/health`)).ok);
 

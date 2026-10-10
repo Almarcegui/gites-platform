@@ -1,5 +1,7 @@
-// Routes du pilote. Historique en hash (/admin2/#/calendrier) : le serveur
-// n'a qu'un fichier à servir, /admin2/index.html, sans réécriture d'URL.
+// Routes de l'écran d'administration. Historique en hash (/admin/#/calendrier) :
+// le serveur n'a qu'un fichier à servir, /admin/index.html, sans réécriture
+// d'URL. Les adresses de l'ancien écran (#/dash, #/cal, #/resa…) mènent au
+// bon écran : liens gardés dans un favori, un mail, ou la carte Santé.
 // La fiche ouverte vit dans l'adresse (?resa=12) : un lien la rouvre.
 import { createHashHistory, createRootRoute, createRoute, createRouter, Outlet, redirect } from "@tanstack/react-router";
 
@@ -95,8 +97,40 @@ const settingsRoutes = [
   sub("appareil", DevicePage),
 ];
 
+// Adresses de l'ancien écran (favoris, mails, carte Santé) : on mène au bon
+// écran. La fiche ouverte (?resa=) et le reste de l'adresse sont gardés.
+const LEGACY: Record<string, string> = {
+  "/dash": "/",
+  "/cal": "/calendrier",
+  "/plan": "/calendrier",
+  "/cal/prix": "/reglages/tarifs",
+  "/tarifs": "/reglages/tarifs",
+  "/cal/annee": "/reglages/tarifs",
+  "/resa": "/reservations",
+  "/clients": "/reglages/clients",
+  "/paiements": "/reglages/paiements",
+  "/stats": "/reglages/chiffres",
+  "/promos": "/reglages/promotions",
+  "/options": "/reglages/options",
+  "/canaux": "/reglages/plateformes",
+  "/ical": "/reglages/calendriers",
+  "/users": "/reglages/comptes",
+  "/params": "/reglages/domaine",
+  "/startup": "/reglages/mise-en-route",
+};
+const legacyRoutes = Object.entries(LEGACY).map(([from, to]) =>
+  createRoute({
+    getParentRoute: () => rootRoute,
+    path: from,
+    beforeLoad: ({ search }) => {
+      throw redirect({ to, search, replace: true });
+    },
+  }),
+);
+
 const routeTree = rootRoute.addChildren([
   loginRoute,
+  ...legacyRoutes,
   appRoute.addChildren([todayRoute, calendarRoute, bookingsRoute, messagesRoute, cleaningRoute, reviewsRoute, settingsRoute, ...settingsRoutes]),
 ]);
 

@@ -1,4 +1,4 @@
-// Captures « avant » du lot 1 : l'ancien écran /admin/ et le pilote /admin2/,
+// Captures « avant » du lot 1 : l'ancien écran /admin/ et le pilote /admin/,
 // sur les mêmes données inventées (npm run pilote:donnees). Usage :
 //   node e2e/captures-avant.mjs        (serveur local sur GITES_URL ou :8796)
 import { readFileSync } from "node:fs";
@@ -11,7 +11,7 @@ const out = (n) => fileURLToPath(new URL(`../docs/captures/lot1/${n}.png`, impor
 
 const browser = await chromium.launch({ channel: "chrome" });
 const page = await browser.newPage({ viewport: { width: 1280, height: 860 }, locale: "fr-BE", timezoneId: "Europe/Brussels", colorScheme: "light" });
-await page.goto(`${base}/admin2/`);
+await page.goto(`${base}/admin/`);
 await page.getByLabel("Identifiant").fill("pilote");
 await page.getByLabel("Mot de passe").fill(pw);
 await page.getByRole("button", { name: "Se connecter" }).click();
@@ -25,7 +25,7 @@ for (const r of old) {
 }
 const neu = ["", "calendrier", "reservations", "messages", "menage", "reglages"];
 for (const r of neu) {
-  await page.goto(`${base}/admin2/#/${r}`);
+  await page.goto(`${base}/admin/#/${r}`);
   await page.waitForTimeout(1600);
   await page.screenshot({ path: out(`avant-pilote-${r || "aujourdhui"}`), fullPage: false });
 }

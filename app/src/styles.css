@@ -968,3 +968,4 @@ fieldset.wd legend { font-weight: 600; margin-bottom: 8px; padding: 0; }
   .tbl th, .tbl td { padding: 10px 12px; }
   .tbl td small { display: block; color: var(--ink-2); font-size: 14px; }
 }
+.tbl td small .phase { color: var(--pine-ink); font-weight: 600; }

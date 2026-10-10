@@ -14,17 +14,17 @@ const browser = await chromium.launch({ channel: "chrome" });
 const widths = (process.argv[3] ?? "1280,1512").split(",").map(Number);
 for (const w of widths) {
   const page = await browser.newPage({ viewport: { width: w, height: w < 1024 ? 844 : 900 }, locale: "fr-BE", timezoneId: "Europe/Brussels", colorScheme: "light" });
-  await page.goto(`${base}/admin2/`);
+  await page.goto(`${base}/admin/`);
   await page.getByLabel("Identifiant").fill("pilote");
   await page.getByLabel("Mot de passe").fill(pw);
   await page.getByRole("button", { name: "Se connecter" }).click();
   await page.waitForTimeout(1500);
   for (const [name, route] of [["aujourdhui", ""], ["calendrier", "calendrier"], ["reservations", "reservations"], ["reglages", "reglages"], ["prix", "reglages/tarifs"]]) {
-    await page.goto(`${base}/admin2/#/${route}`);
+    await page.goto(`${base}/admin/#/${route}`);
     await page.waitForTimeout(1800);
     await page.screenshot({ path: out(`${phase}-${w}-${name}`) });
   }
-  await page.goto(`${base}/admin2/#/reservations`);
+  await page.goto(`${base}/admin/#/reservations`);
   await page.waitForTimeout(1500);
   const row = page.locator(".list-row, tbody tr").first();
   if (await row.count()) {

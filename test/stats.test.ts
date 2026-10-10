@@ -324,12 +324,12 @@ describe("route /api/admin/stats", () => {
     expect(data.searches).toHaveProperty("topEmpty");
   });
 
-  it("la vue Statistiques du back-office affiche les trois cartes", () => {
-    const app = readFileSync(fileURLToPath(new URL("../public/admin/app.js", import.meta.url)), "utf8");
-    expect(app).toMatch(/function decisionCards/);
-    expect(app).toMatch(/Délai de réservation/);
-    expect(app).toMatch(/Entonnoir de conversion/);
-    expect(app).toMatch(/sans le trouver/);
+  it("l'écran Chiffres du back-office affiche les trois lectures", () => {
+    const app = readFileSync(fileURLToPath(new URL("../app/src/pages/settings/Stats.tsx", import.meta.url)), "utf8");
+    expect(app).toMatch(/q\.data\?\.leadTime && q\.data\.funnel && q\.data\.searches/);
+    expect(app).toMatch(/À quelle avance on réserve/);
+    expect(app).toMatch(/biggestDropKey/);
+    expect(app).toMatch(/Dates cherchées sans réponse/);
     // la promesse RGPD est écrite à l'écran, là où le propriétaire la lit
     expect(app).toMatch(/Aucune donnée identifiante/);
   });

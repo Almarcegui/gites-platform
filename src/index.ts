@@ -4,6 +4,7 @@ import { apiError, Router } from "./api/router";
 import { registerPublicRoutes } from "./api/public";
 import { registerAdminRoutes } from "./api/admin";
 import { runAllScheduled } from "./jobs/scheduled";
+import { adminRedirectResponse } from "./core/admin-redirect";
 import { adminIpCheck, adminIpGate, ipDeniedResponse, markIpDenied } from "./core/ip-allow";
 import { withStandardHeaders } from "./services/http-headers";
 import { buildReplyMime, parseRawEmail, processInboundEmail } from "./services/inbound-email";
@@ -28,13 +29,17 @@ export default {
     const legacy = wpRedirect(url);
     if (legacy) return finish(legacy);
     // Accès administrateur fermé au public (ADMIN_ALLOWED_IPS, vide = ouvert) :
-    // API admin ET écrans /admin/ et /admin2/, avant toute lecture de la base.
+    // API admin ET écran /admin/ (et l'ancienne adresse), avant toute lecture de la base.
     // Écrans : refus immédiat. API : refus après authentification, aux humains
     // seulement (clés de service et compte « sauvegarde » exemptés, cf. guard).
     const clientIp = request.headers.get("cf-connecting-ip");
     const ipCheck = adminIpCheck(url.pathname, env.ADMIN_ALLOWED_IPS, clientIp);
     if (ipCheck === "deny") return finish(adminIpGate(url.pathname, env.ADMIN_ALLOWED_IPS, clientIp) ?? ipDeniedResponse());
     if (ipCheck === "defer") markIpDenied(request);
+    // Une seule adresse pour l'écran d'administration : /admin2/… et
+    // /admin/login.html renvoient vers /admin/ (src/core/admin-redirect.ts).
+    const moved = adminRedirectResponse(url.pathname);
+    if (moved) return finish(moved);
     // "/" sert le site vitrine (public/index.html) via les assets.
     try {
       const response = await router.handle(request, env, ctx);

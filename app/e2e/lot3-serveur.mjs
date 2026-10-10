@@ -2,7 +2,7 @@
 // Refait aussi les captures de l'aide « Comment ça marche » (app/public/aide/)
 // et celles du lot (app/docs/captures/lot3/).
 //
-//   npm run build            (à la racine : dist/ et public/admin2/)
+//   npm run build            (à la racine : dist/ et public/admin/)
 //   node app/e2e/lot3-serveur.mjs
 //   npm run build            (encore une fois si les captures de l'aide ont changé)
 //

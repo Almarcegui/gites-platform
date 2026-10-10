@@ -16,16 +16,12 @@ import { api } from "../../api/client";
 import type { Beds24Status, ChannelsOverview, MarkupState, PriceLinkingState, SyncConflict } from "../../api/types2";
 import { ErrorLine, useAction } from "../../lib/action";
 import { stayRange } from "../../lib/dates";
+import { parsePct, pctFr } from "../../lib/markups";
 import { eur } from "../../lib/money";
+import { Beds24PropertyCard } from "./Beds24Property";
 import { Confirm, Empty, Fold, Loading, Page, SaveBar, Section, SidePanel, sqlWhen, useWorkingProperty } from "../../ui/kit";
 
-/** « 17,5 » → 17.5 ; illisible → null. */
-function parsePct(raw: number | string): number | null {
-  const s = String(raw ?? "").trim().replace(",", ".");
-  if (!/^\d+(\.\d+)?$/.test(s)) return null;
-  return Math.round(Number(s) * 100) / 100;
-}
-const pctFr = (n: number) => String(n).replace(".", ",");
+
 
 export function ChannelsPage() {
   const { t } = useLingui();
@@ -48,6 +44,7 @@ export function ChannelsPage() {
       {d && pid ? (
         <>
           <LinkCard d={d} propertyId={pid} />
+          {d.configured ? <Beds24PropertyCard propertyId={pid} /> : null}
           {linking.data?.enabled ? <p className="note">{t`Prix par plateforme en place : Beds24 ajoute à chaque plateforme son pourcentage ci-dessous. Le bouton « Appliquer » ne compte plus tant qu'ils sont en place.`}</p> : null}
           {mk.data ? <MarkupsCard m={mk.data} /> : mk.error ? <ErrorLine text={t`Les prix envoyés aux plateformes n'ont pas pu être lus.`} /> : null}
           <Section title={t`Promotions Airbnb et prix par plateforme`} hint={t`Remises long séjour, réservation tôt, dernière minute et non remboursable sur Airbnb ; un prix propre à chaque plateforme, calculé par Beds24 avec les pourcentages ci-dessus.`}>

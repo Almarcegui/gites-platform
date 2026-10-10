@@ -1,6 +1,6 @@
 // Réglages : tout ce qui ne sert pas tous les jours, rangé par sujet. Chaque
-// ligne ouvre un écran du nouveau back-office ; l'ancien /admin/ n'est plus
-// nécessaire. En bas, ce qui ne regarde que cet appareil : clair ou sombre,
+// ligne ouvre un écran du back-office (l'ancien écran a été retiré le
+// 10/10/2026). En bas, ce qui ne regarde que cet appareil : clair ou sombre,
 // domaine affiché, déconnexion.
 import { Trans, useLingui } from "@lingui/react/macro";
 import { IconChevronRight } from "@tabler/icons-react";

@@ -3,7 +3,7 @@ import { t } from "@lingui/core/macro";
 //
 // La session est celle de l'ancien back-office : `POST /api/admin/login`
 // renvoie un jeton, envoyé ensuite en `Authorization: Bearer session:<jeton>`.
-// Les clés de stockage sont partagées avec /admin/ (gp_session, gp_token,
+// Les clés de stockage sont celles de l'ancien écran (gp_session, gp_token,
 // gp_user) : se connecter à l'un connecte l'autre.
 
 const SESSION_KEY = "gp_session";
@@ -37,7 +37,7 @@ export function authHeader(): string | null {
 }
 
 /** À l'ouverture de l'écran : si le compte connecté n'est plus celui qui a
- *  rempli le cache hors ligne (changement de compte par l'ancien /admin/, qui
+ *  rempli le cache hors ligne (changement de compte sur le même navigateur, qui
  *  partage la session), on vide ce cache. */
 const CACHE_OWNER_KEY = "gp2_cache_owner";
 export function checkOfflineCacheOwner(): void {
@@ -79,7 +79,7 @@ export async function clearOfflineCache(): Promise<void> {
     // Seules les lectures de l'API partent : l'écran lui-même (HTML, scripts,
     // icônes) ne contient aucune donnée et reste disponible hors ligne.
     for (const k of await caches.keys()) {
-      if (!k.startsWith("gites-admin2")) continue;
+      if (!k.startsWith("gites-admin")) continue;
       const c = await caches.open(k);
       for (const req of await c.keys()) if (new URL(req.url).pathname.startsWith("/api/")) await c.delete(req);
     }

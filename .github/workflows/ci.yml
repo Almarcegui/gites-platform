@@ -30,7 +30,7 @@ jobs:
       - name: Tests
         run: npm test
 
-  # Pilote du nouveau back-office (app/, servi sous /admin2/) : ses propres
+  # Écran d'administration (app/, servi sous /admin/) : ses propres
   # dépendances, son typecheck, ses essais d'écran (jsdom) et son build.
   app:
     runs-on: ubuntu-latest
