@@ -133,7 +133,8 @@ import {
   type PromotionInput,
   type RateRuleInput,
 } from "../db/repo";
-import { Beds24Error, beds24Configured, beds24Setup, beds24Status, resetBeds24TokenCache } from "../services/beds24";
+import { Beds24Error, beds24Configured, beds24Setup, beds24Status, beds24WritesAllowed, resetBeds24TokenCache } from "../services/beds24";
+import { derivedLines, parsePriceLinking, PRICE_LINKING_KEY } from "../core/channel-promotions";
 import {
   createSession, deleteSession, deleteUserSessions, generatePassword, hashPassword, sessionUser, verifyPassword,
 } from "../services/admin-auth";
@@ -160,6 +161,7 @@ import { processInboundEmail, type ParsedEmail } from "../services/inbound-email
 import { syncFeed } from "../services/ical";
 import { countDirectBookings, countSearchStages, listSearchLog } from "../services/search-log";
 import { registerLot2AdminRoutes } from "./admin-lot2";
+import { registerLot3AdminRoutes, sendPriceLinking } from "./admin-lot3";
 
 // --- garde d'authentification -------------------------------------------------
 
@@ -572,6 +574,8 @@ export function registerAdminRoutes(router: Router): void {
   // photos (src/api/admin-lot2.ts). Avant les routes historiques : la route
   // d'envoi de photos est plus précise que celles de la galerie.
   registerLot2AdminRoutes(router);
+  // Lot 3 : promotions Airbnb, prix dérivés par canal, avis (src/api/admin-lot3.ts).
+  registerLot3AdminRoutes(router);
 
   // --- connexion --------------------------------------------------------------
   // SEULE route /api/admin/* volontairement HORS guard : elle sert à obtenir
@@ -1187,6 +1191,22 @@ export function registerAdminRoutes(router: Router): void {
     if (wanted?.ok) await writePushChannel(env, req, wanted.value, channels);
 
     const after = await channelMarkupState(env.DB);
+    // Prix dérivés actifs (lot 3) : les multiplicateurs vivent chez Beds24, ils
+    // repartent avec la nouvelle majoration. Un échec n'annule pas
+    // l'enregistrement : il est dit, et l'écran Plateformes montre « à renvoyer ».
+    let linking: { resent: boolean; error?: string } | undefined;
+    if (parsePriceLinking(await getSetting(env.DB, PRICE_LINKING_KEY)).enabled && beds24WritesAllowed(env)) {
+      try {
+        await sendPriceLinking(env, true);
+        const lines = derivedLines(channels);
+        await setSetting(env.DB, PRICE_LINKING_KEY, JSON.stringify({ enabled: true, sentMarkups: Object.fromEntries(lines.map((l) => [l.channel, l.markupPct])), sentAt: new Date().toISOString() }));
+        linking = { resent: true };
+      } catch (e) {
+        linking = { resent: false, error: e instanceof Error ? e.message : String(e) };
+        await audit(env.DB, "admin", "beds24.price_linking_failed", "app", { error: linking.error, par: currentUser(req) });
+      }
+    }
+    if (linking) return json({ ...after, linking });
     // Changer un pourcentage, ou retirer le canal appliqué de la liste, change
     // le prix qui part aux plateformes : sans ce push, Airbnb et Booking
     // garderaient l'ancien prix jusqu'au prochain cron.
