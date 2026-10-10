@@ -20,6 +20,8 @@ const env = (prod = true): Env => ({
   DB: t.db, ASSETS: undefined as unknown as Fetcher, ADMIN_TOKEN: ADMIN,
   PUBLIC_BASE_URL: prod ? "https://gites.exemple.be" : "http://localhost:8798",
   BEDS24_REFRESH_TOKEN: "refresh-de-test", EMAILS_ENABLED: "false",
+  // Écritures Beds24 fermées par défaut depuis #104 : seule la production pose la variable.
+  ...(prod ? { BEDS24_WRITE_ENABLED: "true" } : {}),
 });
 
 interface Call { method: string; url: URL; body: unknown }
