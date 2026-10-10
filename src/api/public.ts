@@ -67,6 +67,7 @@ import {
   verifyStripeSignature,
 } from "../services/stripe";
 import { turnstileSiteKey, verifyTurnstile } from "../services/turnstile";
+import { registerTaskShareRoutes } from "./tasks-public";
 
 const MAX_NIGHTS = 60;
 const MAX_ADVANCE_DAYS = 730; // réservation à 2 ans max
@@ -260,6 +261,9 @@ function photosByUnit(rows: UnitPhotoRow[]): Map<number, UnitPhotoRow[]> {
 }
 
 export function registerPublicRoutes(router: Router): void {
+  // Lien de partage du ménage (GET /t/<jeton>), sans connexion.
+  registerTaskShareRoutes(router);
+
   // --- liste des domaines (landing multi-biens) -------------------------------
   router.get("/api/public/properties", async (_req, env) => {
     const properties = await listProperties(env.DB);

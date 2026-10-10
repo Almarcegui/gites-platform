@@ -60,7 +60,7 @@ export function BookingsPage() {
           className="search"
           size="md"
           leftSection={<IconSearch size={20} />}
-          placeholder={t`Nom, mail ou référence`}
+          placeholder={t`Nom, mail, téléphone ou référence`}
           aria-label={t`Rechercher une réservation`}
           value={search}
           onChange={(e) => setSearch(e.currentTarget.value)}

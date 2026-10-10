@@ -30,7 +30,7 @@ export function ClientsPage() {
   return (
     <Page title={t`Clients`} back lead={t`Tous les clients des deux domaines. La recherche lit le nom et le mail.`}>
       <div className="filters">
-        <TextInput className="search" size="md" leftSection={<IconSearch size={20} />} placeholder={t`Nom ou mail`} aria-label={t`Rechercher un client`} value={search} onChange={(e) => setSearch(e.currentTarget.value)} />
+        <TextInput className="search" size="md" leftSection={<IconSearch size={20} />} placeholder={t`Nom, mail ou téléphone`} aria-label={t`Rechercher un client`} value={search} onChange={(e) => setSearch(e.currentTarget.value)} />
       </div>
       {list.error ? <ErrorLine text={t`La liste n'a pas pu être lue.`} /> : null}
       {list.isLoading ? <Loading /> : null}

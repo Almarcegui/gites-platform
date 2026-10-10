@@ -241,3 +241,49 @@ export interface Message {
 export interface GuestRegisterInfo {
   entries?: unknown[];
 }
+
+// --- lot 2 : ménage, modèles, liens de partage ------------------------------------
+
+export interface Task {
+  id: number;
+  propertyId: number;
+  unitId: number;
+  unitName: string;
+  isComposite: boolean;
+  bookingId: number | null;
+  kind: "menage" | "autre";
+  dueDate: IsoDate;
+  dueTime: string | null;
+  nextCheckin: IsoDate | null;
+  nextCheckinTime: string | null;
+  nextUnitId: number | null;
+  nextUnitName: string | null;
+  nextPersons: number | null;
+  status: "a_faire" | "fait" | "annule";
+  assignee: string | null;
+  note: string | null;
+  doneAt: string | null;
+  doneBy: string | null;
+  updatedAt: string;
+}
+
+export interface TaskShareLink {
+  id: number;
+  label: string;
+  propertyId: number | null;
+  createdBy: string | null;
+  createdAt: string;
+  lastUsedAt: string | null;
+  revokedAt: string | null;
+}
+
+export interface MessageTemplate {
+  id: number;
+  propertyId: number | null;
+  name: string;
+  lang: "fr" | "nl" | "en";
+  body: string;
+  sortOrder: number;
+  active: boolean;
+  updatedAt: string;
+}

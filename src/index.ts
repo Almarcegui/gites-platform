@@ -3,7 +3,8 @@
 import { apiError, Router } from "./api/router";
 import { registerPublicRoutes } from "./api/public";
 import { registerAdminRoutes } from "./api/admin";
-import { runScheduled } from "./services/cron";
+import { runAllScheduled } from "./jobs/scheduled";
+import { adminIpGate } from "./core/ip-allow";
 import { withStandardHeaders } from "./services/http-headers";
 import { buildReplyMime, parseRawEmail, processInboundEmail } from "./services/inbound-email";
 import { PaymentInFlightError } from "./services/booking-flow";
@@ -25,6 +26,10 @@ export default {
     // que le Worker ne répond pas sur le domaine définitif — cf. redirects.ts.
     const legacy = wpRedirect(url);
     if (legacy) return finish(legacy);
+    // Accès administrateur fermé au public (ADMIN_ALLOWED_IPS, vide = ouvert) :
+    // API admin ET écrans /admin/ et /admin2/, avant toute lecture de la base.
+    const denied = adminIpGate(url.pathname, env.ADMIN_ALLOWED_IPS, request.headers.get("cf-connecting-ip"));
+    if (denied) return finish(denied);
     // "/" sert le site vitrine (public/index.html) via les assets.
     try {
       const response = await router.handle(request, env, ctx);
@@ -57,7 +62,7 @@ export default {
   },
 
   async scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
-    ctx.waitUntil(runScheduled(env));
+    ctx.waitUntil(runAllScheduled(env));
   },
 
   // Emails entrants (Cloudflare Email Routing → ce Worker, une fois le

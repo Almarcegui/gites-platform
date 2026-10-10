@@ -2,7 +2,7 @@ import { Trans, useLingui } from "@lingui/react/macro";
 import { Menu } from "@mantine/core";
 import { IconAdjustmentsHorizontal, IconBrush, IconCalendar, IconCheck, IconHome, IconList, IconMessage, IconSun } from "@tabler/icons-react";
 import { Link, Outlet, useNavigate, useSearch } from "@tanstack/react-router";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import { useMessages, useProperties } from "../api/hooks";
 import { BookingPanel } from "../booking/BookingPanel";
@@ -87,13 +87,35 @@ function Items({ unread }: { unread: number }) {
   );
 }
 
+/** Le réseau est-il là ? (événements online/offline du navigateur) */
+function useOnline(): boolean {
+  const [online, setOnline] = useState(() => (typeof navigator === "undefined" ? true : navigator.onLine));
+  useEffect(() => {
+    const on = () => setOnline(true);
+    const off = () => setOnline(false);
+    window.addEventListener("online", on);
+    window.addEventListener("offline", off);
+    return () => {
+      window.removeEventListener("online", on);
+      window.removeEventListener("offline", off);
+    };
+  }, []);
+  return online;
+}
+
 export function Shell() {
   const { t } = useLingui();
+  const online = useOnline();
   const search = useSearch({ strict: false }) as { resa?: number };
   const navigate = useNavigate();
   const unread = useMessages("nouveau").data?.length ?? 0;
   return (
     <SaleProvider>
+      {online ? null : (
+        <div className="offline" role="status">
+          <Trans>Hors ligne : vous voyez la dernière version gardée sur cet appareil. Rien ne peut être changé avant le retour du réseau.</Trans>
+        </div>
+      )}
       <header className="top">
         <DomainSelector />
         <nav className="nav" aria-label={t`Menu principal`}>

@@ -46,4 +46,18 @@ interface Env {
   /** Instantané complet de la base SQLite (VACUUM INTO), injecté par
    *  node/server.mjs ; absent sur Workers (export SQL à la place). */
   SQLITE_SNAPSHOT?: () => Promise<Uint8Array>;
+  /** Adresses ou plages CIDR autorisées sur /api/admin/*, /admin/ et /admin2/
+   *  (virgules ou espaces). Vide = ouvert. Cf. src/core/ip-allow.ts. */
+  ADMIN_ALLOWED_IPS?: string;
+  /** Dépôt des photos envoyées depuis le back-office. Fourni par
+   *  node/server.mjs (dossier UPLOADS_DIR, servi sous /uploads/) ; absent sur
+   *  Workers, où l'envoi répond 501. */
+  UPLOADS?: UploadStore;
+}
+
+/** Écriture d'un fichier envoyé. `name` est déjà validé (hexadécimal + extension). */
+interface UploadStore {
+  put(name: string, bytes: Uint8Array): Promise<void>;
+  /** Retire un fichier déposé (compensation quand la base refuse la ligne). */
+  remove?(name: string): Promise<void>;
 }

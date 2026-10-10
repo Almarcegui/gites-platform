@@ -42,6 +42,7 @@ export function SettingsPage() {
         { to: "/reglages/clients", label: t`Clients`, hint: t`Coordonnées et séjours de chaque client` },
         { to: "/reglages/paiements", label: t`Paiements reçus`, hint: t`Tout ce qui a été encaissé ou attendu` },
         { to: "/reglages/chiffres", label: t`Chiffres de l'année`, hint: t`Remplissage, revenus, comparaison avec l'an passé, exports` },
+        { to: "/reglages/modeles", label: t`Modèles de réponse`, hint: t`Les textes tout prêts pour répondre aux clients : accès, horaires, solde, après le séjour` },
       ],
     },
     {
@@ -63,6 +64,7 @@ export function SettingsPage() {
     {
       title: t`Accès et suivi`,
       items: [
+        { to: "/reglages/mon-compte", label: t`Mon compte`, hint: t`Changer mon mot de passe` },
         { to: "/reglages/comptes", label: t`Personnes qui ont accès`, hint: t`Créer un accès, changer un mot de passe, couper un accès` },
         { to: "/reglages/journaux", label: t`Journaux`, hint: t`Qui a fait quoi, mails envoyés aux clients` },
       ],

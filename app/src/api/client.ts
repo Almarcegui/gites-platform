@@ -35,6 +35,16 @@ export function authHeader(): string | null {
   return null;
 }
 
+/** À l'ouverture de l'écran : si le compte connecté n'est plus celui qui a
+ *  rempli le cache hors ligne (changement de compte par l'ancien /admin/, qui
+ *  partage la session), on vide ce cache. */
+const CACHE_OWNER_KEY = "gp2_cache_owner";
+export function checkOfflineCacheOwner(): void {
+  const user = lire(USER_KEY) ?? "";
+  if ((lire(CACHE_OWNER_KEY) ?? "") !== user || !isLoggedIn()) void clearOfflineCache();
+  ecrire(CACHE_OWNER_KEY, isLoggedIn() ? user : null);
+}
+
 export function isLoggedIn(): boolean {
   return authHeader() != null;
 }
@@ -50,6 +60,31 @@ export function lastUser(): string {
 export function clearSession(): void {
   ecrire(SESSION_KEY, null);
   ecrire(TOKEN_KEY, null);
+  void clearOfflineCache();
+}
+
+/** Vide les lectures de l'API gardées pour le hors-ligne (service worker) : à la
+ *  connexion, à la déconnexion et à toute session refusée (401), pour qu'un
+ *  compte ne relise jamais hors ligne ce qu'un autre a vu. */
+export async function clearOfflineCache(): Promise<void> {
+  // D'abord le service worker : il change de génération, une lecture encore en
+  // vol ne pourra plus être écrite dans le cache après la purge.
+  try {
+    navigator.serviceWorker?.controller?.postMessage("vider");
+  } catch {
+    /* pas de service worker */
+  }
+  try {
+    // Seules les lectures de l'API partent : l'écran lui-même (HTML, scripts,
+    // icônes) ne contient aucune donnée et reste disponible hors ligne.
+    for (const k of await caches.keys()) {
+      if (!k.startsWith("gites-admin2")) continue;
+      const c = await caches.open(k);
+      for (const req of await c.keys()) if (new URL(req.url).pathname.startsWith("/api/")) await c.delete(req);
+    }
+  } catch {
+    /* pas de cache (navigateur ancien, page non sécurisée, tests) */
+  }
 }
 
 /** Erreur d'API : le message du serveur (déjà en français) et le statut. */
@@ -96,8 +131,33 @@ export async function api<T>(path: string, init: { method?: string; body?: unkno
   return data as T;
 }
 
+/** Envoi d'un formulaire multipart (photos) : même garde et mêmes erreurs que api(). */
+export async function apiUpload<T>(path: string, form: FormData): Promise<T> {
+  const headers: Record<string, string> = { accept: "application/json" };
+  const auth = authHeader();
+  if (auth) headers.authorization = auth;
+  let res: Response;
+  try {
+    res = await fetch(new URL(`/api/admin${path}`, window.location.origin), { method: "POST", headers, body: form });
+  } catch {
+    throw new ApiError(0, "Pas de connexion avec le serveur. Vérifiez internet, puis réessayez.", null);
+  }
+  const data: unknown = await res.json().catch(() => null);
+  if (!res.ok) {
+    if (res.status === 401) {
+      clearSession();
+      unauthorizedListeners.forEach((fn) => fn());
+    }
+    const msg = data && typeof data === "object" && "error" in data ? String((data as { error: unknown }).error) : `erreur ${res.status}`;
+    throw new ApiError(res.status, msg, data);
+  }
+  return data as T;
+}
+
 export async function login(user: string, password: string): Promise<void> {
   const data = await api<{ ok: boolean; user: string; session?: string }>("/login", { method: "POST", body: { user, password } });
+  await clearOfflineCache();
+  ecrire(CACHE_OWNER_KEY, data.user);
   ecrire(USER_KEY, data.user);
   ecrire(LAST_USER_KEY, data.user);
   if (data.session) {
@@ -118,6 +178,7 @@ export async function logout(): Promise<void> {
     /* la session locale est effacée de toute façon */
   }
   clearSession();
+  await clearOfflineCache();
 }
 
 /** Message lisible pour une erreur quelconque. */

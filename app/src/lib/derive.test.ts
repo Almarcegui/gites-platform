@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { DayRate, PlanningBooking } from "../api/types";
-import { barColumns, barKind, cleaningTasks, daySentence, priceRuns, tapDay, EMPTY_SELECTION } from "./derive";
+import { barColumns, barKind, daySentence, priceRuns, tapDay, EMPTY_SELECTION } from "./derive";
 
 const pb = (o: Partial<PlanningBooking>): PlanningBooking => ({
   id: 1, reference: "PM-1", unitId: 1, checkin: "2026-10-10", checkout: "2026-10-12", status: "confirmed", source: "direct",
@@ -58,26 +58,6 @@ describe("tapDay (premier jour puis jour de départ)", () => {
     const c = tapDay(a.selection, 2, "2026-10-18", ctx);
     expect(c.ok).toBe(false);
     if (!c.ok) expect(c.error).toContain("2026-10-16");
-  });
-});
-
-describe("cleaningTasks", () => {
-  it("un ménage par départ, serré si quelqu'un arrive le jour même", () => {
-    const tasks = cleaningTasks(
-      [{
-        propertyId: 1,
-        bookings: [pb({ id: 1, unitId: 2, checkin: "2026-10-07", checkout: "2026-10-10", persons: 6 }), pb({ id: 2, unitId: 2, checkin: "2026-10-10", checkout: "2026-10-12", persons: 4 })],
-        links: [],
-        unitNames: new Map([[2, "La Scierie"]]),
-        checkinTime: "16:00",
-        checkoutTime: "10:00",
-      }],
-      "2026-10-10",
-      7,
-    );
-    expect(tasks).toHaveLength(2);
-    expect(tasks[0]).toMatchObject({ unitName: "La Scierie", date: "2026-10-10", tight: true, next: { persons: 4, checkin: "2026-10-10" } });
-    expect(tasks[1]).toMatchObject({ date: "2026-10-12", next: null, tight: false });
   });
 });
 

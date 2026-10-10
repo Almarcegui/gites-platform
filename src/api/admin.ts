@@ -157,6 +157,7 @@ import {
 import { processInboundEmail, type ParsedEmail } from "../services/inbound-email";
 import { syncFeed } from "../services/ical";
 import { countDirectBookings, countSearchStages, listSearchLog } from "../services/search-log";
+import { registerLot2AdminRoutes } from "./admin-lot2";
 
 // --- garde d'authentification -------------------------------------------------
 
@@ -213,7 +214,7 @@ function checkCredentials(raw: string, user: string, password: string): boolean 
  *  Utilisateurs pour interdire l'auto-verrouillage et tracer l'audit). */
 const REQUEST_USER = new WeakMap<Request, string>();
 
-function currentUser(req: Request): string {
+export function currentUser(req: Request): string {
   return REQUEST_USER.get(req) ?? "admin";
 }
 
@@ -240,7 +241,7 @@ function backupAccountRefused(username: string, url: URL): Response | null {
   return apiError(403, "le compte « sauvegarde » n'ouvre que l'export de la base");
 }
 
-function guard(handler: Handler): Handler {
+export function guard(handler: Handler): Handler {
   return async (req, env, params, url, ctx) => {
     const header = req.headers.get("authorization") ?? "";
     const presented = header.startsWith("Bearer ") ? header.slice(7) : "";
@@ -551,6 +552,11 @@ async function checkAvailability(
 }
 
 export function registerAdminRoutes(router: Router): void {
+  // Lot 2 du nouvel écran : ménage, modèles de réponse, mon compte, envoi de
+  // photos (src/api/admin-lot2.ts). Avant les routes historiques : la route
+  // d'envoi de photos est plus précise que celles de la galerie.
+  registerLot2AdminRoutes(router);
+
   // --- connexion --------------------------------------------------------------
   // SEULE route /api/admin/* volontairement HORS guard : elle sert à obtenir
   // l'accès. Elle ne renvoie jamais de donnée métier — juste oui/non (+ session).

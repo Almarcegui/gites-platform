@@ -68,10 +68,31 @@ export function webpSize(bytes: Uint8Array): ImageSize | null {
   return null;
 }
 
+/** Dimensions d'un PNG, lues dans le bloc IHDR (toujours le premier). */
+export function pngSize(bytes: Uint8Array): ImageSize | null {
+  const sig = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+  if (bytes.length < 24 || !sig.every((b, i) => bytes[i] === b)) return null;
+  if (String.fromCharCode(...bytes.subarray(12, 16)) !== "IHDR") return null;
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const width = view.getUint32(16);
+  const height = view.getUint32(20);
+  return width > 0 && height > 0 ? { width, height } : null;
+}
+
+/** Type réel d'une image d'après ses premiers octets (jamais d'après le nom
+ *  ou l'en-tête envoyé par le navigateur). */
+export function sniffImageType(bytes: Uint8Array): "jpg" | "png" | "webp" | null {
+  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return "jpg";
+  if (bytes.length >= 8 && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) return "png";
+  if (bytes.length >= 12 && String.fromCharCode(...bytes.subarray(0, 4)) === "RIFF" && String.fromCharCode(...bytes.subarray(8, 12)) === "WEBP") return "webp";
+  return null;
+}
+
 /** Dimensions d'un fichier image d'après son extension, ou null. */
 export function imageSize(path: string, bytes: Uint8Array): ImageSize | null {
   const lower = path.toLowerCase();
   if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return jpegSize(bytes);
   if (lower.endsWith(".webp")) return webpSize(bytes);
+  if (lower.endsWith(".png")) return pngSize(bytes);
   return null;
 }

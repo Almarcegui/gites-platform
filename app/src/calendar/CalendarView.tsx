@@ -7,7 +7,8 @@ import { useQueries } from "@tanstack/react-query";
 import { useMemo, useRef, useState, type ReactNode } from "react";
 
 import { api } from "../api/client";
-import { useDomains } from "../api/hooks";
+import { useDomains, useTasks } from "../api/hooks";
+import { tasksByBooking } from "../lib/tasks";
 import type { ManualBlock, RateCalendarUnit } from "../api/types";
 import { BlockPanel } from "./BlockPanel";
 import { ErrorLine } from "../lib/action";
@@ -49,6 +50,8 @@ export function CalendarView({ title, before }: { title: ReactNode; before?: Rea
   const from = useGrid ? addDays(start, -1) : addDays(firstMonday, -1);
   const to = useGrid ? addDays(start, days + 1) : addDays(firstMonday, 7 * weeksCount + 1);
   const { domains, isLoading, error } = useDomains(from, to);
+  const tasksQ = useTasks(from, to);
+  const tasks = useMemo(() => (tasksQ.data ? tasksByBooking(tasksQ.data) : undefined), [tasksQ.data]);
 
   const rateQs = useQueries({
     queries: domains.map((d) => ({
@@ -142,6 +145,7 @@ export function CalendarView({ title, before }: { title: ReactNode; before?: Rea
               selection={sel}
               onOpenBooking={openBooking}
               onOpenBlock={setBlock}
+              tasks={tasks}
               onSelect={(s, a) => {
                 setSel(s);
                 setAnchor(a);

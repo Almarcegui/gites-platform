@@ -153,6 +153,24 @@ push). Transfert prévu vers **`Almarcegui/gites-platform`**, en attente d'un ge
 de Julien depuis le compte propriétaire actuel ; ensuite,
 `git remote set-url origin https://github.com/Almarcegui/gites-platform.git`.
 
+## Lot 2 du nouvel écran (/admin2/, 10/10/2026)
+
+| Fonction | Où | Notes |
+|---|---|---|
+| **Ménage en base** (migration `0022`) | `src/core/cleaning.ts`, `src/db/tasks.ts`, `GET/PATCH /api/admin/tasks`, `POST /api/admin/tasks/generate` | une tâche par départ (bien, date, heure, arrivée suivante, voyageurs), état fait/à faire, personne, note. Génération idempotente au cron (`src/jobs/scheduled.ts`) et à chaque lecture. Les « holds » du tunnel public n'en créent pas |
+| **Lien de partage du ménage** | `GET /t/<jeton>` (`src/api/tasks-public.ts`), `GET/POST/DELETE /api/admin/task-links` | page publique sans login, sans nom de voyageur, cibles de 44 px, marche sans JavaScript. Seul le SHA-256 du jeton est en base ; un lien se coupe depuis l'écran Ménage |
+| **Modèles de réponse** (migration `0023`) | `src/db/templates.ts`, CRUD `/api/admin/message-templates` | variables `{prenom}` `{bien}` `{arrivee}` `{solde}` `{heure_arrivee}` `{heure_depart}` `{signature}`, langue fr/nl/en, par domaine ou communs. Écran Réglages › Modèles de réponse |
+| **Recherche par téléphone** | `src/core/phone.ts`, `listBookings` / `listGuests` | compare les chiffres, sans indicatif belge ni 0 de tête : « 0475 12 » trouve « +32 475 12 34 56 » |
+| **Mon mot de passe** | `GET /api/admin/me`, `POST /api/admin/me/password` | ancien exigé, 12 caractères au moins (ou proposé par la plateforme), autres sessions du compte coupées, 5 essais manqués par quart d'heure. Refusé (400) pour l'accès de secours `ADMIN_TOKEN` |
+| **Envoi de photos** | `POST /api/admin/units/:id/photos/upload` | Node seulement : fichiers dans `UPLOADS_DIR` (défaut `../gites-data/uploads`, hors du site), servis sous `/uploads/`. JPEG/PNG/WebP lus dans les octets, 8 Mo, nom au hasard ; sans texte, la photo arrive masquée. Workers : 501 |
+| **PWA** | `app/public/manifest.webmanifest`, `app/public/sw.js` | installable (iPhone : Partager › Sur l'écran d'accueil), réseau d'abord, hors ligne en lecture pour Aujourd'hui ; cache vidé à la déconnexion |
+| **Accès admin fermé au public** | `src/core/ip-allow.ts`, `src/index.ts`, `node/server.mjs` | `ADMIN_ALLOWED_IPS` (CIDR v4/v6, vide = ouvert, **pas activé par défaut**) sur `/api/admin/*`, `/admin/`, `/admin2/` ; 403 explicite. Node : `TRUST_PROXY=true` derrière le proxy d'Infomaniak. Cf. `.env.example` |
+
+Vérifier : `make test` (la suite `test/lot2.test.ts` tourne sur D1 **et** sur
+`node:sqlite`), `npm run smoke:node` (vrai serveur Node, base temporaire), et le
+parcours Playwright `node app/e2e/lot2-serveur.mjs` (serveur Node sur 8797,
+données inventées, captures dans `app/docs/captures/lot2/`).
+
 ## Le cœur : le moteur de disponibilité lié
 
 Le point où tous les concurrents sauf Beds24 échouent : les deux maisons du
