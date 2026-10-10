@@ -720,7 +720,7 @@ async function openBookingPanel(unitId) {
       <div class="panel-main">
         ${PROP.options.length ? `<div class="card"><h3>${t("Équipements du séjour")}</h3>${optionRows}</div>` : ""}
         <div class="card" id="guestCard">
-          <h3 id="step3Title" tabindex="-1">Vos coordonnées</h3>
+          <h3 id="step3Title" tabindex="-1">${t("Vos coordonnées")}</h3>
           <div class="formgrid">
             <div><label class="f" for="gFirst">${t("Prénom")}</label><input id="gFirst" autocomplete="given-name"></div>
             <div><label class="f" for="gLast">${t("Nom *")}</label><input id="gLast" autocomplete="family-name"></div>

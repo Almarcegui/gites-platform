@@ -30,6 +30,10 @@ export function SettingsPage() {
 
   const groups: { title: string; items: Entry[] }[] = [
     {
+      title: t`Aide`,
+      items: [{ to: "/reglages/aide", label: t`Comment ça marche`, hint: t`Une journée type, le calendrier, la vente par téléphone, le ménage, les messages, qui appeler` }],
+    },
+    {
       title: t`Prix et ventes`,
       items: [
         { to: "/reglages/tarifs", label: t`Prix et saisons`, hint: t`Prix de base, saisons, prix fixés à la main, l'année en couleurs` },

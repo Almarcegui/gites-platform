@@ -168,6 +168,7 @@ export const NL = {
   "Votre banque traite le paiement (Bancontact met parfois quelques minutes). Cette page se met à jour toute seule dès que la confirmation nous parvient.":
     "Uw bank verwerkt de betaling (Bancontact heeft soms enkele minuten nodig). Deze pagina werkt zichzelf bij zodra de bevestiging ons bereikt.",
   "Votre choix": "Uw keuze",
+  "Vos coordonnées": "Uw gegevens",
   "Votre confirmation arrive par email.": "Uw bevestiging komt per e-mail.",
   "Votre créneau est bloqué <b id=\"holdMin\">30</b> minutes le temps du paiement. Réservation ferme dès paiement — pas de droit de rétractation pour les hébergements datés (art. VI.53, 12° CDE) ; conditions d'annulation dans les CGV.":
     "Uw periode is <b id=\"holdMin\">30</b> minuten geblokkeerd tijdens de betaling. De reservering is definitief na betaling — geen herroepingsrecht voor accommodatie op vaste data (art. VI.53, 12° WER); annuleringsvoorwaarden in de algemene voorwaarden.",

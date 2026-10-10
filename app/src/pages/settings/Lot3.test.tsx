@@ -147,3 +147,22 @@ describe("carte « Avis » d'Aujourd'hui", () => {
     expect(screen.queryByText(/Répondre dans Beds24/)).toBeNull();
   });
 });
+
+describe("aide « Comment ça marche »", () => {
+  it("s'ouvre depuis Réglages et couvre les sept points, en vouvoiement", async () => {
+    const user = userEvent.setup();
+    renderApp("/reglages");
+    await user.click(await screen.findByRole("link", { name: /Comment ça marche/ }));
+    expect(await screen.findByRole("heading", { name: "Comment ça marche", level: 1 })).toBeInTheDocument();
+    for (const h of ["Une journée type", "Le calendrier", "Vendre par téléphone", "Le ménage", "Les messages", "Ce qui se fait tout seul", "Qui appeler"]) {
+      expect(screen.getByRole("heading", { name: h, level: 2 })).toBeInTheDocument();
+    }
+    // vouvoiement : aucune forme en « tu »
+    const text = [...document.querySelectorAll(".help-part")].map((e) => e.textContent).join(" ");
+    expect(text).toMatch(/\bvous\b/);
+    expect(text).not.toMatch(/\b(tu|ton|ta|tes)\b/i);
+    // chaque partie illustrée montre une capture de l'écran réel
+    const imgs = screen.getAllByRole("img");
+    expect(imgs.map((i) => i.getAttribute("src"))).toEqual(expect.arrayContaining([expect.stringMatching(/aide\/aujourdhui\.png$/), expect.stringMatching(/aide\/calendrier\.png$/)]));
+  });
+});
