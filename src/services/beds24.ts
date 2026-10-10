@@ -102,7 +102,7 @@ function withoutErrors(item: Record<string, unknown>): string {
     for (const m of list) {
       const o = (m && typeof m === "object" ? m : {}) as Record<string, unknown>;
       const field = typeof o.field === "string" && o.field ? `${o.field} : ` : "";
-      notes.push(`${key === "warnings" ? "avertissement" : "info"} ${field}${typeof o.message === "string" ? o.message : JSON.stringify(m)}`);
+      notes.push(`${key === "warnings" ? "avertissement" : "info"} ${field}${typeof o.message === "string" ? o.message : JSON.stringify(rawForAudit(m))}`);
     }
   }
   if (notes.length) return notes.join(" ; ");
@@ -149,7 +149,7 @@ function collectFailures(data: unknown): string[] {
             if (e && typeof e === "object") {
               const o = e as Record<string, unknown>;
               const field = typeof o.field === "string" && o.field ? `${o.field} : ` : "";
-              return `${field}${typeof o.message === "string" ? o.message : JSON.stringify(o)}`;
+              return `${field}${typeof o.message === "string" ? o.message : JSON.stringify(rawForAudit(o))}`;
             }
             return String(e);
           })
@@ -157,7 +157,7 @@ function collectFailures(data: unknown): string[] {
       : typeof errs === "string"
         ? errs
         : errs != null
-          ? JSON.stringify(errs)
+          ? JSON.stringify(rawForAudit(errs))
           : withoutErrors(item);
     return `${target != null ? `#${String(target)} ` : ""}${text}`;
   };
@@ -239,7 +239,9 @@ export async function beds24Fetch<T>(
   try {
     parsed = text ? JSON.parse(text) : {};
   } catch {
-    parsed = { error: `réponse non JSON : ${truncate(text, 2000)}` };
+    const msg = `Beds24 ${path} → ${res.status} réponse non JSON : ${truncate(text, 500)}`;
+    if (res.ok) throw new Beds24Error(msg, res.status, method !== "GET" ? "inconnu" : "refus");
+    parsed = { error: `réponse non JSON : ${truncate(text, 500)}` };
   }
   const data = parsed as T & { success?: boolean; error?: string };
   if (!res.ok) {

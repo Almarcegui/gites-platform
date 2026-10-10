@@ -19,6 +19,8 @@ let t: TestDb;
 const faux = new FauxBeds24();
 interface Call { method: string; path: string; body: unknown }
 let calls: Call[] = [];
+/** Réponse 201 en texte brut (non JSON) au prochain POST /properties. */
+let rawPost: string | null = null;
 const realFetch = globalThis.fetch;
 
 const env = (writes = true): Env => ({
@@ -55,6 +57,11 @@ beforeAll(async () => {
     const body = init?.body ? JSON.parse(String(init.body)) : null;
     calls.push({ method, path, body });
     if (path === "/authentication/token") return new Response(JSON.stringify({ token: "tok" }), { status: 200 });
+    if (path === "/properties" && method === "POST" && rawPost != null) {
+      const text = rawPost;
+      rawPost = null;
+      return new Response(text, { status: 201 });
+    }
     if (path === "/properties") return method === "GET" ? faux.get(url.searchParams) : faux.post(body);
     if (method === "POST") return new Response(JSON.stringify((body as unknown[]).map(() => ({ success: true, modified: {} }))), { status: 201 });
     return new Response(JSON.stringify({ success: true, data: [] }), { status: 200 });
@@ -252,5 +259,32 @@ describe("contrôle Codex 10/10", () => {
     const r = await api("POST", "/api/admin/channels/price-linking", { enabled: true });
     expect(r.status).toBe(502);
     expect(posts().map((p) => p.id)).toEqual([PROP]);
+  });
+
+  it("contrôle Codex 2 : liste priceRules en partie illisible ou sans ligne 1 → rien n'est envoyé", async () => {
+    faux.seed(PROP, [SCIEUR, SCIERIE], [DEFAULT_RULE_1, { name: "sans id" }]);
+    expect((await api("POST", "/api/admin/channels/price-linking", { enabled: false })).status).toBe(502);
+    faux.seed(PROP, [SCIEUR, SCIERIE], [{ id: 2, name: "Airbnb (prix direct x 1,18)", priceLinking: { roomId: SCIEUR, priceId: 1, offsetMultiplier: 1.18, offsetAmount: 0 }, channels: { airbnb: { enabled: true } } }]);
+    const r = await api("POST", "/api/admin/channels/price-linking", { enabled: false });
+    expect(r.status).toBe(502);
+    expect(r.data.error).toContain("pas de ligne de prix 1");
+    expect(calls.filter((c) => c.method === "POST")).toHaveLength(0);
+    expect(await etats()).toEqual([`${SCIEUR}:partiel`, `${SCIERIE}:partiel`]);
+  });
+
+  it("contrôle Codex 2 : une ligne existante garde sa page de réservation", async () => {
+    faux.seed(PROP, [SCIEUR, SCIERIE], [DEFAULT_RULE_1, { id: 2, name: "Airbnb (prix direct × 1,18)", channels: { airbnb: { enabled: false } } }]);
+    expect((await api("POST", "/api/admin/channels/price-linking", { enabled: true })).status).toBe(200);
+    const sent = posts()[0]!.roomTypes[0]!.priceRules;
+    expect(sent.find((x) => x.id === 2)!.bookingPage).toBeUndefined();
+    expect(sent.find((x) => x.id === 3)!.bookingPage).toEqual({ direct: false, agent: false });
+  });
+
+  it("contrôle Codex 2 : un 201 non JSON n'est pas pris pour un succès", async () => {
+    rawPost = "<html>Service Unavailable</html>";
+    const r = await api("POST", "/api/admin/channels/price-linking", { enabled: true });
+    expect(r.status).toBe(502);
+    expect(r.data.error).toContain("réponse non JSON : <html>Service Unavailable</html>");
+    expect((await api("GET", "/api/admin/channels/price-linking")).data.enabled).toBe(false);
   });
 });
