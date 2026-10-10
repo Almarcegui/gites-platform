@@ -731,6 +731,11 @@ export function registerConfigViews() {
           <button class="btn o sm copyWebhook" style="margin-left:6px">Copier</button></p>` : ""}
       </div>
 
+      ${data.configured ? `
+      <div class="card mb" id="b24compte"><h3>Compte Beds24 relié</h3>
+        <p class="small muted" id="b24compteBody">lecture du compte Beds24…</p>
+      </div>` : ""}
+
       ${markups ? `
       <div class="card mb"><h3>Prix envoyés aux plateformes</h3>
         <p class="small">Les places de marché prennent une commission : le tarif qu'on y affiche est
@@ -928,6 +933,88 @@ export function registerConfigViews() {
           : `⚠️ ${s.error ?? "échec"}`;
       } catch (e) { note.textContent = `⚠️ ${e.message}`; }
     };
+    // Compte relié + état du mapping (lectures seules, après l'affichage : la
+    // vue reste instantanée). Le bouton de création n'apparaît que si la
+    // liaison est active ET le mapping absent ou périmé (nouveau compte vide).
+    const compteCard = root.querySelector("#b24compte");
+    const renderCompte = (s) => {
+      const body = root.querySelector("#b24compteBody");
+      if (!s.connected) {
+        body.innerHTML = `<span class="tag t-warn">Liaison inactive</span> ${esc(s.error ?? "")}`;
+        return;
+      }
+      const m = s.mapping;
+      const etatTag = (e) => e === "actif"
+        ? `<span class="tag t-ok">actif</span>`
+        : e === "perime"
+          ? `<span class="tag t-bad">mapping périmé</span>`
+          : e === "absent" ? `<span class="tag t-warn">non mappé</span>` : `<span class="tag">inconnu</span>`;
+      const props = s.properties ?? [];
+      compteCard.innerHTML = `<h3>Compte Beds24 relié</h3>
+        <p><span class="tag t-ok">Liaison active</span>
+          compte <b class="mono">#${esc(String(s.compte?.id ?? "?"))}</b>${s.compte?.appareil ? ` · jeton « ${esc(s.compte.appareil)} »` : ""}
+          · ${props.length} propriété${props.length > 1 ? "s" : ""} dans le compte</p>
+        ${props.length ? `<ul class="small" style="margin:6px 0 0 18px">${props.map((p) => `<li><span class="mono">#${p.id}</span> ${esc(p.name)}
+          <span class="muted">— ${(p.roomTypes ?? []).map((r) => `${esc(r.name)} (#${r.id})`).join(", ") || "aucune room"}</span></li>`).join("")}</ul>`
+          : `<p class="small muted">Le compte est vide : aucune propriété.</p>`}
+        ${m ? `<p style="margin-top:8px">Chez nous : « ${esc(m.propertyName)} » → ${m.beds24PropertyId ? `<span class="mono">#${m.beds24PropertyId}</span>` : "aucune propriété"} ${etatTag(m.etat)}</p>
+          <ul class="small" style="margin:4px 0 0 18px">${m.rooms.map((r) => `<li>${esc(r.unitName)} → ${r.beds24RoomId ? `<span class="mono">room #${r.beds24RoomId}</span>` : "—"} ${etatTag(r.etat)}</li>`).join("")}</ul>` : ""}
+        ${m && m.etat === "perime" ? `<p class="small" style="margin-top:6px">L'identifiant enregistré n'existe pas dans ce compte (ancien compte résilié) : les calendriers ne partent nulle part tant que la propriété n'est pas recréée.</p>` : ""}
+        ${s.ecriturePropriete === false ? `<p class="small" style="margin-top:6px"><span class="tag t-warn">Droits du jeton</span> le code d'invitation ne semble pas autoriser l'écriture des propriétés (${esc(s.compte.scopes.join(", "))}) : la création risque d'être refusée.</p>` : ""}
+        ${s.creationPossible ? `<p style="margin-top:10px"><button class="btn sm" id="b24create">Créer la propriété sur Beds24</button>
+          <span id="b24createNote" class="small muted"></span></p>` : ""}`;
+      const btn = root.querySelector("#b24create");
+      if (btn) btn.onclick = () => createProperty(btn);
+    };
+    const createProperty = async (btn) => {
+      const n = root.querySelector("#b24createNote");
+      let plan;
+      try {
+        plan = await api(`/api/admin/beds24/creer-propriete/apercu?property=${currentPropertyId()}`);
+      } catch (e) { n.textContent = `⚠️ ${e.message}`; return; }
+      const lines = plan.rooms.map((r) => `  • ${r.name} — ${r.maxPeople} pers. max`
+        + (r.minStay ? `, ${r.minStay} nuit(s) min.` : "")
+        + (r.rackRate ? `, prix de base ${r.rackRate} ${plan.currency}` : ""));
+      const direct = plan.directOnly.map((d) => `  • ${d.name} : ${d.raison}`);
+      const ok = confirm(`Créer sur Beds24 (compte réel) :\n\n`
+        + `Propriété « ${plan.name} »\n  ${[plan.address, plan.city, plan.country].filter(Boolean).join(", ")} · ${plan.currency}\n\n`
+        + `Hébergements vendus sur les canaux :\n${lines.join("\n")}\n`
+        + (direct.length ? `\nNon créés :\n${direct.join("\n")}\n` : "")
+        + `\nLe mapping enregistré chez nous sera remplacé par les nouveaux identifiants. Si une propriété du même nom existe déjà dans le compte, elle est reprise (pas de doublon).`);
+      if (!ok) return;
+      btn.disabled = true;
+      n.textContent = "création en cours…";
+      try {
+        const r = await api("/api/admin/beds24/creer-propriete", {
+          method: "POST", body: { propertyId: currentPropertyId(), confirmer: true },
+        });
+        const recap = `Propriété #${r.propriete.beds24PropertyId} ${r.propriete.creee ? "créée" : "reprise"} · `
+          + r.rooms.map((x) => `${x.name} → room #${x.beds24RoomId}${x.creee ? "" : " (existante)"}`).join(" · ");
+        compteCard.insertAdjacentHTML("beforeend", `<p style="margin-top:10px"><span class="tag t-ok">Fait</span> ${esc(recap)}</p>
+          <p><button class="btn sm" id="b24pushAfter">⬆ Pousser les calendriers maintenant</button>
+          <span id="b24pushNote" class="small muted">Beds24 n'a encore ni disponibilités ni prix : à pousser une fois.</span></p>`);
+        btn.remove();
+        n.textContent = "";
+        root.querySelector("#b24pushAfter").onclick = async (ev) => {
+          const pn = root.querySelector("#b24pushNote");
+          ev.target.disabled = true;
+          pn.textContent = "push…";
+          try {
+            const p = await api("/api/admin/beds24/push", { method: "POST", body: { propertyId: currentPropertyId() } });
+            toast(`Calendriers poussés : ${p.pushed.map((x) => x.unitName).join(", ")}`);
+            location.reload();
+          } catch (e) { ev.target.disabled = false; pn.textContent = `⚠️ ${e.message}`; }
+        };
+      } catch (e) {
+        btn.disabled = false;
+        n.textContent = `⚠️ ${e.message}`;
+      }
+    };
+    if (compteCard) {
+      api(`/api/admin/beds24/status?property=${currentPropertyId()}`)
+        .then(renderCompte)
+        .catch((e) => { root.querySelector("#b24compteBody").textContent = `⚠️ ${e.message}`; });
+    }
     root.querySelector("#doPull").onclick = async () => {
       note.textContent = "rapatriement…";
       try {

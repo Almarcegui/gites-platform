@@ -78,8 +78,36 @@ function collectFailures(data: unknown): string[] {
   const describe = (item: Record<string, unknown>): string => {
     const errs = item.errors ?? item.error ?? item.message;
     const target = item.roomId ?? item.propertyId ?? item.id;
-    return `${target != null ? `#${String(target)} ` : ""}${typeof errs === "string" ? errs : JSON.stringify(errs ?? "échec")}`;
+    // Format des écritures v2 (multiplePostResponse) : errors = [{ action,
+    // field, message }] — rendu « champ : message » pour que l'erreur Beds24
+    // remonte en clair jusqu'à l'écran, au lieu d'un JSON illisible.
+    const text = Array.isArray(errs)
+      ? errs
+          .map((e) => {
+            if (e && typeof e === "object") {
+              const o = e as Record<string, unknown>;
+              const field = typeof o.field === "string" && o.field ? `${o.field} : ` : "";
+              return `${field}${typeof o.message === "string" ? o.message : JSON.stringify(o)}`;
+            }
+            return String(e);
+          })
+          .join(" ; ")
+      : typeof errs === "string"
+        ? errs
+        : JSON.stringify(errs ?? "échec");
+    return `${target != null ? `#${String(target)} ` : ""}${text}`;
   };
+  // Les POST v2 (POST /properties, POST /inventory/rooms/calendar…) répondent
+  // par un TABLEAU d'un résultat par élément envoyé, sans enveloppe `data` :
+  // un refus y passait inaperçu.
+  if (Array.isArray(data)) {
+    for (const item of data) {
+      if (item && typeof item === "object" && (item as Record<string, unknown>).success === false) {
+        out.push(describe(item as Record<string, unknown>));
+      }
+    }
+    return out;
+  }
   if (data && typeof data === "object") {
     const root = data as Record<string, unknown>;
     if (root.success === false) out.push(describe(root));
@@ -141,21 +169,60 @@ export async function beds24Setup(inviteCode: string): Promise<{ token: string; 
 
 /** Diagnostic de connexion : détails du compte + propriétés visibles.
  *  Sert à l'endpoint admin /api/admin/beds24/status. */
+export interface Beds24PropertySummary {
+  id: number;
+  name: string;
+  roomTypes?: { id: number; name: string }[];
+}
+
+/** Identité du compte relié, telle que l'API la donne. L'API v2 n'expose PAS
+ *  le nom d'utilisateur du compte (« gites-premore ») : seulement son numéro
+ *  (`ownerId`), le nom donné au jeton à sa création et ses droits. */
+export interface Beds24Compte {
+  id: number | null;
+  appareil: string | null;
+  scopes: string[];
+  /** Jeton restreint à une seule propriété (null = toutes). */
+  limiteAPropriete: number | null;
+}
+
+function readCompte(details: unknown): Beds24Compte {
+  const root = (details && typeof details === "object" ? details : {}) as Record<string, unknown>;
+  const token = (root.token && typeof root.token === "object" ? root.token : {}) as Record<string, unknown>;
+  const n = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
+  return {
+    id: n(token.ownerId),
+    appareil: typeof token.deviceName === "string" ? token.deviceName : null,
+    scopes: Array.isArray(token.scopes) ? token.scopes.filter((x): x is string => typeof x === "string") : [],
+    limiteAPropriete: n(token.onlyPropertyId),
+  };
+}
+
+/** Liste des propriétés du compte, avec leurs rooms. */
+export async function beds24ListProperties(env: Env): Promise<Beds24PropertySummary[]> {
+  const props = await beds24Fetch<{ data?: Beds24PropertySummary[] }>(env, "/properties", {
+    query: { includeAllRooms: "true" },
+  });
+  return (props.data ?? []).map((p) => ({
+    id: Number(p.id),
+    name: String(p.name ?? ""),
+    roomTypes: (p.roomTypes ?? []).map((r) => ({ id: Number(r.id), name: String(r.name ?? "") })),
+  }));
+}
+
 export async function beds24Status(env: Env): Promise<{
   connected: boolean;
   account?: unknown;
-  properties?: { id: number; name: string; roomTypes?: { id: number; name: string }[] }[];
+  compte?: Beds24Compte;
+  properties?: Beds24PropertySummary[];
   error?: string;
 }> {
   if (!(await beds24Configured(env))) return { connected: false, error: "aucun refresh token Beds24 (base ou secret)" };
   try {
     const details = await beds24Fetch<{ data?: unknown }>(env, "/authentication/details");
-    const props = await beds24Fetch<{ data?: { id: number; name: string; roomTypes?: { id: number; name: string }[] }[] }>(
-      env,
-      "/properties",
-      { query: { includeAllRooms: "true" } },
-    );
-    return { connected: true, account: details.data ?? details, properties: props.data ?? [] };
+    const properties = await beds24ListProperties(env);
+    const account = details.data ?? details;
+    return { connected: true, account, compte: readCompte(account), properties };
   } catch (e) {
     console.error("beds24Status —", e);
     // sonde réseau : distingue « sortie internet morte » de « Beds24 inaccessible »
