@@ -148,7 +148,7 @@ export function PricePanel(props: {
     await refresh();
     setBusy(false);
     if (failures.length) {
-      const msg = applied ? t`Changé en partie : ${applied} nuit(s) ont leur nouveau prix, le reste non. ${failures.join(" ")} Vérifiez la grille.` : t`Rien n'a été changé. ${failures.join(" ")}`;
+      const msg = applied ? t`Changé en partie : ${applied} nuit(s) modifiées, le reste non. ${failures.join(" ")} Vérifiez la grille.` : t`Rien n'a été changé. ${failures.join(" ")}`;
       setError(msg);
       toast(msg, true);
     } else {

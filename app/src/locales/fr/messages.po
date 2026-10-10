@@ -20,10 +20,6 @@ msgstr " à l'arrivée"
 msgid " et "
 msgstr " et "
 
-#: src/pages/Messages.tsx
-msgid " et s'affiche sur la page du client"
-msgstr " et s'affiche sur la page du client"
-
 #. placeholder {0}: eur(b.balanceCents)
 #: src/calendar/Weeks.tsx
 msgid ", {0} à encaisser"
@@ -58,6 +54,10 @@ msgstr ", déjà pris"
 #: src/pages/Today.tsx
 msgid ", en retard"
 msgstr ", en retard"
+
+#: src/pages/Messages.tsx
+msgid ", et s'affiche sur la page du client"
+msgstr ", et s'affiche sur la page du client"
 
 #: src/calendar/Weeks.tsx
 msgid ", libre"
@@ -666,8 +666,8 @@ msgstr "Cette semaine"
 
 #. placeholder {0}: failures.join(" ")
 #: src/calendar/PricePanel.tsx
-msgid "Changé en partie : {applied} nuit(s) ont leur nouveau prix, le reste non. {0} Vérifiez la grille."
-msgstr "Changé en partie : {applied} nuit(s) ont leur nouveau prix, le reste non. {0} Vérifiez la grille."
+msgid "Changé en partie : {applied} nuit(s) modifiées, le reste non. {0} Vérifiez la grille."
+msgstr "Changé en partie : {applied} nuit(s) modifiées, le reste non. {0} Vérifiez la grille."
 
 #: src/calendar/Weeks.tsx
 msgid "Changer le prix"
@@ -1043,10 +1043,10 @@ msgid "la nuit"
 msgstr "la nuit"
 
 #. placeholder {0}: message.fromEmail
-#. placeholder {1}: message.bookingId ? t` et s'affiche sur la page du client` : ""
+#. placeholder {1}: message.bookingId ? t`, et s'affiche sur la page du client` : ""
 #: src/pages/Messages.tsx
-msgid "La réponse part par mail à {0}{1}."
-msgstr "La réponse part par mail à {0}{1}."
+msgid "La réponse part par mail à {0} quand l'envoi des mails est actif{1}."
+msgstr "La réponse part par mail à {0} quand l'envoi des mails est actif{1}."
 
 #. placeholder {0}: errorText(e)
 #: src/sale/SaleFlow.tsx
@@ -1095,8 +1095,8 @@ msgid "Le menu garde l'essentiel de tous les jours. Ici, choisissez d'abord le d
 msgstr "Le menu garde l'essentiel de tous les jours. Ici, choisissez d'abord le domaine que l'écran montre."
 
 #: src/booking/BookingPanel.tsx
-msgid "Le message part par mail à {email} et s'affiche sur la page du client."
-msgstr "Le message part par mail à {email} et s'affiche sur la page du client."
+msgid "Le message s'affiche sur la page du client et part par mail à {email} quand l'envoi des mails est actif."
+msgstr "Le message s'affiche sur la page du client et part par mail à {email} quand l'envoi des mails est actif."
 
 #: src/sale/SaleFlow.tsx
 msgid "Le nom du client est nécessaire."

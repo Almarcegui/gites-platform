@@ -624,7 +624,7 @@ function WriteDialog({ open, b, guest, times, onClose }: { open: boolean; b: Boo
       </div>
       <Textarea mt="md" label={t`Votre message`} autosize minRows={8} size="md" value={text} onChange={(e) => setText(e.currentTarget.value)} />
       <div className="send">
-        <p>{email ? t`Le message part par mail à ${email} et s'affiche sur la page du client.` : t`Pas de mail sur cette réservation : le message s'affichera seulement sur la page du client.`}</p>
+        <p>{email ? t`Le message s'affiche sur la page du client et part par mail à ${email} quand l'envoi des mails est actif.` : t`Pas de mail sur cette réservation : le message s'affichera seulement sur la page du client.`}</p>
         <button
           type="button"
           className="btn pri"
@@ -796,8 +796,9 @@ function NotesDialog({ open, b, onClose }: { open: boolean; b: Booking; onClose:
 
 /** Ce qui est vraiment parti : un message est toujours visible sur la page du
  *  client ; le mail ne part que si l'envoi est actif. */
-export function deliveryText(delivery: string | undefined): string {
-  if (delivery === "sent") return "C'est fait. Message envoyé par mail et visible sur la page du client.";
-  if (delivery === "stub") return "C'est fait. Message enregistré sur la page du client ; le mail n'est pas parti (envoi des mails coupé ici).";
-  return "C'est fait. Message enregistré sur la page du client ; pas de mail connu pour l'envoyer.";
+export function deliveryText(delivery: string | undefined, linked = true): string {
+  const where = linked ? "sur la page du client" : "dans la conversation";
+  if (delivery === "sent") return `C'est fait. Message envoyé par mail et enregistré ${where}.`;
+  if (delivery === "stub") return `C'est fait. Message enregistré ${where} ; le mail n'est pas parti (envoi des mails coupé ici).`;
+  return `C'est fait. Message enregistré ${where} ; pas de mail connu pour l'envoyer.`;
 }

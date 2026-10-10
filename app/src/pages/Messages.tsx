@@ -35,7 +35,13 @@ export function MessagesPage() {
     if (layout === "A" && selected == null && list[0]) setSelected(list[0].id);
   }, [layout, list, selected]);
   const current = (all.data ?? []).find((m) => m.id === selected) ?? list.find((m) => m.id === selected) ?? null;
-  const showList = layout === "A" || selected == null;
+  useEffect(() => setSelected(wanted), [wanted]);
+  const loaded = !!all.data && !!pending.data;
+  // Message demandé introuvable (autre domaine, déjà supprimé) : retour à la liste.
+  useEffect(() => {
+    if (loaded && selected != null && !(all.data ?? []).some((m) => m.id === selected)) setSelected(null);
+  }, [loaded, selected, all.data]);
+  const showList = layout === "A" || selected == null || current == null;
   const showThread = current != null && (layout === "A" || selected != null);
   return (
     <div className="msgs">
@@ -167,7 +173,7 @@ function Thread({ message, onBack }: { message: Message; onBack?: () => void }) 
       <textarea id="rep" className="reply" value={text} onChange={(e) => setText(e.currentTarget.value)} />
       {send.state.status === "error" ? <ErrorLine text={t`Pas envoyé. ${send.state.text} Votre texte est gardé.`} /> : null}
       <div className="send">
-        <p>{t`La réponse part par mail à ${message.fromEmail}${message.bookingId ? t` et s'affiche sur la page du client` : ""}.`}</p>
+        <p>{t`La réponse part par mail à ${message.fromEmail} quand l'envoi des mails est actif${message.bookingId ? t`, et s'affiche sur la page du client` : ""}.`}</p>
         {message.status === "nouveau" ? (
           <ActionButton run={() => api(`/messages/${message.id}`, { method: "PATCH", body: { status: "traité" } })} ok={t`C'est fait. Message marqué comme traité.`}>
             {t`Marquer comme traité`}
@@ -182,7 +188,7 @@ function Thread({ message, onBack }: { message: Message; onBack?: () => void }) 
           className="btn pri"
           disabled={send.state.status === "busy" || text.trim().length < 2 || !!thread.error}
           onClick={async () => {
-            if (await send.run(() => api<{ delivery: string }>(`/messages/${message.id}/reply`, { method: "POST", body: { body: text } }), (r) => deliveryText((r as { delivery?: string }).delivery))) setText("");
+            if (await send.run(() => api<{ delivery: string }>(`/messages/${message.id}/reply`, { method: "POST", body: { body: text } }), (r) => deliveryText((r as { delivery?: string }).delivery, message.bookingId != null))) setText("");
           }}
         >
           <IconSend size={20} />

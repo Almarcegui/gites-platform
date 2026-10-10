@@ -69,8 +69,8 @@ function devVars() {
   if (!existsSync(p)) throw new Error(".dev.vars absent : copiez-le depuis le clone principal (sans les lignes BEDS24_*)");
   const out = {};
   for (const line of readFileSync(p, "utf8").split("\n")) {
-    const m = line.match(/^([A-Z0-9_]+)=(.*)$/);
-    if (m) out[m[1]] = m[2].trim();
+    const m = line.match(/^\s*(?:export\s+)?([A-Za-z0-9_]+)\s*=\s*(.*)$/);
+    if (m) out[m[1]] = m[2].trim().replace(/^["']|["']$/g, "");
   }
   return out;
 }
@@ -91,7 +91,8 @@ if (sansDemo) process.exit(0);
 // --- 5 : démonstration par l'API ---------------------------------------------
 const vars = devVars();
 // Garde-fou : aucun accès aux plateformes depuis le pilote.
-if (Object.keys(vars).some((k) => k.startsWith("BEDS24_") || k.startsWith("STRIPE_") || k === "RESEND_API_KEY")) {
+const SENSIBLES = ["BEDS24_REFRESH_TOKEN", "BEDS24_WEBHOOK_KEY", "STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET", "RESEND_API_KEY"];
+if (SENSIBLES.some((k) => vars[k])) {
   throw new Error(".dev.vars contient des clés Beds24, Stripe ou d'envoi de mails : retirez-les pour le pilote (rien ne doit sortir du Mac).");
 }
 const secours = (vars.ADMIN_TOKEN ?? "").split(",")[0]?.trim();
