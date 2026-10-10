@@ -689,3 +689,17 @@ fieldset.wd legend { font-weight: 600; margin-bottom: 8px; padding: 0; }
 @media (max-width: 600px) { .drop { grid-template-columns: auto 1fr; } .drop .btn { grid-column: 1 / -1; } }
 /* Lot 2 : bandeau hors ligne */
 .offline { background: var(--genet-soft, #fff3cd); color: var(--ink); border-bottom: 1px solid var(--line); padding: 8px 16px; font-size: 16px; text-align: center; }
+
+/* --- lot 3 : promotions Airbnb, prix par plateforme, avis ------------------------ */
+.warn-line { display: flex; gap: 10px; align-items: center; padding: 10px 12px; border-radius: 12px; background: var(--surface-2); border-left: 4px solid var(--genet); margin-top: 12px; font-weight: 600; }
+.blk .note, section .note { color: var(--ink-2); border-left: 4px solid var(--line); padding: 6px 12px; margin: 12px 0; }
+.form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px 20px; }
+.fs { border: 1px solid var(--line-2); border-radius: 12px; padding: 10px 14px 14px; margin: 0; min-width: 0; }
+.fs legend { font-weight: 700; padding: 0 6px; }
+.fs .row-in { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
+.preview { margin-top: 18px; padding: 14px 16px; border-radius: 14px; background: var(--surface-2); }
+.preview .row-in { display: flex; flex-wrap: wrap; gap: 12px; }
+.reviews-strip { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; padding: 12px 16px; margin-bottom: 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; }
+.reviews-strip .score { font-size: 22px; font-weight: 800; white-space: nowrap; }
+.reviews-strip .last { flex: 1 1 320px; min-width: 0; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.reviews-strip .low, .card .low { color: var(--genet); font-weight: 700; }

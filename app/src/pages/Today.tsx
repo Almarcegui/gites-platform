@@ -19,6 +19,7 @@ import { eur } from "../lib/money";
 import { useLayout } from "../lib/useLayout";
 import { HealthStrip } from "../shell/Health";
 import { useOpenBooking } from "../shell/Shell";
+import { ReviewsCard, ReviewsStrip, useReviews } from "./Reviews";
 
 function useDay() {
   const today = todayBrussels();
@@ -125,6 +126,7 @@ function TodayA() {
         <>
         {d.incomplete ? <ErrorLine text={t`Une partie des données n'a pas pu être lue : les chiffres ci-dessous peuvent être incomplets. Rechargez la page.`} /> : null}
         <HealthStrip overviews={d.overviews} />
+        <ReviewsStrip />
         <div className="today" aria-label={t`La journée`}>
           {items.map((x) => (
             <button key={x.k} type="button" className="t-item" data-k={x.k} onClick={x.onClick}>
@@ -249,6 +251,7 @@ function TodayB() {
   const navigate = useNavigate();
   const openBooking = useOpenBooking();
   const tight = d.cleaning.find((c) => c.tight && c.next);
+  const reviews = useReviews().data;
   const nMsg = d.messages.length;
   const nPay = d.toCollect.length;
   const tail = [
@@ -311,7 +314,7 @@ function TodayB() {
           </div>
         ) : null}
 
-        {d.overdue.length || d.holds.length || d.messages.length ? (
+        {d.overdue.length || d.holds.length || d.messages.length || reviews?.count ? (
           <h2 className="sec">
             <Trans>À régler sans heure fixe</Trans>
           </h2>
@@ -365,6 +368,7 @@ function TodayB() {
               </div>
             </article>
           ))}
+          <ReviewsCard />
         </div>
       </section>
       <aside aria-labelledby="h-week">

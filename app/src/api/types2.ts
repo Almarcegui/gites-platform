@@ -324,3 +324,83 @@ export interface Photo {
   caption: string | null;
   active: boolean;
 }
+
+// --- lot 3 : promotions Airbnb, prix dérivés, avis -------------------------------
+
+export interface AirbnbPromotions {
+  weeklyPct: number;
+  biweeklyPct: number;
+  monthlyPct: number;
+  earlyBirdDays: number | null;
+  earlyBirdPct: number;
+  lastMinuteDays: number | null;
+  lastMinutePct: number;
+  nonRefundablePct: number;
+}
+
+export interface AirbnbPreview {
+  stayCents: number;
+  nights: number;
+  markupPct: number;
+  airbnbCents: number;
+  lengthPct: number;
+  withLengthCents: number;
+  nonRefundableCents: number | null;
+  earlyBirdCents: number | null;
+  lastMinuteCents: number | null;
+}
+
+export interface Beds24WriteState {
+  configured: boolean;
+  writesAllowed: boolean;
+  reason: string | null;
+}
+
+export interface AirbnbPromotionsState {
+  propertyId: number;
+  promotions: AirbnbPromotions;
+  earlyBirdDays: number[];
+  markupPct: number;
+  markupSource: string;
+  preview: AirbnbPreview;
+  beds24: Beds24WriteState & { linked: boolean; rooms: number };
+  lastSent: { at: string; by: string } | null;
+  sentSame: boolean;
+}
+
+export interface PriceLinkingState {
+  enabled: boolean;
+  lines: { channel: string; label: string; beds24Channel: string; markupPct: number; multiplier: number; priceId: number; exampleCents: number }[];
+  unlinked: string[];
+  exampleDirectCents: number;
+  pushChannel: string | null;
+  pushPct: number;
+  upToDate: boolean;
+  sentAt: string | null;
+  beds24: Beds24WriteState & { linked: number };
+}
+
+export interface ReviewItem {
+  id: number;
+  channel: "airbnb" | "booking";
+  rating: number | null;
+  rawScore: number | null;
+  rawScale: number;
+  reviewerName: string | null;
+  headline: string | null;
+  body: string | null;
+  negative: string | null;
+  replied: boolean;
+  submittedAt: string | null;
+  unitName: string | null;
+}
+
+export interface ReviewsSummary {
+  count: number;
+  average: number | null;
+  byChannel: { channel: string; count: number; average: number | null }[];
+  latest: ReviewItem[];
+  low: ReviewItem[];
+  replyUrl: string;
+  lowScore: number;
+}

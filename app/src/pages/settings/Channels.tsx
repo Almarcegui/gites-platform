@@ -7,11 +7,11 @@ import { Trans, useLingui } from "@lingui/react/macro";
 import { NumberInput, Textarea, TextInput } from "@mantine/core";
 import { IconAlertTriangle, IconCheck, IconPlugConnected } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
-import { useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 
 import { api } from "../../api/client";
-import type { Beds24Status, ChannelsOverview, MarkupState, SyncConflict } from "../../api/types2";
+import type { Beds24Status, ChannelsOverview, MarkupState, PriceLinkingState, SyncConflict } from "../../api/types2";
 import { ErrorLine, useAction } from "../../lib/action";
 import { stayRange } from "../../lib/dates";
 import { eur } from "../../lib/money";
@@ -31,6 +31,7 @@ export function ChannelsPage() {
   const pid = property?.id;
   const ov = useQuery({ queryKey: ["channels", pid], queryFn: () => api<ChannelsOverview>("/channels/overview", { query: { property: pid } }), enabled: pid != null });
   const mk = useQuery({ queryKey: ["markups"], queryFn: () => api<MarkupState>("/channel-markups") });
+  const linking = useQuery({ queryKey: ["price-linking"], queryFn: () => api<PriceLinkingState>("/channels/price-linking") });
   const [conflict, setConflict] = useState<SyncConflict | null>(null);
   const d = ov.data;
   const open = (d?.conflicts ?? []).filter((c) => c.status === "open");
@@ -45,7 +46,13 @@ export function ChannelsPage() {
       {d && pid ? (
         <>
           <LinkCard d={d} propertyId={pid} />
+          {linking.data?.enabled ? <p className="note">{t`Prix par plateforme en place : Beds24 ajoute à chaque plateforme son pourcentage ci-dessous. Le bouton « Appliquer » ne compte plus tant qu'ils sont en place.`}</p> : null}
           {mk.data ? <MarkupsCard m={mk.data} /> : mk.error ? <ErrorLine text={t`Les prix envoyés aux plateformes n'ont pas pu être lus.`} /> : null}
+          <Section title={t`Promotions Airbnb et prix par plateforme`} hint={t`Remises long séjour, réservation tôt, dernière minute et non remboursable sur Airbnb ; un prix propre à chaque plateforme, calculé par Beds24 avec les pourcentages ci-dessus.`}>
+            <Link to="/reglages/plateformes/prix" className="btn">
+              {t`Régler les promotions et les prix par plateforme`}
+            </Link>
+          </Section>
           <Section title={t`Désaccords de calendrier`} hint={t`Ce qu'une plateforme annonce et que nous n'avons pas pu reprendre : ces dates restent en vente d'un côté et prises de l'autre. Un désaccord disparaît tout seul quand la liaison ne le revoit plus.`}>
             {open.length === 0 ? (
               <p className="ok-line">
