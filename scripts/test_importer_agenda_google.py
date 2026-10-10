@@ -180,6 +180,9 @@ class Statuts(unittest.TestCase):
             self.assertEqual((l.statut, l.motif), ("blocage", titre.strip()), titre)
         self.assertEqual(une("tante de cartier", invites=["tante.x@example.com"]).statut, "blocage")
 
+    def test_sans_titre_motif_par_defaut(self):
+        self.assertEqual((une("").statut, une("").motif), ("blocage", "agenda Google (sans titre)"))
+
     def test_sans_adresse_ni_montant_blocage_suppose(self):
         l = une("Quelque chose")
         self.assertEqual(l.statut, "blocage")

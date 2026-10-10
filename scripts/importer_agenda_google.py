@@ -378,7 +378,7 @@ def lire_evenement(cal: dict, ev: dict, au_plus_tard_export: dt.date, proprietai
     texte_min = _sans_accents(RE_EMAIL.sub(" ", texte))
     if any(re.search(p, texte_min) for p in MOTS_BLOCAGE):
         ligne.statut = "blocage"
-        ligne.motif = re.sub(r"\s+", " ", titre).strip()[:200]
+        ligne.motif = re.sub(r"\s+", " ", titre).strip()[:200] or "agenda Google (sans titre)"
         return ligne
     if MOTS_ANNULATION.search(titre) and len(emails) > 1:
         # « … jules… Annulation. … anne… » : l'annulation vise l'ancien client,
@@ -388,7 +388,7 @@ def lire_evenement(cal: dict, ev: dict, au_plus_tard_export: dt.date, proprietai
         ligne.statut = "annulee"
     elif not emails and ligne.sans_montant:
         ligne.statut = "blocage"
-        ligne.motif = re.sub(r"\s+", " ", titre).strip()[:200]
+        ligne.motif = re.sub(r"\s+", " ", titre).strip()[:200] or "agenda Google (sans titre)"
         ligne.doutes.append("ni adresse ni montant : blocage supposé (famille, usage de papa ?)")
         return ligne
 
