@@ -1,6 +1,7 @@
 // Configuration wrangler — plateforme de gestion des gîtes.
-// ⚠️ AUCUN déploiement (`wrangler deploy`) sans accord explicite de Julien.
-// Le database_id D1 réel sera créé au moment du déploiement (wrangler d1 create gites-platform).
+// ⚠️ AUCUN déploiement en production sans accord explicite de Julien.
+// Déployer passe par `make livrer` (production) ou `make livrer-essai` (essai),
+// jamais par un `wrangler deploy` à la main : voir le Makefile.
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "gites-platform",
@@ -77,6 +78,45 @@
           "binding": "DB",
           "database_name": "gites-platform",
           "database_id": "8ecf7b7c-5f2f-4292-861e-b945aff53042", // base réelle (WEUR), créée le 2026-08-03
+          "migrations_dir": "migrations"
+        }
+      ],
+      "triggers": {
+        "crons": ["*/15 * * * *"]
+      },
+      "observability": { "enabled": true }
+    },
+
+    // ── Environnement d'essai (09/10/2026, méthode Greffe) ──────────────────
+    // Un Worker et une base À PART : rien de ce qu'on y fait ne touche la
+    // production. `make livrer-essai` y déploie la branche courante ; on y
+    // essaie une migration ou un écran avant `make livrer`.
+    // - Base D1 `gites-platform-essai` (WEUR, créée le 2026-10-09) : migrations
+    //   et seed rejoués depuis zéro, aucune donnée de la production.
+    // - Courriels coupés (EMAILS_ENABLED=false), paiement simulé (aucune clé
+    //   Stripe), Beds24 coupé : AUCUN secret BEDS24_* ne doit y être posé.
+    //   ⚠️ BEDS24_WRITE_ENABLED=false ne suffit pas à lui seul : en https,
+    //   beds24WritesAllowed() autorise l'écriture (src/services/beds24.ts) ;
+    //   c'est l'absence de BEDS24_REFRESH_TOKEN qui garde l'intégration éteinte.
+    // - Seul secret : ADMIN_TOKEN d'essai, distinct de la production, lu dans
+    //   `.secrets.essai` (gitignoré) par `make livrer-essai`.
+    "essai": {
+      "name": "gites-platform-essai",
+      "vars": {
+        "PUBLIC_BASE_URL": "https://gites-platform-essai.j-decartier.workers.dev",
+        "EMAILS_ENABLED": "false",
+        "BEDS24_WRITE_ENABLED": "false"
+      },
+      "assets": {
+        "directory": "public",
+        "binding": "ASSETS",
+        "run_worker_first": ["/api/*", "/ical/*", "/"]
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "gites-platform-essai",
+          "database_id": "154b7bd2-8e17-45f5-b230-1faf85fca44e", // base d'essai (WEUR), créée le 2026-10-09
           "migrations_dir": "migrations"
         }
       ],

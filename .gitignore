@@ -37,6 +37,9 @@ public/admin2/
 app/test-results/
 app/playwright-report/
 _scratch/
+# Worktrees git des agents (git worktree add .worktrees/<nom>) : jamais committés.
+.worktrees/
+__pycache__/
 *.log
 .DS_Store
 

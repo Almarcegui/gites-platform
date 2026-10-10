@@ -11,13 +11,20 @@ import { configDefaults, defineConfig } from "vitest/config";
 
 export default defineConfig({
   test: {
+    // mcp/ = connecteur Claude, paquet Node à part (ses propres dépendances et
+    // sa propre suite : `cd mcp && npm test`).
     // Les worktrees git d'agents (`.worktrees/<nom>/`) vivent DANS le clone :
     // sans cette exclusion, `npm test` lancé depuis le clone principal rejoue
     // aussi leurs suites — chaque test tourne N fois, sur du code qui n'est
     // pas celui de la branche courante.
-    // `app/` (pilote du nouveau back-office) a ses propres essais, lancés par
-    // son Vitest à lui (jsdom) : `npm --prefix app test`.
-    exclude: [...configDefaults.exclude, ".worktrees/**", "app/**"],
+    // mcp/ = connecteur Claude, paquet Node à part (ses propres dépendances et
+    // sa propre suite : `cd mcp && npm test`). app/ = nouvel écran, idem
+    // (`cd app && npm test`).
+    // Les worktrees git d'agents (`.worktrees/<nom>/`) vivent DANS le clone :
+    // sans cette exclusion, `npm test` lancé depuis le clone principal rejoue
+    // aussi leurs suites — chaque test tourne N fois, sur du code qui n'est
+    // pas celui de la branche courante.
+    exclude: [...configDefaults.exclude, "mcp/**", "app/**", ".worktrees/**"],
     testTimeout: 30_000,
     hookTimeout: 60_000,
   },
