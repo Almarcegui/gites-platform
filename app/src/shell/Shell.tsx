@@ -6,7 +6,7 @@
 import { Trans, useLingui } from "@lingui/react/macro";
 import { AppShell, Drawer, Menu, Tooltip } from "@mantine/core";
 import { useHotkeys } from "@mantine/hooks";
-import { IconBrush, IconCalendar, IconCheck, IconDots, IconLayoutSidebarLeftCollapse, IconLayoutSidebarLeftExpand, IconLogout, IconMessage, IconSelector, IconSun } from "@tabler/icons-react";
+import { IconBrush, IconCalendar, IconCheck, IconDots, IconHome2, IconLayoutSidebarLeftCollapse, IconLayoutSidebarLeftExpand, IconLogout, IconMessage, IconSelector, IconSun } from "@tabler/icons-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link, Outlet, useNavigate, useRouterState, useSearch } from "@tanstack/react-router";
 import { useEffect, useState, type ReactNode } from "react";
@@ -32,7 +32,7 @@ function readFolded(): boolean {
   }
 }
 
-function DomainSelector({ variant }: { variant: "side" | "top" }) {
+function DomainSelector({ variant }: { variant: "side" | "top" | "icon" }) {
   const { t } = useLingui();
   const { scope, setScope: applyScope } = useScope();
   const [pending, setPending] = useState<Scope | null>(null);
@@ -43,16 +43,26 @@ function DomainSelector({ variant }: { variant: "side" | "top" }) {
   const label = current ? current.name : t`Tous mes gîtes`;
   const detail = current ? (current.commune ?? "") : properties.map((p) => p.name.replace(/^(Les Gîtes du |Le )/, "")).join(t` et `);
   return (
-    <Menu position={variant === "side" ? "bottom-start" : "bottom-start"} shadow="md" width={280}>
-      <Menu.Target>
-        <button className={`dom dom-${variant}`} type="button" aria-label={t`Choisir le domaine affiché, actuellement : ${label}`}>
-          <span className="dom-txt">
-            <b>{label}</b>
-            {detail ? <small>{detail}</small> : null}
-          </span>
-          <IconSelector size={18} className="dom-chev" aria-hidden />
-        </button>
-      </Menu.Target>
+    <Menu position={variant === "icon" ? "right-start" : "bottom-start"} shadow="md" width={280}>
+      {variant === "icon" ? (
+        <Tooltip label={label} position="right" withArrow events={{ hover: true, focus: true, touch: false }}>
+          <Menu.Target>
+            <button className="dom-icon" type="button" aria-label={t`Choisir le domaine affiché, actuellement : ${label}`}>
+              <IconHome2 size={20} aria-hidden />
+            </button>
+          </Menu.Target>
+        </Tooltip>
+      ) : (
+        <Menu.Target>
+          <button className={`dom dom-${variant}`} type="button" aria-label={t`Choisir le domaine affiché, actuellement : ${label}`}>
+            <span className="dom-txt">
+              <b>{label}</b>
+              {detail ? <small>{detail}</small> : null}
+            </span>
+            <IconSelector size={18} className="dom-chev" aria-hidden />
+          </button>
+        </Menu.Target>
+      )}
       <Menu.Dropdown>
         <Menu.Item onClick={() => setScope("all")} rightSection={scope === "all" ? <IconCheck size={18} /> : null} style={{ minHeight: 44 }}>
           <Trans>Tous mes gîtes</Trans>
@@ -148,7 +158,9 @@ function Sidebar({ folded, toggle }: { folded: boolean; toggle: () => void }) {
   const keys = isMac ? "⌘ B" : "Ctrl B";
   return (
     <>
-      <div className="side-top">{folded ? null : <DomainSelector variant="side" />}</div>
+      <div className="side-top">
+        <DomainSelector variant={folded ? "icon" : "side"} />
+      </div>
       <nav className="side-nav" aria-label={t`Menu principal`}>
         {nav.map((s) => (
           <div key={s.id} className="side-sec" role="group" aria-labelledby={`nav-${s.id}`}>
@@ -175,12 +187,12 @@ function Sidebar({ folded, toggle }: { folded: boolean; toggle: () => void }) {
             </small>
           </span>
         )}
-        <Tooltip label={t`Se déconnecter`} position="right" withArrow>
+        <Tooltip label={t`Se déconnecter`} position="right" withArrow events={{ hover: true, focus: true, touch: false }}>
           <button type="button" className="side-btn icon" onClick={() => void signOut()} aria-label={t`Se déconnecter`}>
             <IconLogout size={18} />
           </button>
         </Tooltip>
-        <Tooltip label={folded ? t`Déplier le menu (${keys})` : t`Replier le menu (${keys})`} position="right" withArrow>
+        <Tooltip label={folded ? t`Déplier le menu (${keys})` : t`Replier le menu (${keys})`} position="right" withArrow events={{ hover: true, focus: true, touch: false }}>
           <button
             type="button"
             className="side-btn icon"

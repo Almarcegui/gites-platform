@@ -37,7 +37,7 @@ function sortRows(list: Booking[], sort: Sort): Booking[] {
 function SortTh({ k, sort, onSort, right, children }: { k: SortKey; sort: Sort; onSort: (s: Sort) => void; right?: boolean; children: ReactNode }) {
   const on = sort?.k === k;
   return (
-    <th scope="col" className={right ? "r" : undefined} aria-sort={on ? (sort.dir === 1 ? "ascending" : "descending") : "none"}>
+    <th scope="col" className={right ? "r" : undefined} aria-sort={on ? (sort.dir === 1 ? "ascending" : "descending") : undefined}>
       <button type="button" className="th-sort" onClick={() => onSort(on && sort.dir === 1 ? { k, dir: -1 } : { k, dir: 1 })}>
         {children}
         {on ? sort.dir === 1 ? <IconArrowUp size={16} aria-hidden /> : <IconArrowDown size={16} aria-hidden /> : <IconArrowsSort size={16} aria-hidden className="muted" />}
