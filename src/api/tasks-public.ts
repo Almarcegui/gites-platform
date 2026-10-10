@@ -162,7 +162,7 @@ export function registerTaskShareRoutes(router: Router): void {
     }
     if (etat !== "fait" && etat !== "a_faire") return apiError(400, "état attendu : fait ou a_faire");
     const by = `lien:${link.label}`;
-    await updateTask(env.DB, task.id, { status: etat }, by);
+    if (!(await updateTask(env.DB, task.id, { status: etat }, by))) return apiError(409, "ce ménage vient d'être annulé");
     await audit(env.DB, "public", "task.share.update", `task:${task.id}`, { status: etat, lien: link.id });
     return new Response(null, { status: 303, headers: { location: `/t/${p.token}?ok=${etat}`, "cache-control": "no-store", "referrer-policy": "no-referrer" } });
   });

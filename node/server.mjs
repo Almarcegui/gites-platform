@@ -8,7 +8,7 @@
 
 import { createServer } from "node:http";
 import { existsSync, mkdirSync, readFileSync, statSync } from "node:fs";
-import { writeFile } from "node:fs/promises";
+import { unlink, writeFile } from "node:fs/promises";
 import { dirname, extname, join, normalize, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -86,6 +86,10 @@ const env = {
       if (!/^[0-9a-f]{32}\.(jpg|png|webp)$/.test(name)) throw new Error("nom de fichier refusé");
       mkdirSync(UPLOADS_DIR, { recursive: true });
       await writeFile(join(UPLOADS_DIR, name), bytes, { flag: "wx" });
+    },
+    async remove(name) {
+      if (!/^[0-9a-f]{32}\.(jpg|png|webp)$/.test(name)) return;
+      await unlink(join(UPLOADS_DIR, name));
     },
   },
 };

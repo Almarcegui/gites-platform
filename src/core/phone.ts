@@ -38,5 +38,7 @@ export function phoneCore(q: string): string | null {
 export function sqlPhoneDigits(col: string): string {
   let e = `COALESCE(${col}, '')`;
   for (const ch of [" ", ".", "/", "-", "(", ")", "+"]) e = `REPLACE(${e}, '${ch}', '')`;
+  // Espaces insécables et tabulation (numéros copiés depuis un téléphone).
+  for (const code of [160, 8239, 8201, 9]) e = `REPLACE(${e}, char(${code}), '')`;
   return e;
 }

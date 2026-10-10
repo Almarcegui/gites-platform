@@ -23,7 +23,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState, type ReactNode } from "react";
 
 import { api } from "../api/client";
-import { useBooking, useGuest } from "../api/hooks";
+import { useBooking, useGuest, useProperties } from "../api/hooks";
 import type { Booking, BookingDetail, Guest, QuoteResponse } from "../api/types";
 import { ErrorLine, useAction } from "../lib/action";
 import { diffDays, hourLabel, longDate, todayBrussels } from "../lib/dates";
@@ -575,6 +575,7 @@ function LinkDialog({ open, b, balance, onClose }: { open: boolean; b: Booking; 
 
 function WriteDialog({ open, b, guest, times, onClose }: { open: boolean; b: Booking; guest: Guest | undefined; times: { checkinTime: string; checkoutTime: string } | undefined; onClose: () => void }) {
   const { t } = useLingui();
+  const { data: properties = [] } = useProperties();
   const a = useAction();
   const [text, setText] = useState("");
   useEffect(() => {
@@ -592,7 +593,7 @@ function WriteDialog({ open, b, guest, times, onClose }: { open: boolean; b: Boo
     checkinTime: hourLabel(times?.checkinTime ?? "16:00"),
     checkoutTime: hourLabel(times?.checkoutTime ?? "10:00"),
     balance: balance > 0 && !isChannel(b) ? eur(balance) : null,
-    signature: b.unitName ?? "",
+    signature: properties.find((p) => p.id === b.propertyId)?.name ?? "",
   };
   const email = b.guestEmail ?? guest?.email;
   return (

@@ -76,7 +76,7 @@ export function registerLot2AdminRoutes(router: Router): void {
     const pid = intOrZero(url.searchParams.get("property"));
     const properties = (await listProperties(env.DB)).filter((p) => !pid || p.id === pid);
     if (url.searchParams.get("sync") !== "0") {
-      for (const p of properties) await syncCleaningTasks(env.DB, p.id, today);
+      for (const p of properties) await syncCleaningTasks(env.DB, p.id, today, new Date(), { from, to });
     }
     const tasks = await listTasks(env.DB, {
       propertyIds: properties.map((p) => p.id),
@@ -127,7 +127,7 @@ export function registerLot2AdminRoutes(router: Router): void {
       patch.note = n.value;
     }
     const by = currentUser(req);
-    await updateTask(env.DB, id, patch, by);
+    if (!(await updateTask(env.DB, id, patch, by))) return apiError(409, "ce ménage vient d'être annulé (la réservation n'existe plus)");
     await audit(env.DB, "admin", "task.update", `task:${id}`, { ...patch, par: by });
     return json({ ok: true, task: await getTask(env.DB, id) });
   }));
@@ -190,7 +190,8 @@ export function registerLot2AdminRoutes(router: Router): void {
 
   router.get("/api/admin/message-templates", guard(async (_req, env, _p, url) => {
     const pid = intOrZero(url.searchParams.get("property")) || undefined;
-    const templates = await listTemplates(env.DB, { propertyId: pid, activeOnly: url.searchParams.get("active") === "1" });
+    // ?common=1 : seulement les modèles communs (message sans domaine connu).
+    const templates = await listTemplates(env.DB, { propertyId: pid, commonOnly: url.searchParams.get("common") === "1", activeOnly: url.searchParams.get("active") === "1" });
     return json({ templates, variables: TEMPLATE_VARIABLES, langs: TEMPLATE_LANGS });
   }));
 
@@ -328,16 +329,23 @@ export function registerLot2AdminRoutes(router: Router): void {
     const described = altRaw.length >= 3;
     await env.UPLOADS.put(name, bytes);
     const path = `/uploads/${name}`;
-    const photoId = await createUnitPhoto(env.DB, {
-      unitId: id,
-      path,
-      alt: described ? altRaw : `Photo de ${unit.name}, à décrire`,
-      caption: caption || null,
-      webpWidths: [],
-      width: size.width,
-      height: size.height,
-      active: described,
-    });
+    let photoId: number | null = null;
+    try {
+      photoId = await createUnitPhoto(env.DB, {
+        unitId: id,
+        path,
+        alt: described ? altRaw : `Photo de ${unit.name}, à décrire`,
+        caption: caption || null,
+        webpWidths: [],
+        width: size.width,
+        height: size.height,
+        active: described,
+      });
+    } finally {
+      // Fichier sans ligne en base = fichier orphelin : on le retire.
+      if (photoId == null) await env.UPLOADS.remove?.(name).catch(() => undefined);
+    }
+    if (photoId == null) return apiError(500, "la photo n'a pas pu être enregistrée");
     await audit(env.DB, "admin", "unit.photo.upload", `unit:${id}`, { path, octets: bytes.length, par: currentUser(req) });
     return json({ id: photoId, path, width: size.width, height: size.height, active: described }, 201);
   }));

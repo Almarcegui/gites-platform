@@ -142,11 +142,13 @@ export function useTasks(from: IsoDate, to: IsoDate) {
   });
 }
 
-/** Modèles de réponse proposés pour un domaine (communs + propres), actifs. */
+/** Modèles de réponse proposés pour un domaine (communs + propres), actifs.
+ *  Domaine inconnu : les modèles communs SEULEMENT, jamais ceux d'un autre gîte. */
 export function useTemplates(propertyId: number | null | undefined) {
   return useQuery({
-    queryKey: ["templates", propertyId ?? "all", "active"],
-    queryFn: () => api<{ templates: MessageTemplate[] }>("/message-templates", { query: { property: propertyId ?? undefined, active: 1 } }).then((r) => r.templates),
+    queryKey: ["templates", propertyId ?? "common", "active"],
+    queryFn: () =>
+      api<{ templates: MessageTemplate[] }>("/message-templates", { query: propertyId ? { property: propertyId, active: 1 } : { common: 1, active: 1 } }).then((r) => r.templates),
     staleTime: 60_000,
   });
 }

@@ -8,16 +8,22 @@
 // Fonctions pures : le Worker passe `cf-connecting-ip`, le serveur Node
 // l'adresse de la socket (ou du proxy de confiance, cf. TRUST_PROXY).
 
-/** Chemins protégés : l'API admin et les deux écrans. */
+/** Chemins protégés : l'API admin et les deux écrans.
+ *
+ *  Comparés SEGMENT par SEGMENT, comme le routeur les lit (segments vides
+ *  retirés, chacun décodé) et sans tenir compte de la casse : « /api//admin »,
+ *  « //admin2/ » ou « /api/%61dmin » ne contournent pas la garde. Un chemin
+ *  indécodable est traité comme protégé. */
 export function isAdminPath(pathname: string): boolean {
-  return (
-    pathname === "/admin" ||
-    pathname.startsWith("/admin/") ||
-    pathname === "/admin2" ||
-    pathname.startsWith("/admin2/") ||
-    pathname.startsWith("/api/admin/") ||
-    pathname === "/api/admin"
-  );
+  let segs: string[];
+  try {
+    segs = pathname.split("/").filter(Boolean).map((s) => decodeURIComponent(s).toLowerCase());
+  } catch {
+    return true;
+  }
+  const first = segs[0] ?? "";
+  if (first === "admin" || first === "admin2") return true;
+  return first === "api" && segs[1] === "admin";
 }
 
 interface Range {

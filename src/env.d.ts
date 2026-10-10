@@ -42,4 +42,6 @@ interface Env {
 /** Écriture d'un fichier envoyé. `name` est déjà validé (hexadécimal + extension). */
 interface UploadStore {
   put(name: string, bytes: Uint8Array): Promise<void>;
+  /** Retire un fichier déposé (compensation quand la base refuse la ligne). */
+  remove?(name: string): Promise<void>;
 }

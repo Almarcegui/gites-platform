@@ -7,7 +7,7 @@ import { useSearch } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 
 import { api } from "../api/client";
-import { useBooking, useMessages } from "../api/hooks";
+import { useBooking, useMessages, useProperties } from "../api/hooks";
 import type { Message } from "../api/types";
 import { ActionButton, ErrorLine, useAction } from "../lib/action";
 import { hourLabel, longDate, todayBrussels, whenLabel } from "../lib/dates";
@@ -93,6 +93,7 @@ export function MessagesPage() {
 
 function Thread({ message, onBack }: { message: Message; onBack?: () => void }) {
   const { t } = useLingui();
+  const { data: properties = [] } = useProperties();
   const openBooking = useOpenBooking();
   const today = todayBrussels();
   const thread = useQuery({
@@ -115,7 +116,8 @@ function Thread({ message, onBack }: { message: Message; onBack?: () => void }) 
     checkinTime: hourLabel(times?.checkinTime ?? "16:00"),
     checkoutTime: hourLabel(times?.checkoutTime ?? "10:00"),
     balance: balance > 0 ? eur(balance) : null,
-    signature: booking?.unitName ?? "",
+    // Signature : le nom du domaine (« Les Gîtes du Pré Moré »), pas celui du bien.
+    signature: properties.find((p) => p.id === (booking?.propertyId ?? message.propertyId))?.name ?? "",
   };
   const items = thread.data?.thread ?? [message];
   return (

@@ -34,10 +34,11 @@ function mapTemplate(r: Raw): TemplateRow {
 }
 
 /** Modèles visibles pour un domaine (communs + propres), ou tous. */
-export async function listTemplates(db: D1Database, opts: { propertyId?: number; activeOnly?: boolean } = {}): Promise<TemplateRow[]> {
+export async function listTemplates(db: D1Database, opts: { propertyId?: number; commonOnly?: boolean; activeOnly?: boolean } = {}): Promise<TemplateRow[]> {
   const where: string[] = [];
   const binds: unknown[] = [];
-  if (opts.propertyId) {
+  if (opts.commonOnly) where.push("property_id IS NULL");
+  else if (opts.propertyId) {
     binds.push(opts.propertyId);
     where.push(`(property_id IS NULL OR property_id = ?${binds.length})`);
   }

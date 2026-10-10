@@ -10,7 +10,7 @@
 // Le cache est vidé à la déconnexion (api/client.ts, logout).
 const CACHE = "gites-admin2-v1";
 const SHELL = ["/admin2/", "/admin2/index.html", "/admin2/manifest.webmanifest", "/admin2/icon-192.png"];
-const READS = /^\/api\/admin\/(properties|units|planning|settings|overview|messages|tasks|message-templates|me)(\/?$|\?)/;
+const READS = /^\/api\/admin\/(properties|units|planning|settings|overview|messages|tasks|message-templates|me|rate-calendar)(\/?$|\?)|^\/api\/admin\/(bookings|guests)\/\d+$/;
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -34,7 +34,7 @@ self.addEventListener("activate", (event) => {
 function cacheable(url) {
   if (url.origin !== self.location.origin) return false;
   if (url.pathname.startsWith("/admin2/")) return true;
-  return READS.test(url.pathname + (url.search ? "?" : ""));
+  return READS.test(url.pathname) || READS.test(`${url.pathname}?`);
 }
 
 self.addEventListener("fetch", (event) => {
@@ -49,7 +49,9 @@ self.addEventListener("fetch", (event) => {
         // erreur, ni un 401 (session expirée), ni un 403 (garde IP).
         if (res.ok && res.type === "basic") {
           const copy = res.clone();
-          caches.open(CACHE).then((c) => c.put(req, copy)).catch(() => undefined);
+          // Attendu par le navigateur : une écriture tardive ne recrée pas le
+          // cache juste après une déconnexion.
+          event.waitUntil(caches.open(CACHE).then((c) => c.put(req, copy)).catch(() => undefined));
         }
         return res;
       })

@@ -50,6 +50,24 @@ export function lastUser(): string {
 export function clearSession(): void {
   ecrire(SESSION_KEY, null);
   ecrire(TOKEN_KEY, null);
+  void clearOfflineCache();
+}
+
+/** Vide les lectures de l'API gardées pour le hors-ligne (service worker) : à la
+ *  connexion, à la déconnexion et à toute session refusée (401), pour qu'un
+ *  compte ne relise jamais hors ligne ce qu'un autre a vu. */
+export async function clearOfflineCache(): Promise<void> {
+  try {
+    // Seules les lectures de l'API partent : l'écran lui-même (HTML, scripts,
+    // icônes) ne contient aucune donnée et reste disponible hors ligne.
+    for (const k of await caches.keys()) {
+      if (!k.startsWith("gites-admin2")) continue;
+      const c = await caches.open(k);
+      for (const req of await c.keys()) if (new URL(req.url).pathname.startsWith("/api/")) await c.delete(req);
+    }
+  } catch {
+    /* pas de cache (navigateur ancien, page non sécurisée, tests) */
+  }
 }
 
 /** Erreur d'API : le message du serveur (déjà en français) et le statut. */
@@ -121,6 +139,7 @@ export async function apiUpload<T>(path: string, form: FormData): Promise<T> {
 
 export async function login(user: string, password: string): Promise<void> {
   const data = await api<{ ok: boolean; user: string; session?: string }>("/login", { method: "POST", body: { user, password } });
+  await clearOfflineCache();
   ecrire(USER_KEY, data.user);
   ecrire(LAST_USER_KEY, data.user);
   if (data.session) {
@@ -141,12 +160,7 @@ export async function logout(): Promise<void> {
     /* la session locale est effacée de toute façon */
   }
   clearSession();
-  // Les lectures gardées pour le hors-ligne (service worker) partent avec la session.
-  try {
-    for (const k of await caches.keys()) if (k.startsWith("gites-admin2")) await caches.delete(k);
-  } catch {
-    /* pas de cache (navigateur ancien, page non sécurisée) */
-  }
+  await clearOfflineCache();
 }
 
 /** Message lisible pour une erreur quelconque. */

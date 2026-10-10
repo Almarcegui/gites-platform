@@ -111,10 +111,28 @@ function sameDesired(row: Raw, d: DesiredTask): boolean {
   );
 }
 
-/** Met les ménages d'un domaine à jour d'après ses départs. Idempotent. */
-export async function syncCleaningTasks(db: D1Database, propertyId: number, today: IsoDate, now: Date = new Date()): Promise<SyncResult> {
-  const from = addDays(today, -TASK_PAST_DAYS);
-  const to = addDays(today, TASK_AHEAD_DAYS);
+/** Bornes d'une génération demandée par l'écran (calendrier d'un autre mois). */
+export const TASK_SYNC_MIN_DAYS = -60;
+export const TASK_SYNC_MAX_DAYS = 400;
+
+/** Met les ménages d'un domaine à jour d'après ses départs. Idempotent.
+ *  Fenêtre : J−7 à J+60 (cron), élargie à `range` quand l'écran lit une autre
+ *  plage, dans les bornes TASK_SYNC_MIN_DAYS / TASK_SYNC_MAX_DAYS. */
+export async function syncCleaningTasks(
+  db: D1Database,
+  propertyId: number,
+  today: IsoDate,
+  now: Date = new Date(),
+  range?: { from: IsoDate; to: IsoDate },
+): Promise<SyncResult> {
+  const lo = addDays(today, TASK_SYNC_MIN_DAYS);
+  const hi = addDays(today, TASK_SYNC_MAX_DAYS);
+  let from = addDays(today, -TASK_PAST_DAYS);
+  let to = addDays(today, TASK_AHEAD_DAYS);
+  if (range) {
+    if (range.from < from) from = range.from < lo ? lo : range.from;
+    if (range.to > to) to = range.to > hi ? hi : range.to;
+  }
   const nowSql = sqlNow(now);
   const [links, settings, rows] = await Promise.all([
     listLinks(db, propertyId),
@@ -159,7 +177,7 @@ export async function syncCleaningTasks(db: D1Database, propertyId: number, toda
         .prepare(
           `UPDATE tasks SET unit_id = ?2, due_date = ?3, due_time = ?4, next_checkin = ?5, next_checkin_time = ?6,
                   next_unit_id = ?7, next_persons = ?8, updated_at = ?9
-                  ${resetStatus ? ", status = 'a_faire', done_at = NULL, done_by = NULL" : ""}
+                  ${resetStatus ? (dayMoved ? ", status = 'a_faire', done_at = NULL, done_by = NULL" : ", status = CASE WHEN status = 'annule' THEN 'a_faire' ELSE status END") : ""}
             WHERE id = ?1`,
         )
         .bind(num(row.id), d.unitId, d.dueDate, d.dueTime, d.nextCheckin, d.nextCheckinTime, d.nextUnitId, d.nextPersons, nowSql),
@@ -188,7 +206,8 @@ export async function syncCleaningTasks(db: D1Database, propertyId: number, toda
       const alive = b && makesCleaning({ status: String(b.status), source: String(b.source), holdExpiresAt: strOrNull(b.hold_expires_at) }, nowSql);
       if (!alive) {
         if (String(o.status) === "fait") continue; // un ménage fait reste fait
-        stmts.push(db.prepare("UPDATE tasks SET status = 'annule', updated_at = ?2 WHERE id = ?1").bind(num(o.id), nowSql));
+        // Conditionnel : un « fait » coché entre la lecture et l'écriture reste fait.
+        stmts.push(db.prepare("UPDATE tasks SET status = 'annule', updated_at = ?2 WHERE id = ?1 AND status = 'a_faire'").bind(num(o.id), nowSql));
         result.cancelled++;
       } else if (String(b!.checkout) >= to) {
         // Séjour prolongé au-delà de la fenêtre : la date suit, l'arrivée
@@ -254,7 +273,10 @@ export interface TaskPatch {
   note?: string | null;
 }
 
-export async function updateTask(db: D1Database, id: number, patch: TaskPatch, by: string, now: Date = new Date()): Promise<void> {
+/** Écrit le changement. Faux si rien n'a été écrit : tâche inconnue, ou
+ *  passée « annule » entre la lecture et l'écriture (un changement d'état ne
+ *  touche jamais une tâche annulée). */
+export async function updateTask(db: D1Database, id: number, patch: TaskPatch, by: string, now: Date = new Date()): Promise<boolean> {
   const sets: string[] = [];
   const binds: unknown[] = [id];
   const add = (sql: string, v: unknown) => {
@@ -270,9 +292,11 @@ export async function updateTask(db: D1Database, id: number, patch: TaskPatch, b
   }
   if (patch.assignee !== undefined) add("assignee = ?", patch.assignee);
   if (patch.note !== undefined) add("note = ?", patch.note);
-  if (!sets.length) return;
+  if (!sets.length) return true;
   add("updated_at = ?", sqlNow(now));
-  await db.prepare(`UPDATE tasks SET ${sets.join(", ")} WHERE id = ?1`).bind(...binds).run();
+  const guard = patch.status ? " AND status != 'annule'" : "";
+  const res = await db.prepare(`UPDATE tasks SET ${sets.join(", ")} WHERE id = ?1${guard}`).bind(...binds).run();
+  return res.meta.changes > 0;
 }
 
 // --- liens de partage ----------------------------------------------------------

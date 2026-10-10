@@ -253,6 +253,12 @@ for (const [backend, create] of [
         expect((await call("GET", "/api/admin/tasks", undefined, { auth: null })).status).toBe(401);
       });
 
+      it("la lecture d'une plage lointaine génère ses ménages (calendrier d'un autre mois)", async () => {
+        const id = await booking("PM-T-090", 2, D(85), D(88));
+        const r = await call("GET", `/api/admin/tasks?from=${D(80)}&to=${D(100)}`);
+        expect((r.data.tasks as { bookingId: number }[]).some((x) => x.bookingId === id)).toBe(true);
+      });
+
       it("le cron génère aussi les ménages", async () => {
         const id = await booking("PM-T-005", 2, D(20), D(23));
         await runLot2Scheduled(env);
@@ -331,6 +337,14 @@ for (const [backend, create] of [
         expect(active.some((x) => x.id === id)).toBe(false);
         expect((await call("DELETE", `/api/admin/message-templates/${id}`)).status).toBe(200);
         expect((await call("DELETE", `/api/admin/message-templates/${id}`)).status).toBe(404);
+      });
+
+      it("domaine inconnu : les modèles communs seulement", async () => {
+        const c = await call("POST", "/api/admin/message-templates", { name: "Privé Moulin", body: "Texte du Moulin", propertyId: 2 });
+        const common = (await call("GET", "/api/admin/message-templates?common=1")).data.templates as { id: number; propertyId: number | null }[];
+        expect(common.every((x) => x.propertyId == null)).toBe(true);
+        expect(common.some((x) => x.id === c.data.id)).toBe(false);
+        await call("DELETE", `/api/admin/message-templates/${c.data.id}`);
       });
 
       it("refuse un modèle vide, une langue inconnue, un domaine inconnu", async () => {
@@ -471,5 +485,12 @@ describe("garde IP dans le point d'entrée Worker", () => {
     expect(ok.status).toBe(200);
     expect(await ok.text()).toBe("asset");
     expect((await worker.fetch(req("/book/", "1.2.3.4"), env, ctx)).status).toBe(200);
+  });
+});
+
+describe("revue Codex 1", () => {
+  it("garde IP : doubles barres, casse et encodage ne contournent pas", () => {
+    for (const p of ["/api//admin/tasks", "//api/admin/units", "//admin2/", "/API/admin/units", "/api/%61dmin/units", "/Admin2/", "/api/admin%2"]) expect(isAdminPath(p)).toBe(true);
+    expect(adminIpGate("/api//admin/tasks", "10.0.0.0/8", "1.2.3.4")?.status).toBe(403);
   });
 });
