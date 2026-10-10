@@ -28,6 +28,36 @@ interface Env {
    *  désactivé : les deux clés vont ensemble, cf. services/turnstile.ts. */
   TURNSTILE_SECRET_KEY?: string;
   /** Autorise les ÉCRITURES vers Beds24 (compte réel, pas de bac à sable).
-   *  Déduit sinon de PUBLIC_BASE_URL en https:// — cf. beds24WritesAllowed(). */
+   *  Seule la valeur "true" autorise (fermé par défaut) — cf. beds24WritesAllowed(). */
   BEDS24_WRITE_ENABLED?: string;
+  /** Mails par SMTP (Infomaniak, site Node seulement) : actif quand les quatre
+   *  SMTP_HOST, SMTP_USER, SMTP_PASSWORD, MAIL_FROM sont posés, EMAILS_ENABLED
+   *  vaut "true" et que node/server.mjs a fourni SMTP_SEND. Prime sur Resend. */
+  SMTP_HOST?: string;
+  /** 465 (TLS direct, le défaut) ou 587 (STARTTLS obligatoire). */
+  SMTP_PORT?: string;
+  SMTP_USER?: string;
+  SMTP_PASSWORD?: string;
+  /** Expéditeur, « Nom <adresse> » ; sur Node, remplace RESEND_FROM. */
+  MAIL_FROM?: string;
+  /** Transport SMTP injecté par node/server.mjs (node:net/node:tls, absent sur
+   *  Workers, dont le runtime n'ouvre pas de socket SMTP sortante). */
+  SMTP_SEND?: (mail: { to: string; subject: string; text: string }) => Promise<{ id: string }>;
+  /** Instantané complet de la base SQLite (VACUUM INTO), injecté par
+   *  node/server.mjs ; absent sur Workers (export SQL à la place). */
+  SQLITE_SNAPSHOT?: () => Promise<Uint8Array>;
+  /** Adresses ou plages CIDR autorisées sur /api/admin/*, /admin/ et /admin2/
+   *  (virgules ou espaces). Vide = ouvert. Cf. src/core/ip-allow.ts. */
+  ADMIN_ALLOWED_IPS?: string;
+  /** Dépôt des photos envoyées depuis le back-office. Fourni par
+   *  node/server.mjs (dossier UPLOADS_DIR, servi sous /uploads/) ; absent sur
+   *  Workers, où l'envoi répond 501. */
+  UPLOADS?: UploadStore;
+}
+
+/** Écriture d'un fichier envoyé. `name` est déjà validé (hexadécimal + extension). */
+interface UploadStore {
+  put(name: string, bytes: Uint8Array): Promise<void>;
+  /** Retire un fichier déposé (compensation quand la base refuse la ligne). */
+  remove?(name: string): Promise<void>;
 }

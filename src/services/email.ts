@@ -1,7 +1,12 @@
 // Emails transactionnels — MODE STUB PAR DÉFAUT.
-// Chaque email est journalisé dans email_log. Il n'est réellement envoyé (via
-// Resend) que si EMAILS_ENABLED=true ET RESEND_API_KEY présente — c'est-à-dire
-// jamais sans décision explicite de Julien.
+// Chaque email est journalisé dans email_log. Il n'est réellement envoyé que si
+// EMAILS_ENABLED=true ET qu'un transport est configuré — c'est-à-dire jamais
+// sans décision explicite de Julien. Deux transports, un seul à la fois :
+//   - SMTP (site Node chez Infomaniak, la production depuis le 10/10/2026) :
+//     SMTP_HOST, SMTP_USER, SMTP_PASSWORD, MAIL_FROM posés ; le client SMTP vit
+//     dans node/smtp.mjs (node:net/node:tls), injecté en env.SMTP_SEND ;
+//   - Resend (Cloudflare Workers, inchangé) : RESEND_API_KEY.
+// SMTP prime quand les deux sont configurés.
 
 import type { BookingRow, PropertyRow, PropertySettings } from "../db/repo";
 import type { Quote, QuoteLine } from "../core/pricing";
@@ -28,14 +33,32 @@ export interface EmailToQueue {
   kind: string; // 'voucher' | 'payment_link' | 'balance_reminder' | …
 }
 
-export async function queueEmail(db: D1Database, env: Env, e: EmailToQueue): Promise<void> {
+/** Le transport réellement employé si l'envoi est actif, ou null (stub). */
+export function emailTransport(env: Env): "smtp" | "resend" | null {
+  if (env.EMAILS_ENABLED !== "true") return null;
+  const smtp = [env.SMTP_HOST, env.SMTP_USER, env.SMTP_PASSWORD, env.MAIL_FROM].every((v) => (v ?? "").trim() !== "");
+  if (smtp && env.SMTP_SEND) return "smtp";
+  if (env.RESEND_API_KEY) return "resend";
+  return null;
+}
+
+export async function queueEmail(db: D1Database, env: Env, e: EmailToQueue): Promise<"stub" | "sent" | "failed"> {
   let status: "stub" | "sent" | "failed" = "stub";
   let providerId: string | null = null;
   // Sans le détail de l'échec, un voucher jamais parti était indiscernable
   // d'un envoi désactivé — et personne ne le voyait (audit ECC 2026-07-30).
   let errorDetail: string | null = null;
+  const transport = emailTransport(env);
 
-  if (env.EMAILS_ENABLED === "true" && env.RESEND_API_KEY) {
+  if (transport === "smtp" && env.SMTP_SEND) {
+    try {
+      providerId = (await env.SMTP_SEND({ to: e.to, subject: e.subject, text: e.bodyText })).id;
+      status = "sent";
+    } catch (err) {
+      status = "failed";
+      errorDetail = err instanceof Error ? err.message.slice(0, 400) : String(err).slice(0, 400);
+    }
+  } else if (transport === "resend") {
     try {
       const res = await fetch("https://api.resend.com/emails", {
         method: "POST",
@@ -69,6 +92,7 @@ export async function queueEmail(db: D1Database, env: Env, e: EmailToQueue): Pro
     )
     .bind(e.bookingId ?? null, e.to, e.subject, e.bodyText, e.kind, status, providerId, errorDetail)
     .run();
+  return status;
 }
 
 function quoteLinesText(lines: QuoteLine[]): string {

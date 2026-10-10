@@ -2,11 +2,11 @@
 // en biais, le trait jaune du jour, la ligne prix et minimum sous chaque bien.
 // Toucher une case (ou glisser sur une plage) ouvre le popover.
 import { useLingui } from "@lingui/react/macro";
-import { IconBrush, IconCurrencyEuro, IconLock } from "@tabler/icons-react";
+import { IconBrush, IconCheck, IconCurrencyEuro, IconLock } from "@tabler/icons-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import type { DomainData } from "../api/hooks";
-import type { IsoDate, PlanningBooking, RateCalendarUnit, Unit } from "../api/types";
+import type { IsoDate, ManualBlock, PlanningBooking, RateCalendarUnit, Task, Unit } from "../api/types";
 import { addDays, dayNum, dayRange, isWeekend, longDate, monthShort, shortDate, weekdayShort } from "../lib/dates";
 import { BAR_LABEL, barColumns, barKind, channelName, isChannel, isNightTaken } from "../lib/derive";
 import type { RangeSelection } from "./PricePanel";
@@ -20,7 +20,11 @@ export interface GridProps {
   showPrices: boolean;
   selection: RangeSelection | null;
   onOpenBooking: (id: number) => void;
+  onOpenBlock?: (block: ManualBlock) => void;
   onSelect: (s: RangeSelection, anchor: DOMRect | null) => void;
+  /** Ménages par réservation (lot 2) : une pastille le jour du départ, cochée
+   *  quand le ménage est fait. Absent = seule la pastille du jour, comme avant. */
+  tasks?: Map<number, Task>;
 }
 
 interface Span {
@@ -206,17 +210,31 @@ export function Grid(props: GridProps) {
                   <span>{k.reason || t`Bloqué`}</span>
                 </>,
                 t`Bloqué du ${shortDate(k.checkin)} au ${shortDate(k.checkout)} : ${k.reason ?? ""}`,
+                props.onOpenBlock ? () => props.onOpenBlock!(k) : undefined,
               ),
             )}
-          {departing && todayIdx >= 0 ? (
-            <span className="mk" style={{ gridColumn: `${2 + 2 * todayIdx} / span 2` }} title={t`Ménage à faire aujourd'hui`}>
-              <IconBrush size={13} />
-            </span>
-          ) : null}
+          {props.tasks
+            ? own.map((b) => {
+                const k = props.tasks!.get(b.id);
+                const idx = dates.indexOf(b.checkout);
+                if (!k || idx < 0) return null;
+                const done = k.status === "fait";
+                const label = done ? t`Ménage fait, ${u.name}, ${longDate(b.checkout)}` : t`Ménage à faire, ${u.name}, ${longDate(b.checkout)}`;
+                return (
+                  <span key={`mk${b.id}`} className={`mk${done ? " ok" : ""}`} style={{ gridColumn: `${2 + 2 * idx} / span 2` }} title={label} role="img" aria-label={label}>
+                    {done ? <IconCheck size={13} /> : <IconBrush size={13} />}
+                  </span>
+                );
+              })
+            : departing && todayIdx >= 0 ? (
+                <span className="mk" style={{ gridColumn: `${2 + 2 * todayIdx} / span 2` }} title={t`Ménage à faire aujourd'hui`}>
+                  <IconBrush size={13} />
+                </span>
+              ) : null}
         </div>
         {props.showPrices ? (
           <div className="row px">
-            <div className="lab">{t`Prix, minimum`}</div>
+            <div className="lab">{t`Prix, nuits min.`}</div>
             {dates.map((d, i) => {
               const r = rates?.days.find((x) => x.date === d);
               const taken = isNightTaken(occupancy, u.id, d);
@@ -234,7 +252,8 @@ export function Grid(props: GridProps) {
                   {...cellHandlers(domain.property.id, u.id, d)}
                 >
                   <b>{price ?? "—"}</b>
-                  <small>{r?.minNights ? t`${r.minNights} n.` : ""}</small>
+                  {/* Le minimum ne s'écrit que là où il change : moins de chiffres, la grille respire. */}
+                  <small>{r?.minNights && (i === 0 || rates?.days.find((x) => x.date === dates[i - 1])?.minNights !== r.minNights) ? t`${r.minNights} n.` : ""}</small>
                 </button>
               );
             })}

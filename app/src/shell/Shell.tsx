@@ -2,16 +2,20 @@ import { Trans, useLingui } from "@lingui/react/macro";
 import { Menu } from "@mantine/core";
 import { IconAdjustmentsHorizontal, IconBrush, IconCalendar, IconCheck, IconHome, IconList, IconMessage, IconSun } from "@tabler/icons-react";
 import { Link, Outlet, useNavigate, useSearch } from "@tanstack/react-router";
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import { useMessages, useProperties } from "../api/hooks";
 import { BookingPanel } from "../booking/BookingPanel";
-import { useScope } from "../lib/scope";
+import { useScope, type Scope } from "../lib/scope";
+import { Confirm, hasUnsaved } from "../ui/kit";
 import { SaleProvider } from "../sale/SaleFlow";
 
 function DomainSelector() {
   const { t } = useLingui();
-  const { scope, setScope } = useScope();
+  const { scope, setScope: applyScope } = useScope();
+  const [pending, setPending] = useState<Scope | null>(null);
+  // Une saisie en cours dépend du domaine affiché : on demande avant d'en changer.
+  const setScope = (s: Scope) => (s !== scope && hasUnsaved() ? setPending(s) : applyScope(s));
   const { data: properties = [] } = useProperties();
   const current = scope === "all" ? null : properties.find((p) => p.id === scope);
   const label = current ? current.name : t`Tous mes gîtes`;
@@ -34,6 +38,19 @@ function DomainSelector() {
           </Menu.Item>
         ))}
       </Menu.Dropdown>
+      <Confirm
+        open={pending != null}
+        title={t`Changer de domaine sans enregistrer ?`}
+        text={t`Des modifications de cette page ne sont pas enregistrées. En changeant de domaine, elles seront perdues.`}
+        yes={t`Changer sans enregistrer`}
+        no={t`Rester sur ce domaine`}
+        danger
+        onYes={() => {
+          if (pending != null) applyScope(pending);
+          setPending(null);
+        }}
+        onNo={() => setPending(null)}
+      />
     </Menu>
   );
 }
@@ -70,13 +87,35 @@ function Items({ unread }: { unread: number }) {
   );
 }
 
+/** Le réseau est-il là ? (événements online/offline du navigateur) */
+function useOnline(): boolean {
+  const [online, setOnline] = useState(() => (typeof navigator === "undefined" ? true : navigator.onLine));
+  useEffect(() => {
+    const on = () => setOnline(true);
+    const off = () => setOnline(false);
+    window.addEventListener("online", on);
+    window.addEventListener("offline", off);
+    return () => {
+      window.removeEventListener("online", on);
+      window.removeEventListener("offline", off);
+    };
+  }, []);
+  return online;
+}
+
 export function Shell() {
   const { t } = useLingui();
+  const online = useOnline();
   const search = useSearch({ strict: false }) as { resa?: number };
   const navigate = useNavigate();
   const unread = useMessages("nouveau").data?.length ?? 0;
   return (
     <SaleProvider>
+      {online ? null : (
+        <div className="offline" role="status">
+          <Trans>Hors ligne : vous voyez la dernière version gardée sur cet appareil. Rien ne peut être changé avant le retour du réseau.</Trans>
+        </div>
+      )}
       <header className="top">
         <DomainSelector />
         <nav className="nav" aria-label={t`Menu principal`}>

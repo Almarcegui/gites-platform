@@ -1,0 +1,5 @@
+/* Badges des canaux OTA dans l'écran Messages (s'ajoutent à .src). */
+.src.canal { background: var(--ourthe-soft); color: var(--ink); }
+.src.canal-airbnb { background: var(--danger-soft); color: var(--ink); }
+.src.canal-booking { background: var(--ourthe-soft); color: var(--ink); }
+.src.canal-autre { background: var(--myrt-soft); color: var(--ink); }

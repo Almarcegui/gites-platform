@@ -23,15 +23,16 @@ import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState, type ReactNode } from "react";
 
 import { api } from "../api/client";
-import { useBooking, useGuest } from "../api/hooks";
+import { useBooking, useGuest, useProperties } from "../api/hooks";
 import type { Booking, BookingDetail, Guest, QuoteResponse } from "../api/types";
 import { ErrorLine, useAction } from "../lib/action";
 import { diffDays, hourLabel, longDate, todayBrussels } from "../lib/dates";
 import { channelName, isChannel } from "../lib/derive";
 import { eur } from "../lib/money";
-import { fillTemplate, templateLabels, type TemplateId } from "../lib/templates";
+import { TemplateChips } from "../messages/TemplateChips";
 import { useToast } from "../lib/toasts";
 import { useLayout } from "../lib/useLayout";
+import { RegisterSection } from "./Register";
 
 export type BookingState = "option" | "solde" | "soldee" | "plat" | "annulee";
 
@@ -269,12 +270,7 @@ function Fiche({ detail, dialog, setDialog }: { detail: BookingDetail; dialog: D
           {b.guestNotes ? <p className="note">{t`Demande du client : ${b.guestNotes}`}</p> : null}
         </Fold>
         <Fold title={t`Voyageurs inscrits`} count={t`registre`}>
-          <p className="note">
-            <Trans>La liste des voyageurs se remplit à l'arrivée (registre obligatoire). Pour le pilote, elle se saisit dans l'ancien écran.</Trans>
-          </p>
-          <a className="btn" href={`/admin/#/resa`} style={{ marginBottom: 14 }}>
-            <Trans>Ouvrir l'ancien écran</Trans>
-          </a>
+          <RegisterSection b={b} />
         </Fold>
         <Fold title={t`Historique`} count={String(detail.history.length)}>
           <ul>
@@ -445,7 +441,7 @@ function MoreMenu({ b, setDialog }: { b: Booking; setDialog: (d: Dialog) => void
 function Box({ open, onClose, title, children }: { open: boolean; onClose: () => void; title: string; children: ReactNode }) {
   const layout = useLayout();
   return (
-    <Modal opened={open} onClose={onClose} title={<b style={{ fontSize: 20 }}>{title}</b>} closeOnClickOutside={false} centered fullScreen={layout === "B"} size="lg" zIndex={400}>
+    <Modal opened={open} onClose={onClose} title={<b style={{ fontSize: 20 }}>{title}</b>} closeOnClickOutside={false} closeOnEscape={false} centered fullScreen={layout === "B"} size="lg" zIndex={400}>
       {children}
     </Modal>
   );
@@ -579,13 +575,12 @@ function LinkDialog({ open, b, balance, onClose }: { open: boolean; b: Booking; 
 
 function WriteDialog({ open, b, guest, times, onClose }: { open: boolean; b: Booking; guest: Guest | undefined; times: { checkinTime: string; checkoutTime: string } | undefined; onClose: () => void }) {
   const { t } = useLingui();
+  const { data: properties = [] } = useProperties();
   const a = useAction();
   const [text, setText] = useState("");
-  const [tpl, setTpl] = useState<TemplateId | null>(null);
   useEffect(() => {
     if (open) {
       setText("");
-      setTpl(null);
       a.reset();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -598,30 +593,12 @@ function WriteDialog({ open, b, guest, times, onClose }: { open: boolean; b: Boo
     checkinTime: hourLabel(times?.checkinTime ?? "16:00"),
     checkoutTime: hourLabel(times?.checkoutTime ?? "10:00"),
     balance: balance > 0 && !isChannel(b) ? eur(balance) : null,
-    signature: b.unitName ?? "",
+    signature: properties.find((p) => p.id === b.propertyId)?.name ?? "",
   };
   const email = b.guestEmail ?? guest?.email;
   return (
     <Box open={open} onClose={onClose} title={t`Écrire à ${b.guestName ?? t`ce client`}`}>
-      <p className="tpl">
-        <Trans>Partir d'un modèle</Trans>
-      </p>
-      <div className="chips" role="group" aria-label={t`Modèles de réponse`}>
-        {templateLabels().map((m) => (
-          <button
-            key={m.id}
-            type="button"
-            className="chip"
-            aria-pressed={tpl === m.id}
-            onClick={() => {
-              setTpl(m.id);
-              setText(fillTemplate(m.id, ctx));
-            }}
-          >
-            {m.label}
-          </button>
-        ))}
-      </div>
+      {open ? <TemplateChips propertyId={b.propertyId} ctx={ctx} onPick={setText} labelId="tpl-w" /> : null}
       <Textarea mt="md" label={t`Votre message`} autosize minRows={8} size="md" value={text} onChange={(e) => setText(e.currentTarget.value)} />
       <div className="send">
         <p>{email ? t`Le message s'affiche sur la page du client et part par mail à ${email} quand l'envoi des mails est actif.` : t`Pas de mail sur cette réservation : le message s'affichera seulement sur la page du client.`}</p>

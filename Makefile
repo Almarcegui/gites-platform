@@ -1,7 +1,9 @@
 # Gites Platform : les commandes du dépôt (méthode reprise de Greffe, 09/10/2026).
 #
 # `make check` : tout ce qui doit passer avant de dire « fini ».
-# `make livrer` : la production, et seulement par là ; `make livrer-essai` : l'essai.
+# `make livrer` : la production (site Node chez Infomaniak, décision du 10/10/2026),
+# et seulement par là ; `make livrer-essai` : l'essai ; `make livrer-cloudflare` :
+# l'ancien Worker de production, tant qu'il existe.
 #
 # ⚠️ Jamais `make check | tail … && git commit` : un tube rend le code de sortie de
 # sa DERNIÈRE commande, et l'échec de `make check` passe inaperçu (arrivé sur
@@ -29,7 +31,14 @@ VITEST := node_modules/.bin/vitest
 MARQUE_CHECK := .wrangler/check-ok
 PORT ?= 8788
 
-.PHONY: installer dev test check sauvegarde livrer livrer-essai sonde-prod sonde-essai _outils
+.PHONY: installer dev test check sauvegarde sauvegarde-cloudflare livrer livrer-essai livrer-cloudflare sonde-prod sonde-essai sonde-cloudflare installer-sonde _outils
+
+# make livrer SANS_SAUVEGARDE=oui : livrer sans sauvegarde préalable, le temps que le compte « sauvegarde » existe.
+SANS_SAUVEGARDE ?=
+OPTION_SAUVEGARDE := $(if $(filter oui,$(SANS_SAUVEGARDE)),--sans-sauvegarde,)
+# Copie de la sonde lue par le LaunchAgent com.julien.gites-sonde (hors du dépôt :
+# elle ne dépend ni d'un worktree ni d'une branche).
+SONDE_INSTALLEE := $(HOME)/.local/share/gites/gites_sonde.py
 
 installer:  ## dépendances, telles que le verrou les fixe
 	npm ci
@@ -50,23 +59,36 @@ check: _outils  ## tout ce qui doit passer avant de dire « fini » ; sur un arb
 	$(VITEST) run --no-file-parallelism
 	npm run -s check:images
 	@# les scripts Python se lisent sans erreur (ast, et non py_compile : pas de __pycache__ dans l'arbre)
-	$(PYTHON) -B -c 'import ast, sys; [ast.parse(open(f, encoding="utf-8").read(), f) for f in sys.argv[1:]]' scripts/sauvegarde_nuit.py scripts/livrer.py
+	$(PYTHON) -B -c 'import ast, sys; [ast.parse(open(f, encoding="utf-8").read(), f) for f in sys.argv[1:]]' scripts/sauvegarde_nuit.py scripts/livrer.py scripts/gites_sonde.py scripts/gites_admin.py
 	@etat="$$(git status --porcelain)" || { echo "git status a échoué : aucune marque posée."; exit 1; }; \
 	head="$$(git rev-parse HEAD)" || { echo "git rev-parse a échoué : aucune marque posée."; exit 1; }; \
 	if [ -z "$$etat" ] && [ -n "$$head" ]; then mkdir -p .wrangler && echo "$$head" > $(MARQUE_CHECK) && echo "check vert sur $${head:0:8} : livrable."; \
 	else echo "check vert, mais l'arbre n'est pas propre : rien n'est livrable avant un commit et un nouveau make check."; fi
 
-sauvegarde:  ## export horodaté de la base de PRODUCTION dans sauvegardes/ (lecture seule), ligne dans ~/Library/Logs/gites-sauvegarde.log
-	$(PYTHON) scripts/sauvegarde_nuit.py --cible prod --origine manuel
+sauvegarde:  ## copie horodatée de la base de PRODUCTION (Infomaniak, HTTPS, compte « sauvegarde ») dans sauvegardes/, ligne dans ~/Library/Logs/gites-sauvegarde.log
+	$(PYTHON) scripts/sauvegarde_nuit.py --cible infomaniak --origine manuel
 
-livrer:  ## PRODUCTION (go de Julien), depuis main : gardes, sauvegarde, migrations distantes, déploiement, sonde
-	$(PYTHON) scripts/livrer.py --cible prod
+sauvegarde-cloudflare:  ## export de l'ancienne base D1 de production (wrangler, lecture seule), tant que le Worker existe
+	$(PYTHON) scripts/sauvegarde_nuit.py --cible cloudflare --origine manuel
+
+livrer:  ## PRODUCTION Infomaniak (go de Julien), depuis main : gardes, sauvegarde, push de main, geste Manager (redémarrer), sonde
+	$(PYTHON) scripts/livrer.py --cible prod $(OPTION_SAUVEGARDE)
+
+livrer-cloudflare:  ## l'ancien Worker de production (wrangler), depuis main : gardes, sauvegarde D1, migrations distantes, déploiement, sonde
+	$(PYTHON) scripts/livrer.py --cible cloudflare
 
 livrer-essai:  ## ESSAI, depuis n'importe quelle branche : gardes, sauvegarde de la base d'essai, migrations, déploiement avec le jeton d'essai, sonde
 	$(PYTHON) scripts/livrer.py --cible essai
 
-sonde-prod:  ## la sonde publique de la production (/api/public/health : 2xx et ok=true), une minute au plus
-	$(PYTHON) scripts/livrer.py --sonde prod
+sonde-prod:  ## la production : /api/public/health ok ET traitement planifié passé il y a 30 min au plus (journal, sans Telegram)
+	$(PYTHON) scripts/gites_sonde.py --sans-telegram
+
+sonde-cloudflare:  ## la sonde publique de l'ancien Worker
+	$(PYTHON) scripts/livrer.py --sonde cloudflare
+
+installer-sonde:  ## copie scripts/gites_sonde.py là où le LaunchAgent com.julien.gites-sonde la lit (à refaire après un changement de la sonde)
+	mkdir -p $(dir $(SONDE_INSTALLEE))
+	install -m 0644 scripts/gites_sonde.py $(SONDE_INSTALLEE)
 
 sonde-essai:  ## la sonde publique de l'essai
 	$(PYTHON) scripts/livrer.py --sonde essai

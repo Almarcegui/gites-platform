@@ -3,6 +3,8 @@
 // La fiche ouverte vit dans l'adresse (?resa=12) : un lien la rouvre.
 import { createHashHistory, createRootRoute, createRoute, createRouter, Outlet, redirect } from "@tanstack/react-router";
 
+import type { ReactNode } from "react";
+
 import { isLoggedIn } from "./api/client";
 import { Shell } from "./shell/Shell";
 import { LoginPage } from "./pages/Login";
@@ -12,6 +14,22 @@ import { BookingsPage } from "./pages/Bookings";
 import { MessagesPage } from "./pages/Messages";
 import { CleaningPage } from "./pages/Cleaning";
 import { SettingsPage } from "./pages/Settings";
+import { AccountsPage } from "./pages/settings/Accounts";
+import { ChannelsPage } from "./pages/settings/Channels";
+import { ClientsPage } from "./pages/settings/Clients";
+import { DomainPage } from "./pages/settings/Domain";
+import { IcalPage } from "./pages/settings/Ical";
+import { ImportPage } from "./pages/settings/Import";
+import { LogsPage } from "./pages/settings/Logs";
+import { OptionsPage } from "./pages/settings/Options";
+import { PaymentsPage } from "./pages/settings/Payments";
+import { PromotionsPage } from "./pages/settings/Promotions";
+import { RegisterPage } from "./pages/settings/Register";
+import { StartupPage } from "./pages/settings/Startup";
+import { StatsPage } from "./pages/settings/Stats";
+import { TarifsPage } from "./pages/settings/Tarifs";
+import { TemplatesPage } from "./pages/settings/Templates";
+import { MyAccountPage } from "./pages/settings/MyAccount";
 
 export interface RootSearch {
   resa?: number;
@@ -48,10 +66,30 @@ const bookingsRoute = createRoute({ getParentRoute: () => appRoute, path: "/rese
 const messagesRoute = createRoute({ getParentRoute: () => appRoute, path: "/messages", component: MessagesPage });
 const cleaningRoute = createRoute({ getParentRoute: () => appRoute, path: "/menage", component: CleaningPage });
 const settingsRoute = createRoute({ getParentRoute: () => appRoute, path: "/reglages", component: SettingsPage });
+// Réglages du lot 1 : tout ce que l'ancien /admin/ savait faire.
+const sub = (path: string, component: () => ReactNode) => createRoute({ getParentRoute: () => appRoute, path: `/reglages/${path}`, component });
+const settingsRoutes = [
+  sub("tarifs", TarifsPage),
+  sub("promotions", PromotionsPage),
+  sub("options", OptionsPage),
+  sub("clients", ClientsPage),
+  sub("paiements", PaymentsPage),
+  sub("chiffres", StatsPage),
+  sub("plateformes", ChannelsPage),
+  sub("calendriers", IcalPage),
+  sub("comptes", AccountsPage),
+  sub("domaine", DomainPage),
+  sub("registre", RegisterPage),
+  sub("import", ImportPage),
+  sub("mise-en-route", StartupPage),
+  sub("journaux", LogsPage),
+  sub("modeles", TemplatesPage),
+  sub("mon-compte", MyAccountPage),
+];
 
 const routeTree = rootRoute.addChildren([
   loginRoute,
-  appRoute.addChildren([todayRoute, calendarRoute, bookingsRoute, messagesRoute, cleaningRoute, settingsRoute]),
+  appRoute.addChildren([todayRoute, calendarRoute, bookingsRoute, messagesRoute, cleaningRoute, settingsRoute, ...settingsRoutes]),
 ]);
 
 export function makeRouter(history = createHashHistory()) {

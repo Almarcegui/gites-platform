@@ -1,5 +1,5 @@
 // Messages : la liste, le fil, la réponse à partir d'un modèle, « traité ».
-// PILOTE : les quatre modèles sont en constantes (lib/templates.ts).
+// Les modèles viennent de la base (Réglages › Modèles de réponse).
 import { Trans, useLingui } from "@lingui/react/macro";
 import { IconChevronLeft, IconSend } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
@@ -7,19 +7,16 @@ import { useSearch } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 
 import { api } from "../api/client";
-import { useBooking, useMessages } from "../api/hooks";
+import { useBooking, useMessages, useProperties } from "../api/hooks";
 import type { Message } from "../api/types";
 import { ActionButton, ErrorLine, useAction } from "../lib/action";
 import { hourLabel, longDate, todayBrussels, whenLabel } from "../lib/dates";
 import { eur } from "../lib/money";
-import { fillTemplate, templateLabels, type TemplateId } from "../lib/templates";
+import { TemplateChips } from "../messages/TemplateChips";
 import { useLayout } from "../lib/useLayout";
 import { deliveryText } from "../booking/BookingPanel";
 import { useOpenBooking } from "../shell/Shell";
-
-function sourceLabel(m: Message): { cls: string; text: string } {
-  return m.channel === "form" ? { cls: "st", text: "Votre site" } : { cls: "", text: "Mail" };
-}
+import { channelDeliveryText, displayName, replyHint, sourceLabel } from "../canaux/canal";
 
 export function MessagesPage() {
   const { t } = useLingui();
@@ -35,7 +32,11 @@ export function MessagesPage() {
     if (layout === "A" && selected == null && list[0]) setSelected(list[0].id);
   }, [layout, list, selected]);
   const current = (all.data ?? []).find((m) => m.id === selected) ?? list.find((m) => m.id === selected) ?? null;
-  useEffect(() => setSelected(wanted), [wanted]);
+  // Un lien ?msg= ouvre ce message ; sans lien, on garde la sélection (à
+  // l'ordinateur, le premier message s'ouvre de lui-même).
+  useEffect(() => {
+    if (wanted != null) setSelected(wanted);
+  }, [wanted]);
   const loaded = !!all.data && !!pending.data;
   // Message demandé introuvable (autre domaine, déjà supprimé) : retour à la liste.
   useEffect(() => {
@@ -59,7 +60,7 @@ export function MessagesPage() {
             </button>
           </div>
           <p className="muted" style={{ margin: 0, padding: "0 16px 12px", fontSize: 15 }}>
-            <Trans>Les messages de votre site et les mails des clients arrivent ici. Ceux d'Airbnb et de Booking suivront.</Trans>
+            <Trans>Les messages de votre site, les mails des clients et les messages d'Airbnb et de Booking (par Beds24) arrivent ici.</Trans>
           </p>
           {(filter === "nouveau" ? pending : all).error ? <ErrorLine text={t`Les messages n'ont pas pu être lus.`} /> : null}
           {list.length === 0 ? (
@@ -70,7 +71,7 @@ export function MessagesPage() {
             return (
               <button key={m.id} type="button" className={`conv${m.status === "traité" ? " read" : ""}`} aria-current={m.id === selected} onClick={() => setSelected(m.id)}>
                 <span className="who">
-                  <span>{m.fromName || m.fromEmail}</span>
+                  <span>{displayName(m)}</span>
                   <small>{whenLabel(m.receivedAt, today)}</small>
                 </span>
                 <p>
@@ -89,6 +90,7 @@ export function MessagesPage() {
 
 function Thread({ message, onBack }: { message: Message; onBack?: () => void }) {
   const { t } = useLingui();
+  const { data: properties = [] } = useProperties();
   const openBooking = useOpenBooking();
   const today = todayBrussels();
   const thread = useQuery({
@@ -102,7 +104,6 @@ function Thread({ message, onBack }: { message: Message; onBack?: () => void }) 
     staleTime: 5 * 60_000,
   }).data;
   const [text, setText] = useState("");
-  const [tpl, setTpl] = useState<TemplateId | null>(null);
   const send = useAction();
   const balance = booking ? booking.totalCents - booking.paidCents : 0;
   const ctx = {
@@ -112,7 +113,8 @@ function Thread({ message, onBack }: { message: Message; onBack?: () => void }) 
     checkinTime: hourLabel(times?.checkinTime ?? "16:00"),
     checkoutTime: hourLabel(times?.checkoutTime ?? "10:00"),
     balance: balance > 0 ? eur(balance) : null,
-    signature: booking?.unitName ?? "",
+    // Signature : le nom du domaine (« Les Gîtes du Pré Moré »), pas celui du bien.
+    signature: properties.find((p) => p.id === (booking?.propertyId ?? message.propertyId))?.name ?? "",
   };
   const items = thread.data?.thread ?? [message];
   return (
@@ -123,7 +125,7 @@ function Thread({ message, onBack }: { message: Message; onBack?: () => void }) 
             <IconChevronLeft size={22} />
           </button>
         ) : null}
-        <h2 id="h-th">{message.fromName || message.fromEmail}</h2>
+        <h2 id="h-th">{displayName(message)}</h2>
         <span className={`src ${sourceLabel(message).cls}`}>{sourceLabel(message).text}</span>
         <p>
           {booking ? (
@@ -134,7 +136,7 @@ function Thread({ message, onBack }: { message: Message; onBack?: () => void }) 
               </button>
             </>
           ) : (
-            t`Pas de réservation liée. ${message.fromEmail}`
+            message.channel === "beds24" ? t`Pas de réservation liée chez nous pour ce message.` : t`Pas de réservation liée. ${message.fromEmail}`
           )}
         </p>
       </div>
@@ -143,37 +145,19 @@ function Thread({ message, onBack }: { message: Message; onBack?: () => void }) 
       {items.map((m) => (
         <div key={m.id} className={`bub${m.direction === "out" ? " out" : ""}`}>
           <small>
-            {m.direction === "out" ? t`Vous` : m.fromName || m.fromEmail}, {whenLabel(m.receivedAt, today)} — {m.subject}
+            {m.direction === "out" ? t`Vous` : displayName(m)}, {whenLabel(m.receivedAt, today)} — {m.subject}
           </small>
           {m.bodyText}
         </div>
       ))}
-      <p className="tpl" id="tpl-l">
-        <Trans>Partir d'un modèle</Trans>
-      </p>
-      <div className="chips" role="group" aria-labelledby="tpl-l">
-        {templateLabels().map((x) => (
-          <button
-            key={x.id}
-            type="button"
-            className="chip"
-            aria-pressed={tpl === x.id}
-            onClick={() => {
-              setTpl(x.id);
-              setText(fillTemplate(x.id, ctx));
-            }}
-          >
-            {x.label}
-          </button>
-        ))}
-      </div>
+      <TemplateChips propertyId={booking?.propertyId ?? message.propertyId} ctx={ctx} onPick={setText} />
       <label htmlFor="rep" className="tpl">
         <Trans>Votre réponse</Trans>
       </label>
       <textarea id="rep" className="reply" value={text} onChange={(e) => setText(e.currentTarget.value)} />
       {send.state.status === "error" ? <ErrorLine text={t`Pas envoyé. ${send.state.text} Votre texte est gardé.`} /> : null}
       <div className="send">
-        <p>{t`La réponse part par mail à ${message.fromEmail} quand l'envoi des mails est actif${message.bookingId ? t`, et s'affiche sur la page du client` : ""}.`}</p>
+        <p>{replyHint(message)}</p>
         {message.status === "nouveau" ? (
           <ActionButton run={() => api(`/messages/${message.id}`, { method: "PATCH", body: { status: "traité" } })} ok={t`C'est fait. Message marqué comme traité.`}>
             {t`Marquer comme traité`}
@@ -188,7 +172,7 @@ function Thread({ message, onBack }: { message: Message; onBack?: () => void }) 
           className="btn pri"
           disabled={send.state.status === "busy" || text.trim().length < 2 || !!thread.error}
           onClick={async () => {
-            if (await send.run(() => api<{ delivery: string }>(`/messages/${message.id}/reply`, { method: "POST", body: { body: text } }), (r) => deliveryText((r as { delivery?: string }).delivery, message.bookingId != null))) setText("");
+            if (await send.run(() => api<{ delivery: string }>(`/messages/${message.id}/reply`, { method: "POST", body: { body: text } }), (r) => channelDeliveryText((r as { delivery?: string }).delivery, message.canal) ?? deliveryText((r as { delivery?: string }).delivery, message.bookingId != null))) setText("");
           }}
         >
           <IconSend size={20} />

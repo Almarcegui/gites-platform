@@ -7,8 +7,10 @@ import { useQueries } from "@tanstack/react-query";
 import { useMemo, useRef, useState, type ReactNode } from "react";
 
 import { api } from "../api/client";
-import { useDomains } from "../api/hooks";
-import type { RateCalendarUnit } from "../api/types";
+import { useDomains, useTasks } from "../api/hooks";
+import { tasksByBooking } from "../lib/tasks";
+import type { ManualBlock, RateCalendarUnit } from "../api/types";
+import { BlockPanel } from "./BlockPanel";
 import { ErrorLine } from "../lib/action";
 import { addDays, mondayOf, todayBrussels } from "../lib/dates";
 import { useLayout } from "../lib/useLayout";
@@ -38,6 +40,7 @@ export function CalendarView({ title, before }: { title: ReactNode; before?: Rea
   const [sel, setSel] = useState<RangeSelection | null>(null);
   const [anchor, setAnchor] = useState<DOMRect | null>(null);
   const calRef = useRef<HTMLDivElement>(null);
+  const [block, setBlock] = useState<ManualBlock | null>(null);
 
   const useGrid = layout === "A" || phoneMode === "grid";
   const days = layout === "A" ? 31 : 14;
@@ -47,6 +50,8 @@ export function CalendarView({ title, before }: { title: ReactNode; before?: Rea
   const from = useGrid ? addDays(start, -1) : addDays(firstMonday, -1);
   const to = useGrid ? addDays(start, days + 1) : addDays(firstMonday, 7 * weeksCount + 1);
   const { domains, isLoading, error } = useDomains(from, to);
+  const tasksQ = useTasks(from, to);
+  const tasks = useMemo(() => (tasksQ.data ? tasksByBooking(tasksQ.data) : undefined), [tasksQ.data]);
 
   const rateQs = useQueries({
     queries: domains.map((d) => ({
@@ -139,6 +144,8 @@ export function CalendarView({ title, before }: { title: ReactNode; before?: Rea
               showPrices={prices}
               selection={sel}
               onOpenBooking={openBooking}
+              onOpenBlock={setBlock}
+              tasks={tasks}
               onSelect={(s, a) => {
                 setSel(s);
                 setAnchor(a);
@@ -155,6 +162,7 @@ export function CalendarView({ title, before }: { title: ReactNode; before?: Rea
           weeks={weeksCount}
           today={today}
           onOpenBooking={openBooking}
+          onOpenBlock={setBlock}
           onSell={(s) => sell({ unitId: s.unitId, checkin: s.checkin, checkout: s.checkout })}
           onPrice={(s) => {
             setSel(s);
@@ -175,6 +183,7 @@ export function CalendarView({ title, before }: { title: ReactNode; before?: Rea
           }}
         />
       ) : null}
+      {block ? <BlockPanel block={block} unitName={domains.flatMap((d) => d.units).find((u) => u.id === block.unitId)?.name ?? ""} onClose={() => setBlock(null)} /> : null}
     </section>
   );
 }

@@ -50,12 +50,23 @@ Décisions de Julien : [`docs/decisions.md`](docs/decisions.md) ; séances :
 | `make dev` | migrations locales, puis serveur local sur 8788 |
 | `make test` | les tests, un fichier après l'autre (`--no-file-parallelism`) |
 | `make check` | **tout ce qui doit passer avant de dire « fini »** : typecheck, tests, signatures des images, script de sauvegarde. Sur un arbre propre, marque le commit vérifié |
-| `make sauvegarde` | export horodaté de la base de **production** dans `sauvegardes/` (lecture seule) |
-| `make livrer-essai` | vers l'**essai** : sauvegarde de la base d'essai, migrations, déploiement, sonde |
-| `make livrer` | vers la **production**, sur le « go » de Julien et depuis `main` seulement : sauvegarde, migrations, déploiement, sonde |
-| `make sonde-prod`, `make sonde-essai` | `/api/public/health`, une minute au plus |
+| `make sauvegarde` | copie horodatée de la base de **production** (Infomaniak, par HTTPS, compte `sauvegarde`) dans `sauvegardes/` (lecture seule) |
+| `make sauvegarde-cloudflare` | export de l'ancienne base D1 (tant que le Worker existe) |
+| `make livrer-essai` | vers l'**essai** (Workers) : sauvegarde de la base d'essai, migrations, déploiement, sonde |
+| `make livrer` | vers la **production Infomaniak**, sur le « go » de Julien et depuis `main` seulement : gardes, sauvegarde, `git push origin main`, rappel du geste Manager (redémarrer le site), sonde |
+| `make livrer-cloudflare` | l'ancien Worker de production (wrangler), tant qu'il existe |
+| `make sonde-prod` | `scripts/gites_sonde.py` : `/api/public/health` ok **et** traitement planifié passé il y a 30 min au plus |
+| `make sonde-essai`, `make sonde-cloudflare` | `/api/public/health` des Workers, une minute au plus |
+| `make installer-sonde` | copie la sonde là où la lit le LaunchAgent `com.julien.gites-sonde` |
 
-Les deux `livrer` passent par `scripts/livrer.py` : ils refusent un arbre modifié
+**La production est le site Node.js chez Infomaniak, `https://dev1.mdcdy.be`**
+(décision de Julien du 10/10/2026 : une seule version). Le serveur est un clone
+de `main` ; il se redéploie quand on le redémarre dans le Manager, et applique
+alors lui-même les migrations. Pas d'accès SSH : sauvegarde, sonde et livraison
+passent par HTTPS et GitHub. Ce qui reste avant la bascule complète (domaine,
+adresse mail, Beds24, Stripe, arrêt du Worker) : [`docs/mise-en-ligne.md`](docs/mise-en-ligne.md).
+
+Les `livrer` passent par `scripts/livrer.py` : ils refusent un arbre modifié
 et un commit sur lequel `make check` n'est pas passé, tiennent un verrou par cible
 jusqu'à la sonde (deux livraisons vers la même base ne s'entrelacent pas, même
 depuis deux worktrees), et sans sauvegarde réussie aucune migration distante ne
@@ -68,8 +79,8 @@ de sa dernière commande, et l'échec passe. `make check` se lance seul.
 **https://gites-platform-essai.j-decartier.workers.dev** — Worker et base D1
 (`gites-platform-essai`) à part : rien de ce qu'on y fait ne touche la production.
 Courriels coupés, paiement simulé, Beds24 coupé (aucun secret `BEDS24_*` n'y est
-posé, et il ne faut pas en poser : en https, `BEDS24_WRITE_ENABLED=false` ne
-suffit pas, voir `wrangler.jsonc`). Son `ADMIN_TOKEN`, distinct de celui de la
+posé, et il ne faut pas en poser ; les écritures y sont de toute façon fermées,
+`BEDS24_WRITE_ENABLED` n'y valant pas « true », voir `wrangler.jsonc`). Son `ADMIN_TOKEN`, distinct de celui de la
 production, est dans `.secrets.essai` (gitignoré, dans le clone principal) ;
 `make livrer-essai` le pose à chaque déploiement. À la première livraison, la base
 d'essai n'a encore aucune table : sa sauvegarde le constate et laisse passer
@@ -78,13 +89,61 @@ d'essai n'a encore aucune table : sa sauvegarde le constate et laisse passer
 ### La sauvegarde de nuit
 
 Le LaunchAgent `com.julien.gites-sauvegarde` lance chaque nuit à 3 h 30 (ou au
-réveil du Mac) `scripts/sauvegarde_nuit.py` **du clone principal** : export de la
-base de production dans `sauvegardes/AAAA-MM-JJ-HHMMSS-gites-platform.sql`,
-30 jours gardés et 7 fichiers au moins, une ligne par passage dans
-`~/Library/Logs/gites-sauvegarde.log` (« OK … » ou « ÉCHEC … », jamais l'URL de
-téléchargement signée que wrangler affiche), sortie 1 sur échec. Il a besoin
-d'une session wrangler valide (`npx wrangler login`) : sinon, chaque nuit écrit
-« ÉCHEC … Not logged in ». Arrêt : `launchctl bootout gui/501/com.julien.gites-sauvegarde`.
+réveil du Mac) `scripts/sauvegarde_nuit.py` **du clone principal**, une ligne par
+passage dans `~/Library/Logs/gites-sauvegarde.log` (« OK … » ou « ÉCHEC … »),
+sortie 1 sur échec, 30 jours gardés et 7 fichiers au moins.
+
+- **Production Infomaniak** (`--cible infomaniak`, le défaut) : sans SSH. Le
+  script ouvre une session avec le compte réservé **`sauvegarde`** du
+  back-office, tire `GET /api/admin/export.sqlite` (instantané `VACUUM INTO`,
+  fichier SQLite complet et cohérent), ferme la session, vérifie le fichier en
+  lecture seule (`integrity_check`, tables des migrations de `_migrations`) et le
+  range dans `sauvegardes/AAAA-MM-JJ-HHMMSS-gites-infomaniak.sqlite`.
+  Identifiants : `~/.config/gites/sauvegarde.env` (droits 600, modèle
+  `scripts/sauvegarde.env.example`, jamais dans le dépôt). Le compte
+  `sauvegarde` n'ouvre **que** l'export (403 partout ailleurs).
+- **Ancienne D1** (`--cible cloudflare`, `prod` en est l'ancien nom) : `wrangler
+  d1 export`, besoin d'une session wrangler valide.
+
+`GET /api/admin/export.sql` rend aussi la base en SQL (schéma + données) sur les
+deux cibles. Arrêt : `launchctl bootout gui/501/com.julien.gites-sauvegarde`.
+
+### L'accès de service (Claude, scripts du Mac)
+
+Des **clés d'API de service**, sans compte humain (table `service_keys`,
+migration 0024) : présentées en `Authorization: Bearer svc:<clé>`, droits admin,
+seul leur SHA-256 est gardé, dernière utilisation notée, révocables (la ligne
+reste). Le journal d'audit les inscrit `svc:<nom>`. **Création et révocation
+depuis une session humaine seulement** (back-office, page Utilisateurs ›
+« Accès de service », ou `POST /api/admin/service-keys {name}` et
+`POST /api/admin/service-keys/:id/revoke`) : une clé ne fabrique pas d'autres
+clés, le compte `sauvegarde` non plus. La clé n'est affichée qu'une fois.
+
+Poser la première clé : se connecter au back-office (compte nominatif), page
+Utilisateurs › Accès de service › « Créer une clé » (nom : `claude-mac`), puis
+sur le Mac :
+
+```bash
+mkdir -p ~/.config/gites && cp scripts/service.env.example ~/.config/gites/service.env
+chmod 600 ~/.config/gites/service.env      # y coller la clé (GITES_SERVICE_KEY)
+/opt/homebrew/bin/python3 scripts/gites_admin.py sante
+```
+
+`scripts/gites_admin.py` : `sante`, `beds24-statut`, `beds24-lier <code>`,
+`resa-annuler <réf> --motif "…" [--oui]` (sans `--oui`, montre seulement),
+`export-sauvegarde [--sortie f.sqlite]` ; sortie JSON, jamais la clé. Le
+connecteur MCP (`mcp/`) accepte `GITES_SERVICE_KEY` à la place de
+`GITES_ID`/`GITES_MDP`.
+
+### La sonde
+
+Le LaunchAgent `com.julien.gites-sonde` lance toutes les 30 min
+`scripts/gites_sonde.py` (copie installée par `make installer-sonde` dans
+`~/.local/share/gites/`) : `/api/public/health` de la production doit répondre
+`ok` et `cronAgeMinutes` valoir 30 au plus (null = le traitement planifié n'a
+jamais tourné). Une ligne par passage dans `~/Library/Logs/gites-sonde.log` ;
+Telegram par l'outbox du pont au passage au rouge, un rappel toutes les 12 h,
+un message au retour au vert. Arrêt : `launchctl bootout gui/501/com.julien.gites-sonde`.
 
 ### Le dépôt sur GitHub
 
@@ -93,6 +152,24 @@ Aujourd'hui `jdecartier-glitch/gites-platform` (le compte actif de `gh`,
 push). Transfert prévu vers **`Almarcegui/gites-platform`**, en attente d'un geste
 de Julien depuis le compte propriétaire actuel ; ensuite,
 `git remote set-url origin https://github.com/Almarcegui/gites-platform.git`.
+
+## Lot 2 du nouvel écran (/admin2/, 10/10/2026)
+
+| Fonction | Où | Notes |
+|---|---|---|
+| **Ménage en base** (migration `0022`) | `src/core/cleaning.ts`, `src/db/tasks.ts`, `GET/PATCH /api/admin/tasks`, `POST /api/admin/tasks/generate` | une tâche par départ (bien, date, heure, arrivée suivante, voyageurs), état fait/à faire, personne, note. Génération idempotente au cron (`src/jobs/scheduled.ts`) et à chaque lecture. Les « holds » du tunnel public n'en créent pas |
+| **Lien de partage du ménage** | `GET /t/<jeton>` (`src/api/tasks-public.ts`), `GET/POST/DELETE /api/admin/task-links` | page publique sans login, sans nom de voyageur, cibles de 44 px, marche sans JavaScript. Seul le SHA-256 du jeton est en base ; un lien se coupe depuis l'écran Ménage |
+| **Modèles de réponse** (migration `0023`) | `src/db/templates.ts`, CRUD `/api/admin/message-templates` | variables `{prenom}` `{bien}` `{arrivee}` `{solde}` `{heure_arrivee}` `{heure_depart}` `{signature}`, langue fr/nl/en, par domaine ou communs. Écran Réglages › Modèles de réponse |
+| **Recherche par téléphone** | `src/core/phone.ts`, `listBookings` / `listGuests` | compare les chiffres, sans indicatif belge ni 0 de tête : « 0475 12 » trouve « +32 475 12 34 56 » |
+| **Mon mot de passe** | `GET /api/admin/me`, `POST /api/admin/me/password` | ancien exigé, 12 caractères au moins (ou proposé par la plateforme), autres sessions du compte coupées, 5 essais manqués par quart d'heure. Refusé (400) pour l'accès de secours `ADMIN_TOKEN` |
+| **Envoi de photos** | `POST /api/admin/units/:id/photos/upload` | Node seulement : fichiers dans `UPLOADS_DIR` (défaut `../gites-data/uploads`, hors du site), servis sous `/uploads/`. JPEG/PNG/WebP lus dans les octets, 8 Mo, nom au hasard ; sans texte, la photo arrive masquée. Workers : 501 |
+| **PWA** | `app/public/manifest.webmanifest`, `app/public/sw.js` | installable (iPhone : Partager › Sur l'écran d'accueil), réseau d'abord, hors ligne en lecture pour Aujourd'hui ; cache vidé à la déconnexion |
+| **Accès admin fermé au public** | `src/core/ip-allow.ts`, `src/index.ts`, `node/server.mjs` | `ADMIN_ALLOWED_IPS` (CIDR v4/v6, vide = ouvert, **pas activé par défaut**) sur `/api/admin/*`, `/admin/`, `/admin2/` ; 403 explicite. Node : `TRUST_PROXY=true` derrière le proxy d'Infomaniak. Cf. `.env.example` |
+
+Vérifier : `make test` (la suite `test/lot2.test.ts` tourne sur D1 **et** sur
+`node:sqlite`), `npm run smoke:node` (vrai serveur Node, base temporaire), et le
+parcours Playwright `node app/e2e/lot2-serveur.mjs` (serveur Node sur 8797,
+données inventées, captures dans `app/docs/captures/lot2/`).
 
 ## Le cœur : le moteur de disponibilité lié
 
@@ -299,6 +376,19 @@ diagnostic `GET /api/admin/beds24/status` (détails compte + propriétés + sond
 réseau en cas d'échec). Auth validée en direct : `GET /properties` → 200.
 Révocation : écran Refresh Tokens de l'UI Beds24.
 
+**Nouveau compte (10/10/2026) — recréer la propriété depuis le back-office.**
+`GET /api/admin/beds24/status?property=1` rend aussi le compte relié (`compte` :
+numéro, nom du jeton, droits — l'API ne donne pas le nom d'utilisateur), l'état
+du mapping (`actif` / `perime` / `absent`) et `creationPossible`.
+`GET /api/admin/beds24/creer-propriete/apercu` montre ce qui partirait (aucun
+réseau) ; `POST /api/admin/beds24/creer-propriete { propertyId, confirmer: true }`
+crée la propriété et une room par maison (le Domaine entier reste direct-only),
+écrit le mapping, puis envoie textes et équipements
+(`src/services/beds24-propriete.ts`, contenu dans `src/core/beds24-contenu.ts`).
+Photos, GPS, lits, wifi : rendus sous « à compléter dans Beds24 ». Bouton dans
+Canaux OTA. Écritures Beds24 **fermées par défaut** : seule
+`BEDS24_WRITE_ENABLED="true"` (production) les autorise, le https ne suffit plus.
+
 ⚠️ **Piège dev local + VPN Emeria** : workerd (wrangler dev) lit `/etc/resolv.conf`
 (résolveurs VPN 100.64.0.x) qui renvoie des réponses **vides** pour les domaines
 publics → TOUS les fetch sortants du Worker local échouent en
@@ -425,6 +515,27 @@ Côté back-office : onglet **Messages** (badge tableau de bord), fil en bulles,
 **réponse envoyée depuis la plateforme** (visible immédiatement sur le voucher,
 doublée par email quand `EMAILS_ENABLED` — sinon journalisée en stub), message
 proactif depuis la fiche résa (« 💬 Message au client »), marquage traité.
+
+### Messages des canaux (Airbnb, Booking.com, Vrbo, Expedia) par Beds24
+
+Beds24 n'a pas de webhook pour les messages : le cron les relève **une fois par
+passage, pour tout le compte** (`GET /bookings/messages?filter=unread&maxAge=N`,
+N = jours depuis la dernière relève + 1, 30 au premier passage), après le pull
+des réservations. Chaque message est gardé dans `channel_messages` (migration
+0024) ; ceux du voyageur et de l'hôte sont recopiés dans `messages` avec
+`channel = 'beds24'`, rattachés à notre réservation par `external_uid
+'beds24:<id>'` (sinon regroupés sous l'adresse `beds24:<id>`). Les messages
+relevés sont marqués lus chez Beds24 en **un** appel (`POST /bookings/messages
+[{id, read:true}]`, production seulement). Le quota (`X-FiveMinCreditLimit`,
+`-Remaining`, `X-RequestCost`) est noté à chaque relève dans `app_settings`
+(`beds24_messages_last`) et au journal d'audit quand un message arrive ou que la
+réserve passe sous 20 %.
+
+Répondre à un message de canal (`POST /api/admin/messages/:id/reply`) le renvoie
+**par Beds24, sur le canal du voyageur** (`POST /bookings/messages
+[{bookingId, message}]`, texte brut), jamais par mail ; un refus de Beds24 rend
+502 et le message reste « à répondre ». L'écran Messages de `app/` affiche le
+canal en badge (`app/src/canaux/`).
 
 ## Intégration email (boîte de réception + accusés + transfert)
 
@@ -732,6 +843,11 @@ Le script annule tout seul les réservations de test qu'il a créées.
 
 ### Ce qui ne suit pas sur Infomaniak
 
+- **Emails sortants** : par **SMTP** (la boîte Infomaniak, `reservations@` sur le
+  domaine définitif) — client sans dépendance `node/smtp.mjs` (TLS sur 465,
+  STARTTLS obligatoire sur 587, AUTH PLAIN ou LOGIN), actif quand `SMTP_HOST`,
+  `SMTP_USER`, `SMTP_PASSWORD`, `MAIL_FROM` sont posés et `EMAILS_ENABLED=true`.
+  Resend reste le transport sur Workers. Variables : `.env.example`.
 - **Emails entrants** : le handler Cloudflare Email Routing n'a pas d'équivalent.
   À remplacer par une relève IMAP sur une boîte Infomaniak, ou à laisser de côté
   (les échanges clients passent déjà par la plateforme).
@@ -741,13 +857,10 @@ Le script annule tout seul les réservations de test qu'il a créées.
 
 ### Sauvegarde
 
-La base est **un seul fichier**. La sauvegarder, c'est le copier :
-
-```bash
-sqlite3 "$SQLITE_PATH" ".backup '/chemin/sauvegardes/$(date +%F)-gites.db'"
-```
-
-À planifier en tâche hebdomadaire, et à rapatrier hors du serveur. Tester la
+Sans SSH, la sauvegarde se **tire depuis le Mac**, chaque nuit, par
+`GET /api/admin/export.sqlite` (compte `sauvegarde`) : voir « La sauvegarde de
+nuit » plus haut. Restaurer = arrêter le site, remplacer le fichier
+`SQLITE_PATH` par la copie (sans `-wal` ni `-shm` à côté), redémarrer. Tester la
 restauration une fois : une procédure jamais exécutée n'est pas une procédure.
 
 ## Sécurité

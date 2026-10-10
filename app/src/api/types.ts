@@ -89,6 +89,17 @@ export interface Overview {
     overdueBalances: OverviewBalance[];
     activeHolds: { id: number; reference: string; unitName: string; holdExpiresAt: string | null }[];
     newEmails: number;
+    feedAlerts?: { id: number; name: string; status: string | null }[];
+  };
+  health?: {
+    orphanPayments: { reference: string; bookingId: number; amountCents: number; bookingStatus: string }[];
+    overpaidBookings: { reference: string; bookingId: number; overpaidCents: number }[];
+    failedEmails: { bookingId: number | null; reference: string | null; kind: string; toEmail: string; errorDetail: string | null }[];
+    recentErrors: { action: string; entity: string | null; createdAt: string }[];
+    beds24Stale: boolean;
+    beds24StaleHours: number | null;
+    drift: { kind: string; label: string; detail: string; href: string }[];
+    ok: boolean;
   };
 }
 
@@ -102,6 +113,7 @@ export interface DayRate {
   fallbackPriceCents: number | null;
   overridePriceCents: number | null;
   overrideMinNights: number | null;
+  seasonName?: string | null;
 }
 
 export interface RateCalendarUnit {
@@ -210,7 +222,10 @@ export interface Message {
   id: number;
   propertyId: number | null;
   direction: "in" | "out";
-  channel: "email" | "form";
+  /** 'beds24' : message d'un canal OTA (Airbnb, Booking…) relevé par Beds24 — cf. canaux/canal.ts. */
+  channel: "email" | "form" | "beds24";
+  /** Nom du canal d'un message 'beds24' (« Airbnb »), sinon null. */
+  canal?: string | null;
   fromEmail: string;
   fromName: string | null;
   toEmail: string | null;
@@ -225,4 +240,50 @@ export interface Message {
 
 export interface GuestRegisterInfo {
   entries?: unknown[];
+}
+
+// --- lot 2 : ménage, modèles, liens de partage ------------------------------------
+
+export interface Task {
+  id: number;
+  propertyId: number;
+  unitId: number;
+  unitName: string;
+  isComposite: boolean;
+  bookingId: number | null;
+  kind: "menage" | "autre";
+  dueDate: IsoDate;
+  dueTime: string | null;
+  nextCheckin: IsoDate | null;
+  nextCheckinTime: string | null;
+  nextUnitId: number | null;
+  nextUnitName: string | null;
+  nextPersons: number | null;
+  status: "a_faire" | "fait" | "annule";
+  assignee: string | null;
+  note: string | null;
+  doneAt: string | null;
+  doneBy: string | null;
+  updatedAt: string;
+}
+
+export interface TaskShareLink {
+  id: number;
+  label: string;
+  propertyId: number | null;
+  createdBy: string | null;
+  createdAt: string;
+  lastUsedAt: string | null;
+  revokedAt: string | null;
+}
+
+export interface MessageTemplate {
+  id: number;
+  propertyId: number | null;
+  name: string;
+  lang: "fr" | "nl" | "en";
+  body: string;
+  sortOrder: number;
+  active: boolean;
+  updatedAt: string;
 }

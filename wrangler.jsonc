@@ -66,7 +66,7 @@
       "vars": {
         "PUBLIC_BASE_URL": "https://gites-platform.j-decartier.workers.dev", // TEST public 2026-08-03 — à caler sur le domaine retenu (décision D5)
         "EMAILS_ENABLED": "false",                 // passer à "true" une fois Resend + DKIM vérifiés
-        "BEDS24_WRITE_ENABLED": "true"             // réactivé le 2026-08-03 (demande Julien) — NB : en https, beds24WritesAllowed() autorise de toute façon
+        "BEDS24_WRITE_ENABLED": "true"             // réactivé le 2026-08-03 (demande Julien) — INDISPENSABLE depuis le 10/10/2026 : sans « true », aucune écriture Beds24 (fermé par défaut)
       },
       "assets": {
         "directory": "public",
@@ -95,9 +95,9 @@
     //   et seed rejoués depuis zéro, aucune donnée de la production.
     // - Courriels coupés (EMAILS_ENABLED=false), paiement simulé (aucune clé
     //   Stripe), Beds24 coupé : AUCUN secret BEDS24_* ne doit y être posé.
-    //   ⚠️ BEDS24_WRITE_ENABLED=false ne suffit pas à lui seul : en https,
-    //   beds24WritesAllowed() autorise l'écriture (src/services/beds24.ts) ;
-    //   c'est l'absence de BEDS24_REFRESH_TOKEN qui garde l'intégration éteinte.
+    //   Depuis le 10/10/2026, beds24WritesAllowed() est fermé par défaut : seul
+    //   BEDS24_WRITE_ENABLED="true" autorise une écriture, le https ne suffit
+    //   plus. L'absence de BEDS24_REFRESH_TOKEN reste la première barrière.
     // - Seul secret : ADMIN_TOKEN d'essai, distinct de la production, lu dans
     //   `.secrets.essai` (gitignoré) par `make livrer-essai`.
     "essai": {

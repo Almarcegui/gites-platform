@@ -81,6 +81,7 @@ Node 20 ou plus récent.
 | `GITES_URL` | `https://gites-platform.j-decartier.workers.dev` (prod) ou `http://localhost:8788` (dev). Une origine seule (ni chemin, ni identifiant, ni requête) ; `http://` n'est accepté que pour localhost. |
 | `GITES_ID` | Identifiant admin : un compte de la page Utilisateurs (session de 30 jours, renouvelée seule), ou un couple de secours de `ADMIN_TOKEN`. |
 | `GITES_MDP` | Son mot de passe. |
+| `GITES_SERVICE_KEY` | À la place de `GITES_ID`/`GITES_MDP` : une **clé d'accès de service** (back-office, page Utilisateurs › Accès de service, affichée une fois). Présentée en `Bearer svc:<clé>`, sans connexion ; le journal d'audit l'inscrit `svc:<nom>`. Révoquée : le connecteur reçoit 401 et ne réessaie pas. Pratique pour Claude et Jarvis, qui n'ont pas de compte humain. |
 | `GITES_MDP_TROUSSEAU` | À la place de `GITES_MDP` : nom d'un service du trousseau macOS (compte = `GITES_ID`). Évite le mot de passe en clair dans un fichier de configuration. |
 | `GITES_TIMEOUT_MS` | Délai par requête (défaut 20 000). |
 | `GITES_MCP_SILENCE` | `1` = aucun journal sur stderr. |
