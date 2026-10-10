@@ -151,6 +151,7 @@ import {
 } from "../services/booking-flow";
 import { buildBalanceReminderEmail, queueEmail } from "../services/email";
 import { importElloha } from "../services/elloha-import";
+import { importAgendaGoogle, MAX_AGENDA_EVENTS } from "../services/agenda-import";
 import { replyOnChannel } from "../services/beds24-messages";
 import { exportSql } from "../services/export-db";
 import { tarStream } from "../core/tar";
@@ -2571,25 +2572,27 @@ export function registerAdminRoutes(router: Router): void {
   }));
 
   router.post("/api/admin/ical-feeds", guard(async (req, env) => {
-    const body = await readJson<{ unitId?: number; name?: string; url?: string }>(req);
+    const body = await readJson<{ unitId?: number; name?: string; url?: string; departureDayIncluded?: boolean }>(req);
     const unitId = intParam(String(body?.unitId ?? ""), 0);
     const name = String(body?.name ?? "").trim();
     const feedUrl = String(body?.url ?? "").trim();
     if (!unitId || !name || !/^https?:\/\//.test(feedUrl)) return apiError(400, "unitId, name et url http(s) requis");
-    const id = await createFeed(env.DB, { unitId, name, url: feedUrl });
-    await audit(env.DB, "admin", "ical_feed.create", `feed:${id}`, { unitId, name });
+    const departureDayIncluded = body?.departureDayIncluded === true;
+    const id = await createFeed(env.DB, { unitId, name, url: feedUrl, departureDayIncluded });
+    await audit(env.DB, "admin", "ical_feed.create", `feed:${id}`, { unitId, name, departureDayIncluded });
     return json({ id }, 201);
   }));
 
   router.patch("/api/admin/ical-feeds/:id", guard(async (req, env, p) => {
     const id = intParam(p.id, 0);
-    const body = await readJson<{ name?: string; url?: string; active?: boolean }>(req);
+    const body = await readJson<{ name?: string; url?: string; active?: boolean; departureDayIncluded?: boolean }>(req);
     if (!id || !body) return apiError(400, "requête invalide");
     if (body.url !== undefined && !/^https?:\/\//.test(String(body.url))) return apiError(400, "url invalide");
     await updateFeed(env.DB, id, {
       name: body.name !== undefined ? String(body.name).trim() : undefined,
       url: body.url !== undefined ? String(body.url).trim() : undefined,
       active: typeof body.active === "boolean" ? body.active : undefined,
+      departureDayIncluded: typeof body.departureDayIncluded === "boolean" ? body.departureDayIncluded : undefined,
     });
     await audit(env.DB, "admin", "ical_feed.update", `feed:${id}`, body);
     return json({ ok: true });
@@ -2624,6 +2627,31 @@ export function registerAdminRoutes(router: Router): void {
     const csv = String(body?.csv ?? "");
     if (csv.trim().length === 0) return apiError(400, "csv attendu");
     const result = await importElloha(env.DB, propertyId, csv, body?.dryRun !== false);
+    return json({ result });
+  }));
+
+  // --- import des agendas Google de papa (scripts/importer_agenda_google.py) -------
+  // Idempotent ; `essai: true` dit ce qui serait fait sans rien écrire.
+  router.post("/api/admin/import/agenda-google", guard(async (req, env, _p, _url, execCtx) => {
+    const body = await readJson<{ unitId?: unknown; feedId?: unknown; evenements?: unknown; essai?: unknown }>(req);
+    if (!body) return apiError(400, "corps JSON attendu");
+    const unitId = intParam(String(body.unitId ?? ""), 0);
+    const feedId = intParam(String(body.feedId ?? ""), 0);
+    if (!Array.isArray(body.evenements) || body.evenements.length === 0) return apiError(400, "evenements : liste attendue");
+    if (body.evenements.length > MAX_AGENDA_EVENTS) return apiError(400, `au plus ${MAX_AGENDA_EVENTS} événements par envoi`);
+    const feed = await getFeed(env.DB, feedId);
+    if (!feed) return apiError(404, "flux iCal inconnu");
+    if (feed.unitId !== unitId) return apiError(400, `le flux ${feedId} appartient au bien ${feed.unitId}, pas au bien ${unitId}`);
+    const essai = body.essai === true;
+    const result = await importAgendaGoogle(env.DB, feed, body.evenements, { essai });
+    if (!essai) {
+      await audit(env.DB, "admin", "agenda.import", `feed:${feed.id}`, {
+        par: currentUser(req), creees: result.creees, completees: result.completees,
+        annulees: result.annulees, blocages: result.blocages, ignorees: result.ignorees,
+      });
+      const unit = await getUnit(env.DB, unitId);
+      if (unit && result.creees + result.annulees + result.blocages > 0) triggerBeds24Push(env.DB, env, execCtx, unit.propertyId);
+    }
     return json({ result });
   }));
 

@@ -775,6 +775,54 @@ export async function createBookingAtomic(db: D1Database, input: CreateBookingIn
   return { ok: true, id, reference: row?.reference ?? "" };
 }
 
+/** Inscrit une réservation DÉJÀ ANNULÉE (historique importé : séjour annulé
+ *  dans un agenda externe). Pas de garde de disponibilité : une annulée
+ *  n'occupe aucun stock, et son créneau a souvent été reloué. Même numérotation
+ *  que createBookingAtomic. */
+export async function insertCancelledBooking(
+  db: D1Database,
+  input: Omit<CreateBookingInput, "status" | "holdMinutes"> & { cancelReason: string },
+): Promise<{ id: number; reference: string; inserted: boolean }> {
+  if (!isIsoDate(input.checkin) || !isIsoDate(input.checkout) || input.checkin >= input.checkout) {
+    throw new Error(`insertCancelledBooking: dates invalides ${input.checkin} → ${input.checkout}`);
+  }
+  const nowDate = input.now ?? new Date();
+  const now = sqlNow(nowDate);
+  const year = todayInZone(nowDate).slice(0, 4);
+  const res = await db
+    .prepare(
+      `INSERT INTO bookings (reference, unit_id, guest_id, checkin, checkout, adults, children,
+                             status, source, channel_label, external_uid, total_cents,
+                             internal_notes, cancelled_at, cancel_reason, created_at, updated_at)
+       SELECT
+         (SELECT p.ref_prefix FROM units u JOIN properties p ON p.id = u.property_id WHERE u.id = ?1)
+           || '-' || ?2 || '-'
+           || printf('%03d', 1 + (
+                SELECT COUNT(*) FROM bookings b
+                 WHERE b.reference LIKE
+                   (SELECT p2.ref_prefix FROM units u2 JOIN properties p2 ON p2.id = u2.property_id WHERE u2.id = ?1)
+                   || '-' || ?2 || '-%'
+              )),
+         ?1, ?6, ?3, ?4, ?7, ?8, 'cancelled', ?9, ?10, ?11, ?12, ?13, ?5, ?14, ?5, ?5
+       WHERE ?11 IS NULL OR NOT EXISTS (SELECT 1 FROM bookings x WHERE x.external_uid = ?11)`,
+    )
+    .bind(
+      input.unitId, year, input.checkin, input.checkout, now, input.guestId ?? null,
+      input.adults, input.children, input.source, input.channelLabel ?? null, input.externalUid ?? null,
+      input.totalCents ?? 0, input.internalNotes ?? null, input.cancelReason,
+    )
+    .run();
+  if (res.meta.changes !== 1) {
+    // Un appel concurrent a inscrit le même UID : on rend la ligne gagnante.
+    const won = await db.prepare("SELECT id, reference FROM bookings WHERE external_uid = ?1").bind(input.externalUid ?? null).first<{ id: number; reference: string }>();
+    if (!won) throw new Error("insertCancelledBooking: insertion refusée");
+    return { id: Number(won.id), reference: won.reference, inserted: false };
+  }
+  const id = res.meta.last_row_id;
+  const row = await db.prepare("SELECT reference FROM bookings WHERE id = ?1").bind(id).first<{ reference: string }>();
+  return { id, reference: row?.reference ?? "", inserted: true };
+}
+
 export async function getBooking(db: D1Database, id: number): Promise<BookingRow | null> {
   const row = await db.prepare(`${BOOKING_JOIN} WHERE b.id = ?1`).bind(id).first();
   return row ? mapBooking(row as Raw) : null;
@@ -1602,6 +1650,9 @@ export interface ManualBlockRow {
   releasedAt: string | null;
   releasedBy: string | null;
   createdAt: string;
+  /** Événement d'agenda externe que ce blocage représente (« feed<id>:<UID> »),
+   *  posé par l'import des agendas Google (migration 0028). */
+  externalUid: string | null;
 }
 
 function mapManualBlock(r: Raw): ManualBlockRow {
@@ -1618,6 +1669,7 @@ function mapManualBlock(r: Raw): ManualBlockRow {
     releasedAt: strOrNull(r.released_at),
     releasedBy: strOrNull(r.released_by),
     createdAt: str(r.created_at),
+    externalUid: strOrNull(r.external_uid),
   };
 }
 
@@ -1632,6 +1684,11 @@ export interface CreateManualBlockInput {
   checkout: IsoDate;
   reason: string;
   createdBy: string;
+  /** Événement d'agenda externe représenté (import agenda Google). */
+  externalUid?: string | null;
+  /** Réservation que ce blocage REMPLACE (import agenda : la « Busy » du même
+   *  événement) : ignorée par le garde, puis annulée par l'appelant. */
+  replacesBookingId?: number | null;
   now?: Date;
 }
 
@@ -1656,12 +1713,13 @@ export async function createManualBlockAtomic(
   const now = sqlNow(input.now ?? new Date());
   const res = await db
     .prepare(
-      `INSERT INTO manual_blocks (unit_id, checkin, checkout, reason, created_by, active, created_at, updated_at)
-       SELECT ?1, ?2, ?3, ?5, ?6, 1, ?4, ?4
+      `INSERT INTO manual_blocks (unit_id, checkin, checkout, reason, created_by, active, created_at, updated_at, external_uid)
+       SELECT ?1, ?2, ?3, ?5, ?6, 1, ?4, ?4, ?7
        WHERE NOT EXISTS (
          SELECT 1 FROM bookings b
           WHERE b.checkin < ?3
             AND b.checkout > ?2
+            AND b.id != ?8
             AND (b.status = 'confirmed' OR (b.status = 'pending' AND b.hold_expires_at > ?4))
             AND b.unit_id IN (
               SELECT ?1
@@ -1671,10 +1729,50 @@ export async function createManualBlockAtomic(
        )
          AND ${manualBlockConflictSql("?1", "?2", "?3")}`,
     )
-    .bind(input.unitId, input.checkin, input.checkout, now, input.reason, input.createdBy)
+    .bind(input.unitId, input.checkin, input.checkout, now, input.reason, input.createdBy, input.externalUid ?? null, input.replacesBookingId ?? -1)
     .run();
   if (res.meta.changes !== 1) return { ok: false, reason: "conflict" };
   return { ok: true, id: res.meta.last_row_id };
+}
+
+/** Déplace un blocage actif (l'événement d'agenda qu'il représente a bougé),
+ *  avec le même garde-fou que sa pose — lui-même exclu. false ⇒ conflit. */
+export async function moveManualBlockAtomic(
+  db: D1Database,
+  id: number,
+  unitId: number,
+  checkin: IsoDate,
+  checkout: IsoDate,
+  now: string = sqlNow(),
+): Promise<boolean> {
+  if (!isIsoDate(checkin) || !isIsoDate(checkout) || checkin >= checkout) {
+    throw new Error(`moveManualBlockAtomic: dates invalides ${checkin} → ${checkout}`);
+  }
+  const res = await db
+    .prepare(
+      `UPDATE manual_blocks SET checkin = ?3, checkout = ?4, updated_at = ?5
+        WHERE id = ?2 AND unit_id = ?1 AND active = 1
+          AND NOT EXISTS (
+            SELECT 1 FROM bookings b
+             WHERE b.checkin < ?4 AND b.checkout > ?3
+               AND (b.status = 'confirmed' OR (b.status = 'pending' AND b.hold_expires_at > ?5))
+               AND b.unit_id IN (SELECT ?1 UNION ALL SELECT ul.unit_id FROM unit_links ul WHERE ul.blocks_unit_id = ?1)
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM manual_blocks k
+             WHERE k.id != ?2 AND k.active = 1 AND k.checkin < ?4 AND k.checkout > ?3
+               AND k.unit_id IN (SELECT ?1 UNION ALL SELECT ul.unit_id FROM unit_links ul WHERE ul.blocks_unit_id = ?1)
+          )`,
+    )
+    .bind(unitId, id, checkin, checkout, now)
+    .run();
+  return res.meta.changes === 1;
+}
+
+/** Blocage (actif OU levé) qui représente cet événement d'agenda externe. */
+export async function getManualBlockByExternalUid(db: D1Database, externalUid: string): Promise<ManualBlockRow | null> {
+  const row = await db.prepare(`${MANUAL_BLOCK_JOIN} WHERE k.external_uid = ?1`).bind(externalUid).first();
+  return row ? mapManualBlock(row as Raw) : null;
 }
 
 export async function getManualBlock(db: D1Database, id: number): Promise<ManualBlockRow | null> {
@@ -2125,6 +2223,9 @@ export interface FeedRow {
   name: string;
   url: string;
   active: boolean;
+  /** Le calendrier bloque aussi le jour du départ (convention de papa) :
+   *  la lecture retire un jour aux événements « journée entière ». */
+  departureDayIncluded: boolean;
   lastSyncAt: string | null;
   lastStatus: string | null;
 }
@@ -2133,6 +2234,7 @@ function mapFeed(r: Raw): FeedRow {
   return {
     id: num(r.id), unitId: num(r.unit_id), unitName: strOrNull(r.unit_name) ?? undefined,
     name: str(r.name), url: str(r.url), active: num(r.active) === 1,
+    departureDayIncluded: num(r.departure_day_included ?? 0) === 1,
     lastSyncAt: strOrNull(r.last_sync_at), lastStatus: strOrNull(r.last_status),
   };
 }
@@ -2155,10 +2257,13 @@ export async function getFeed(db: D1Database, id: number): Promise<FeedRow | nul
   return row ? mapFeed(row as Raw) : null;
 }
 
-export async function createFeed(db: D1Database, f: { unitId: number; name: string; url: string }): Promise<number> {
+export async function createFeed(
+  db: D1Database,
+  f: { unitId: number; name: string; url: string; departureDayIncluded?: boolean },
+): Promise<number> {
   const res = await db
-    .prepare("INSERT INTO ical_feeds (unit_id, name, url) VALUES (?1, ?2, ?3)")
-    .bind(f.unitId, f.name, f.url)
+    .prepare("INSERT INTO ical_feeds (unit_id, name, url, departure_day_included) VALUES (?1, ?2, ?3, ?4)")
+    .bind(f.unitId, f.name, f.url, f.departureDayIncluded ? 1 : 0)
     .run();
   return res.meta.last_row_id;
 }
@@ -2166,13 +2271,17 @@ export async function createFeed(db: D1Database, f: { unitId: number; name: stri
 export async function updateFeed(
   db: D1Database,
   id: number,
-  f: Partial<{ name: string; url: string; active: boolean }>,
+  f: Partial<{ name: string; url: string; active: boolean; departureDayIncluded: boolean }>,
 ): Promise<void> {
   await db
     .prepare(
-      "UPDATE ical_feeds SET name = COALESCE(?2, name), url = COALESCE(?3, url), active = COALESCE(?4, active) WHERE id = ?1",
+      `UPDATE ical_feeds SET name = COALESCE(?2, name), url = COALESCE(?3, url), active = COALESCE(?4, active),
+         departure_day_included = COALESCE(?5, departure_day_included) WHERE id = ?1`,
     )
-    .bind(id, f.name ?? null, f.url ?? null, f.active === undefined ? null : f.active ? 1 : 0)
+    .bind(
+      id, f.name ?? null, f.url ?? null, f.active === undefined ? null : f.active ? 1 : 0,
+      f.departureDayIncluded === undefined ? null : f.departureDayIncluded ? 1 : 0,
+    )
     .run();
 }
 
