@@ -79,8 +79,9 @@ def gardes(cible: str) -> str:
     return head
 
 
-# L'essai ne doit porter aucun secret de service réel : en https, BEDS24_WRITE_ENABLED=false
-# ne suffit pas (src/services/beds24.ts), et `--secrets-file` ajoute sans jamais retirer.
+# L'essai ne doit porter aucun secret de service réel (les écritures Beds24 y sont fermées
+# depuis le 10/10/2026, mais un jeton y permettrait encore de LIRE le compte réel), et
+# `--secrets-file` ajoute sans jamais retirer.
 SECRETS_ADMIS_ESSAI = {"ADMIN_TOKEN", "TURNSTILE_SITE_KEY", "TURNSTILE_SECRET_KEY"}
 
 
