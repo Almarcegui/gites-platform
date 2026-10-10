@@ -39,6 +39,60 @@ Deux repères pour lire le code :
 
 Architecture du code : [`ARCHITECTURE.md`](ARCHITECTURE.md).
 Organisation du travail à deux : [`COLLABORATION.md`](COLLABORATION.md).
+Décisions de Julien : [`docs/decisions.md`](docs/decisions.md) ; séances :
+[`docs/journal-des-seances.md`](docs/journal-des-seances.md).
+
+## Les commandes du dépôt (`make`, depuis le 09/10/2026)
+
+| Commande | Ce qu'elle fait |
+|---|---|
+| `make installer` | `npm ci` |
+| `make dev` | migrations locales, puis serveur local sur 8788 |
+| `make test` | les tests, un fichier après l'autre (`--no-file-parallelism`) |
+| `make check` | **tout ce qui doit passer avant de dire « fini »** : typecheck, tests, signatures des images, script de sauvegarde. Sur un arbre propre, marque le commit vérifié |
+| `make sauvegarde` | export horodaté de la base de **production** dans `sauvegardes/` (lecture seule) |
+| `make livrer-essai` | vers l'**essai** : sauvegarde de la base d'essai, migrations, déploiement, sonde |
+| `make livrer` | vers la **production**, sur le « go » de Julien et depuis `main` seulement : sauvegarde, migrations, déploiement, sonde |
+| `make sonde-prod`, `make sonde-essai` | `/api/public/health`, une minute au plus |
+
+Les deux `livrer` passent par `scripts/livrer.py` : ils refusent un arbre modifié
+et un commit sur lequel `make check` n'est pas passé, tiennent un verrou par cible
+jusqu'à la sonde (deux livraisons vers la même base ne s'entrelacent pas, même
+depuis deux worktrees), et sans sauvegarde réussie aucune migration distante ne
+part. Seul le wrangler du dépôt (`node_modules/.bin`) est employé.
+**Jamais `make check | tail … && git commit`** : un tube rend le code de sortie
+de sa dernière commande, et l'échec passe. `make check` se lance seul.
+
+### L'environnement d'essai
+
+**https://gites-platform-essai.j-decartier.workers.dev** — Worker et base D1
+(`gites-platform-essai`) à part : rien de ce qu'on y fait ne touche la production.
+Courriels coupés, paiement simulé, Beds24 coupé (aucun secret `BEDS24_*` n'y est
+posé, et il ne faut pas en poser : en https, `BEDS24_WRITE_ENABLED=false` ne
+suffit pas, voir `wrangler.jsonc`). Son `ADMIN_TOKEN`, distinct de celui de la
+production, est dans `.secrets.essai` (gitignoré, dans le clone principal) ;
+`make livrer-essai` le pose à chaque déploiement. À la première livraison, la base
+d'essai n'a encore aucune table : sa sauvegarde le constate et laisse passer
+(l'essai seulement ; une base de production vide ou incomplète est refusée).
+
+### La sauvegarde de nuit
+
+Le LaunchAgent `com.julien.gites-sauvegarde` lance chaque nuit à 3 h 30 (ou au
+réveil du Mac) `scripts/sauvegarde_nuit.py` **du clone principal** : export de la
+base de production dans `sauvegardes/AAAA-MM-JJ-HHMMSS-gites-platform.sql`,
+30 jours gardés et 7 fichiers au moins, une ligne par passage dans
+`~/Library/Logs/gites-sauvegarde.log` (« OK … » ou « ÉCHEC … », jamais l'URL de
+téléchargement signée que wrangler affiche), sortie 1 sur échec. Il a besoin
+d'une session wrangler valide (`npx wrangler login`) : sinon, chaque nuit écrit
+« ÉCHEC … Not logged in ». Arrêt : `launchctl bootout gui/501/com.julien.gites-sauvegarde`.
+
+### Le dépôt sur GitHub
+
+Aujourd'hui `jdecartier-glitch/gites-platform` (le compte actif de `gh`,
+`Almarcegui`, n'y a pas accès : `gh auth switch -u jdecartier-glitch` avant un
+push). Transfert prévu vers **`Almarcegui/gites-platform`**, en attente d'un geste
+de Julien depuis le compte propriétaire actuel ; ensuite,
+`git remote set-url origin https://github.com/Almarcegui/gites-platform.git`.
 
 ## Le cœur : le moteur de disponibilité lié
 
@@ -483,9 +537,12 @@ Seuls les codes d'erreur de Cloudflare (`invalid-input-response`,
 
 ---
 
-## Déploiement (⚠️ RIEN n'est déployé — décision de Julien)
+## Déploiement (en production depuis le 03/08/2026 — décision de Julien)
 
-Runbook à exécuter LE MOMENT VENU, jamais sans son accord explicite.
+**Depuis le 09/10/2026, on déploie par `make livrer` (production) et
+`make livrer-essai` (essai), jamais par un `wrangler deploy` à la main** (§ Les
+commandes du dépôt). Le runbook ci-dessous décrit la mise en place initiale ;
+chaque déploiement en production reste soumis à l'accord explicite de Julien.
 Depuis le LOT A0, la config locale et la config de production sont **séparées**
 dans `wrangler.jsonc` (bloc `env.production`) : on ne modifie plus le bloc
 racine au déploiement, sans quoi tout `npm run dev` suivant fabriquait des
@@ -530,14 +587,18 @@ tardivement).
 #### Sauvegarder
 
 ```bash
-scripts/backup-d1.sh          # export daté + rotation des 8 dernières
+make sauvegarde              # export horodaté (scripts/sauvegarde_nuit.py)
 ```
 
 Le script ne fait que **lire** la production. Il écrit
-`sauvegardes/AAAA-MM-JJ-gites-platform.sql`, journalise dans
-`sauvegardes/journal-sauvegardes.log`, et refuse un export vide ou sans schéma —
-un export tronqué qui inspire confiance est pire que pas de sauvegarde du tout.
-Nombre de copies conservées : `SAUVEGARDES_A_GARDER=12 scripts/backup-d1.sh`.
+`sauvegardes/AAAA-MM-JJ-HHMMSS-gites-platform.sql` (dans le clone principal, même
+lancé depuis un worktree), une ligne dans `~/Library/Logs/gites-sauvegarde.log`,
+et refuse un export qui ne se rejoue pas entièrement dans une base SQLite en
+mémoire (`integrity_check`, tables attendues) — un export tronqué qui inspire
+confiance est pire que pas de sauvegarde du tout.
+Rotation : 30 jours, et toujours les 7 plus récentes. `make livrer` le lance
+avant toute migration distante. L'ancien `scripts/backup-d1.sh` (journal
+`sauvegardes/journal-sauvegardes.log`, nom au jour près) n'est plus appelé.
 
 ⚠️ **Le dump ne doit jamais être versionné.** Il contient les données
 personnelles des voyageurs (noms, e-mails, téléphones, montants) et le dépôt est
@@ -546,6 +607,10 @@ partagé. `sauvegardes/`, `backups/`, `*.sql.gz` et `*.dump` sont exclus par le
 Cloudflare sont Time Machine et le disque local, pas git.
 
 #### Automatiser (une fois, sur le Mac du propriétaire)
+
+**Fait le 09/10/2026** : LaunchAgent `com.julien.gites-sauvegarde`, chaque nuit à
+3 h 30 (§ La sauvegarde de nuit, plus haut). Le gabarit hebdomadaire ci-dessous
+(`backup-d1.sh`, dimanche 8 h) n'a jamais été installé ; il reste pour mémoire.
 
 `scripts/com.julien.gites-backup.plist.example` est un **gabarit** : il déclenche
 le script tous les dimanches à 8 h. Installation :

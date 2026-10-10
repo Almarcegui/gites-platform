@@ -19,8 +19,11 @@
 
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const IMG_DIR = new URL("../public/img/", import.meta.url).pathname;
+// fileURLToPath et non `.pathname` : `.pathname` laisse le chemin encodé
+// (%F0%9F%94%A7 pour l'émoji du dossier « 🔧 Dev »), introuvable sur le disque.
+const IMG_DIR = fileURLToPath(new URL("../public/img/", import.meta.url));
 
 /** Plafond de poids par fichier (issue #17). Doit rester aligné sur
  *  `POIDS_MAX_KO` de `scripts/optimize-images.mjs`. */
