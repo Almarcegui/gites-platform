@@ -8,7 +8,7 @@
 
 import { createServer } from "node:http";
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync } from "node:fs";
-import { unlink, writeFile } from "node:fs/promises";
+import { readFile, stat, unlink, writeFile } from "node:fs/promises";
 import { dirname, extname, join, normalize, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -114,7 +114,7 @@ const env = {
     async read(name) {
       if (!/^[0-9a-f]{32}\.(jpg|png|webp)$/.test(name)) throw new Error("nom de fichier refusé");
       const full = join(UPLOADS_DIR, name);
-      return { bytes: new Uint8Array(readFileSync(full)), mtime: Math.floor(statSync(full).mtimeMs / 1000) };
+      return { bytes: new Uint8Array(await readFile(full)), mtime: Math.floor((await stat(full)).mtimeMs / 1000) };
     },
   },
 };
@@ -253,11 +253,23 @@ async function sendResponse(res, response) {
   const headers = {};
   for (const [k, v] of response.headers) headers[k] = v;
   res.writeHead(response.status, headers);
-  if (response.body) {
-    const buf = Buffer.from(await response.arrayBuffer());
-    res.end(buf);
-  } else {
+  if (!response.body) {
     res.end();
+    return;
+  }
+  // En flux, avec contre-pression : une grosse réponse (archive des photos)
+  // ne passe jamais tout entière en mémoire.
+  const reader = response.body.getReader();
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!res.write(value)) await new Promise((r) => res.once("drain", r));
+    }
+    res.end();
+  } catch (e) {
+    console.error("[gites] réponse interrompue :", e instanceof Error ? e.message : e);
+    res.destroy(e instanceof Error ? e : undefined);
   }
 }
 

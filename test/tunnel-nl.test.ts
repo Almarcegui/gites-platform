@@ -101,6 +101,9 @@ describe("réservation en néerlandais", () => {
     expect(created.status).toBe(201);
     const guest = await t.db.prepare("SELECT lang FROM guests WHERE email = 'pieter@example.be'").first<{ lang: string }>();
     expect(guest?.lang).toBe("nl");
+    // la langue est aussi celle de CETTE réservation (revue Codex) : un client qui
+    // réserve plus tard en français ne fait pas basculer celle-ci.
+    expect((await t.db.prepare("SELECT lang FROM bookings WHERE reference = ?1").bind(created.data.reference).first<{ lang: string }>())?.lang).toBe("nl");
     const session = new URL(created.data.checkoutUrl as string).searchParams.get("session")!;
     expect((await call("POST", "/api/public/dev-pay/confirm", { session })).status).toBe(200);
     const mails = (await t.db.prepare("SELECT subject, body_text, kind FROM email_log WHERE to_email = 'pieter@example.be'").all<{ subject: string; body_text: string; kind: string }>()).results;

@@ -25,6 +25,9 @@ const env = (writes = true): Env => ({
 interface Call { method: string; path: string; query: URLSearchParams; body: unknown }
 let calls: Call[] = [];
 let refuse: string | null = null;
+/** Refuse seulement l'appel POST /properties qui vise cette propriété Beds24. */
+let refuseProperty: number | null = null;
+let reviewPages: Record<string, unknown[][]> = {};
 let airbnbReviews: Record<string, unknown[]> = {};
 let bookingReviews: unknown[] = [];
 const realFetch = globalThis.fetch;
@@ -40,6 +43,14 @@ beforeAll(async () => {
     calls.push({ method, path, query: url.searchParams, body });
     if (path === "/authentication/token") return new Response(JSON.stringify({ token: "tok" }), { status: 200 });
     if (refuse === path) return new Response(JSON.stringify({ success: false, error: "refusé par le faux Beds24" }), { status: 400 });
+    if (path === "/properties" && refuseProperty != null && (body as Array<{ id: number }>)[0]?.id === refuseProperty) {
+      return new Response(JSON.stringify({ success: false, error: "propriété refusée" }), { status: 400 });
+    }
+    const paged = reviewPages[`${path}?${url.searchParams.get("roomId") ?? url.searchParams.get("propertyId")}`];
+    if (paged) {
+      const page = Number(url.searchParams.get("page") ?? "1");
+      return new Response(JSON.stringify({ success: true, data: paged[page - 1] ?? [], pages: { nextPageExists: page < paged.length } }), { status: 200 });
+    }
     if (path === "/channels/airbnb/reviews") return new Response(JSON.stringify({ success: true, data: airbnbReviews[url.searchParams.get("roomId") ?? ""] ?? [] }), { status: 200 });
     if (path === "/channels/booking/reviews") return new Response(JSON.stringify({ success: true, data: bookingReviews }), { status: 200 });
     if (method === "POST") return new Response(JSON.stringify((body as unknown[]).map(() => ({ success: true, modified: {} }))), { status: 201 });
@@ -53,6 +64,8 @@ afterAll(async () => {
 beforeEach(() => {
   calls = [];
   refuse = null;
+  refuseProperty = null;
+  reviewPages = {};
 });
 
 async function api(method: string, path: string, body?: unknown, e: Env = env()) {
@@ -258,5 +271,51 @@ describe("avis Airbnb et Booking", () => {
     await expect(runLot3Scheduled(env(false), new Date("2026-10-11T08:00:00Z"))).resolves.toBeUndefined();
     const n = await t.db.prepare("SELECT COUNT(*) AS n FROM audit_log WHERE action = 'beds24.reviews.error'").first<{ n: number }>();
     expect(n?.n).toBeGreaterThan(0);
+  });
+});
+
+describe("revue Codex 1", () => {
+  it("prix dérivés tout ou rien : une propriété refuse, la précédente est remise, rien n'est activé", async () => {
+    await t.db.prepare("UPDATE properties SET beds24_property_id = 999001 WHERE id = 2").run();
+    const unit = await t.db.prepare("SELECT id FROM units WHERE property_id = 2 AND is_composite = 0 LIMIT 1").first<{ id: number }>();
+    await t.db.prepare("UPDATE units SET beds24_room_id = 999101 WHERE id = ?1").bind(unit!.id).run();
+    try {
+      refuseProperty = 999001;
+      const r = await api("POST", "/api/admin/channels/price-linking", { enabled: true });
+      expect(r.status).toBe(502);
+      const posts = calls.filter((c) => c.path === "/properties").map((c) => (c.body as Array<{ id: number; roomTypes: Array<{ priceRules: Array<Record<string, any>> }> }>)[0]!);
+      // aller sur 344555, refus sur 999001, retour arrière sur 344555 (liens défaits)
+      expect(posts.map((p) => p.id)).toEqual([344555, 999001, 344555]);
+      expect(posts[2]!.roomTypes[0]!.priceRules[1]!.priceLinking).toEqual({ priceId: null });
+      expect((await api("GET", "/api/admin/channels/price-linking")).data.enabled).toBe(false);
+    } finally {
+      await t.db.prepare("UPDATE properties SET beds24_property_id = NULL WHERE id = 2").run();
+      await t.db.prepare("UPDATE units SET beds24_room_id = NULL WHERE id = ?1").bind(unit!.id).run();
+    }
+  });
+
+  it("avis : toutes les pages lues ; une source en panne garde son curseur ; un vieil avis sous 4 reste signalé", async () => {
+    await t.db.prepare("DELETE FROM channel_reviews").run();
+    await t.db.prepare("DELETE FROM app_settings WHERE key = ?1").bind(REVIEWS_STATE_KEY).run();
+    const many = (prefix: string, n: number, rating: number) => Array.from({ length: n }, (_, i) => ({ id: `${prefix}${i}`, reviewer_role: "guest", overall_rating: rating, public_review: "ok", submitted_at: `2026-0${prefix === "old" ? "1" : "9"}-${String((i % 27) + 1).padStart(2, "0")}T10:00:00Z` }));
+    reviewPages = {
+      "/channels/airbnb/reviews?711713": [many("p1-", 100, 5), many("p2-", 3, 5)],
+      "/channels/airbnb/reviews?711714": [[...many("old", 1, 2), ...many("new", 40, 5)]],
+    };
+    refuse = "/channels/booking/reviews";
+    const r = await pullChannelReviews(env(false), new Date("2026-10-12T08:00:00Z"));
+    expect(r.fetched).toBe(144);
+    const state = JSON.parse((await t.db.prepare("SELECT value FROM app_settings WHERE key = ?1").bind(REVIEWS_STATE_KEY).first<{ value: string }>())!.value);
+    expect(state.ok["airbnb:711713"]).toBeTruthy();
+    expect(state.ok["booking:344555"]).toBeUndefined();
+    const s = await api("GET", "/api/admin/reviews?property=1");
+    expect(s.data.low.map((x: { rating: number }) => x.rating)).toEqual([2]);
+  });
+
+  it("Cloudflare Access compte comme un humain (lien de ménage permis)", async () => {
+    const res = await router.handle(new Request("http://test.local/api/admin/task-links", {
+      method: "POST", headers: { "cf-access-jwt-assertion": "jeton", "content-type": "application/json" }, body: JSON.stringify({ label: "Ménage Access" }),
+    }), { ...env(false), ADMIN_TOKEN: undefined } as Env);
+    expect(res!.status).toBe(201);
   });
 });

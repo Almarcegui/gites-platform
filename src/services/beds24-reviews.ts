@@ -129,24 +129,44 @@ export interface ReviewsPullResult {
   errors: string[];
 }
 
+/** Pages lues au plus par source et par relève (100 avis par page chez Beds24). */
+const MAX_PAGES = 5;
+
+interface ReviewsState {
+  /** Dernière tentative (règle les 6 h entre deux relèves). */
+  at?: string;
+  /** Dernière relève COMPLÈTE réussie, par source (« booking:344555 ») : le
+   *  `from` de Booking part de là, et une panne d'une source ne fait pas
+   *  avancer son curseur (contrôle Codex). */
+  ok?: Record<string, string>;
+}
+
+/** Toutes les pages d'une source ; lève si une page échoue. */
+async function allPages<T>(env: Env, path: string, query: Record<string, string>): Promise<T[]> {
+  const out: T[] = [];
+  for (let page = 1; page <= MAX_PAGES; page += 1) {
+    const res = await beds24Fetch<{ data?: T[]; pages?: { nextPageExists?: boolean } }>(env, path, { query: page > 1 ? { ...query, page: String(page) } : query });
+    out.push(...(res.data ?? []));
+    if (!res.pages?.nextPageExists) break;
+  }
+  return out;
+}
+
 /** La relève du cron : sans Beds24 configuré, ou moins de 6 h après la dernière, ne fait rien. */
 export async function pullChannelReviews(env: Env, now: Date = new Date(), force = false): Promise<ReviewsPullResult> {
   const db = env.DB;
   const result: ReviewsPullResult = { ran: false, fetched: 0, inserted: 0, low: 0, errors: [] };
   if (!(await beds24Configured(env))) return result;
-  let state: { at?: string } = {};
+  let state: ReviewsState = {};
   try {
-    state = JSON.parse((await getSetting(db, REVIEWS_STATE_KEY)) ?? "{}") as { at?: string };
+    state = JSON.parse((await getSetting(db, REVIEWS_STATE_KEY)) ?? "{}") as ReviewsState;
   } catch {
     state = {};
   }
   const last = state.at ? Date.parse(state.at) : Number.NaN;
   if (!force && !Number.isNaN(last) && now.getTime() - last < REVIEWS_EVERY_HOURS * 3_600_000) return result;
   result.ran = true;
-  // Booking : depuis la dernière relève, moins une semaine (un avis peut
-  // arriver avec retard) ; un an au premier passage.
-  const fromMs = Number.isNaN(last) ? now.getTime() - FIRST_FROM_DAYS * 86_400_000 : last - 7 * 86_400_000;
-  const from = new Date(fromMs).toISOString().slice(0, 10);
+  const ok: Record<string, string> = { ...(state.ok ?? {}) };
 
   const props = (await db.prepare("SELECT id, beds24_property_id FROM properties WHERE beds24_property_id IS NOT NULL").all<{ id: number; beds24_property_id: number }>()).results ?? [];
   const keep = async (row: ReviewRow | null) => {
@@ -160,23 +180,28 @@ export async function pullChannelReviews(env: Env, now: Date = new Date(), force
   for (const p of props) {
     const rooms = (await db.prepare("SELECT id, beds24_room_id FROM units WHERE property_id = ?1 AND beds24_room_id IS NOT NULL AND active = 1").bind(p.id).all<{ id: number; beds24_room_id: number }>()).results ?? [];
     for (const u of rooms) {
+      const key = `airbnb:${u.beds24_room_id}`;
       try {
-        const res = await beds24Fetch<{ data?: AirbnbReview[] }>(env, "/channels/airbnb/reviews", { query: { roomId: String(u.beds24_room_id) } });
-        for (const r of res.data ?? []) await keep(fromAirbnb(r, p.id, u.id));
+        for (const r of await allPages<AirbnbReview>(env, "/channels/airbnb/reviews", { roomId: String(u.beds24_room_id) })) await keep(fromAirbnb(r, p.id, u.id));
+        ok[key] = now.toISOString();
       } catch (e) {
         result.errors.push(`airbnb chambre ${u.beds24_room_id} : ${e instanceof Error ? e.message : String(e)}`.slice(0, 300));
       }
     }
+    // Booking : depuis la dernière relève réussie de CETTE source, moins une
+    // semaine (un avis peut arriver avec retard) ; un an au premier passage.
+    const key = `booking:${p.beds24_property_id}`;
+    const since = ok[key] ? Date.parse(ok[key]!) : Number.NaN;
+    const fromMs = Number.isNaN(since) ? now.getTime() - FIRST_FROM_DAYS * 86_400_000 : since - 7 * 86_400_000;
     try {
-      const res = await beds24Fetch<{ data?: BookingReview[] }>(env, "/channels/booking/reviews", { query: { propertyId: String(p.beds24_property_id), from } });
-      for (const r of res.data ?? []) await keep(fromBooking(r, p.id));
+      const rows = await allPages<BookingReview>(env, "/channels/booking/reviews", { propertyId: String(p.beds24_property_id), from: new Date(fromMs).toISOString().slice(0, 10) });
+      for (const r of rows) await keep(fromBooking(r, p.id));
+      ok[key] = now.toISOString();
     } catch (e) {
       result.errors.push(`booking propriété ${p.beds24_property_id} : ${e instanceof Error ? e.message : String(e)}`.slice(0, 300));
     }
   }
-  // Une relève sans aucune réponse ne repousse pas la suivante : on retentera au prochain passage.
-  const allFailed = result.errors.length > 0 && result.fetched === 0 && result.errors.length >= props.length;
-  if (!allFailed) await setSetting(db, REVIEWS_STATE_KEY, JSON.stringify({ at: now.toISOString(), fetched: result.fetched, inserted: result.inserted }));
+  await setSetting(db, REVIEWS_STATE_KEY, JSON.stringify({ at: now.toISOString(), ok, fetched: result.fetched, inserted: result.inserted }));
   if (result.inserted || result.errors.length) {
     await audit(db, "cron", result.errors.length ? "beds24.reviews.error" : "beds24.reviews", null, { ...result });
   }
@@ -220,6 +245,17 @@ export async function reviewsSummary(db: D1Database, propertyId: number | null) 
     replied: r.reply_text != null, submittedAt: (r.submitted_at as string | null) ?? null, unitName: (r.unit_name as string | null) ?? null,
   });
   const all = rows.map(item);
+  // Avis sous 4 sans réponse : requête à part, jamais coupée par LIMIT 30
+  // (un mauvais avis ancien reste signalé tant qu'il n'a pas de réponse).
+  const lowRows = (await bind(
+    db.prepare(
+      `SELECT r.id, r.channel, r.rating, r.raw_score, r.raw_scale, r.reviewer_name, r.headline, r.body_text, r.negative_text,
+              r.reply_text, r.submitted_at, u.name AS unit_name
+         FROM channel_reviews r LEFT JOIN units u ON u.id = r.unit_id
+        WHERE r.rating < ${REVIEWS_LOW_SCORE} AND r.reply_text IS NULL ${propertyId ? "AND r.property_id = ?1" : ""}
+        ORDER BY COALESCE(r.submitted_at, r.created_at) DESC LIMIT 20`,
+    ),
+  ).all<Record<string, unknown>>()).results ?? [];
   const avg = (v: number | null | undefined) => (v == null ? null : Math.round(v * 10) / 10);
   return {
     count: Number(agg?.n ?? 0),
@@ -227,7 +263,7 @@ export async function reviewsSummary(db: D1Database, propertyId: number | null) 
     byChannel: byChannel.map((c) => ({ channel: c.channel, count: Number(c.n), average: avg(c.avg) })),
     latest: all.slice(0, 5),
     // Les avis sous 4 sans réponse, des 30 derniers : ceux qui demandent un geste.
-    low: all.filter((r) => r.rating != null && r.rating < REVIEWS_LOW_SCORE && !r.replied),
+    low: lowRows.map(item),
     replyUrl: BEDS24_REVIEWS_URL,
   };
 }

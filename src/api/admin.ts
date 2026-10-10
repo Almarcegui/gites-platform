@@ -153,7 +153,7 @@ import { buildBalanceReminderEmail, queueEmail } from "../services/email";
 import { importElloha } from "../services/elloha-import";
 import { replyOnChannel } from "../services/beds24-messages";
 import { exportSql } from "../services/export-db";
-import { buildTar, type TarEntry } from "../core/tar";
+import { tarStream } from "../core/tar";
 import {
   createServiceKey, listServiceKeys, resolveServiceKey, revokeServiceKey, validServiceKeyName,
 } from "../services/service-keys";
@@ -230,7 +230,7 @@ const REQUEST_KIND = new WeakMap<Request, AuthKind>();
 
 export function isHuman(req: Request): boolean {
   const kind = REQUEST_KIND.get(req);
-  return (kind === "session" || kind === "paire" || kind === "nu") && currentUser(req) !== BACKUP_USER;
+  return (kind === "session" || kind === "paire" || kind === "nu" || kind === "access") && currentUser(req) !== BACKUP_USER;
 }
 
 /** Compte de la sauvegarde de nuit (scripts/sauvegarde_nuit.py, depuis le Mac) :
@@ -319,7 +319,10 @@ export function guard(inner: Handler): Handler {
       if (ok) return handler(req, env, params, url, ctx);
       return apiError(401, "non autorisé");
     }
-    if (req.headers.get("cf-access-jwt-assertion")) return handler(req, env, params, url, ctx);
+    if (req.headers.get("cf-access-jwt-assertion")) {
+      REQUEST_KIND.set(req, "access");
+      return handler(req, env, params, url, ctx);
+    }
 
     // 3) Sans secret : fail-closed tant qu'aucun compte n'existe en base ;
     //    401 (→ page de login) dès que le verrou vit en base.
@@ -2665,20 +2668,15 @@ export function registerAdminRoutes(router: Router): void {
       return apiError(501, "photos indisponibles sur cette cible (seulement sur le serveur Node)", { code: "uploads_unavailable" });
     }
     const names = (await store.list()).filter((n) => /^[0-9a-f]{32}\.(?:jpg|png|webp)$/.test(n)).sort();
-    const entries: TarEntry[] = [];
-    for (const name of names) {
-      const { bytes, mtime } = await store.read(name);
-      entries.push({ name, bytes, mtime });
-    }
-    const tar = buildTar(entries);
-    await audit(env.DB, "admin", "export.uploads", undefined, { fichiers: entries.length, octets: tar.byteLength, par: currentUser(req) });
-    return new Response(tar, {
+    await audit(env.DB, "admin", "export.uploads", undefined, { fichiers: names.length, par: currentUser(req) });
+    const read = store.read.bind(store);
+    return new Response(tarStream(names, read), {
       headers: {
         "content-type": "application/x-tar",
         "content-disposition": `attachment; filename="gites-photos-${new Date().toISOString().slice(0, 10)}.tar"`,
         "cache-control": "no-store",
         "x-content-type-options": "nosniff",
-        "x-gites-files": String(entries.length),
+        "x-gites-files": String(names.length),
       },
     });
   }));

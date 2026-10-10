@@ -668,7 +668,7 @@ function mapBooking(r: Raw): BookingRow {
 const BOOKING_JOIN = `
   SELECT b.*, u.name AS unit_name, u.property_id AS property_id,
          TRIM(COALESCE(g.first_name, '') || ' ' || g.last_name) AS guest_name,
-         g.email AS guest_email, g.lang AS guest_lang
+         g.email AS guest_email, COALESCE(b.lang, g.lang) AS guest_lang
     FROM bookings b
     JOIN units u ON u.id = b.unit_id
     LEFT JOIN guests g ON g.id = b.guest_id`;

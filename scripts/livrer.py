@@ -205,7 +205,9 @@ def livrer_infomaniak(sans_sauvegarde: bool) -> None:
         if sans_sauvegarde:
             print("\n── Sauvegarde : SAUTÉE (--sans-sauvegarde) — à ne faire que tant que le compte « sauvegarde » n'existe pas.", flush=True)
         else:
-            etape("Sauvegarde", [PYTHON, str(RACINE / "scripts" / "sauvegarde_nuit.py"), "--cible", "infomaniak", "--origine", "livraison"])
+            etape("Sauvegarde", [PYTHON, str(RACINE / "scripts" / "sauvegarde_nuit.py"), "--cible", "infomaniak", "--origine", "livraison",
+                                 # la base compte avant tout ; le serveur en place peut précéder la route des photos (lot 3)
+                                 "--photos-facultatives"])
         meme_arbre(head)
         if git("rev-parse", "origin/main") == head:
             print(f"\n── Push : origin/main est déjà {head[:8]}, rien à pousser.", flush=True)

@@ -1,6 +1,6 @@
 #!/opt/homebrew/bin/python3
 # Sauvegarde de la base des gîtes (production Infomaniak par HTTPS, base + archive .tar des photos ; ou D1 Cloudflare/essai par wrangler) dans sauvegardes/, rotation à 30 jours, une ligne dans ~/Library/Logs/gites-sauvegarde.log, sortie 1 sur échec.
-# Usage : /opt/homebrew/bin/python3 scripts/sauvegarde_nuit.py [--cible infomaniak|cloudflare|essai] [--origine nuit|manuel|livraison] [--garder-jours 30] [--base-vide-admise]
+# Usage : /opt/homebrew/bin/python3 scripts/sauvegarde_nuit.py [--cible infomaniak|cloudflare|essai] [--origine nuit|manuel|livraison] [--garder-jours 30] [--base-vide-admise] [--photos-facultatives]
 """Sauvegarde de nuit de la base des gîtes dans sauvegardes/, 30 jours gardés.
 
 Trois cibles :
@@ -453,7 +453,16 @@ def rotation(base: str, garder_jours: int, aujourd_hui: dt.date, ext: str = ".sq
     return supprimees
 
 
-def sauvegarder(cible: str, garder_jours: int, base_vide_admise: bool) -> tuple[Path, str]:
+class PhotosManquantes(Exception):
+    """La base est sauvegardée, mais pas les photos (serveur sans la route du lot 3)."""
+
+    def __init__(self, final: Path, resume: str):
+        super().__init__(resume)
+        self.final = final
+        self.resume = resume
+
+
+def sauvegarder(cible: str, garder_jours: int, base_vide_admise: bool, photos_facultatives: bool = False) -> tuple[Path, str]:
     base = BASES[cible]
     ext = ".sqlite" if cible == "infomaniak" else ".sql"
     if cible != "infomaniak" and not (RACINE / "node_modules" / ".bin" / "wrangler").exists():
@@ -475,6 +484,7 @@ def sauvegarder(cible: str, garder_jours: int, base_vide_admise: bool) -> tuple[
             os.close(descripteur)
             photos_tmp = Path(nom)
         resume_photos = ""
+        absentes = False
         try:
             if cible == "infomaniak":
                 exporter_infomaniak(temporaire, photos_tmp)
@@ -490,13 +500,19 @@ def sauvegarder(cible: str, garder_jours: int, base_vide_admise: bool) -> tuple[
                     rotation(BASE_PHOTOS, garder_jours, dt.date.today(), ".tar")
                 else:
                     resume_photos = " ; photos : route absente sur le serveur (antérieur au lot 3), non sauvegardées"
+                    absentes = True
         finally:
             temporaire.unlink(missing_ok=True)
             if photos_tmp is not None:
                 photos_tmp.unlink(missing_ok=True)
         supprimees = rotation(base, garder_jours, dt.date.today(), ext)
-    return final, (f"{resume}{resume_photos} ; rotation : {len(supprimees)} supprimée(s) "
-                   f"({garder_jours} jours, {GARDER_TOUJOURS} gardées au moins)")
+    texte = (f"{resume}{resume_photos} ; rotation : {len(supprimees)} supprimée(s) "
+             f"({garder_jours} jours, {GARDER_TOUJOURS} gardées au moins)")
+    # Une production sans archive des photos est une sauvegarde incomplète :
+    # échec, sauf --photos-facultatives (le temps que le serveur passe au lot 3).
+    if absentes and not photos_facultatives:
+        raise PhotosManquantes(final, texte)
+    return final, texte
 
 
 def main() -> int:
@@ -505,6 +521,8 @@ def main() -> int:
                    help="infomaniak (production, défaut) · cloudflare (ancienne D1) · essai · prod = ancien nom de cloudflare")
     p.add_argument("--origine", choices=["nuit", "manuel", "livraison"], default="nuit")
     p.add_argument("--garder-jours", type=int, default=30)
+    p.add_argument("--photos-facultatives", action="store_true",
+                   help="infomaniak : une archive des photos absente (serveur antérieur au lot 3) ne fait pas échouer la sauvegarde")
     p.add_argument("--base-vide-admise", action="store_true",
                    help="essai seulement : une base sans aucune table (pas encore migrée) passe pour sauvegardée")
     a = p.parse_args()
@@ -515,8 +533,10 @@ def main() -> int:
         p.error("--base-vide-admise ne vaut que pour --cible essai")
     # Une seule ligne de journal par passage, écrite ici et nulle part ailleurs.
     try:
-        final, resume = sauvegarder(a.cible, a.garder_jours, a.base_vide_admise)
+        final, resume = sauvegarder(a.cible, a.garder_jours, a.base_vide_admise, a.photos_facultatives)
         ligne, code = f"OK {a.cible} {a.origine} {final} {resume}", 0
+    except PhotosManquantes as e:
+        ligne, code = f"ÉCHEC {a.cible} {a.origine} : photos non sauvegardées (base sauvegardée : {e.final} {e.resume})", 1
     except Echec as e:
         ligne, code = f"ÉCHEC {a.cible} {a.origine} : {e}", 1
     except Exception as e:  # imprévue : elle doit laisser sa ligne au journal

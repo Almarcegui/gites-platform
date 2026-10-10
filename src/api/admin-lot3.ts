@@ -84,12 +84,36 @@ async function markupContext(db: D1Database) {
 }
 
 /** Pose (ou défait) les prix dérivés sur toutes les chambres reliées. */
+/** Pose (ou défait) les prix dérivés sur toutes les chambres reliées.
+ *
+ *  Tout ou rien (contrôle Codex) : si une propriété refuse, celles déjà
+ *  passées sont remises dans l'état d'avant, pour que le réglage enregistré
+ *  (prix direct poussé ou non) reste vrai partout — sinon la commission serait
+ *  comptée deux fois sur une partie des annonces. Si ce retour arrière échoue
+ *  aussi, l'erreur le dit : à vérifier dans Beds24. */
 export async function sendPriceLinking(env: Env, enabled: boolean): Promise<{ properties: number; rooms: number }> {
   const { markups } = await markupContext(env.DB);
   const lines = derivedLines(markups);
   const linked = await linkedRooms(env.DB);
+  const done: typeof linked = [];
   for (const l of linked) {
-    await beds24Fetch(env, "/properties", { method: "POST", body: priceLinkingBody(l.beds24PropertyId, l.roomIds, lines, enabled) });
+    try {
+      await beds24Fetch(env, "/properties", { method: "POST", body: priceLinkingBody(l.beds24PropertyId, l.roomIds, lines, enabled) });
+      done.push(l);
+    } catch (e) {
+      const undone: number[] = [];
+      for (const d of done) {
+        try {
+          await beds24Fetch(env, "/properties", { method: "POST", body: priceLinkingBody(d.beds24PropertyId, d.roomIds, lines, !enabled) });
+        } catch {
+          undone.push(d.beds24PropertyId);
+        }
+      }
+      if (undone.length && e instanceof Beds24Error) {
+        throw new Beds24Error(`${e.message} — et le retour arrière a échoué sur la propriété Beds24 ${undone.join(", ")} : prix par plateforme à vérifier dans Beds24`, e.status, "inconnu");
+      }
+      throw e;
+    }
   }
   return { properties: linked.length, rooms: linked.reduce((n, l) => n + l.roomIds.length, 0) };
 }

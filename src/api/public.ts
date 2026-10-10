@@ -873,6 +873,8 @@ export function registerPublicRoutes(router: Router): void {
     }
     // preuve d'acceptation des CGV : version (hash serveur du texte affiché),
     // horodatage serveur et IP — la case front seule ne prouverait rien.
+    // Langue de CETTE réservation (lot 3) : ses mails et son voucher la suivront.
+    await db.prepare("UPDATE bookings SET lang = ?1 WHERE id = ?2").bind(body.lang === "nl" ? "nl" : "fr", created.id).run();
     await recordCgvAcceptance(db, created.id, {
       version: await cgvVersion(ctx.settings.cgvText),
       ip: req.headers.get("cf-connecting-ip"),

@@ -38,17 +38,43 @@ export interface TarEntry {
   mtime?: number;
 }
 
+/** Un membre de l'archive : en-tête + contenu complété au bloc. */
+export function tarEntry(e: TarEntry): Uint8Array {
+  const out = new Uint8Array(BLOCK + Math.ceil(e.bytes.length / BLOCK) * BLOCK);
+  out.set(header(e.name, e.bytes.length, e.mtime ?? 0), 0);
+  out.set(e.bytes, BLOCK);
+  return out;
+}
+
+/** Fin d'archive : deux blocs nuls. */
+export const TAR_END = new Uint8Array(2 * BLOCK);
+
 /** Concatène les fichiers en une archive tar complète (deux blocs nuls de fin). */
 export function buildTar(entries: TarEntry[]): Uint8Array {
-  let total = 2 * BLOCK;
-  for (const e of entries) total += BLOCK + Math.ceil(e.bytes.length / BLOCK) * BLOCK;
-  const out = new Uint8Array(total);
+  const parts = entries.map(tarEntry);
+  const out = new Uint8Array(parts.reduce((n, p) => n + p.length, 0) + TAR_END.length);
   let off = 0;
-  for (const e of entries) {
-    out.set(header(e.name, e.bytes.length, e.mtime ?? 0), off);
-    off += BLOCK;
-    out.set(e.bytes, off);
-    off += Math.ceil(e.bytes.length / BLOCK) * BLOCK;
+  for (const p of parts) {
+    out.set(p, off);
+    off += p.length;
   }
   return out;
+}
+
+/** L'archive en flux : un fichier lu à la fois, jamais toute la photothèque en
+ *  mémoire (contrôle Codex). `read` est appelé au moment où le client tire. */
+export function tarStream(names: string[], read: (name: string) => Promise<{ bytes: Uint8Array; mtime: number }>): ReadableStream<Uint8Array> {
+  let i = 0;
+  return new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      if (i < names.length) {
+        const name = names[i++]!;
+        const { bytes, mtime } = await read(name);
+        controller.enqueue(tarEntry({ name, bytes, mtime }));
+      } else {
+        controller.enqueue(TAR_END);
+        controller.close();
+      }
+    },
+  });
 }
