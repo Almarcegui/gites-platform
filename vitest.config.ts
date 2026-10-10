@@ -15,7 +15,9 @@ export default defineConfig({
     // sans cette exclusion, `npm test` lancé depuis le clone principal rejoue
     // aussi leurs suites — chaque test tourne N fois, sur du code qui n'est
     // pas celui de la branche courante.
-    exclude: [...configDefaults.exclude, ".worktrees/**"],
+    // `app/` (pilote du nouveau back-office) a ses propres essais, lancés par
+    // son Vitest à lui (jsdom) : `npm --prefix app test`.
+    exclude: [...configDefaults.exclude, ".worktrees/**", "app/**"],
     testTimeout: 30_000,
     hookTimeout: 60_000,
   },
