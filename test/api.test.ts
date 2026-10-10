@@ -380,15 +380,18 @@ describe("admin", () => {
   });
 
   it("POST /api/admin/login : seule route admin hors garde — oui/non, jamais de donnée", async () => {
-    const secured: Env = { ...env, ADMIN_TOKEN: "julien:mdp-a, papa:mdp-c" };
-    expect((await call("POST", "/api/admin/login", { user: "julien", password: "mdp-a" }, {}, secured)).status).toBe(200);
+    const secured: Env = { ...env, ADMIN_TOKEN: "secours:mdp-a, papa:mdp-c" };
+    expect((await call("POST", "/api/admin/login", { user: "secours", password: "mdp-a" }, {}, secured)).status).toBe(200);
     expect((await call("POST", "/api/admin/login", { user: "papa", password: "mdp-c" }, {}, secured)).status).toBe(200);
-    expect((await call("POST", "/api/admin/login", { user: "julien", password: "mdp-c" }, {}, secured)).status).toBe(401);
+    expect((await call("POST", "/api/admin/login", { user: "secours", password: "mdp-c" }, {}, secured)).status).toBe(401);
     expect((await call("POST", "/api/admin/login", { user: "intrus", password: "mdp-a" }, {}, secured)).status).toBe(401);
-    expect((await call("POST", "/api/admin/login", { user: "julien" }, {}, secured)).status).toBe(400);
+    expect((await call("POST", "/api/admin/login", { user: "secours" }, {}, secured)).status).toBe(400);
     // verrou pas posé → 503 explicite (le front affiche le bandeau « verrou inactif »)
+    // depuis 0027 un compte « julien » vit en base : sans secret, la route répond 401 (plus 503)
     const nu: Env = { ...env, ADMIN_TOKEN: undefined };
-    expect((await call("POST", "/api/admin/login", { user: "julien", password: "x" }, {}, nu)).status).toBe(503);
+    expect((await call("POST", "/api/admin/login", { user: "secours", password: "x" }, {}, nu)).status).toBe(401);
+    // et le compte initial de 0027 ouvre avec son mot de passe provisoire
+    expect((await call("POST", "/api/admin/login", { user: "julien", password: "gites-2026" }, {}, nu)).status).toBe(200);
   });
 
   it("comptes en base : création → login avec session → reset/désactivation coupent tout", async () => {
