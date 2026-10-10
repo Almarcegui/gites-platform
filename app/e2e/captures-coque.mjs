@@ -32,6 +32,22 @@ for (const w of widths) {
     await page.waitForTimeout(1500);
     await page.screenshot({ path: out(`${phase}-${w}-fiche`) });
   }
+  if (phase === "apres" && w >= 1024) {
+    // barre repliée en icônes (Ctrl/⌘ B), mémorisée sur l'appareil
+    await page.goto(`${base}/admin/#/calendrier`);
+    await page.waitForTimeout(1200);
+    await page.keyboard.press("ControlOrMeta+b");
+    await page.waitForTimeout(600);
+    await page.screenshot({ path: out(`${phase}-${w}-calendrier-replie`) });
+    await page.keyboard.press("ControlOrMeta+b");
+  }
+  if (phase === "apres" && w < 1024) {
+    await page.goto(`${base}/admin/#/`);
+    await page.waitForTimeout(1200);
+    await page.getByRole("button", { name: "Plus" }).click();
+    await page.waitForTimeout(600);
+    await page.screenshot({ path: out(`${phase}-${w}-plus`) });
+  }
   await page.close();
 }
 await browser.close();

@@ -83,7 +83,7 @@ test("le domaine : un seul Enregistrer, garde à la sortie", async ({ page }) =>
   const before = await phone.inputValue();
   await phone.fill("0470 00 00 99");
   await expect(page.getByText("Modifications non enregistrées.")).toBeVisible();
-  await page.getByRole("navigation", { name: "Menu principal" }).first().getByRole("link", { name: "Calendrier" }).click();
+  await page.getByRole("navigation", { name: "Menu principal" }).first().getByRole("link", { name: "Calendrier", exact: true }).click();
   await expect(page.getByRole("dialog", { name: "Partir sans enregistrer ?" })).toBeVisible();
   await page.screenshot({ path: shot("apres-1280-domaine-garde") });
   await page.getByRole("button", { name: "Rester sur la page" }).click();
@@ -167,7 +167,7 @@ test("remises, options, comptes : créer, ouvrir, supprimer", async ({ page }) =
 
 test("registre : la saisie s'ouvre depuis la fiche (sans rien écrire)", async ({ page }) => {
   await go(page, "reservations");
-  await page.locator(".list-row").first().click();
+  await page.locator(".bk tbody tr").first().click();
   const d = drawer(page);
   await d.getByText("Voyageurs inscrits").click();
   await d.getByRole("button", { name: /Inscrire/ }).click();

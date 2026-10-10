@@ -26,7 +26,8 @@ test("ménage : case « fait » en base, personne et note, lien de partage coch�
   await expect(page.getByRole("heading", { name: "Ménage", level: 1 })).toBeVisible();
   const first = page.locator(".job").filter({ hasText: "La Scierie" }).first();
   await expect(first).toContainText("nouveaux voyageurs le jour même");
-  await expect(page.getByText("Pilote")).toHaveCount(0);
+  // (dans la page : la barre latérale montre la personne connectée, « pilote »)
+  await expect(page.locator(".page").getByText("Pilote")).toHaveCount(0);
 
   // Personne et note.
   await page.locator(".job").filter({ hasText: "La Maison du Scieur" }).first().getByRole("button", { name: /Qui s'en occupe/ }).click();
