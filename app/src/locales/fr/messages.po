@@ -3,9 +3,10 @@ msgstr ""
 "Content-Type: text/plain; charset=utf-8\n"
 "Language: fr\n"
 
+#. placeholder {0}: m.errorDetail ? ` (${m.errorDetail})` : ""
 #: src/booking/BookingPanel.tsx
-msgid " — n'est pas parti"
-msgstr " — n'est pas parti"
+msgid " — n'est pas parti{0}"
+msgstr " — n'est pas parti{0}"
 
 #: src/booking/BookingPanel.tsx
 msgid " — préparé, envoi des mails coupé sur ce poste"
@@ -32,6 +33,11 @@ msgstr ", {0} à encaisser"
 #: src/calendar/Weeks.tsx
 msgid ", {0} pers."
 msgstr ", {0} pers."
+
+#. placeholder {0}: eur(x.balanceCents)
+#: src/booking/BookingPanel.tsx
+msgid ", {0} restent à payer"
+msgstr ", {0} restent à payer"
 
 #. placeholder {0}: longDate(b.balanceDueDate)
 #: src/booking/BookingPanel.tsx
@@ -558,10 +564,6 @@ msgstr "C'est fait. Confirmation renvoyée au client."
 msgid "C'est fait. Lien de paiement prêt."
 msgstr "C'est fait. Lien de paiement prêt."
 
-#: src/booking/BookingPanel.tsx
-msgid "C'est fait. Message envoyé."
-msgstr "C'est fait. Message envoyé."
-
 #: src/pages/Messages.tsx
 msgid "C'est fait. Message marqué comme traité."
 msgstr "C'est fait. Message marqué comme traité."
@@ -593,10 +595,6 @@ msgstr "C'est fait. Rappel du solde ({0}) envoyé."
 msgid "C'est fait. Rappel envoyé par mail."
 msgstr "C'est fait. Rappel envoyé par mail."
 
-#: src/pages/Messages.tsx
-msgid "C'est fait. Réponse envoyée."
-msgstr "C'est fait. Réponse envoyée."
-
 #. placeholder {0}: (r as { booking: Booking }).booking.reference
 #. placeholder {0}: created.booking.reference
 #: src/sale/SaleFlow.tsx
@@ -611,9 +609,20 @@ msgstr "C'est fait. Réservation annulée, les dates sont libres."
 msgid "C'est fait. Réservation confirmée, la confirmation part au client."
 msgstr "C'est fait. Réservation confirmée, la confirmation part au client."
 
+#. placeholder {0}: eur(x.refundCents)
 #: src/booking/BookingPanel.tsx
-msgid "C'est fait. Séjour modifié."
-msgstr "C'est fait. Séjour modifié."
+msgid "C'est fait. Séjour modifié : nouveau total {total}, {0} à rembourser à la main."
+msgstr "C'est fait. Séjour modifié : nouveau total {total}, {0} à rembourser à la main."
+
+#. placeholder {0}: x.balanceCents ? t`, ${eur(x.balanceCents)} restent à payer` : ""
+#: src/booking/BookingPanel.tsx
+msgid "C'est fait. Séjour modifié : nouveau total {total}{0}."
+msgstr "C'est fait. Séjour modifié : nouveau total {total}{0}."
+
+#. placeholder {0}: eur(balance)
+#: src/booking/BookingPanel.tsx
+msgid "C'est plus que le solde ({0}). Vérifiez le montant avant de le noter."
+msgstr "C'est plus que le solde ({0}). Vérifiez le montant avant de le noter."
 
 #: src/sale/SaleFlow.tsx
 msgid "Calcul du prix…"
@@ -655,6 +664,11 @@ msgstr "Cette réservation vient de {0} : changez aussi les dates là-bas, sinon
 msgid "Cette semaine"
 msgstr "Cette semaine"
 
+#. placeholder {0}: failures.join(" ")
+#: src/calendar/PricePanel.tsx
+msgid "Changé en partie : {applied} nuit(s) ont leur nouveau prix, le reste non. {0} Vérifiez la grille."
+msgstr "Changé en partie : {applied} nuit(s) ont leur nouveau prix, le reste non. {0} Vérifiez la grille."
+
 #: src/calendar/Weeks.tsx
 msgid "Changer le prix"
 msgstr "Changer le prix"
@@ -663,7 +677,6 @@ msgstr "Changer le prix"
 msgid "Changer le séjour"
 msgstr "Changer le séjour"
 
-#: src/booking/BookingPanel.tsx
 #: src/sale/SaleFlow.tsx
 msgid "Changer les dates"
 msgstr "Changer les dates"
@@ -737,14 +750,14 @@ msgstr "complet"
 msgid "Comptes et mots de passe"
 msgstr "Comptes et mots de passe"
 
-#: src/sale/SaleFlow.tsx
-msgid "Confirmée : le client a déjà payé, ou paiera sur place"
-msgstr "Confirmée : le client a déjà payé, ou paiera sur place"
-
 #: src/booking/BookingPanel.tsx
 #: src/calendar/Grid.tsx
 msgid "Confirmée et payée"
 msgstr "Confirmée et payée"
+
+#: src/sale/SaleFlow.tsx
+msgid "Confirmée sans attendre les arrhes"
+msgstr "Confirmée sans attendre les arrhes"
 
 #: src/booking/BookingPanel.tsx
 msgid "Confirmer"
@@ -800,6 +813,7 @@ msgstr "Départ"
 msgid "Départ : {0}, ménage à prévoir"
 msgstr "Départ : {0}, ménage à prévoir"
 
+#: src/booking/BookingPanel.tsx
 #: src/sale/SaleFlow.tsx
 msgid "Détail du prix"
 msgstr "Détail du prix"
@@ -929,10 +943,10 @@ msgstr "Étapes"
 msgid "Façon de changer le prix"
 msgstr "Façon de changer le prix"
 
-#. placeholder {0}: failures.join(" ")
+#. placeholder {0}: errorText(e)
 #: src/calendar/PricePanel.tsx
-msgid "Fait pour {ok} bien(s), pas pour : {0}"
-msgstr "Fait pour {ok} bien(s), pas pour : {0}"
+msgid "Fait pour {done} bien(s) seulement : {0}"
+msgstr "Fait pour {done} bien(s) seulement : {0}"
 
 #: src/booking/BookingPanel.tsx
 #: src/calendar/PricePanel.tsx
@@ -1034,9 +1048,24 @@ msgstr "la nuit"
 msgid "La réponse part par mail à {0}{1}."
 msgstr "La réponse part par mail à {0}{1}."
 
+#. placeholder {0}: errorText(e)
+#: src/sale/SaleFlow.tsx
+msgid "La réservation est enregistrée, mais le lien de paiement n'a pas pu être créé : {0} Créez-le depuis la fiche."
+msgstr "La réservation est enregistrée, mais le lien de paiement n'a pas pu être créé : {0} Créez-le depuis la fiche."
+
+#. placeholder {0}: errorText(e)
+#: src/sale/SaleFlow.tsx
+msgid "La réservation est enregistrée, mais le paiement n'a pas été noté : {0} Notez-le dans la fiche."
+msgstr "La réservation est enregistrée, mais le paiement n'a pas été noté : {0} Notez-le dans la fiche."
+
 #: src/calendar/CalendarView.tsx
 msgid "Le calendrier n'a pas pu être lu. Rechargez la page."
 msgstr "Le calendrier n'a pas pu être lu. Rechargez la page."
+
+#. placeholder {0}: q ? eur(q.totalCents) : ""
+#: src/sale/SaleFlow.tsx
+msgid "Le client a déjà payé le total ({0}) : le noter comme reçu"
+msgstr "Le client a déjà payé le total ({0}) : le noter comme reçu"
 
 #. placeholder {0}: eur(amount)
 #: src/booking/BookingPanel.tsx
@@ -1048,9 +1077,18 @@ msgstr "Le client paie {0} par carte depuis ce lien. Copiez-le pour l'envoyer pa
 msgid "Le départ doit venir après l'arrivée."
 msgstr "Le départ doit venir après l'arrivée."
 
+#: src/pages/Messages.tsx
+msgid "Le fil de la conversation n'a pas pu être lu. Rechargez la page avant de répondre."
+msgstr "Le fil de la conversation n'a pas pu être lu. Rechargez la page avant de répondre."
+
 #: src/calendar/Weeks.tsx
 msgid "Le jour de départ"
 msgstr "Le jour de départ"
+
+#: src/booking/BookingPanel.tsx
+#: src/sale/SaleFlow.tsx
+msgid "Le lien n'a pas pu être copié : sélectionnez-le et copiez-le à la main."
+msgstr "Le lien n'a pas pu être copié : sélectionnez-le et copiez-le à la main."
 
 #: src/pages/Settings.tsx
 msgid "Le menu garde l'essentiel de tous les jours. Ici, choisissez d'abord le domaine que l'écran montre."
@@ -1094,6 +1132,11 @@ msgstr "Légende"
 msgid "Les calendriers reliés"
 msgstr "Les calendriers reliés"
 
+#. placeholder {0}: channelName(b)
+#: src/booking/BookingPanel.tsx
+msgid "Les dates, l'annulation et le paiement de cette réservation se gèrent sur {0} : la grille suivra."
+msgstr "Les dates, l'annulation et le paiement de cette réservation se gèrent sur {0} : la grille suivra."
+
 #: src/calendar/Grid.tsx
 msgid "les deux maisons"
 msgstr "les deux maisons"
@@ -1104,12 +1147,21 @@ msgid "Les deux maisons, après le Domaine"
 msgstr "Les deux maisons, après le Domaine"
 
 #: src/pages/Messages.tsx
-msgid "Les messages de votre site et les mails des clients arrivent ici. Airbnb et Booking suivront avec Beds24."
-msgstr "Les messages de votre site et les mails des clients arrivent ici. Airbnb et Booking suivront avec Beds24."
+msgid "Les messages de votre site et les mails des clients arrivent ici. Ceux d'Airbnb et de Booking suivront."
+msgstr "Les messages de votre site et les mails des clients arrivent ici. Ceux d'Airbnb et de Booking suivront."
 
 #: src/pages/Messages.tsx
 msgid "Les messages n'ont pas pu être lus."
 msgstr "Les messages n'ont pas pu être lus."
+
+#: src/calendar/CalendarView.tsx
+msgid "Les prix n'ont pas pu être lus : ne les changez pas avant d'avoir rechargé la page."
+msgstr "Les prix n'ont pas pu être lus : ne les changez pas avant d'avoir rechargé la page."
+
+#: src/booking/BookingPanel.tsx
+#: src/sale/SaleFlow.tsx
+msgid "Lien copié."
+msgstr "Lien copié."
 
 #: src/booking/BookingPanel.tsx
 msgid "Lien de paiement"
@@ -1257,12 +1309,6 @@ msgstr "Noter un paiement reçu"
 #: src/booking/BookingPanel.tsx
 msgid "Notes"
 msgstr "Notes"
-
-#. placeholder {0}: eur(qd.quote.totalCents)
-#. placeholder {1}: eur(b.paidCents)
-#: src/booking/BookingPanel.tsx
-msgid "Nouveau total : {0} (déjà payé : {1})."
-msgstr "Nouveau total : {0} (déjà payé : {1})."
 
 #: src/pages/Login.tsx
 msgid "Nouvel écran, en essai"
@@ -1460,6 +1506,12 @@ msgstr "Prix actuel : {0} la nuit{1}."
 msgid "Prix de la nuit (€)"
 msgstr "Prix de la nuit (€)"
 
+#. placeholder {0}: eur(qd.quote.totalCents)
+#. placeholder {1}: eur(b.paidCents)
+#: src/booking/BookingPanel.tsx
+msgid "Prix des nuits sur ces dates : {0}, hors options déjà vendues (déjà payé : {1}). Le total exact s'affiche après l'enregistrement."
+msgstr "Prix des nuits sur ces dates : {0}, hors options déjà vendues (déjà payé : {1}). Le total exact s'affiche après l'enregistrement."
+
 #: src/calendar/CalendarView.tsx
 msgid "Prix et minimum"
 msgstr "Prix et minimum"
@@ -1645,6 +1697,10 @@ msgstr "Semaine du {0}{1} au {2} {3}"
 msgid "Semaines"
 msgstr "Semaines"
 
+#: src/sale/SaleFlow.tsx
+msgid "Sinon, le solde reste à encaisser dans la fiche."
+msgstr "Sinon, le solde reste à encaisser dans la fiche."
+
 #: src/pages/Today.tsx
 msgid "SMS"
 msgstr "SMS"
@@ -1671,6 +1727,7 @@ msgstr "Solde, à payer avant le {0}"
 
 #. placeholder {0}: channelName(b)
 #: src/booking/BookingPanel.tsx
+#: src/pages/Bookings.tsx
 msgid "sur {0}"
 msgstr "sur {0}"
 
@@ -1732,6 +1789,14 @@ msgstr "Une nuit de moins"
 #: src/calendar/PricePanel.tsx
 msgid "Une nuit de plus"
 msgstr "Une nuit de plus"
+
+#: src/pages/Today.tsx
+msgid "Une partie des données n'a pas pu être lue : la journée peut être incomplète. Rechargez la page."
+msgstr "Une partie des données n'a pas pu être lue : la journée peut être incomplète. Rechargez la page."
+
+#: src/pages/Today.tsx
+msgid "Une partie des données n'a pas pu être lue : les chiffres ci-dessous peuvent être incomplets. Rechargez la page."
+msgstr "Une partie des données n'a pas pu être lue : les chiffres ci-dessous peuvent être incomplets. Rechargez la page."
 
 #: src/calendar/PricePanel.tsx
 #: src/calendar/Weeks.tsx

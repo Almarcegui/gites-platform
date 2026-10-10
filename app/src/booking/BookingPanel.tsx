@@ -30,6 +30,7 @@ import { diffDays, hourLabel, longDate, todayBrussels } from "../lib/dates";
 import { channelName, isChannel } from "../lib/derive";
 import { eur } from "../lib/money";
 import { fillTemplate, templateLabels, type TemplateId } from "../lib/templates";
+import { useToast } from "../lib/toasts";
 import { useLayout } from "../lib/useLayout";
 
 export type BookingState = "option" | "solde" | "soldee" | "plat" | "annulee";
@@ -230,6 +231,17 @@ function Fiche({ detail, dialog, setDialog }: { detail: BookingDetail; dialog: D
         {state !== "annulee" ? <MainActions b={b} state={state} balance={balance} setDialog={setDialog} /> : null}
         {state !== "annulee" ? <MoreMenu b={b} setDialog={setDialog} /> : null}
 
+        {detail.quote?.lines?.length ? (
+          <Fold title={t`Détail du prix`} count={eur(detail.quote.totalCents ?? b.totalCents)}>
+            <ul>
+              {detail.quote.lines.map((l, i) => (
+                <li key={i}>
+                  {l.publicLabel ?? l.label} : {eur(l.amountCents)}
+                </li>
+              ))}
+            </ul>
+          </Fold>
+        ) : null}
         <Fold title={t`Paiements`} count={detail.payments.length ? t`${detail.payments.filter((p) => p.status === "succeeded").length} reçu(s)` : t`aucun`}>
           <ul>
             {detail.payments.length === 0 ? <li>{t`Aucun paiement reçu.`}</li> : null}
@@ -247,7 +259,7 @@ function Fiche({ detail, dialog, setDialog }: { detail: BookingDetail; dialog: D
             {detail.emails.map((m) => (
               <li key={m.id}>
                 {longDate(m.createdAt.slice(0, 10))} : {m.subject}
-                {m.status === "failed" ? t` — n'est pas parti` : m.status === "stub" ? t` — préparé, envoi des mails coupé sur ce poste` : ""}
+                {m.status === "failed" ? t` — n'est pas parti${m.errorDetail ? ` (${m.errorDetail})` : ""}` : m.status === "stub" ? t` — préparé, envoi des mails coupé sur ce poste` : ""}
               </li>
             ))}
           </ul>
@@ -359,7 +371,6 @@ function MainActions({ b, state, balance, setDialog }: { b: Booking; state: Book
     acts = [
       write,
       btn("notes", <IconPencil size={22} />, t`Ajouter une note`, () => setDialog("notes")),
-      btn("edit", <IconCalendar size={22} />, t`Changer les dates`, () => setDialog("edit")),
     ];
   } else {
     acts = [
@@ -370,7 +381,10 @@ function MainActions({ b, state, balance, setDialog }: { b: Booking; state: Book
   }
   return (
     <>
-      <div className="main-acts">{acts}</div>
+      <div className="main-acts" style={acts.length === 2 ? { gridTemplateColumns: "1fr 1fr" } : undefined}>
+        {acts}
+      </div>
+      {state === "plat" ? <p className="muted" style={{ fontSize: 15 }}>{t`Les dates, l'annulation et le paiement de cette réservation se gèrent sur ${channelName(b)} : la grille suivra.`}</p> : null}
       {err && err.status === "error" ? <ErrorLine text={err.text} /> : null}
     </>
   );
@@ -405,16 +419,20 @@ function MoreMenu({ b, setDialog }: { b: Booking; setDialog: (d: Dialog) => void
           >
             <Trans>Renvoyer la confirmation au client</Trans>
           </Menu.Item>
-          <Menu.Item style={{ minHeight: 44 }} onClick={() => setDialog("edit")}>
-            <Trans>Changer les dates ou le nombre de voyageurs</Trans>
-          </Menu.Item>
+          {!isChannel(b) ? (
+            <Menu.Item style={{ minHeight: 44 }} onClick={() => setDialog("edit")}>
+              <Trans>Changer les dates ou le nombre de voyageurs</Trans>
+            </Menu.Item>
+          ) : null}
           <Menu.Item style={{ minHeight: 44 }} onClick={() => setDialog("notes")}>
             <Trans>Modifier la note</Trans>
           </Menu.Item>
-          <Menu.Divider />
-          <Menu.Item style={{ minHeight: 44 }} color="red" onClick={() => setDialog("cancel")}>
-            <Trans>Annuler la réservation</Trans>
-          </Menu.Item>
+          {!isChannel(b) ? <Menu.Divider /> : null}
+          {!isChannel(b) ? (
+            <Menu.Item style={{ minHeight: 44 }} color="red" onClick={() => setDialog("cancel")}>
+              <Trans>Annuler la réservation</Trans>
+            </Menu.Item>
+          ) : null}
         </Menu.Dropdown>
       </Menu>
       {voucher.state.status === "error" ? <ErrorLine text={voucher.state.text} /> : null}
@@ -465,6 +483,9 @@ function PayDialog({ open, b, balance, onClose }: { open: boolean; b: Booking; b
           ]}
         />
       </div>
+      {cents > balance && balance > 0 ? (
+        <p className="late" style={{ color: "var(--danger)", fontWeight: 600, margin: "8px 0 0" }}>{t`C'est plus que le solde (${eur(balance)}). Vérifiez le montant avant de le noter.`}</p>
+      ) : null}
       <TextInput mt="sm" size="md" label={t`Note (facultatif)`} value={note} onChange={(e) => setNote(e.currentTarget.value)} />
       <div className="acts" style={{ marginTop: 16 }}>
         <button
@@ -492,6 +513,7 @@ function PayDialog({ open, b, balance, onClose }: { open: boolean; b: Booking; b
 
 function LinkDialog({ open, b, balance, onClose }: { open: boolean; b: Booking; balance: number; onClose: () => void }) {
   const { t } = useLingui();
+  const toast = useToast();
   const a = useAction();
   const [url, setUrl] = useState<string | null>(null);
   useEffect(() => {
@@ -517,9 +539,14 @@ function LinkDialog({ open, b, balance, onClose }: { open: boolean; b: Booking; 
           <button
             type="button"
             className="btn pri"
-            onClick={() => {
-              void navigator.clipboard?.writeText(url);
-              onClose();
+            onClick={async () => {
+              try {
+                await navigator.clipboard.writeText(url);
+                toast(t`Lien copié.`);
+                onClose();
+              } catch {
+                toast(t`Le lien n'a pas pu être copié : sélectionnez-le et copiez-le à la main.`, true);
+              }
             }}
           >
             <IconCopy size={20} />
@@ -603,7 +630,10 @@ function WriteDialog({ open, b, guest, times, onClose }: { open: boolean; b: Boo
           className="btn pri"
           disabled={a.state.status === "busy" || text.trim().length < 2}
           onClick={async () => {
-            const ok = await a.run(() => api(`/bookings/${b.id}/messages`, { method: "POST", body: { body: text } }), t`C'est fait. Message envoyé.`);
+            const ok = await a.run(
+              () => api<{ delivery: string }>(`/bookings/${b.id}/messages`, { method: "POST", body: { body: text } }),
+              (r) => deliveryText((r as { delivery?: string }).delivery),
+            );
             if (ok) onClose();
           }}
         >
@@ -696,7 +726,7 @@ function EditDialog({ open, b, onClose }: { open: boolean; b: Booking; onClose: 
       {qd && !qd.availability.available ? <ErrorLine text={t`Ces nuits sont déjà prises.`} /> : null}
       {qd && qd.quote.ok ? (
         <p className="lead" style={{ marginTop: 12 }}>
-          {t`Nouveau total : ${eur(qd.quote.totalCents)} (déjà payé : ${eur(b.paidCents)}).`}
+          {t`Prix des nuits sur ces dates : ${eur(qd.quote.totalCents)}, hors options déjà vendues (déjà payé : ${eur(b.paidCents)}). Le total exact s'affiche après l'enregistrement.`}
         </p>
       ) : null}
       {qd && !qd.quote.ok ? <ErrorLine text={t`Au moins ${qd.quote.minNights} nuits sur ces dates.`} /> : null}
@@ -708,7 +738,12 @@ function EditDialog({ open, b, onClose }: { open: boolean; b: Booking; onClose: 
           onClick={async () => {
             const ok = await a.run(
               () => api(`/bookings/${b.id}`, { method: "PATCH", body: { checkin, checkout, adults: Number(adults), children: Number(children) } }),
-              t`C'est fait. Séjour modifié.`,
+              (r) => {
+                const x = r as { booking?: Booking; balanceCents?: number; refundCents?: number };
+                const total = x.booking ? eur(x.booking.totalCents) : "";
+                if (x.refundCents) return t`C'est fait. Séjour modifié : nouveau total ${total}, ${eur(x.refundCents)} à rembourser à la main.`;
+                return t`C'est fait. Séjour modifié : nouveau total ${total}${x.balanceCents ? t`, ${eur(x.balanceCents)} restent à payer` : ""}.`;
+              },
             );
             if (ok) onClose();
           }}
@@ -757,4 +792,12 @@ function NotesDialog({ open, b, onClose }: { open: boolean; b: Booking; onClose:
       {a.state.status === "error" ? <ErrorLine text={a.state.text} /> : null}
     </Box>
   );
+}
+
+/** Ce qui est vraiment parti : un message est toujours visible sur la page du
+ *  client ; le mail ne part que si l'envoi est actif. */
+export function deliveryText(delivery: string | undefined): string {
+  if (delivery === "sent") return "C'est fait. Message envoyé par mail et visible sur la page du client.";
+  if (delivery === "stub") return "C'est fait. Message enregistré sur la page du client ; le mail n'est pas parti (envoi des mails coupé ici).";
+  return "C'est fait. Message enregistré sur la page du client ; pas de mail connu pour l'envoyer.";
 }

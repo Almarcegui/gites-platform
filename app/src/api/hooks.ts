@@ -1,7 +1,7 @@
 // Lectures de l'API, mises en cache par TanStack Query. Après toute écriture,
 // `useRefresh()` relit tout : l'écran ne montre jamais un état qu'il suppose.
 import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback } from "react";
+import { useCallback, useEffect } from "react";
 
 import { api } from "./client";
 import type {
@@ -35,6 +35,11 @@ export function useScopedProperties(): { properties: Property[]; isLoading: bool
   const { scope } = useScope();
   const q = useProperties();
   const all = q.data ?? [];
+  // Un domaine mémorisé qui n'existe plus : on revient à « Tous mes gîtes ».
+  const { setScope } = useScope();
+  useEffect(() => {
+    if (q.data && scope !== "all" && !q.data.some((p) => p.id === scope)) setScope("all");
+  }, [q.data, scope, setScope]);
   return { properties: scope === "all" ? all : all.filter((p) => p.id === scope), isLoading: q.isLoading, error: q.error };
 }
 
@@ -89,7 +94,7 @@ export function useOverviews() {
   const qs = useQueries({
     queries: properties.map((p) => ({ queryKey: ["overview", p.id], queryFn: () => api<Overview>("/overview", { query: { property: p.id } }) })),
   });
-  return qs.map((q) => q.data).filter((x): x is Overview => !!x);
+  return { list: qs.map((q) => q.data).filter((x): x is Overview => !!x), error: qs.some((q) => q.isError) };
 }
 
 export function useRates(propertyId: number, from: IsoDate, to: IsoDate, enabled: boolean) {

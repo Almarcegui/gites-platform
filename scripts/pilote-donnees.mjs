@@ -90,10 +90,14 @@ if (sansDemo) process.exit(0);
 
 // --- 5 : démonstration par l'API ---------------------------------------------
 const vars = devVars();
+// Garde-fou : aucun accès aux plateformes depuis le pilote.
+if (Object.keys(vars).some((k) => k.startsWith("BEDS24_") || k.startsWith("STRIPE_") || k === "RESEND_API_KEY")) {
+  throw new Error(".dev.vars contient des clés Beds24, Stripe ou d'envoi de mails : retirez-les pour le pilote (rien ne doit sortir du Mac).");
+}
 const secours = (vars.ADMIN_TOKEN ?? "").split(",")[0]?.trim();
 if (!secours || !secours.includes(":")) throw new Error("ADMIN_TOKEN de .dev.vars attendu sous la forme id:motdepasse");
 
-const server = spawn(WRANGLER, ["dev", "--port", String(PORT), "--ip", "127.0.0.1", "--var", "EMAILS_ENABLED:false"], {
+const server = spawn(WRANGLER, ["dev", "--port", String(PORT), "--ip", "127.0.0.1", "--var", "EMAILS_ENABLED:false", "--var", "BEDS24_WRITE_ENABLED:false", "--var", `PUBLIC_BASE_URL:http://127.0.0.1:${PORT}`], {
   cwd: ROOT,
   stdio: ["ignore", "pipe", "pipe"],
 });

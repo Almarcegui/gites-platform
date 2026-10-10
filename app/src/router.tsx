@@ -15,13 +15,19 @@ import { SettingsPage } from "./pages/Settings";
 
 export interface RootSearch {
   resa?: number;
+  /** message à ouvrir dans Messages */
+  msg?: number;
 }
 
 const rootRoute = createRootRoute({
   component: Outlet,
   validateSearch: (s: Record<string, unknown>): RootSearch => {
+    const out: RootSearch = {};
     const n = Number(s.resa);
-    return Number.isInteger(n) && n > 0 ? { resa: n } : {};
+    if (Number.isInteger(n) && n > 0) out.resa = n;
+    const m = Number(s.msg);
+    if (Number.isInteger(m) && m > 0) out.msg = m;
+    return out;
   },
 });
 

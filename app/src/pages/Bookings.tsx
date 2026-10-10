@@ -89,7 +89,7 @@ export function BookingsPage() {
                   <span className={`pill ${st}`}>{pill[st]}</span>
                 </span>
                 <span style={{ textAlign: "right" }}>
-                  <b>{eur(b.totalCents)}</b>
+                  <b>{st === "plat" ? t`sur ${channelName(b)}` : eur(b.totalCents)}</b>
                   <small>{st === "solde" ? t`reste ${eur(balance)}` : ""}</small>
                   <small className="sr">{stayRange(b.checkin, b.checkout)}</small>
                 </span>

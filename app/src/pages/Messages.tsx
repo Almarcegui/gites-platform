@@ -3,6 +3,7 @@
 import { Trans, useLingui } from "@lingui/react/macro";
 import { IconChevronLeft, IconSend } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
+import { useSearch } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 
 import { api } from "../api/client";
@@ -13,6 +14,7 @@ import { hourLabel, longDate, todayBrussels, whenLabel } from "../lib/dates";
 import { eur } from "../lib/money";
 import { fillTemplate, templateLabels, type TemplateId } from "../lib/templates";
 import { useLayout } from "../lib/useLayout";
+import { deliveryText } from "../booking/BookingPanel";
 import { useOpenBooking } from "../shell/Shell";
 
 function sourceLabel(m: Message): { cls: string; text: string } {
@@ -26,7 +28,8 @@ export function MessagesPage() {
   const pending = useMessages("nouveau");
   const all = useMessages();
   const list = (filter === "nouveau" ? pending.data : all.data) ?? [];
-  const [selected, setSelected] = useState<number | null>(null);
+  const wanted = (useSearch({ strict: false }) as { msg?: number }).msg ?? null;
+  const [selected, setSelected] = useState<number | null>(wanted);
   const today = todayBrussels();
   useEffect(() => {
     if (layout === "A" && selected == null && list[0]) setSelected(list[0].id);
@@ -50,7 +53,7 @@ export function MessagesPage() {
             </button>
           </div>
           <p className="muted" style={{ margin: 0, padding: "0 16px 12px", fontSize: 15 }}>
-            <Trans>Les messages de votre site et les mails des clients arrivent ici. Airbnb et Booking suivront avec Beds24.</Trans>
+            <Trans>Les messages de votre site et les mails des clients arrivent ici. Ceux d'Airbnb et de Booking suivront.</Trans>
           </p>
           {(filter === "nouveau" ? pending : all).error ? <ErrorLine text={t`Les messages n'ont pas pu être lus.`} /> : null}
           {list.length === 0 ? (
@@ -130,6 +133,7 @@ function Thread({ message, onBack }: { message: Message; onBack?: () => void }) 
         </p>
       </div>
       {thread.isLoading ? <p className="loading">{t`Chargement du fil…`}</p> : null}
+      {thread.error ? <ErrorLine text={t`Le fil de la conversation n'a pas pu être lu. Rechargez la page avant de répondre.`} /> : null}
       {items.map((m) => (
         <div key={m.id} className={`bub${m.direction === "out" ? " out" : ""}`}>
           <small>
@@ -176,9 +180,9 @@ function Thread({ message, onBack }: { message: Message; onBack?: () => void }) 
         <button
           type="button"
           className="btn pri"
-          disabled={send.state.status === "busy" || text.trim().length < 2}
+          disabled={send.state.status === "busy" || text.trim().length < 2 || !!thread.error}
           onClick={async () => {
-            if (await send.run(() => api(`/messages/${message.id}/reply`, { method: "POST", body: { body: text } }), t`C'est fait. Réponse envoyée.`)) setText("");
+            if (await send.run(() => api<{ delivery: string }>(`/messages/${message.id}/reply`, { method: "POST", body: { body: text } }), (r) => deliveryText((r as { delivery?: string }).delivery))) setText("");
           }}
         >
           <IconSend size={20} />

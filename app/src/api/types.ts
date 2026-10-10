@@ -152,6 +152,7 @@ export interface EmailLog {
   kind: string;
   subject: string;
   status: string;
+  errorDetail?: string | null;
   createdAt: string;
 }
 
@@ -167,6 +168,7 @@ export interface BookingDetail {
   payments: Payment[];
   emails: EmailLog[];
   history: AuditEntry[];
+  quote: { lines?: QuoteLine[]; totalCents?: number } | null;
 }
 
 export interface Guest {

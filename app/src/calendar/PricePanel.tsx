@@ -122,6 +122,7 @@ export function PricePanel(props: {
     setDone(null);
     const failures: string[] = [];
     let ok = 0;
+    let applied = 0; // nuits déjà changées, même si la suite échoue
     for (const id of chosen) {
       const name = units.find((u) => u.id === id)?.name ?? "";
       try {
@@ -133,9 +134,11 @@ export function PricePanel(props: {
               method: "PATCH",
               body: { unitId: id, from: run.from, to: run.to, priceCents: run.priceCents, ...(minTouched ? { minNights } : {}) },
             });
+            applied += diffDays(run.from, run.to) + 1;
           }
         } else {
           await api("/rate-overrides", { method: "PATCH", body: { unitId: id, from: sel.from, to: sel.to, minNights } });
+          applied += nights;
         }
         ok += 1;
       } catch (e) {
@@ -145,7 +148,7 @@ export function PricePanel(props: {
     await refresh();
     setBusy(false);
     if (failures.length) {
-      const msg = ok ? t`Fait pour ${ok} bien(s), pas pour : ${failures.join(" ")}` : t`Rien n'a été changé. ${failures.join(" ")}`;
+      const msg = applied ? t`Changé en partie : ${applied} nuit(s) ont leur nouveau prix, le reste non. ${failures.join(" ")} Vérifiez la grille.` : t`Rien n'a été changé. ${failures.join(" ")}`;
       setError(msg);
       toast(msg, true);
     } else {
@@ -159,7 +162,16 @@ export function PricePanel(props: {
     setBusy(true);
     setError(null);
     try {
-      for (const id of chosen) await api("/rate-overrides", { method: "DELETE", query: { unit: id, from: sel.from, to: sel.to } });
+      let done = 0;
+      try {
+        for (const id of chosen) {
+          await api("/rate-overrides", { method: "DELETE", query: { unit: id, from: sel.from, to: sel.to } });
+          done += 1;
+        }
+      } catch (e) {
+        await refresh();
+        throw new Error(done ? t`Fait pour ${done} bien(s) seulement : ${errorText(e)}` : errorText(e));
+      }
       await refresh();
       const msg = t`C'est fait. Ces nuits reprennent le prix de la saison.`;
       setDone(msg);

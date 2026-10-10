@@ -8,12 +8,13 @@ import { useQueries, useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 
-import { api } from "../api/client";
+import { api, errorText } from "../api/client";
 import { useScopedProperties } from "../api/hooks";
 import type { Booking, IsoDate, QuoteResponse, Unit, UnitLink } from "../api/types";
 import { ErrorLine, useAction } from "../lib/action";
 import { addDays, diffDays, longDate, stayRange, todayBrussels } from "../lib/dates";
 import { eur } from "../lib/money";
+import { useToast } from "../lib/toasts";
 import { useLayout } from "../lib/useLayout";
 
 export interface SalePrefill {
@@ -68,6 +69,8 @@ export function SaleFlow({ prefill, onClose }: { prefill: SalePrefill | null; on
   const [email, setEmail] = useState("");
   const [mode, setMode] = useState<"option" | "confirmed">("option");
   const [link, setLink] = useState(true);
+  const [paidAll, setPaidAll] = useState(false);
+  const [linkError, setLinkError] = useState<string | null>(null);
   const [created, setCreated] = useState<{ booking: Booking; paymentUrl: string | null } | null>(null);
   const a = useAction();
 
@@ -86,6 +89,8 @@ export function SaleFlow({ prefill, onClose }: { prefill: SalePrefill | null; on
     setEmail("");
     setMode("option");
     setLink(true);
+    setPaidAll(false);
+    setLinkError(null);
     setCreated(null);
     a.reset();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -128,6 +133,15 @@ export function SaleFlow({ prefill, onClose }: { prefill: SalePrefill | null; on
   if (tooMany && unit) reasons.push(t`${unit.name} accueille ${unit.capacityMax} personnes au plus.`);
 
   const nights = diffDays(checkin, checkout);
+  const toast = useToast();
+  async function copy(text: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast(t`Lien copié.`);
+    } catch {
+      toast(t`Le lien n'a pas pu être copié : sélectionnez-le et copiez-le à la main.`, true);
+    }
+  }
   const title = t`Nouvelle vente`;
 
   return (
@@ -156,6 +170,7 @@ export function SaleFlow({ prefill, onClose }: { prefill: SalePrefill | null; on
             <IconCheck size={20} />
             <span>{t`C'est fait. Réservation ${created.booking.reference} enregistrée.`}</span>
           </div>
+          {linkError ? <ErrorLine text={linkError} /> : null}
           {created.paymentUrl ? (
             <p className="lead" style={{ marginTop: 12, overflowWrap: "anywhere" }}>
               {t`Lien de paiement à transmettre au client :`} {created.paymentUrl}
@@ -163,7 +178,7 @@ export function SaleFlow({ prefill, onClose }: { prefill: SalePrefill | null; on
           ) : null}
           <div className="acts" style={{ marginTop: 16 }}>
             {created.paymentUrl ? (
-              <button type="button" className="btn" onClick={() => void navigator.clipboard?.writeText(created.paymentUrl ?? "")}>
+              <button type="button" className="btn" onClick={() => void copy(created.paymentUrl ?? "")}>
                 <Trans>Copier le lien</Trans>
               </button>
             ) : null}
@@ -264,8 +279,11 @@ export function SaleFlow({ prefill, onClose }: { prefill: SalePrefill | null; on
           </div>
           <Radio.Group mt="md" label={t`Paiement`} value={mode} onChange={(v) => setMode(v as "option" | "confirmed")}>
             <Radio mt="xs" size="md" value="option" label={t`Option : les dates sont gardées en attendant les arrhes (${q ? eur(q.depositCents) : ""})`} />
-            <Radio mt="xs" size="md" value="confirmed" label={t`Confirmée : le client a déjà payé, ou paiera sur place`} />
+            <Radio mt="xs" size="md" value="confirmed" label={t`Confirmée sans attendre les arrhes`} />
           </Radio.Group>
+          {mode === "confirmed" ? (
+            <Checkbox mt="md" size="md" checked={paidAll} onChange={(e) => setPaidAll(e.currentTarget.checked)} label={t`Le client a déjà payé le total (${q ? eur(q.totalCents) : ""}) : le noter comme reçu`} description={t`Sinon, le solde reste à encaisser dans la fiche.`} />
+          ) : null}
           {mode === "option" ? (
             <Checkbox mt="md" size="md" checked={link} onChange={(e) => setLink(e.currentTarget.checked)} label={t`Préparer un lien de paiement par carte`} />
           ) : null}
@@ -277,6 +295,8 @@ export function SaleFlow({ prefill, onClose }: { prefill: SalePrefill | null; on
               onClick={() =>
                 void a.run(
                   async () => {
+                    // Deux temps : la réservation d'abord, le lien ensuite. Si le
+                    // lien échoue, la réservation existe quand même et l'écran le dit.
                     const r = await api<{ booking: Booking; paymentUrl: string | null }>("/bookings", {
                       method: "POST",
                       body: {
@@ -288,11 +308,28 @@ export function SaleFlow({ prefill, onClose }: { prefill: SalePrefill | null; on
                         promoCode: promo.trim() || null,
                         guest: { lastName: lastName.trim(), firstName: firstName.trim(), phone: phone.trim(), email: email.trim() },
                         confirmNow: mode === "confirmed",
-                        generatePaymentLink: mode === "option" && link,
+                        generatePaymentLink: false,
                         paymentMode: "deposit",
                       },
                     });
-                    setCreated(r);
+                    let paymentUrl: string | null = null;
+                    setLinkError(null);
+                    if (mode === "confirmed" && paidAll) {
+                      try {
+                        await api(`/bookings/${r.booking.id}/payments`, { method: "POST", body: { amountCents: r.booking.totalCents, method: "other", kind: "full", note: "payé avant l'enregistrement" } });
+                      } catch (e) {
+                        setLinkError(t`La réservation est enregistrée, mais le paiement n'a pas été noté : ${errorText(e)} Notez-le dans la fiche.`);
+                      }
+                    }
+                    if (mode === "option" && link) {
+                      try {
+                        const amount = Math.max(50, r.booking.depositCents - r.booking.paidCents);
+                        paymentUrl = (await api<{ url: string }>(`/bookings/${r.booking.id}/payment-link`, { method: "POST", body: { amountCents: amount, kind: "deposit" } })).url;
+                      } catch (e) {
+                        setLinkError(t`La réservation est enregistrée, mais le lien de paiement n'a pas pu être créé : ${errorText(e)} Créez-le depuis la fiche.`);
+                      }
+                    }
+                    setCreated({ booking: r.booking, paymentUrl });
                     return r;
                   },
                   (r) => t`C'est fait. Réservation ${(r as { booking: Booking }).booking.reference} enregistrée.`,

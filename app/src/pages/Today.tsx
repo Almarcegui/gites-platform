@@ -10,7 +10,7 @@ import { api } from "../api/client";
 import { useBooking, useDomains, useGuest, useMessages, useOverviews, type DomainData } from "../api/hooks";
 import type { Message, OverviewBalance, PlanningBooking } from "../api/types";
 import { CalendarView } from "../calendar/CalendarView";
-import { ActionButton } from "../lib/action";
+import { ActionButton, ErrorLine } from "../lib/action";
 import { useCleaningDone } from "../lib/cleaning";
 import { addDays, hourLabel, longDate, stayRange, titleDate, todayBrussels, weekdayShort, dayNum } from "../lib/dates";
 import { channelName, cleaningTasks, dayEvents, daySentence, isChannel, nombre, type CleaningTask, type DayEvent } from "../lib/derive";
@@ -22,7 +22,8 @@ function useDay() {
   const today = todayBrussels();
   const { domains, isLoading, error } = useDomains(addDays(today, -1), addDays(today, 45));
   const overviews = useOverviews();
-  const messages = useMessages("nouveau").data ?? [];
+  const messagesQ = useMessages("nouveau");
+  const messages = messagesQ.data ?? [];
   const perProperty = domains
     .filter((d) => d.planning)
     .map((d) => ({
@@ -37,13 +38,14 @@ function useDay() {
   const cleaning = cleaningTasks(perProperty, today, 1);
   const arrivals = events.filter((e) => e.kind === "arrive");
   const departures = events.filter((e) => e.kind === "depart");
-  const overdue: OverviewBalance[] = overviews.flatMap((o) => o.alerts.overdueBalances);
+  const overdue: OverviewBalance[] = overviews.list.flatMap((o) => o.alerts.overdueBalances);
+  const incomplete = !!error || overviews.error || messagesQ.isError;
   const toCollect = [
     ...arrivals.filter((e) => e.booking.balanceCents > 0 && e.booking.status === "confirmed" && !isChannel(e.booking)).map((e) => ({ id: e.booking.id, name: e.booking.guestName, cents: e.booking.balanceCents, late: false })),
     ...overdue.filter((o) => !arrivals.some((e) => e.booking.id === o.id)).map((o) => ({ id: o.id, name: o.guestName ?? o.reference, cents: o.balanceCents, late: true })),
   ];
-  const holds = overviews.flatMap((o) => o.alerts.activeHolds);
-  return { today, domains, isLoading, error, events, arrivals, departures, cleaning, toCollect, overdue, holds, messages };
+  const holds = overviews.list.flatMap((o) => o.alerts.activeHolds);
+  return { incomplete, today, domains, isLoading, error, events, arrivals, departures, cleaning, toCollect, overdue, holds, messages };
 }
 
 function unitName(domains: DomainData[], b: PlanningBooking): string {
@@ -114,6 +116,8 @@ function TodayA() {
     <CalendarView
       title={titleDate(d.today)}
       before={
+        <>
+        {d.incomplete ? <ErrorLine text={t`Une partie des données n'a pas pu être lue : les chiffres ci-dessous peuvent être incomplets. Rechargez la page.`} /> : null}
         <div className="today" aria-label={t`La journée`}>
           {items.map((x) => (
             <button key={x.k} type="button" className="t-item" data-k={x.k} onClick={x.onClick}>
@@ -128,6 +132,7 @@ function TodayA() {
             </button>
           ))}
         </div>
+        </>
       }
     />
   );
@@ -290,6 +295,7 @@ function TodayB() {
         <p className="sum">
           {daySentence(d.arrivals.length, d.departures.length)} {tight && tight.next ? <b>{t`${tight.unitName} doit être prête pour ${hourLabel(tight.next.checkinTime)}.`}</b> : null} {tailText}
         </p>
+        {d.incomplete ? <ErrorLine text={t`Une partie des données n'a pas pu être lue : la journée peut être incomplète. Rechargez la page.`} /> : null}
         {d.isLoading && rail.length === 0 ? <p className="loading">{t`Chargement de la journée…`}</p> : null}
         {rail.length ? (
           <ol className="rail">
@@ -359,7 +365,7 @@ function TodayB() {
               <h3>{m.fromName || m.fromEmail}</h3>
               <p className="quote">{m.bodyText.slice(0, 160)}</p>
               <div className="row-b">
-                <button type="button" className="btn pri" onClick={() => void navigate({ to: "/messages", search: (s: object) => ({ ...s }) })}>
+                <button type="button" className="btn pri" onClick={() => void navigate({ to: "/messages", search: { msg: m.id } })}>
                   {t`Répondre`}
                 </button>
               </div>

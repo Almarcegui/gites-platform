@@ -125,6 +125,7 @@ export function CalendarView({ title, before }: { title: ReactNode; before?: Rea
       </div>
       {before}
       {error ? <ErrorLine text={t`Le calendrier n'a pas pu être lu. Rechargez la page.`} /> : null}
+      {rateQs.some((q) => q.isError) ? <ErrorLine text={t`Les prix n'ont pas pu être lus : ne les changez pas avant d'avoir rechargé la page.`} /> : null}
       {isLoading && domains.every((d) => !d.planning) ? <p className="loading">{t`Chargement du calendrier…`}</p> : null}
       {useGrid ? (
         <>
@@ -161,7 +162,7 @@ export function CalendarView({ title, before }: { title: ReactNode; before?: Rea
           }}
         />
       )}
-      {sel && selDomain ? (
+      {sel && selDomain && !rateQs.some((q) => q.isError) ? (
         <PricePanel
           selection={sel}
           units={selDomain.units}
