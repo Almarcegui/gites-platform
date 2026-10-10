@@ -10,15 +10,17 @@
 <div class="pub" style="max-width:560px">
   <!-- Page de fin de parcours : sans ce lien, la seule sortie est le bouton
        « précédent » du navigateur (issue #47-5). -->
-  <a class="back-top" href="/">← Retour au site</a>
+  <a class="back-top" href="/" data-i18n>← Retour au site</a>
   <div class="card center" id="box">
     <div class="big-check">⏳</div>
-    <h3>Confirmation en cours…</h3>
-    <p class="muted small">Nous vérifions votre paiement, cela prend quelques secondes.</p>
+    <h3 data-i18n>Confirmation en cours…</h3>
+    <p class="muted small" data-i18n>Nous vérifions votre paiement, cela prend quelques secondes.</p>
   </div>
-  <p class="footer-note legal-links"><a href="/mentions-legales/">Mentions légales</a> · <a href="/confidentialite/">Confidentialité</a> · <a href="/conditions-generales/">Conditions générales</a></p>
+  <p class="footer-note legal-links" data-i18n><a href="/mentions-legales/">Mentions légales</a> · <a href="/confidentialite/">Confidentialité</a> · <a href="/conditions-generales/">Conditions générales</a></p>
 </div>
-<script>
+<script type="module">
+import { apiHeaders, LANG, t, translateStatic } from "./i18n.js";
+translateStatic();
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 const q = new URLSearchParams(location.search);
 const ref = q.get("ref"), email = q.get("email");
@@ -27,44 +29,42 @@ const ref = q.get("ref"), email = q.get("email");
 // dire la vérité pendant l'attente, au lieu d'un « Confirmation en cours… »
 // qui laisserait croire à un simple délai d'affichage.
 const redirectStatus = q.get("redirect_status");
-const voucherUrl = `/book/voucher.html?ref=${encodeURIComponent(ref || "")}&email=${encodeURIComponent(email || "")}`;
+const voucherUrl = `/book/voucher.html?ref=${encodeURIComponent(ref || "")}&email=${encodeURIComponent(email || "")}${LANG === "nl" ? "&lang=nl" : ""}`;
 
 async function poll(attempt = 0) {
   const box = document.getElementById("box");
   if (!ref || !email) {
-    box.innerHTML = `<div class="big-check">✅</div><h3>Paiement reçu</h3>
-      <p class="muted small">Votre confirmation arrive par email.</p>`;
+    box.innerHTML = `<div class="big-check">✅</div><h3>${t("Paiement reçu")}</h3>
+      <p class="muted small">${t("Votre confirmation arrive par email.")}</p>`;
     return;
   }
   if (attempt === 0 && redirectStatus === "failed") {
-    box.innerHTML = `<div class="big-check">⚠️</div><h3>Paiement non abouti</h3>
-      <p class="muted small">Aucun montant n'a été débité. Votre créneau reste bloqué quelques minutes :
-      vous pouvez réessayer depuis votre réservation.</p>
-      <p style="margin-top:10px"><a class="btn" href="${voucherUrl}">Reprendre le paiement</a></p>`;
+    box.innerHTML = `<div class="big-check">⚠️</div><h3>${t("Paiement non abouti")}</h3>
+      <p class="muted small">${t("Aucun montant n'a été débité. Votre créneau reste bloqué quelques minutes : vous pouvez réessayer depuis votre réservation.")}</p>
+      <p style="margin-top:10px"><a class="btn" href="${voucherUrl}">${t("Reprendre le paiement")}</a></p>`;
     return;
   }
   if (attempt === 0 && redirectStatus === "processing") {
-    box.innerHTML = `<div class="big-check">🕐</div><h3>Paiement en cours de traitement</h3>
-      <p class="muted small">Votre banque traite le paiement (Bancontact met parfois quelques minutes).
-      Cette page se met à jour toute seule dès que la confirmation nous parvient.</p>`;
+    box.innerHTML = `<div class="big-check">🕐</div><h3>${t("Paiement en cours de traitement")}</h3>
+      <p class="muted small">${t("Votre banque traite le paiement (Bancontact met parfois quelques minutes). Cette page se met à jour toute seule dès que la confirmation nous parvient.")}</p>`;
   }
   try {
-    const res = await fetch(`/api/public/bookings/${encodeURIComponent(ref)}?email=${encodeURIComponent(email)}`);
+    const res = await fetch(`/api/public/bookings/${encodeURIComponent(ref)}?email=${encodeURIComponent(email)}`, { headers: apiHeaders() });
     const data = await res.json();
     if (res.ok && data.booking.status === "confirmed") {
       box.innerHTML = `<div class="big-check">✅</div>
-        <h3>Réservation confirmée !</h3>
-        <p>Référence <b class="mono">${esc(ref)}</b> — un email de confirmation avec les conditions générales et le contrat de location vous est adressé.</p>
-        <p style="margin-top:14px"><a class="btn" href="${voucherUrl}">Voir mon voucher</a></p>`;
+        <h3>${t("Réservation confirmée !")}</h3>
+        <p>${t("Référence <b class=\"mono\">{ref}</b> — un email de confirmation avec les conditions générales et le contrat de location vous est adressé.", { ref: esc(ref) })}</p>
+        <p style="margin-top:14px"><a class="btn" href="${voucherUrl}">${t("Voir mon voucher")}</a></p>`;
       return;
     }
   } catch { /* on repollera */ }
   if (attempt < 20) {
     setTimeout(() => poll(attempt + 1), 1500);
   } else {
-    box.innerHTML = `<div class="big-check">🕐</div><h3>Paiement en cours de traitement</h3>
-      <p class="muted small">La confirmation peut prendre quelques minutes. Retrouvez votre réservation ici :</p>
-      <p style="margin-top:10px"><a class="btn o" href="${voucherUrl}">Voir ma réservation</a></p>`;
+    box.innerHTML = `<div class="big-check">🕐</div><h3>${t("Paiement en cours de traitement")}</h3>
+      <p class="muted small">${t("La confirmation peut prendre quelques minutes. Retrouvez votre réservation ici :")}</p>
+      <p style="margin-top:10px"><a class="btn o" href="${voucherUrl}">${t("Voir ma réservation")}</a></p>`;
   }
 }
 poll();

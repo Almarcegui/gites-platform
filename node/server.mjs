@@ -126,6 +126,7 @@ const { registerPublicRoutes } = await import("../dist/api/public.js");
 const { registerAdminRoutes } = await import("../dist/api/admin.js");
 const { runAllScheduled } = await import("../dist/jobs/scheduled.js");
 const { adminIpCheck, adminIpGate, ipDeniedResponse, markIpDenied } = await import("../dist/core/ip-allow.js");
+const { localizePublicResponse } = await import("../dist/core/public-i18n.js");
 
 const router = new Router();
 registerPublicRoutes(router);
@@ -332,7 +333,8 @@ const server = createServer(async (req, res) => {
     if (ipCheck === "defer") markIpDenied(request);
     const response = await router.handle(request, env, execCtx);
     if (response) {
-      await sendResponse(res, response);
+      // Tunnel public en néerlandais : textes du serveur traduits à la sortie.
+      await sendResponse(res, await localizePublicResponse(request, response));
       return;
     }
     if (ipCheck === "defer") {

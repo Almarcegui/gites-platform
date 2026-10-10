@@ -211,7 +211,8 @@ describe("le tunnel affiche la règle avant la sélection (#66)", () => {
   const HTML = read("public/book/index.html");
 
   it("le calendrier écrit le minimum de nuits dans la case et résume la règle par période", () => {
-    expect(JS).toMatch(/class="mn">min \$\{d\.minNights\} n/);
+    // Lot 3 : le texte passe par t() (français ou néerlandais).
+    expect(JS).toMatch(/class="mn">\$\{t\("min \{n\} n", \{ n: d\.minNights \}\)\}/);
     expect(HTML).toMatch(/id="calRules"/);
     expect(JS).toMatch(/nuits minimum/);
   });
@@ -234,7 +235,7 @@ describe("l'étape « Hébergement » dit la liaison et marque le choix (#45, #4
   it("#45 — l'unité liée qui occupe les nuits est NOMMÉE, et ce qui reste libre aussi", () => {
     // le champ vient de l'API : sans lui, la carte ne peut rien expliquer
     expect(JS).toMatch(/blockedByUnitIds/);
-    expect(JS).toMatch(/Ces nuits sont déjà prises sur \$\{frList\(blockers\)\}/);
+    expect(JS).toMatch(/t\("Ces nuits sont déjà prises sur \{noms\}", \{ noms: frList\(blockers\) \}\)/);
     expect(JS).toMatch(/reste libre/);
     expect(JS).toMatch(/restent libres/);
   });

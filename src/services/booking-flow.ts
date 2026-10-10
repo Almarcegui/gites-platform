@@ -79,9 +79,11 @@ export const MIN_CHECKOUT_CENTS = 50;
 /** Espace client d'une réservation : référence + email, les deux exigés côté
  *  serveur. C'est le point d'entrée stable du solde en libre-service (#67) —
  *  contrairement à une URL de session Stripe, il ne périme jamais. */
-export function voucherUrl(env: Env, booking: { reference: string; guestEmail?: string | null }): string {
+export function voucherUrl(env: Env, booking: { reference: string; guestEmail?: string | null; guestLang?: string | null }): string {
   const email = booking.guestEmail ? `&email=${encodeURIComponent(booking.guestEmail)}` : "";
-  return `${env.PUBLIC_BASE_URL}/book/voucher.html?ref=${encodeURIComponent(booking.reference)}${email}`;
+  // Client néerlandophone (lot 3) : le voucher s'ouvre dans sa langue.
+  const lang = booking.guestLang === "nl" ? "&lang=nl" : "";
+  return `${env.PUBLIC_BASE_URL}/book/voucher.html?ref=${encodeURIComponent(booking.reference)}${email}${lang}`;
 }
 
 /** Ferme les sessions de paiement encore ouvertes sur une réservation, CHEZ

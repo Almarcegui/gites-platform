@@ -11,16 +11,19 @@
 <div class="pub" style="max-width:640px">
   <!-- Page de fin de parcours : sans ce lien, la seule sortie est le bouton
        « précédent » du navigateur (issue #47-5). -->
-  <a class="back-top" href="/">← Retour au site</a>
-  <div id="box"><div class="card muted">Chargement…</div></div>
-  <p class="footer-note legal-links"><a href="/mentions-legales/">Mentions légales</a> · <a href="/confidentialite/">Confidentialité</a> · <a href="/conditions-generales/">Conditions générales</a></p>
+  <a class="back-top" href="/" data-i18n>← Retour au site</a>
+  <nav class="lang-switch" id="langSwitch"></nav>
+  <div id="box"><div class="card muted" data-i18n>Chargement…</div></div>
+  <p class="footer-note legal-links" data-i18n><a href="/mentions-legales/">Mentions légales</a> · <a href="/confidentialite/">Confidentialité</a> · <a href="/conditions-generales/">Conditions générales</a></p>
 </div>
 <script type="module">
 import { cgvHtml } from "./cgv.js";
 import { icsFile } from "./ics.js";
 import { mountPayment, paymentConfig } from "./pay-element.js";
+import { apiHeaders, CGV_NOTE_NL, eur, LANG, mountLangSwitch, pl, t, translateStatic } from "./i18n.js";
+translateStatic();
+mountLangSwitch(document.getElementById("langSwitch"));
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
-const eur = (c) => (c / 100).toLocaleString("fr-BE", { style: "currency", currency: "EUR" });
 const dfr = (iso) => iso ? `${iso.slice(8,10)}/${iso.slice(5,7)}/${iso.slice(0,4)}` : "—";
 const q = new URLSearchParams(location.search);
 const sqlToMs = (s) => Date.parse(String(s).replace(" ", "T") + "Z");
@@ -28,7 +31,7 @@ const sqlToMs = (s) => Date.parse(String(s).replace(" ", "T") + "Z");
 // Le devis stocké porte l'origine du prix (« · tarif de base »), utile au
 // back-office ; le voyageur, lui, veut le prix d'UNE nuit (issue #47-2).
 const lineLabel = (l) => (l?.publicLabel && l.unitPriceCents != null
-  ? `${l.publicLabel} à ${eur(l.unitPriceCents)} la nuit`
+  ? t("{ligne} à {prix} la nuit", { ligne: l.publicLabel, prix: eur(l.unitPriceCents) })
   : (l?.label ?? ""));
 
 (async () => {
@@ -39,21 +42,21 @@ const lineLabel = (l) => (l?.publicLabel && l.unitPriceCents != null
   // une preuve : seul le webhook crédite. On l'affiche donc tel qu'il est,
   // sans promettre un encaissement que le serveur n'a pas encore vu.
   const redirectStatus = q.get("redirect_status");
-  if (!ref || !email) { box.innerHTML = `<div class="card"><div class="note bad">Lien incomplet — utilisez le lien reçu par email.</div></div>`; return; }
-  const res = await fetch(`/api/public/bookings/${encodeURIComponent(ref)}?email=${encodeURIComponent(email)}`);
+  if (!ref || !email) { box.innerHTML = `<div class="card"><div class="note bad">${t("Lien incomplet — utilisez le lien reçu par email.")}</div></div>`; return; }
+  const res = await fetch(`/api/public/bookings/${encodeURIComponent(ref)}?email=${encodeURIComponent(email)}`, { headers: apiHeaders() });
   const data = await res.json();
-  if (!res.ok) { box.innerHTML = `<div class="card"><div class="note bad">Réservation introuvable — vérifiez la référence et l'email.</div></div>`; return; }
+  if (!res.ok) { box.innerHTML = `<div class="card"><div class="note bad">${t("Réservation introuvable — vérifiez la référence et l'email.")}</div></div>`; return; }
   const b = data.booking;
   const statusTag = b.status === "confirmed"
-    ? `<span class="tag t-ok">Confirmée</span>`
-    : b.status === "pending" ? `<span class="tag t-warn">Paiement en attente</span>` : `<span class="tag t-bad">Annulée</span>`;
+    ? `<span class="tag t-ok">${t("Confirmée")}</span>`
+    : b.status === "pending" ? `<span class="tag t-warn">${t("Paiement en attente")}</span>` : `<span class="tag t-bad">${t("Annulée")}</span>`;
   const lines = (b.quoteLines || []).map((l) => `<tr><td>${esc(lineLabel(l))}</td><td class="r ${l.amountCents < 0 ? "neg" : ""}">${eur(l.amountCents)}</td></tr>`).join("");
 
   // Deux paiements possibles sur cette page, le même endpoint derrière :
   // finaliser l'acompte d'une résa en attente, ou régler le solde d'une résa
   // confirmée. Le solde est proposé à tout moment, pas seulement à l'échéance.
   const dueNote = b.balanceDueDate
-    ? `Échéance le ${dfr(b.balanceDueDate)}${b.balanceDueDate < new Date().toISOString().slice(0, 10) ? " — dépassée" : ""}.`
+    ? `${t("Échéance le {date}", { date: dfr(b.balanceDueDate) })}${b.balanceDueDate < new Date().toISOString().slice(0, 10) ? ` — ${t("dépassée")}` : ""}.`
     : "";
   // Option encore vivante ? Comparaison à l'heure SERVEUR renvoyée avec la
   // réservation : l'horloge du poste peut dériver de plusieurs minutes, et le
@@ -65,23 +68,21 @@ const lineLabel = (l) => (l?.publicLabel && l.unitPriceCents != null
   // décroître si l'onglet reste ouvert, sinon on retombe sur le compte à
   // rebours figé que l'issue reproche (contre-review Gemini 2026-08-28).
   const holdExpiresLocal = Date.now() + holdMsLeft;
-  const expiredHtml = `<h3>Option expirée</h3>
-        <p class="small muted">Le blocage de ce créneau est arrivé à son terme et les dates sont de nouveau ouvertes à la réservation.
-        Aucun montant n'a été débité. Vous pouvez relancer une réservation — écrivez-nous ci-dessous si vous préférez qu'on s'en occupe.</p>
-        <p style="margin-top:10px"><a class="btn" href="/book/">Relancer une réservation</a></p>`;
+  const expiredHtml = `<h3>${t("Option expirée")}</h3>
+        <p class="small muted">${t("Le blocage de ce créneau est arrivé à son terme et les dates sont de nouveau ouvertes à la réservation. Aucun montant n'a été débité. Vous pouvez relancer une réservation — écrivez-nous ci-dessous si vous préférez qu'on s'en occupe.")}</p>
+        <p style="margin-top:10px"><a class="btn" href="/book/">${t("Relancer une réservation")}</a></p>`;
   const holdLabel = (ms) => {
     const min = Math.floor(ms / 60000);
-    return min >= 1 ? `${min} minute${min > 1 ? "s" : ""}` : "moins d'une minute";
+    return min >= 1 ? pl(min, "minute", "minutes") : t("moins d'une minute");
   };
 
   // Placé au-dessus du bloc de paiement : un client revenu de sa banque doit
   // lire l'état de SON paiement avant de se voir reproposer de payer.
   const processingBlock = redirectStatus === "processing"
-    ? `<div class="card"><h3>Paiement en cours de traitement</h3>
-        <p class="small">Votre banque a bien pris votre paiement en charge. La confirmation nous parvient sous quelques minutes —
-        cette page et votre email refléteront le nouveau solde dès que ce sera fait. Aucune action de votre part.</p></div>`
+    ? `<div class="card"><h3>${t("Paiement en cours de traitement")}</h3>
+        <p class="small">${t("Votre banque a bien pris votre paiement en charge. La confirmation nous parvient sous quelques minutes — cette page et votre email refléteront le nouveau solde dès que ce sera fait. Aucune action de votre part.")}</p></div>`
     : redirectStatus === "failed"
-    ? `<div class="card"><div class="note bad">Le paiement n'a pas abouti — aucun montant n'a été débité. Vous pouvez réessayer ci-dessous.</div></div>`
+    ? `<div class="card"><div class="note bad">${t("Le paiement n'a pas abouti — aucun montant n'a été débité. Vous pouvez réessayer ci-dessous.")}</div></div>`
     : "";
 
   // Pendant qu'un paiement est en route chez la banque (Bancontact), le bloc de
@@ -89,19 +90,17 @@ const lineLabel = (l) => (l?.publicLabel && l.unitPriceCents != null
   // débit (contre-review Gemini 2026-08-30). Le serveur refuse d'ailleurs en
   // 409, mais l'utilisateur ne doit pas avoir à découvrir l'erreur.
   const payBlock = redirectStatus === "processing" ? "" : holdAlive
-    ? `<div class="card" id="payCard"><h3>Finaliser la réservation</h3>
-        <p class="small muted">Votre créneau vous est bloqué encore
-          <b id="holdLeft">${holdLabel(holdMsLeft)}</b>
-          — terminez le paiement pour confirmer.</p>
+    ? `<div class="card" id="payCard"><h3>${t("Finaliser la réservation")}</h3>
+        <p class="small muted">${t("Votre créneau vous est bloqué encore {duree} — terminez le paiement pour confirmer.", { duree: `<b id="holdLeft">${holdLabel(holdMsLeft)}</b>` })}</p>
         <div id="payMsg"></div>
-        <button class="btn big" id="payNow" style="margin-top:8px">💳 Finaliser le paiement sécurisé</button></div>`
+        <button class="btn big" id="payNow" style="margin-top:8px">💳 ${t("Finaliser le paiement sécurisé")}</button></div>`
     : b.status === "pending"
     ? `<div class="card" id="payCard">${expiredHtml}</div>`
     : b.status === "confirmed" && b.balanceCents > 0
-    ? `<div class="card" id="payCard"><h3>Solde de votre séjour</h3>
-        <p class="small muted">Il reste <b>${eur(b.balanceCents)}</b> à régler. ${esc(dueNote)} Vous pouvez payer dès maintenant, en ligne et en une fois.</p>
+    ? `<div class="card" id="payCard"><h3>${t("Solde de votre séjour")}</h3>
+        <p class="small muted">${t("Il reste <b>{montant}</b> à régler.", { montant: eur(b.balanceCents) })} ${esc(dueNote)} ${t("Vous pouvez payer dès maintenant, en ligne et en une fois.")}</p>
         <div id="payMsg"></div>
-        <button class="btn big" id="payNow" style="margin-top:8px">💳 Payer le solde (${eur(b.balanceCents)})</button></div>`
+        <button class="btn big" id="payNow" style="margin-top:8px">💳 ${t("Payer le solde ({montant})", { montant: eur(b.balanceCents) })}</button></div>`
     : "";
 
   // Adresse du gîte + ajout au calendrier : les deux informations qu'on
@@ -114,53 +113,53 @@ const lineLabel = (l) => (l?.publicLabel && l.unitPriceCents != null
     .filter(Boolean)
     .join(", ");
   const addrHtml = b.status === "cancelled" ? "" : `<div class="card">
-      <h3>Adresse et calendrier</h3>
+      <h3>${t("Adresse et calendrier")}</h3>
       ${address
         ? `<p>${esc(address)}</p>
-           <p class="small" style="margin-top:6px"><a href="https://www.google.com/maps/search/?api=1&amp;query=${encodeURIComponent(address)}" target="_blank" rel="noopener">Ouvrir dans un plan</a></p>`
-        : `<p class="small muted">L'adresse précise vous est communiquée avec les informations d'arrivée.</p>`}
-      <p style="margin-top:10px"><a class="btn o" id="icsBtn" download="sejour-${esc(b.reference)}.ics" href="#">📅 Ajouter à mon agenda</a></p>
+           <p class="small" style="margin-top:6px"><a href="https://www.google.com/maps/search/?api=1&amp;query=${encodeURIComponent(address)}" target="_blank" rel="noopener">${t("Ouvrir dans un plan")}</a></p>`
+        : `<p class="small muted">${t("L'adresse précise vous est communiquée avec les informations d'arrivée.")}</p>`}
+      <p style="margin-top:10px"><a class="btn o" id="icsBtn" download="sejour-${esc(b.reference)}.ics" href="#">📅 ${t("Ajouter à mon agenda")}</a></p>
     </div>`;
 
   box.innerHTML = `
-    <div class="brand"><h1>${esc(b.propertyName)}</h1><p>Voucher de réservation</p></div>
+    <div class="brand"><h1>${esc(b.propertyName)}</h1><p>${t("Voucher de réservation")}</p></div>
     ${processingBlock}
     ${payBlock}
     <div class="card">
       <table class="quote">
-        <tr><td>Référence</td><td class="r"><b class="mono">${esc(b.reference)}</b> ${statusTag}</td></tr>
-        <tr><td>Hébergement</td><td class="r"><b>${esc(b.unitName)}</b></td></tr>
-        <tr><td>Arrivée</td><td class="r">${dfr(b.checkin)} dès ${esc(data.stay.checkinTime)}</td></tr>
-        <tr><td>Départ</td><td class="r">${dfr(b.checkout)} avant ${esc(data.stay.checkoutTime)}</td></tr>
-        <tr><td>Voyageurs</td><td class="r">${b.adults} adulte${b.adults > 1 ? "s" : ""}${b.children ? ` + ${b.children} enfant${b.children > 1 ? "s" : ""}` : ""}</td></tr>
+        <tr><td>${t("Référence")}</td><td class="r"><b class="mono">${esc(b.reference)}</b> ${statusTag}</td></tr>
+        <tr><td>${t("Hébergement")}</td><td class="r"><b>${esc(b.unitName)}</b></td></tr>
+        <tr><td>${t("Arrivée")}</td><td class="r">${t("{date} dès {heure}", { date: dfr(b.checkin), heure: esc(data.stay.checkinTime) })}</td></tr>
+        <tr><td>${t("Départ")}</td><td class="r">${t("{date} avant {heure}", { date: dfr(b.checkout), heure: esc(data.stay.checkoutTime) })}</td></tr>
+        <tr><td>${t("Voyageurs")}</td><td class="r">${pl(b.adults, "adulte", "adultes")}${b.children ? ` + ${pl(b.children, "enfant", "enfants")}` : ""}</td></tr>
       </table>
     </div>
     ${addrHtml}
-    ${lines ? `<div class="card"><h3>Détail du séjour</h3><table class="quote">${lines}
-      <tr class="tot"><td>Total</td><td class="r">${eur(b.totalCents)}</td></tr></table></div>` : ""}
+    ${lines ? `<div class="card"><h3>${t("Détail du séjour")}</h3><table class="quote">${lines}
+      <tr class="tot"><td>${t("Total")}</td><td class="r">${eur(b.totalCents)}</td></tr></table></div>` : ""}
     <div class="card">
       <table class="quote">
-        <tr><td>Déjà payé</td><td class="r">${eur(b.paidCents)}</td></tr>
-        <tr><td>Solde restant${b.balanceCents > 0 && b.balanceDueDate ? ` (pour le ${dfr(b.balanceDueDate)})` : ""}</td>
+        <tr><td>${t("Déjà payé")}</td><td class="r">${eur(b.paidCents)}</td></tr>
+        <tr><td>${t("Solde restant")}${b.balanceCents > 0 && b.balanceDueDate ? ` (${t("pour le {date}", { date: dfr(b.balanceDueDate) })})` : ""}</td>
           <td class="r">${
             b.balanceCents > 0 ? `<b>${eur(b.balanceCents)}</b>`
-            : b.overpaidCents > 0 ? `<b>${eur(0)}</b> <span class="tag t-warn">trop-perçu de ${eur(b.overpaidCents)}</span>`
-            : `<b>${eur(0)}</b> <span class="tag t-ok">soldé</span>`
+            : b.overpaidCents > 0 ? `<b>${eur(0)}</b> <span class="tag t-warn">${t("trop-perçu de {montant}", { montant: eur(b.overpaidCents) })}</span>`
+            : `<b>${eur(0)}</b> <span class="tag t-ok">${t("soldé")}</span>`
           }</td></tr>
-        ${b.overpaidCents > 0 ? `<tr><td colspan="2" class="small muted">Nous avons reçu ${eur(b.overpaidCents)} de plus que le montant dû — nous vous recontactons pour le remboursement.</td></tr>` : ""}
-        ${data.stay.cautionCents > 0 ? `<tr><td>Caution (hors total, avant l'arrivée)</td><td class="r">${eur(data.stay.cautionCents)}</td></tr>` : ""}
+        ${b.overpaidCents > 0 ? `<tr><td colspan="2" class="small muted">${t("Nous avons reçu {montant} de plus que le montant dû — nous vous recontactons pour le remboursement.", { montant: eur(b.overpaidCents) })}</td></tr>` : ""}
+        ${data.stay.cautionCents > 0 ? `<tr><td>${t("Caution (hors total, avant l'arrivée)")}</td><td class="r">${eur(data.stay.cautionCents)}</td></tr>` : ""}
       </table>
-      ${data.contact.email || data.contact.phone ? `<p class="small muted" style="margin-top:8px">Contact : ${esc([data.contact.email, data.contact.phone].filter(Boolean).join(" · "))}</p>` : ""}
+      ${data.contact.email || data.contact.phone ? `<p class="small muted" style="margin-top:8px">${t("Contact :")} ${esc([data.contact.email, data.contact.phone].filter(Boolean).join(" · "))}</p>` : ""}
     </div>
-    <div class="card"><h3>💬 Échanges avec l'équipe</h3>
-      <p class="small muted">Une question sur votre séjour ? Écrivez-nous ici — la réponse apparaîtra sur cette page${b.status !== "cancelled" ? " (et par email)" : ""}.</p>
-      <div class="thread" id="thread"><span class="muted small">Chargement…</span></div>
-      <textarea id="msgText" rows="3" placeholder="Votre message…"></textarea>
-      <p style="margin-top:8px"><button class="btn" id="msgSend">Envoyer</button> <span id="msgNote" class="small muted"></span></p>
+    <div class="card"><h3>💬 ${t("Échanges avec l'équipe")}</h3>
+      <p class="small muted">${b.status !== "cancelled" ? t("Une question sur votre séjour ? Écrivez-nous ici — la réponse apparaîtra sur cette page (et par email).") : t("Une question sur votre séjour ? Écrivez-nous ici — la réponse apparaîtra sur cette page.")}</p>
+      <div class="thread" id="thread"><span class="muted small">${t("Chargement…")}</span></div>
+      <textarea id="msgText" rows="3" placeholder="${t("Votre message…")}"></textarea>
+      <p style="margin-top:8px"><button class="btn" id="msgSend">${t("Envoyer")}</button> <span id="msgNote" class="small muted"></span></p>
     </div>
-    <div class="card"><h3>Conditions générales &amp; contrat de location</h3>
-      <div class="cgv-box">${data.cgvText?.trim() ? cgvHtml(data.cgvText) + (b.depositPct != null ? `<p class="cgv-h"><b>Pour ${esc(b.unitName)}, le pourcentage d'arrhes de l'article 4.1 est de ${b.depositPct} %.</b></p>` : "") : "<p>Conditions générales à venir.</p>"}</div></div>
-    <p class="footer-note"><a href="javascript:print()">Imprimer / enregistrer en PDF</a></p>`;
+    <div class="card"><h3>${t("Conditions générales &amp; contrat de location")}</h3>
+      <div class="cgv-box">${data.cgvText?.trim() ? (LANG === "nl" ? `<p class="cgv-h"><b>${CGV_NOTE_NL}</b></p>` : "") + cgvHtml(data.cgvText) + (b.depositPct != null ? `<p class="cgv-h"><b>${t("Pour {nom}, le pourcentage d'arrhes de l'article 4.1 est de {pct} %.", { nom: esc(b.unitName), pct: b.depositPct })}</b></p>` : "") : `<p>${t("Conditions générales à venir.")}</p>`}</div></div>
+    <p class="footer-note"><a href="javascript:print()">${t("Imprimer / enregistrer en PDF")}</a></p>`;
 
   // Décompte vivant : l'affichage suit le temps qui passe, et la carte bascule
   // d'elle-même sur « option expirée » à l'échéance — au lieu de proposer un
@@ -217,9 +216,9 @@ const lineLabel = (l) => (l?.publicLabel && l.unitPriceCents != null
   if (payBtn) {
     payBtn.onclick = async () => {
       payBtn.disabled = true;
-      payBtn.textContent = "Préparation du paiement…";
+      payBtn.textContent = t("Préparation du paiement…");
       const r = await fetch(`/api/public/bookings/${encodeURIComponent(ref)}/pay`, {
-        method: "POST", headers: { "content-type": "application/json" },
+        method: "POST", headers: apiHeaders({ "content-type": "application/json" }),
         body: JSON.stringify({ email }),
       });
       const d = await r.json();
@@ -229,13 +228,13 @@ const lineLabel = (l) => (l?.publicLabel && l.unitPriceCents != null
       if (r.ok && d.payment?.mode === "element" && d.payment.clientSecret) {
         try {
           const cfg = await paymentConfig();
-          if (!cfg.enabled || !cfg.publishableKey) throw new Error("paiement indisponible");
+          if (!cfg.enabled || !cfg.publishableKey) throw new Error(t("paiement indisponible"));
           await mountPayment(document.getElementById("payCard"), {
             publishableKey: cfg.publishableKey,
             clientSecret: d.payment.clientSecret,
             returnUrl: d.payment.returnUrl,
             amountLabel: eur(d.amountCents),
-            title: d.kind === "balance" ? "Paiement du solde" : "Finaliser la réservation",
+            title: d.kind === "balance" ? t("Paiement du solde") : t("Finaliser la réservation"),
           });
         } catch (e) {
           // `mountPayment` réécrit tout le contenu de #payCard : selon l'endroit
@@ -243,17 +242,17 @@ const lineLabel = (l) => (l?.publicLabel && l.unitPriceCents != null
           // celui qui est encore là — sinon l'échec se terminait en TypeError et
           // le client restait devant une carte vide (contre-review 2026-08-30).
           const zone = document.getElementById("peMsg") || document.getElementById("payMsg");
-          if (zone) zone.innerHTML = `<div class="note bad">${esc(e.message || "paiement indisponible")}</div>`;
+          if (zone) zone.innerHTML = `<div class="note bad">${esc(e.message || t("paiement indisponible"))}</div>`;
           if (document.body.contains(payBtn)) {
             payBtn.disabled = false;
-            payBtn.textContent = "💳 Réessayer le paiement";
+            payBtn.textContent = `💳 ${t("Réessayer le paiement")}`;
           }
         }
         return;
       }
       if (r.ok) { location.href = d.checkoutUrl; return; }
       payBtn.style.display = "none";
-      document.getElementById("payMsg").innerHTML = `<div class="note bad">${esc(d.error || "paiement indisponible")}</div>`;
+      document.getElementById("payMsg").innerHTML = `<div class="note bad">${esc(d.error || t("paiement indisponible"))}</div>`;
     };
   }
 
@@ -262,8 +261,8 @@ const lineLabel = (l) => (l?.publicLabel && l.unitPriceCents != null
     const zone = document.getElementById("thread");
     zone.innerHTML = messages.length
       ? messages.map((m) => `<div class="bubble ${m.direction === "in" ? "in" : "out"}">
-          <div class="who">${m.direction === "in" ? "Vous" : esc(b.propertyName || "L'équipe")} · ${esc((m.at || "").slice(0, 16))}</div>${esc(m.body)}</div>`).join("")
-      : '<span class="muted small">Pas encore de message — écrivez-nous ci-dessous.</span>';
+          <div class="who">${m.direction === "in" ? t("Vous") : esc(b.propertyName || t("L'équipe"))} · ${esc((m.at || "").slice(0, 16))}</div>${esc(m.body)}</div>`).join("")
+      : `<span class="muted small">${t("Pas encore de message — écrivez-nous ci-dessous.")}</span>`;
     zone.scrollTop = zone.scrollHeight;
   };
   try {
@@ -276,17 +275,17 @@ const lineLabel = (l) => (l?.publicLabel && l.unitPriceCents != null
     const btn = document.getElementById("msgSend");
     btn.disabled = true;
     const res = await fetch(`/api/public/bookings/${encodeURIComponent(ref)}/messages`, {
-      method: "POST", headers: { "content-type": "application/json" },
+      method: "POST", headers: apiHeaders({ "content-type": "application/json" }),
       body: JSON.stringify({ email, message: text }),
     });
     const data2 = await res.json();
     btn.disabled = false;
     if (res.ok) {
       document.getElementById("msgText").value = "";
-      document.getElementById("msgNote").textContent = "Message envoyé — nous vous répondons vite.";
+      document.getElementById("msgNote").textContent = t("Message envoyé — nous vous répondons vite.");
       renderThread(data2.messages || []);
     } else {
-      document.getElementById("msgNote").textContent = data2.error || "envoi impossible";
+      document.getElementById("msgNote").textContent = data2.error || t("envoi impossible");
     }
   };
 })();

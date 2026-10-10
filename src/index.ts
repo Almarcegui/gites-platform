@@ -9,6 +9,7 @@ import { withStandardHeaders } from "./services/http-headers";
 import { buildReplyMime, parseRawEmail, processInboundEmail } from "./services/inbound-email";
 import { PaymentInFlightError } from "./services/booking-flow";
 import { wpRedirect } from "./services/redirects";
+import { localizePublicResponse } from "./core/public-i18n";
 
 const router = new Router();
 registerPublicRoutes(router);
@@ -37,7 +38,8 @@ export default {
     // "/" sert le site vitrine (public/index.html) via les assets.
     try {
       const response = await router.handle(request, env, ctx);
-      if (response) return finish(response);
+      // Tunnel public en néerlandais : textes du serveur traduits à la sortie.
+      if (response) return finish(await localizePublicResponse(request, response));
       // API admin hors liste qu'aucune route gardée n'a reconnue : refus.
       if (ipCheck === "defer") return finish(ipDeniedResponse());
     } catch (e) {

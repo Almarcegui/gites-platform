@@ -254,3 +254,8 @@ a{color:var(--accent)}
   color:#E9E5DA;font:inherit;font-size:15px}
 .visionneuse button:hover{background:rgba(233,229,218,.22)}
 .visionneuse :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+/* Sélecteur de langue FR · NL (lot 3) — en haut à droite, assez grand pour le doigt */
+.lang-switch{position:absolute;top:0;right:0;font-size:14px}
+.lang-switch a{display:inline-block;padding:10px 8px;min-height:44px;color:var(--muted);text-decoration:none}
+.lang-switch a[aria-current="true"]{color:inherit;font-weight:700;text-decoration:underline}
+.back-top + .lang-switch, .pub > .lang-switch{position:static;text-align:right;margin-bottom:6px}

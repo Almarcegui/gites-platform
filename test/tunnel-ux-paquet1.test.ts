@@ -34,7 +34,7 @@ describe("issue #41 — case CGV : une seule règle, message ciblé, focus", () 
     expect(JS).toMatch(/id="cgvMsg"[^>]*role="alert"/);
     expect(JS).toMatch(/aria-describedby="cgvMsg"/);
     // et la zone est bien remplie au moment du refus
-    expect(JS).toMatch(/\$\("cgvMsg"\)\.textContent = "Cochez cette case/);
+    expect(JS).toMatch(/\$\("cgvMsg"\)\.textContent = t\("Cochez cette case/);
   });
 
   it("le focus est posé sur la case, et l'erreur se lève dès qu'on la coche", () => {
@@ -60,7 +60,7 @@ describe("issue #42 — radios du paiement à taille native", () => {
   });
 
   it("les deux choix forment un groupe nommé pour les technologies d'assistance", () => {
-    expect(JS).toMatch(/<fieldset class="paychoices"><legend class="sr-only">Montant à payer maintenant<\/legend>/);
+    expect(JS).toMatch(/<fieldset class="paychoices"><legend class="sr-only">\$\{t\("Montant à payer maintenant"\)\}<\/legend>/);
   });
 });
 
@@ -90,7 +90,7 @@ describe("issue #47 — micro-corrections du tunnel", () => {
 
   it("5. les trois pages cul-de-sac offrent un retour au site", () => {
     for (const page of [MERCI, ANNULE, VOUCHER]) {
-      expect(page).toMatch(/class="back-top" href="\/">← Retour au site<\/a>/);
+      expect(page).toMatch(/class="back-top" href="\/"( data-i18n)?>← Retour au site<\/a>/);
     }
   });
 
