@@ -1,0 +1,6087 @@
+msgid ""
+msgstr ""
+"POT-Creation-Date: 2026-10-10 18:52+0200\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Generator: @lingui/cli\n"
+"Language: nl\n"
+
+#. placeholder {0}: m.errorDetail ? ` (${m.errorDetail})` : ""
+#: src/booking/BookingPanel.tsx
+msgid " — n'est pas parti{0}"
+msgstr " — is niet vertrokken{0}"
+
+#: src/booking/BookingPanel.tsx
+msgid " — préparé, envoi des mails coupé sur ce poste"
+msgstr " — voorbereid, mails versturen staat uit op dit toestel"
+
+#: src/pages/settings/Tarifs.tsx
+msgid " — somme des maisons, se lit seulement"
+msgstr " — som van de huizen, alleen te lezen"
+
+#. placeholder {0}: eur(p.airbnbCents)
+#. placeholder {1}: pctTxt(p.markupPct)
+#. placeholder {2}: p.lengthPct
+#. placeholder {3}: p.nights
+#: src/pages/settings/ChannelPrices.tsx
+msgid " ({0} avec + {1} %, puis − {2} % pour {3} nuits)."
+msgstr " ({0} met + {1} %, daarna − {2} % voor {3} nachten)."
+
+#. placeholder {0}: m.reference
+#: src/shell/Health.tsx
+msgid " ({0})"
+msgstr " ({0})"
+
+#. placeholder {0}: pctTxt(p.markupPct)
+#: src/pages/settings/ChannelPrices.tsx
+msgid " (+ {0} %, sans remise de durée)."
+msgstr " (+ {0} %, zonder korting voor verblijfsduur)."
+
+#. placeholder {0}: sqlWhen(s.sentAt)
+#: src/pages/settings/ChannelPrices.tsx
+msgid " (le {0})"
+msgstr " (op {0})"
+
+#: src/pages/settings/Stats.tsx
+msgid " (plus forte perte)"
+msgstr " (grootste daling)"
+
+#: src/pages/settings/Accounts.tsx
+msgid " (vous)"
+msgstr " (u)"
+
+#: src/shell/Shell.tsx
+msgid " et "
+msgstr " en "
+
+#. placeholder {0}: eur(b.balanceCents)
+#: src/calendar/Weeks.tsx
+msgid ", {0} à encaisser"
+msgstr ", {0} te innen"
+
+#. placeholder {0}: r.conflicts.length
+#: src/pages/settings/Ical.tsx
+msgid ", {0} en désaccord (voir Airbnb, Booking et Vrbo)"
+msgstr ", {0} niet in overeenstemming (zie Airbnb, Booking en Vrbo)"
+
+#. placeholder {0}: b.persons
+#: src/calendar/Weeks.tsx
+msgid ", {0} pers."
+msgstr ", {0} pers."
+
+#. placeholder {0}: eur(x.balanceCents)
+#: src/booking/BookingPanel.tsx
+msgid ", {0} restent à payer"
+msgstr ", nog {0} te betalen"
+
+#: src/pages/Today.tsx
+msgid ", à l'arrivée"
+msgstr ", bij aankomst"
+
+#. placeholder {0}: longDate(b.balanceDueDate)
+#: src/booking/BookingPanel.tsx
+msgid ", attendu le {0}"
+msgstr ", verwacht op {0}"
+
+#. placeholder {0}: firstDay.minNights
+#. placeholder {0}: r.minNights
+#: src/calendar/Grid.tsx
+#: src/calendar/Weeks.tsx
+msgid ", au moins {0} nuits"
+msgstr ", minstens {0} nachten"
+
+#: src/calendar/Grid.tsx
+msgid ", déjà pris"
+msgstr ", al bezet"
+
+#: src/pages/Today.tsx
+msgid ", en retard"
+msgstr ", te laat"
+
+#: src/pages/settings/Tarifs.tsx
+msgid ", fixé à la main"
+msgstr ", met de hand vastgelegd"
+
+#: src/calendar/Weeks.tsx
+msgid ", libre"
+msgstr ", vrij"
+
+#: src/calendar/Weeks.tsx
+msgid ", option"
+msgstr ", optie"
+
+#: src/calendar/Weeks.tsx
+msgid ", pris"
+msgstr ", bezet"
+
+#: src/pages/settings/Tarifs.tsx
+msgid ", vendue"
+msgstr ", verkocht"
+
+#. placeholder {0}: channelName(e.booking)
+#: src/pages/Today.tsx
+msgid ", via {0}"
+msgstr ", via {0}"
+
+#. placeholder {0}: nights > 1 ? t`${nights} nuits` : t`1 nuit`
+#. placeholder {1}: eur(sum)
+#: src/calendar/Weeks.tsx
+msgid "{0} : {1} hors ménage. Le prix complet se calcule à l'étape suivante."
+msgstr "{0}: {1} zonder schoonmaak. De volledige prijs wordt in de volgende stap berekend."
+
+#. placeholder {0}: f.name
+#: src/pages/settings/Domain.tsx
+msgid "{0} : format non accepté (JPEG, PNG ou WebP)."
+msgstr "{0}: formaat niet aanvaard (JPEG, PNG of WebP)."
+
+#. placeholder {0}: bad.label
+#. placeholder {1}: m.maxPct
+#: src/pages/settings/Channels.tsx
+msgid "{0} : la majoration va de 0 à {1} %."
+msgstr "{0}: de verhoging gaat van 0 tot {1} %."
+
+#. placeholder {0}: longDate(b.createdAt.slice(0, 10))
+#: src/booking/BookingPanel.tsx
+msgid "{0} : réservation enregistrée"
+msgstr "{0}: reservering geregistreerd"
+
+#. placeholder {0}: f.name
+#: src/pages/settings/Domain.tsx
+msgid "{0} : trop lourde (8 Mo au plus)."
+msgstr "{0}: te zwaar (maximaal 8 MB)."
+
+#. placeholder {0}: p > 0 ? "+" : "−"
+#. placeholder {1}: fr(Math.abs(p))
+#. placeholder {2}: year - 1
+#: src/pages/settings/Stats.tsx
+msgid "{0} {1} % par rapport à {2}"
+msgstr "{0} {1} % ten opzichte van {2}"
+
+#. placeholder {0}: MONTHS[i]
+#. placeholder {1}: fr(m.occupancyPct, 1)
+#. placeholder {2}: m.occupiedNights
+#. placeholder {3}: m.capacityNights
+#. placeholder {4}: eur(m.revenueCents)
+#. placeholder {5}: year - 1
+#. placeholder {6}: fr(p, 1)
+#: src/pages/settings/Stats.tsx
+msgid "{0} {year} : {1} % ({2} nuits sur {3}), {4}. En {5} : {6} %."
+msgstr "{0} {year}: {1} % ({2} nachten op {3}), {4}. In {5}: {6} %."
+
+#. placeholder {0}: note(s.average)
+#: src/pages/Reviews.tsx
+msgid "{0} / 5"
+msgstr "{0} / 5"
+
+#. placeholder {0}: note(s.average)
+#. placeholder {1}: s.count
+#: src/pages/Reviews.tsx
+msgid "{0} / 5 sur {1} avis"
+msgstr "{0} / 5 op {1} beoordelingen"
+
+#. placeholder {0}: eur(m.example.directCents)
+#. placeholder {1}: eur(ex?.suggestedCents ?? m.example.directCents)
+#: src/pages/settings/Channels.tsx
+msgid "{0} → {1}"
+msgstr "{0} → {1}"
+
+#. placeholder {0}: eur(cuts[0]!)
+#. placeholder {0}: eur(cuts[1]!)
+#. placeholder {1}: eur(cuts[1]!)
+#. placeholder {1}: eur(cuts[2]!)
+#: src/pages/settings/Tarifs.tsx
+msgid "{0} à {1}"
+msgstr "{0} tot {1}"
+
+#. placeholder {0}: x.capacityBase
+#. placeholder {1}: x.capacityMax
+#: src/pages/settings/Domain.tsx
+msgid "{0} à {1} personnes"
+msgstr "{0} tot {1} personen"
+
+#. placeholder {0}: u.name
+#: src/pages/settings/Tarifs.tsx
+msgid "{0} a ses prix de saison"
+msgstr "{0} heeft seizoensprijzen"
+
+#. placeholder {0}: unit.name
+#. placeholder {1}: unit.capacityMax
+#: src/sale/SaleFlow.tsx
+msgid "{0} accueille {1} personnes au plus."
+msgstr "{0} ontvangt maximaal {1} personen."
+
+#. placeholder {0}: r.cancelled
+#: src/pages/settings/Ical.tsx
+msgid "{0} annulée(s)"
+msgstr "{0} geannuleerd"
+
+#. placeholder {0}: nombre(arrivals)
+#: src/lib/derive.ts
+msgid "{0} arrivées"
+msgstr "{0} aankomsten"
+
+#. placeholder {0}: nombre(arr.length)
+#. placeholder {1}: arr.join(", ")
+#: src/pages/Today.tsx
+msgid "{0} arrivées ({1})"
+msgstr "{0} aankomsten ({1})"
+
+#. placeholder {0}: o.maxQty
+#: src/pages/settings/Options.tsx
+msgid "{0} au plus"
+msgstr "maximaal {0}"
+
+#. placeholder {0}: s.count
+#: src/pages/Reviews.tsx
+msgid "{0} avis"
+msgstr "{0} beoordelingen"
+
+#. placeholder {0}: s.low.length
+#. placeholder {1}: s.lowScore
+#: src/pages/Reviews.tsx
+msgid "{0} avis sous {1} attendent une réponse."
+msgstr "{0} beoordelingen onder {1} wachten op een antwoord."
+
+#. placeholder {0}: s.low.length
+#. placeholder {1}: s.lowScore
+#: src/pages/Reviews.tsx
+msgid "{0} avis sous {1} sans réponse"
+msgstr "{0} beoordelingen onder {1} zonder antwoord"
+
+#. placeholder {0}: f.set.cgv_text.length
+#: src/pages/settings/Domain.tsx
+msgid "{0} caractères"
+msgstr "{0} tekens"
+
+#. placeholder {0}: q.data.length
+#: src/pages/settings/Accounts.tsx
+msgid "{0} compte"
+msgstr "{0} account"
+
+#. placeholder {0}: q.data.length
+#: src/pages/settings/Accounts.tsx
+msgid "{0} comptes"
+msgstr "{0} accounts"
+
+#. placeholder {0}: nombre(departures)
+#: src/lib/derive.ts
+msgid "{0} départs"
+msgstr "{0} vertrekken"
+
+#. placeholder {0}: nombre(dep.length)
+#. placeholder {1}: dep.join(", ")
+#. placeholder {2}: nombre(dep.length)
+#: src/pages/Today.tsx
+msgid "{0} départs ({1}), donc {2} ménages"
+msgstr "{0} vertrekken ({1}), dus {2} schoonmaakbeurten"
+
+#. placeholder {0}: tight.unitName
+#. placeholder {1}: hourLabel(tight.next.checkinTime)
+#: src/pages/Today.tsx
+msgid "{0} doit être prête pour {1}."
+msgstr "{0} moet klaar zijn om {1}."
+
+#. placeholder {0}: u.username
+#: src/pages/settings/Accounts.tsx
+msgid "{0} est déconnecté tout de suite et ne peut plus entrer. Vous pourrez lui rendre l'accès plus tard."
+msgstr "{0} wordt meteen afgemeld en kan niet meer binnen. U kunt de toegang later teruggeven."
+
+#. placeholder {0}: "{nom}"
+#. placeholder {1}: "{reference}"
+#: src/pages/settings/Domain.tsx
+msgid "{0} et {1} sont remplacés par le nom du client et la référence de sa réservation"
+msgstr "{0} en {1} worden vervangen door de naam van de klant en de referentie van zijn reservering"
+
+#. placeholder {0}: eur(cuts[2]!)
+#: src/pages/settings/Tarifs.tsx
+msgid "{0} et plus"
+msgstr "{0} en meer"
+
+#. placeholder {0}: u.name
+#. placeholder {1}: shortDate(s.checkin)
+#. placeholder {2}: shortDate(s.checkout)
+#. placeholder {3}: s.label
+#: src/calendar/Grid.tsx
+msgid "{0} indisponible {1} – {2} : {3}"
+msgstr "{0} niet beschikbaar {1} – {2}: {3}"
+
+#. placeholder {0}: fr(m.avgDays, 1)
+#. placeholder {0}: fr(m.medianDays, 1)
+#: src/pages/settings/Stats.tsx
+msgid "{0} j"
+msgstr "{0} d"
+
+#. placeholder {0}: fr(q.data.leadTime.medianDays)
+#: src/pages/settings/Stats.tsx
+msgid "{0} jours en médiane"
+msgstr "mediaan {0} dagen"
+
+#. placeholder {0}: diffDays(from, to) + 1
+#: src/pages/settings/Register.tsx
+msgid "{0} jours."
+msgstr "{0} dagen."
+
+#. placeholder {0}: eur(r.priceWeekCents)
+#: src/pages/settings/Tarifs.tsx
+msgid "{0} la nuit"
+msgstr "{0} per nacht"
+
+#. placeholder {0}: eur(r.priceWeekCents)
+#. placeholder {1}: eur(r.priceWeekendCents)
+#: src/pages/settings/Tarifs.tsx
+msgid "{0} la nuit en semaine, {1} le week-end"
+msgstr "{0} per nacht in de week, {1} in het weekend"
+
+#. placeholder {0}: nombre(nMsg)
+#: src/pages/Today.tsx
+msgid "{0} messages à lire"
+msgstr "{0} berichten te lezen"
+
+#. placeholder {0}: r.updated
+#: src/pages/settings/Ical.tsx
+msgid "{0} modifiée(s)"
+msgstr "{0} gewijzigd"
+
+#. placeholder {0}: r.minNights
+#: src/calendar/Grid.tsx
+msgid "{0} n."
+msgstr "{0} n."
+
+#. placeholder {0}: r.imported
+#: src/pages/settings/Ical.tsx
+msgid "{0} nouvelle(s)"
+msgstr "{0} nieuw"
+
+#. placeholder {0}: fr(cur.avgStayNights, 1)
+#: src/pages/settings/Stats.tsx
+msgid "{0} nuits"
+msgstr "{0} nachten"
+
+#. placeholder {0}: r.minNights
+#: src/pages/settings/Tarifs.tsx
+msgid "{0} nuits min."
+msgstr "min. {0} nachten"
+
+#. placeholder {0}: diffDays(v.from, v.to) + 1
+#: src/pages/settings/Tarifs.tsx
+msgid "{0} nuits. Si une autre saison couvre aussi ces jours, la plus courte l'emporte."
+msgstr "{0} nachten. Als een ander seizoen dezelfde dagen dekt, krijgt het kortste voorrang."
+
+#. placeholder {0}: eur(b.paidCents)
+#: src/booking/BookingPanel.tsx
+msgid "{0} ont déjà été payés. L'annulation libère les dates mais ne rembourse rien d'elle-même : le remboursement éventuel se fait à part."
+msgstr "{0} is al betaald. Annuleren maakt de data vrij, maar betaalt niets vanzelf terug: een eventuele terugbetaling gebeurt apart."
+
+#. placeholder {0}: appliedChange.label
+#. placeholder {1}: pctFr(appliedChange.markupPct)
+#. placeholder {2}: pctFr(appliedChange.pct ?? 0)
+#: src/pages/settings/Channels.tsx
+msgid "{0} passe de + {1} % à + {2} %. Les calendriers repartent tout de suite vers les plateformes ; le prix de votre site ne change pas."
+msgstr "{0} gaat van + {1} % naar + {2} %. De kalenders vertrekken meteen naar de platformen; de prijs van uw site verandert niet."
+
+#. placeholder {0}: w.longer.name
+#. placeholder {1}: w.shorter.name
+#: src/pages/settings/Tarifs.tsx
+msgid "{0} passe devant {1}"
+msgstr "{0} gaat voor {1}"
+
+#. placeholder {0}: u.capacityMax
+#: src/calendar/Grid.tsx
+msgid "{0} pers."
+msgstr "{0} pers."
+
+#. placeholder {0}: current.length
+#. placeholder {1}: r.prefill.occupants
+#. placeholder {2}: r.retentionYears
+#: src/booking/Register.tsx
+msgid "{0} personne(s) inscrite(s) sur {1} attendue(s). Gardé {2} ans, puis effacé tout seul."
+msgstr "{0} persoon/personen ingeschreven op {1} verwacht. {2} jaar bewaard, daarna vanzelf gewist."
+
+#. placeholder {0}: b.adults + b.children
+#. placeholder {0}: c.next.persons
+#. placeholder {0}: x.capacityMax
+#: src/booking/BookingPanel.tsx
+#: src/pages/Cleaning.tsx
+#: src/pages/settings/Domain.tsx
+msgid "{0} personnes"
+msgstr "{0} personen"
+
+#. placeholder {0}: rows.length
+#: src/shell/Health.tsx
+msgid "{0} points à vérifier en coulisses"
+msgstr "{0} punten om achter de schermen na te kijken"
+
+#. placeholder {0}: u.username
+#: src/pages/settings/Accounts.tsx
+msgid "{0} pourra de nouveau se connecter avec son mot de passe."
+msgstr "{0} kan opnieuw inloggen met zijn wachtwoord."
+
+#. placeholder {0}: detail.payments.filter((p) => p.status === "succeeded").length
+#: src/booking/BookingPanel.tsx
+msgid "{0} reçu(s)"
+msgstr "{0} ontvangen"
+
+#. placeholder {0}: eur(received)
+#. placeholder {1}: q.data.length
+#: src/pages/settings/Payments.tsx
+msgid "{0} reçus au total sur les {1} derniers paiements affichés."
+msgstr "{0} ontvangen in totaal over de {1} laatste getoonde betalingen."
+
+#. placeholder {0}: g.bookingsCount
+#: src/pages/settings/Clients.tsx
+msgid "{0} séjours, client fidèle"
+msgstr "{0} verblijven, trouwe klant"
+
+#. placeholder {0}: other.name
+#: src/calendar/Weeks.tsx
+msgid "{0} sera fermé ces nuits-là."
+msgstr "{0} wordt die nachten gesloten."
+
+#. placeholder {0}: nombre(nPay)
+#: src/pages/Today.tsx
+msgid "{0} soldes à encaisser"
+msgstr "{0} saldi te innen"
+
+#. placeholder {0}: s.items.filter((i) => DONE.includes(i.status)).length
+#. placeholder {1}: s.items.length
+#: src/pages/settings/Startup.tsx
+msgid "{0} sur {1} réglés"
+msgstr "{0} op {1} betaald"
+
+#. placeholder {0}: u.name
+#. placeholder {1}: longDate(d)
+#. placeholder {2}: price != null ? t`${price} € la nuit` : t`pas de prix`
+#. placeholder {3}: r?.minNights ? t`, au moins ${r.minNights} nuits` : ""
+#. placeholder {4}: taken ? t`, déjà pris` : ""
+#: src/calendar/Grid.tsx
+msgid "{0}, {1} : {2}{3}{4}"
+msgstr "{0}, {1}: {2}{3}{4}"
+
+#. placeholder {0}: b.guestName
+#. placeholder {1}: b.persons
+#. placeholder {2}: nights > 1 ? t`${nights} nuits` : t`1 nuit`
+#: src/pages/Today.tsx
+msgid "{0}, {1} personnes, {2}."
+msgstr "{0}, {1} personen, {2}."
+
+#. placeholder {0}: b.guestName
+#. placeholder {1}: b.persons
+#. placeholder {2}: nights > 1 ? t`${nights} nuits` : t`1 nuit`
+#: src/pages/Today.tsx
+msgid "{0}, {1} personnes, après {2}."
+msgstr "{0}, {1} personen, na {2}."
+
+#. placeholder {0}: unitName(src.unitId)
+#. placeholder {1}: src.guestName
+#. placeholder {2}: shortDate(src.checkin)
+#. placeholder {3}: shortDate(src.checkout)
+#. placeholder {4}: barLabel(kind)
+#: src/calendar/Grid.tsx
+msgid "{0}, {1}, {2} – {3}, {4}"
+msgstr "{0}, {1}, {2} – {3}, {4}"
+
+#. placeholder {0}: b.guestName
+#. placeholder {1}: u.name
+#. placeholder {2}: shortDate(b.checkin)
+#. placeholder {3}: shortDate(b.checkout)
+#. placeholder {4}: kind === "plat" ? t`via ${channelName(b)}` : barLabel(kind)
+#: src/calendar/Grid.tsx
+msgid "{0}, {1}, du {2} au {3}, {4}"
+msgstr "{0}, {1}, van {2} tot {3}, {4}"
+
+#. placeholder {0}: o.unitName
+#. placeholder {1}: stayRange(o.checkin, o.checkout)
+#: src/pages/Today.tsx
+msgid "{0}, {1}."
+msgstr "{0}, {1}."
+
+#. placeholder {0}: u.name
+#. placeholder {1}: longDate(d)
+#. placeholder {2}: st ? t`, pris` : t`, libre`
+#: src/calendar/Weeks.tsx
+msgid "{0}, {1}{2}"
+msgstr "{0}, {1}{2}"
+
+#. placeholder {0}: c.unitName
+#. placeholder {1}: hourLabel(c.next.checkinTime)
+#: src/pages/Today.tsx
+msgid "{0}, à finir avant {1}"
+msgstr "{0}, klaar tegen {1}"
+
+#. placeholder {0}: nights > 1 ? t`${nights} nuits` : t`1 nuit`
+#. placeholder {1}: longDate(addDays(sel.to, 1))
+#: src/calendar/PricePanel.tsx
+msgid "{0}, départ le {1}"
+msgstr "{0}, vertrek op {1}"
+
+#. placeholder {0}: booking.unitName
+#. placeholder {1}: longDate(booking.checkin)
+#. placeholder {2}: longDate(booking.checkout)
+#: src/pages/Messages.tsx
+msgid "{0}, du {1} au {2}."
+msgstr "{0}, {1} tot {2}."
+
+#. placeholder {0}: hourLabel(c.next.checkinTime)
+#: src/pages/Cleaning.tsx
+msgid "{0}, nouveaux voyageurs le jour même"
+msgstr "{0}, nieuwe gasten dezelfde dag"
+
+#. placeholder {0}: property.name
+#: src/pages/settings/Stats.tsx
+msgid "{0}. Seules les réservations confirmées comptent ; une réservation du Domaine entier occupe ses deux maisons."
+msgstr "{0}. Alleen bevestigde reserveringen tellen; een reservering van het hele domein bezet de twee huizen."
+
+#: src/pages/settings/ChannelPrices.tsx
+msgid "{d} jours"
+msgstr "{d} dagen"
+
+#: src/calendar/Grid.tsx
+msgid "{days} jours"
+msgstr "{days} dagen"
+
+#: src/lib/derive.ts
+msgid "{dep} et {arr}"
+msgstr "{dep} en {arr}"
+
+#: src/calendar/Weeks.tsx
+msgid "{free} nuits libres"
+msgstr "{free} vrije nachten"
+
+#: src/pages/settings/Tarifs.tsx
+msgid "{missing} nuits sans prix en {year} : elles ne se vendent pas."
+msgstr "{missing} nachten zonder prijs in {year}: die worden niet verkocht."
+
+#: src/calendar/Grid.tsx
+msgid "{n} est pris"
+msgstr "{n} is bezet"
+
+#: src/calendar/BlockPanel.tsx
+msgid "{n} nuits qui ne se vendent pas, ici ni sur les plateformes."
+msgstr "{n} nachten die niet verkocht worden, hier noch op de platformen."
+
+#: src/booking/BookingPanel.tsx
+#: src/calendar/PricePanel.tsx
+#: src/calendar/Weeks.tsx
+#: src/pages/settings/Tarifs.tsx
+#: src/pages/Today.tsx
+#: src/sale/SaleFlow.tsx
+msgid "{nights} nuits"
+msgstr "{nights} nachten"
+
+#: src/lib/suggestions.ts
+msgid "{nights} nuits libres entre deux séjours, alors que le minimum est de {min} nuits : personne ne peut réserver ce trou."
+msgstr "{nights} vrije nachten tussen twee verblijven, terwijl het minimum {min} nachten is: niemand kan dit gat boeken."
+
+#: src/sale/SaleFlow.tsx
+msgid "{persons} personnes"
+msgstr "{persons} personen"
+
+#: src/calendar/Grid.tsx
+msgid "{price} € la nuit"
+msgstr "€ {price} per nacht"
+
+#. placeholder {0}: fr(Math.abs(diff), d)
+#. placeholder {1}: year - 1
+#: src/pages/settings/Stats.tsx
+msgid "{sign} {0}{unit} par rapport à {1}"
+msgstr "{sign} {0}{unit} ten opzichte van {1}"
+
+#. placeholder {0}: p.reference
+#. placeholder {1}: eur(p.amountCents)
+#: src/shell/Health.tsx
+msgid "{where}{0} : {1} encaissés alors que la réservation n'est pas confirmée. À rembourser ou à reloger aujourd'hui."
+msgstr "{where}{0}: {1} geïnd terwijl de reservering niet bevestigd is. Vandaag terug te betalen of te herhuisvesten."
+
+#. placeholder {0}: p.reference
+#. placeholder {1}: eur(p.overpaidCents)
+#: src/shell/Health.tsx
+msgid "{where}{0} : {1} reçus en trop. À rembourser."
+msgstr "{where}{0}: {1} te veel ontvangen. Terug te betalen."
+
+#. placeholder {0}: h.recentErrors.length
+#: src/shell/Health.tsx
+msgid "{where}{0} erreur(s) technique(s) ces dernières 24 h (détail dans Réglages, Journaux)."
+msgstr "{where}{0} technische fout(en) de voorbije 24 u (details in Instellingen, Logboeken)."
+
+#. placeholder {0}: h.beds24StaleHours ?? "?"
+#: src/shell/Health.tsx
+msgid "{where}aucune nouvelle de Beds24 depuis {0} h : les plateformes peuvent vendre des dates déjà prises."
+msgstr "{where}geen nieuws van Beds24 sinds {0} u: de platformen kunnen data verkopen die al bezet zijn."
+
+#. placeholder {0}: m.toEmail
+#. placeholder {1}: m.reference ? t` (${m.reference})` : ""
+#: src/shell/Health.tsx
+msgid "{where}un mail à {0}{1} n'est pas parti : le client n'a rien reçu."
+msgstr "{where}een mail aan {0}{1} is niet vertrokken: de klant heeft niets ontvangen."
+
+#. placeholder {0}: eur(p.discountCents ?? 0)
+#: src/pages/settings/Promotions.tsx
+msgid "− {0}"
+msgstr "− {0}"
+
+#. placeholder {0}: p.discountPct
+#: src/pages/settings/Promotions.tsx
+msgid "− {0} %"
+msgstr "− {0} %"
+
+#. placeholder {0}: eur(first.priceCents!)
+#. placeholder {1}: eur(cut)
+#: src/lib/suggestions.ts
+msgid "− {LAST_MINUTE_PCT} % sur chacune de ces nuits libres, par exemple {0} → {1}. Au-delà, vous vendriez moins cher que votre prix de base. Les nuits déjà vendues ne bougent pas."
+msgstr "− {LAST_MINUTE_PCT} % op elk van deze vrije nachten, bijvoorbeeld {0} → {1}. Verder verkoopt u goedkoper dan uw basisprijs. Al verkochte nachten veranderen niet."
+
+#: src/pages/settings/Options.tsx
+msgid "1 = en premier sur le site"
+msgstr "1 = als eerste op de site"
+
+#. placeholder {0}: s.lowScore
+#: src/pages/Reviews.tsx
+msgid "1 avis sous {0} sans réponse"
+msgstr "1 beoordeling onder {0} zonder antwoord"
+
+#: src/booking/BookingPanel.tsx
+#: src/calendar/PricePanel.tsx
+#: src/calendar/Weeks.tsx
+#: src/pages/settings/Tarifs.tsx
+#: src/pages/Today.tsx
+#: src/sale/SaleFlow.tsx
+msgid "1 nuit"
+msgstr "1 nacht"
+
+#: src/calendar/Weeks.tsx
+msgid "1 nuit libre"
+msgstr "1 vrije nacht"
+
+#: src/lib/suggestions.ts
+msgid "1 nuit libre entre deux séjours, alors que le minimum est de {min} nuits : personne ne peut réserver ce trou."
+msgstr "1 vrije nacht tussen twee verblijven, terwijl het minimum {min} nachten is: niemand kan dit gat boeken."
+
+#: src/calendar/BlockPanel.tsx
+msgid "1 nuit qui ne se vend pas, ici ni sur les plateformes."
+msgstr "1 nacht die niet verkocht wordt, hier noch op de platformen."
+
+#: src/shell/Health.tsx
+msgid "1 point à vérifier en coulisses"
+msgstr "1 punt om achter de schermen na te kijken"
+
+#: src/pages/settings/Clients.tsx
+msgid "1 séjour"
+msgstr "1 verblijf"
+
+#: src/pages/settings/Import.tsx
+msgid "1. Coller le fichier"
+msgstr "1. Het bestand plakken"
+
+#: src/pages/settings/MyAccount.tsx
+msgid "12 caractères au moins. Une phrase de quatre mots fait très bien l'affaire."
+msgstr "Minstens 12 tekens. Een zin van vier woorden volstaat ruim."
+
+#: src/pages/settings/ChannelPrices.tsx
+msgid "14 nuits et plus"
+msgstr "14 nachten en meer"
+
+#: src/pages/settings/Accounts.tsx
+msgid "2 à 20 lettres minuscules ou chiffres, sans espace (point et tiret permis). Par exemple : papa, marie.d"
+msgstr "2 tot 20 kleine letters of cijfers, zonder spatie (punt en koppelteken toegestaan). Bijvoorbeeld: papa, marie.d"
+
+#: src/pages/settings/Import.tsx
+msgid "2. Tester, puis importer"
+msgstr "2. Testen, dan importeren"
+
+#: src/pages/settings/ChannelPrices.tsx
+msgid "28 nuits et plus"
+msgstr "28 nachten en meer"
+
+#: src/pages/settings/ChannelPrices.tsx
+msgid "7 nuits et plus"
+msgstr "7 nachten en meer"
+
+#. placeholder {0}: m.toEmail
+#: src/pages/settings/Logs.tsx
+msgid "à {0}"
+msgstr "om {0}"
+
+#. placeholder {0}: m.toEmail
+#. placeholder {1}: sqlWhen(m.createdAt)
+#: src/pages/settings/Logs.tsx
+msgid "À {0}, le {1}."
+msgstr "Om {0}, op {1}."
+
+#: src/pages/settings/Ical.tsx
+msgid "À coller dans Airbnb (« Importer un calendrier ») ou ailleurs. Si le Domaine entier est réservé, les deux maisons y apparaissent prises."
+msgstr "Te plakken in Airbnb (« Kalender importeren ») of elders. Als het hele domein geboekt is, staan beide huizen er als bezet."
+
+#: src/pages/Today.tsx
+msgid "À encaisser"
+msgstr "Te innen"
+
+#: src/pages/settings/Startup.tsx
+msgid "À faire"
+msgstr "Te doen"
+
+#: src/pages/Cleaning.tsx
+msgid "À finir avant"
+msgstr "Klaar tegen"
+
+#. placeholder {0}: hourLabel(c.next.checkinTime)
+#: src/pages/Today.tsx
+msgid "à finir avant {0}"
+msgstr "klaar tegen {0}"
+
+#: src/pages/settings/Options.tsx
+msgid "à la pièce"
+msgstr "per stuk"
+
+#: src/pages/settings/Promotions.tsx
+msgid "À partir de combien de nuits"
+msgstr "Vanaf hoeveel nachten"
+
+#. placeholder {0}: longDate(p.validFrom)
+#: src/pages/settings/Promotions.tsx
+msgid "à partir du {0}"
+msgstr "vanaf {0}"
+
+#: src/pages/settings/Stats.tsx
+msgid "À quelle avance on réserve"
+msgstr "Hoe lang op voorhand er geboekt wordt"
+
+#: src/pages/Today.tsx
+msgid "À régler sans heure fixe"
+msgstr "Te regelen zonder vast uur"
+
+#. placeholder {0}: pending.data?.length ?? 0
+#: src/pages/Messages.tsx
+msgid "À répondre ({0})"
+msgstr "Te beantwoorden ({0})"
+
+#: src/pages/settings/Channels.tsx
+msgid "à trancher"
+msgstr "te beslissen"
+
+#: src/pages/Bookings.tsx
+msgid "À venir"
+msgstr "Komende"
+
+#: src/pages/settings/Accounts.tsx
+#: src/pages/settings/Logs.tsx
+msgid "accès coupé"
+msgstr "toegang afgesloten"
+
+#: src/pages/settings/Logs.tsx
+msgid "accès créé"
+msgstr "toegang aangemaakt"
+
+#: src/pages/Settings.tsx
+msgid "Accès et suivi"
+msgstr "Toegang en opvolging"
+
+#: src/pages/settings/Accounts.tsx
+msgid "accès ouvert"
+msgstr "toegang open"
+
+#: src/pages/settings/Logs.tsx
+msgid "accès rendu"
+msgstr "toegang teruggegeven"
+
+#: src/pages/settings/Promotions.tsx
+msgid "Accordées toutes seules quand le séjour remplit la condition."
+msgstr "Vanzelf toegekend als het verblijf aan de voorwaarde voldoet."
+
+#: src/pages/settings/Logs.tsx
+msgid "accusé de réception"
+msgstr "ontvangstbevestiging"
+
+#: src/pages/settings/Promotions.tsx
+msgid "active"
+msgstr "actief"
+
+#: src/pages/settings/Clients.tsx
+#: src/pages/settings/Domain.tsx
+msgid "Adresse"
+msgstr "Adres"
+
+#. placeholder {0}: e.unitName
+#: src/pages/settings/Ical.tsx
+msgid "Adresse de {0} copiée."
+msgstr "Adres van {0} gekopieerd."
+
+#: src/pages/settings/Channels.tsx
+msgid "Adresse de notification à donner à Beds24 lors de la mise en ligne :"
+msgstr "Meldingsadres om bij de lancering aan Beds24 te geven:"
+
+#: src/pages/Cleaning.tsx
+msgid "Adresse du lien"
+msgstr "Adres van de link"
+
+#: src/pages/settings/Ical.tsx
+msgid "Adresse iCal"
+msgstr "iCal-adres"
+
+#: src/pages/Settings.tsx
+msgid "Adresses à donner aux autres sites, calendriers à lire"
+msgstr "Adressen voor andere sites, kalenders om te lezen"
+
+#: src/booking/BookingPanel.tsx
+#: src/sale/SaleFlow.tsx
+msgid "Adultes"
+msgstr "Volwassenen"
+
+#: src/pages/Settings.tsx
+msgid "Affichage"
+msgstr "Weergave"
+
+#: src/pages/Settings.tsx
+msgid "Affichage clair ou sombre"
+msgstr "Lichte of donkere weergave"
+
+#: src/calendar/CalendarView.tsx
+msgid "Affichage du calendrier"
+msgstr "Weergave van de kalender"
+
+#: src/pages/settings/Domain.tsx
+msgid "Affichée"
+msgstr "Getoond"
+
+#. placeholder {0}: sqlWhen(s.lastSent.at)
+#: src/pages/settings/ChannelPrices.tsx
+msgid "Airbnb a reçu ces promotions le {0}."
+msgstr "Airbnb heeft deze promoties ontvangen op {0}."
+
+#: src/pages/settings/ChannelPrices.tsx
+msgid "Airbnb affiche ces remises aux voyageurs. Elles passent par Beds24 ; Booking.com et Vrbo se règlent encore dans leur propre espace."
+msgstr "Airbnb toont deze kortingen aan de gasten. Ze gaan via Beds24; Booking.com en Vrbo worden nog in hun eigen omgeving ingesteld."
+
+#: src/calendar/PricePanel.tsx
+msgid "Airbnb et Booking sont prévenus quand la liaison est active."
+msgstr "Airbnb en Booking worden verwittigd wanneer de koppeling actief is."
+
+#: src/pages/Settings.tsx
+msgid "Airbnb, Booking et calendriers"
+msgstr "Airbnb, Booking en kalenders"
+
+#: src/pages/Settings.tsx
+#: src/pages/settings/Channels.tsx
+msgid "Airbnb, Booking et Vrbo"
+msgstr "Airbnb, Booking en Vrbo"
+
+#: src/calendar/Grid.tsx
+#: src/calendar/Weeks.tsx
+#: src/lib/derive.ts
+msgid "Airbnb, Booking ou autre site"
+msgstr "Airbnb, Booking of een andere site"
+
+#: src/pages/settings/Ical.tsx
+msgid "Ajouter"
+msgstr "Toevoegen"
+
+#: src/pages/settings/Domain.tsx
+msgid "Ajouter un bien"
+msgstr "Een woning toevoegen"
+
+#: src/pages/settings/Ical.tsx
+msgid "Ajouter un calendrier"
+msgstr "Een kalender toevoegen"
+
+#: src/booking/BookingPanel.tsx
+msgid "Ajouter une note"
+msgstr "Een notitie toevoegen"
+
+#: src/pages/settings/Startup.tsx
+msgid "Ajouter une remarque"
+msgstr "Een opmerking toevoegen"
+
+#: src/pages/settings/Ical.tsx
+msgid "Ajoutez l'adresse iCal donnée par un autre site pour que ses réservations bloquent les dates ici."
+msgstr "Voeg het iCal-adres van een andere site toe, zodat zijn reserveringen de data hier blokkeren."
+
+#: src/pages/settings/Templates.tsx
+msgid "anglais"
+msgstr "Engels"
+
+#: src/pages/settings/Logs.tsx
+msgid "annulation"
+msgstr "annulering"
+
+#: src/pages/settings/Clients.tsx
+msgid "annulée"
+msgstr "geannuleerd"
+
+#: src/booking/BookingPanel.tsx
+#: src/pages/Bookings.tsx
+msgid "Annulée"
+msgstr "Geannuleerd"
+
+#: src/pages/Bookings.tsx
+msgid "Annulées"
+msgstr "Geannuleerd"
+
+#: src/booking/BookingPanel.tsx
+#: src/booking/Register.tsx
+#: src/calendar/PricePanel.tsx
+#: src/pages/Cleaning.tsx
+#: src/pages/settings/Accounts.tsx
+#: src/pages/settings/Domain.tsx
+#: src/sale/SaleFlow.tsx
+#: src/ui/kit.tsx
+msgid "Annuler"
+msgstr "Annuleren"
+
+#: src/booking/BookingPanel.tsx
+msgid "Annuler la réservation"
+msgstr "De reservering annuleren"
+
+#. placeholder {0}: b.reference
+#: src/booking/BookingPanel.tsx
+msgid "Annuler la réservation {0}"
+msgstr "Reservering {0} annuleren"
+
+#: src/ui/kit.tsx
+msgid "Annuler les modifications"
+msgstr "Wijzigingen ongedaan maken"
+
+#: src/pages/settings/ChannelPrices.tsx
+msgid "Aperçu"
+msgstr "Voorbeeld"
+
+#: src/calendar/PricePanel.tsx
+msgid "Aperçu des nouveaux prix"
+msgstr "Voorbeeld van de nieuwe prijzen"
+
+#: src/pages/settings/ChannelPrices.tsx
+msgid "Aperçu impossible avec ces valeurs."
+msgstr "Geen voorbeeld mogelijk met deze waarden."
+
+#: src/pages/settings/Accounts.tsx
+msgid "Appareils connectés"
+msgstr "Verbonden toestellen"
+
+#: src/pages/Today.tsx
+msgid "Appeler"
+msgstr "Bellen"
+
+#. placeholder {0}: errorText(e)
+#: src/pages/settings/Tarifs.tsx
+msgid "Appliqué en partie : {done} nuit(s) sur {nights}. {0}"
+msgstr "Gedeeltelijk toegepast: {done} nacht(en) op {nights}. {0}"
+
+#: src/pages/settings/Channels.tsx
+msgid "appliquée"
+msgstr "toegepast"
+
+#: src/pages/settings/Channels.tsx
+msgid "Appliquer"
+msgstr "Toepassen"
+
+#: src/pages/settings/Tarifs.tsx
+msgid "Appliquer à {nights} nuit(s)"
+msgstr "Toepassen op {nights} nacht(en)"
+
+#: src/calendar/PricePanel.tsx
+msgid "Appliquer à {total} nuits"
+msgstr "Toepassen op {total} nachten"
+
+#. placeholder {0}: hourLabel(c.time)
+#: src/pages/Today.tsx
+msgid "après {0}"
+msgstr "na {0}"
+
+#: src/pages/settings/Payments.tsx
+msgid "Arrhes"
+msgstr "Voorschot"
+
+#. placeholder {0}: q.depositPct
+#: src/sale/SaleFlow.tsx
+msgid "Arrhes à la réservation ({0} %)"
+msgstr "Voorschot bij reservering ({0} %)"
+
+#: src/pages/settings/Domain.tsx
+msgid "Arrhes à la réservation (%)"
+msgstr "Voorschot bij reservering (%)"
+
+#: src/booking/BookingPanel.tsx
+msgid "Arrhes attendues"
+msgstr "Verwacht voorschot"
+
+#: src/pages/Today.tsx
+msgid "Arrhes pas encore reçues."
+msgstr "Voorschot nog niet ontvangen."
+
+#: src/pages/settings/Domain.tsx
+msgid "Arrhes propres à ce bien (%)"
+msgstr "Eigen voorschot voor deze woning (%)"
+
+#: src/booking/BookingPanel.tsx
+#: src/booking/Register.tsx
+#: src/pages/Today.tsx
+#: src/sale/SaleFlow.tsx
+msgid "Arrivée"
+msgstr "Aankomst"
+
+#. placeholder {0}: arr[0]
+#: src/pages/Today.tsx
+msgid "Arrivée : {0}"
+msgstr "Aankomst: {0}"
+
+#: src/pages/settings/Domain.tsx
+msgid "Arrivée à partir de"
+msgstr "Aankomst vanaf"
+
+#: src/pages/settings/Domain.tsx
+msgid "Arrivée et départ"
+msgstr "Aankomst en vertrek"
+
+#: src/pages/settings/Domain.tsx
+msgid "Arrivée et départ sont à la même heure : le ménage n'a pas de temps entre deux séjours. Vérifiez ces heures."
+msgstr "Aankomst en vertrek vallen op hetzelfde uur: er is geen tijd voor de schoonmaak tussen twee verblijven. Kijk deze uren na."
+
+#: src/pages/settings/Tarifs.tsx
+msgid "arrivée le {days}"
+msgstr "aankomst op {days}"
+
+#: src/pages/Today.tsx
+msgid "Arrivent"
+msgstr "Komen aan"
+
+#. placeholder {0}: firstDay.minNights
+#: src/calendar/Weeks.tsx
+msgid "Attention : au moins {0} nuits à cette période."
+msgstr "Let op: minstens {0} nachten in deze periode."
+
+#: src/pages/settings/Register.tsx
+msgid "Au"
+msgstr "Tot"
+
+#. placeholder {0}: eur(r.fallbackCents)
+#: src/pages/settings/Tarifs.tsx
+msgid "au lieu de {0}"
+msgstr "in plaats van {0}"
+
+#: src/pages/settings/ChannelPrices.tsx
+msgid "Au moins … avant l'arrivée"
+msgstr "Minstens … voor aankomst"
+
+#. placeholder {0}: r.minNights
+#: src/pages/settings/Tarifs.tsx
+msgid "au moins {0} nuits"
+msgstr "minstens {0} nachten"
+
+#. placeholder {0}: q.minNights
+#. placeholder {0}: qd.quote.minNights
+#: src/booking/BookingPanel.tsx
+#: src/sale/SaleFlow.tsx
+msgid "Au moins {0} nuits sur ces dates."
+msgstr "Minstens {0} nachten op deze data."
+
+#: src/pages/settings/Promotions.tsx
+msgid "Au moins combien de jours avant l'arrivée"
+msgstr "Minstens hoeveel dagen voor aankomst"
+
+#: src/pages/settings/Promotions.tsx
+msgid "Au plus combien de jours avant l'arrivée"
+msgstr "Hoogstens hoeveel dagen voor aankomst"
+
+#: src/booking/BookingPanel.tsx
+msgid "aucun"
+msgstr "geen"
+
+#: src/pages/settings/Channels.tsx
+msgid "aucun bien relié"
+msgstr "geen gekoppelde woning"
+
+#: src/pages/settings/Ical.tsx
+msgid "Aucun calendrier lu"
+msgstr "Geen kalender gelezen"
+
+#: src/pages/settings/Clients.tsx
+msgid "Aucun client ne correspond à « {q} »"
+msgstr "Geen enkele klant komt overeen met « {q} »"
+
+#: src/pages/settings/Clients.tsx
+msgid "Aucun client pour l'instant"
+msgstr "Nog geen klanten"
+
+#: src/pages/settings/Promotions.tsx
+msgid "Aucun code promo"
+msgstr "Geen promotiecode"
+
+#: src/pages/Cleaning.tsx
+msgid "Aucun départ dans les trois prochaines semaines."
+msgstr "Geen vertrek in de komende drie weken."
+
+#: src/pages/settings/Channels.tsx
+msgid "Aucun désaccord : tout ce que les plateformes annoncent est repris ici."
+msgstr "Geen onenigheid: alles wat de platformen melden, staat hier."
+
+#: src/pages/Today.tsx
+msgid "Aucun en attente."
+msgstr "Niets in afwachting."
+
+#: src/pages/settings/Logs.tsx
+msgid "Aucun mail envoyé"
+msgstr "Geen mail verstuurd"
+
+#: src/booking/BookingPanel.tsx
+msgid "Aucun mail pour l'instant."
+msgstr "Nog geen mails."
+
+#: src/pages/Today.tsx
+msgid "Aucun ménage aujourd'hui."
+msgstr "Vandaag geen schoonmaak."
+
+#: src/pages/Cleaning.tsx
+msgid "Aucun ménage prévu"
+msgstr "Geen schoonmaak gepland"
+
+#: src/pages/Messages.tsx
+msgid "Aucun message en attente. Tout est répondu."
+msgstr "Geen berichten in afwachting. Alles is beantwoord."
+
+#: src/pages/Messages.tsx
+msgid "Aucun message pour l'instant."
+msgstr "Nog geen berichten."
+
+#: src/pages/settings/Templates.tsx
+msgid "Aucun modèle"
+msgstr "Geen sjabloon"
+
+#: src/messages/TemplateChips.tsx
+msgid "Aucun modèle."
+msgstr "Geen sjabloon."
+
+#: src/pages/settings/Payments.tsx
+msgid "Aucun paiement ici"
+msgstr "Hier geen betaling"
+
+#: src/booking/BookingPanel.tsx
+msgid "Aucun paiement reçu."
+msgstr "Geen betaling ontvangen."
+
+#: src/calendar/PricePanel.tsx
+msgid "aucun prix de départ sur ces nuits"
+msgstr "geen startprijs op deze nachten"
+
+#: src/sale/SaleFlow.tsx
+msgid "Aucun prix n'est fixé pour une partie de ces nuits."
+msgstr "Voor een deel van deze nachten is geen prijs vastgelegd."
+
+#: src/pages/settings/Tarifs.tsx
+msgid "Aucun prix sur {year}."
+msgstr "Geen prijs in {year}."
+
+#: src/pages/settings/Clients.tsx
+msgid "aucun séjour"
+msgstr "geen verblijf"
+
+#: src/pages/settings/Channels.tsx
+msgid "aucune"
+msgstr "geen"
+
+#: src/pages/settings/ChannelPrices.tsx
+msgid "Aucune annonce n'est reliée à Beds24 pour l'instant."
+msgstr "Er is voorlopig geen enkele advertentie aan Beds24 gekoppeld."
+
+#: src/pages/Cleaning.tsx
+msgid "aucune de prévue"
+msgstr "geen gepland"
+
+#: src/booking/BookingPanel.tsx
+msgid "Aucune note."
+msgstr "Geen notitie."
+
+#: src/pages/settings/Options.tsx
+msgid "Aucune option"
+msgstr "Geen optie"
+
+#: src/pages/settings/Domain.tsx
+msgid "Aucune photo envoyée."
+msgstr "Geen foto verstuurd."
+
+#: src/pages/settings/Channels.tsx
+msgid "Aucune pour l'instant"
+msgstr "Voorlopig geen"
+
+#: src/pages/settings/Stats.tsx
+msgid "Aucune recherche restée sans réponse."
+msgstr "Geen zoekopdracht zonder antwoord gebleven."
+
+#: src/pages/settings/Promotions.tsx
+msgid "Aucune remise automatique"
+msgstr "Geen automatische korting"
+
+#: src/pages/settings/Stats.tsx
+msgid "aucune réservation"
+msgstr "geen reservering"
+
+#: src/pages/Bookings.tsx
+msgid "Aucune réservation ne correspond à « {q} »"
+msgstr "Geen enkele reservering komt overeen met « {q} »"
+
+#: src/pages/Bookings.tsx
+msgid "Aucune réservation sur cette période"
+msgstr "Geen reserveringen in deze periode"
+
+#: src/pages/settings/Clients.tsx
+msgid "Aucune réservation."
+msgstr "Geen reserveringen."
+
+#: src/pages/settings/Tarifs.tsx
+msgid "Aucune saison"
+msgstr "Geen seizoen"
+
+#: src/calendar/PricePanel.tsx
+msgid "Augmenter ou baisser"
+msgstr "Verhogen of verlagen"
+
+#: src/pages/Today.tsx
+msgid "aujourd'hui"
+msgstr "vandaag"
+
+#: src/calendar/CalendarView.tsx
+#: src/shell/Shell.tsx
+msgid "Aujourd'hui"
+msgstr "Vandaag"
+
+#. placeholder {0}: pctFr(m.pushMarkupPct)
+#. placeholder {1}: applied.label
+#. placeholder {2}: eur(m.example.directCents)
+#. placeholder {3}: eur(m.example.pushedCents)
+#: src/pages/settings/Channels.tsx
+msgid "Aujourd'hui : + {0} % (référence {1}). Une nuit à {2} sur votre site part à {3} sur les plateformes."
+msgstr "Vandaag: + {0} % (referentie {1}). Een nacht van {2} op uw site gaat naar {3} op de platformen."
+
+#: src/pages/settings/Channels.tsx
+msgid "Aujourd'hui : aucune majoration. Les plateformes reçoivent le prix de votre site, commission non compensée."
+msgstr "Vandaag: geen verhoging. De platformen krijgen de prijs van uw site, zonder compensatie voor de commissie."
+
+#. placeholder {0}: longDate(day)
+#: src/pages/Cleaning.tsx
+msgid "Aujourd'hui, {0}"
+msgstr "Vandaag, {0}"
+
+#. placeholder {0}: pctTxt(s.pushPct)
+#: src/pages/settings/ChannelPrices.tsx
+msgid "Aujourd'hui, toutes les plateformes reçoivent le même prix : celui de votre site + {0} %."
+msgstr "Vandaag krijgen alle platformen dezelfde prijs: die van uw site + {0} %."
+
+#: src/pages/settings/ChannelPrices.tsx
+msgid "Aujourd'hui, toutes les plateformes reçoivent le prix de votre site."
+msgstr "Vandaag krijgen alle platformen de prijs van uw site."
+
+#: src/pages/settings/Startup.tsx
+msgid "automatique"
+msgstr "automatisch"
+
+#: src/booking/BookingPanel.tsx
+msgid "autre changement"
+msgstr "andere wijziging"
+
+#: src/booking/BookingPanel.tsx
+#: src/pages/settings/Payments.tsx
+msgid "autre moyen"
+msgstr "andere betaalwijze"
+
+#: src/booking/BookingPanel.tsx
+msgid "Autre moyen"
+msgstr "Andere betaalwijze"
+
+#: src/pages/Bookings.tsx
+msgid "Autre site"
+msgstr "Andere site"
+
+#: src/pages/settings/Stats.tsx
+msgid "Avance médiane"
+msgstr "Mediane boekingstermijn"
+
+#: src/pages/settings/Stats.tsx
+msgid "Avance moyenne"
+msgstr "Gemiddelde boekingstermijn"
+
+#: src/pages/settings/Startup.tsx
+msgid "Avancement"
+msgstr "Voortgang"
+
+#: src/pages/Reviews.tsx
+msgid "Avis"
+msgstr "Beoordelingen"
+
+#. placeholder {0}: s.sentAt ? t` (le ${sqlWhen(s.sentAt)})` : ""
+#: src/pages/settings/ChannelPrices.tsx
+msgid "Beds24 a reçu ces pourcentages{0}."
+msgstr "Beds24 heeft deze percentages ontvangen{0}."
+
+#: src/pages/settings/ChannelPrices.tsx
+msgid "Beds24 calcule le prix de chaque plateforme à partir du prix de votre site. Les pourcentages se règlent sur l'écran Plateformes, une seule fois pour tout."
+msgstr "Beds24 berekent de prijs van elk platform op basis van de prijs van uw site. De percentages stelt u in op het scherm Platformen, één keer voor alles."
+
+#: src/pages/settings/ChannelPrices.tsx
+msgid "Beds24 calculera le prix de chaque plateforme avec ces pourcentages. Les calendriers repartent tout de suite, au prix de votre site ; c'est Beds24 qui ajoute le pourcentage."
+msgstr "Beds24 berekent de prijs van elk platform met deze percentages. De kalenders vertrekken meteen, tegen de prijs van uw site; Beds24 voegt het percentage toe."
+
+#: src/pages/settings/Channels.tsx
+msgid "Beds24 ne répond pas avec ce compte. Rétablissez la liaison avec un nouveau code d'invitation (ci-dessous)."
+msgstr "Beds24 antwoordt niet met deze account. Herstel de koppeling met een nieuwe uitnodigingscode (hieronder)."
+
+#: src/pages/settings/Stats.tsx
+#: src/sale/SaleFlow.tsx
+msgid "Bien"
+msgstr "Woning"
+
+#: src/pages/settings/Ical.tsx
+msgid "Bien concerné"
+msgstr "Betrokken woning"
+
+#: src/pages/settings/Logs.tsx
+msgid "bien créé"
+msgstr "woning aangemaakt"
+
+#: src/pages/settings/Logs.tsx
+msgid "bien modifié"
+msgstr "woning gewijzigd"
+
+#: src/calendar/PricePanel.tsx
+msgid "Biens concernés par le prix"
+msgstr "Woningen waarvoor de prijs geldt"
+
+#: src/pages/settings/Logs.tsx
+msgid "blocage levé"
+msgstr "blokkering opgeheven"
+
+#: src/calendar/Weeks.tsx
+msgid "bloqué"
+msgstr "geblokkeerd"
+
+#: src/calendar/Grid.tsx
+#: src/calendar/Weeks.tsx
+msgid "Bloqué"
+msgstr "Geblokkeerd"
+
+#. placeholder {0}: stayRange(block.checkin, block.checkout)
+#: src/calendar/BlockPanel.tsx
+msgid "Bloqué {0}"
+msgstr "Geblokkeerd {0}"
+
+#. placeholder {0}: shortDate(k.checkin)
+#. placeholder {1}: shortDate(k.checkout)
+#. placeholder {2}: k.reason ?? ""
+#: src/calendar/Grid.tsx
+msgid "Bloqué du {0} au {1} : {2}"
+msgstr "Geblokkeerd van {0} tot {1}: {2}"
+
+#: src/calendar/Grid.tsx
+msgid "Bloqué par une maison"
+msgstr "Geblokkeerd door een huis"
+
+#. placeholder {0}: nights > 1 ? t`${nights} nuits` : t`la nuit`
+#: src/calendar/PricePanel.tsx
+#: src/calendar/Weeks.tsx
+msgid "Bloquer {0}"
+msgstr "{0} blokkeren"
+
+#: src/calendar/PricePanel.tsx
+#: src/calendar/Weeks.tsx
+msgid "Bloquer ces nuits"
+msgstr "Deze nachten blokkeren"
+
+#: src/pages/settings/Templates.tsx
+msgid "Bonjour {prenom},\n"
+"\n"
+"\n"
+"\n"
+"À bientôt,\n"
+"{signature}"
+msgstr "Beste {prenom},\n"
+"\n"
+"\n"
+"\n"
+"Tot binnenkort,\n"
+"{signature}"
+
+#: src/booking/BookingPanel.tsx
+#: src/lib/action.tsx
+msgid "C'est fait"
+msgstr "Gedaan"
+
+#. placeholder {0}: eur(cents)
+#: src/booking/BookingPanel.tsx
+msgid "C'est fait. {0} encaissés."
+msgstr "Gedaan. {0} geïnd."
+
+#. placeholder {0}: x.imported
+#. placeholder {1}: x.updated
+#. placeholder {2}: x.cancelled
+#: src/pages/settings/Channels.tsx
+msgid "C'est fait. {0} nouvelle(s), {1} modifiée(s), {2} annulée(s)."
+msgstr "Gedaan. {0} nieuw, {1} gewijzigd, {2} geannuleerd."
+
+#. placeholder {0}: x.imported
+#: src/pages/settings/Import.tsx
+msgid "C'est fait. {0} réservation(s) importée(s)."
+msgstr "Gedaan. {0} reservering(en) geïmporteerd."
+
+#. placeholder {0}: PRESETS.find((p) => p.key === preset)?.label
+#: src/calendar/PricePanel.tsx
+msgid "C'est fait. {0} sur {total} nuits, arrondi aux 5 €."
+msgstr "Gedaan. {0} op {total} nachten, afgerond op € 5."
+
+#. placeholder {0}: entries.length
+#: src/booking/Register.tsx
+msgid "C'est fait. {0} voyageur(s) inscrit(s) au registre."
+msgstr "Gedaan. {0} gast(en) ingeschreven in het register."
+
+#. placeholder {0}: parts.join(", ")
+#. placeholder {1}: r.conflicts.length ? t`, ${r.conflicts.length} en désaccord (voir Airbnb, Booking et Vrbo)` : ""
+#: src/pages/settings/Ical.tsx
+msgid "C'est fait. {0}{1}."
+msgstr "Gedaan. {0}{1}."
+
+#: src/pages/settings/Ical.tsx
+msgid "C'est fait. {n} calendrier(s) relu(s)."
+msgstr "Gedaan. {n} kalender(s) opnieuw gelezen."
+
+#: src/pages/settings/Domain.tsx
+msgid "C'est fait. {sent} photos envoyées : décrivez-les pour les afficher."
+msgstr "Gedaan. {sent} foto's verstuurd: beschrijf ze om ze te tonen."
+
+#: src/pages/settings/Accounts.tsx
+msgid "C'est fait. Accès coupé."
+msgstr "Gedaan. Toegang afgesloten."
+
+#: src/pages/settings/Accounts.tsx
+msgid "C'est fait. Accès rendu."
+msgstr "Gedaan. Toegang teruggegeven."
+
+#: src/pages/settings/ChannelPrices.tsx
+msgid "C'est fait. Airbnb a reçu les promotions."
+msgstr "Gedaan. Airbnb heeft de promoties ontvangen."
+
+#. placeholder {0}: (r as Beds24Status).properties?.length ?? 0
+#: src/pages/settings/Channels.tsx
+msgid "C'est fait. Beds24 répond : {0} propriété(s) visible(s)."
+msgstr "Gedaan. Beds24 antwoordt: {0} accommodatie(s) zichtbaar."
+
+#. placeholder {0}: v.name.trim()
+#: src/pages/settings/Domain.tsx
+msgid "C'est fait. Bien {0} créé."
+msgstr "Gedaan. Woning {0} aangemaakt."
+
+#: src/pages/settings/Ical.tsx
+msgid "C'est fait. Calendrier ajouté ; il sera lu dans les 15 minutes."
+msgstr "Gedaan. Kalender toegevoegd; hij wordt binnen 15 minuten gelezen."
+
+#: src/pages/settings/Ical.tsx
+msgid "C'est fait. Calendrier enregistré."
+msgstr "Gedaan. Kalender opgeslagen."
+
+#: src/pages/settings/Ical.tsx
+msgid "C'est fait. Calendrier retiré."
+msgstr "Gedaan. Kalender verwijderd."
+
+#. placeholder {0}: (r as { pushed: { unitName: string }[] }).pushed.map((x) => x.unitName).join(", ") || t`aucun bien relié`
+#: src/pages/settings/Channels.tsx
+msgid "C'est fait. Calendriers envoyés : {0}."
+msgstr "Gedaan. Kalenders verstuurd: {0}."
+
+#: src/calendar/PricePanel.tsx
+msgid "C'est fait. Ces nuits reprennent le prix de la saison."
+msgstr "Gedaan. Deze nachten krijgen opnieuw de seizoensprijs."
+
+#: src/pages/settings/Tarifs.tsx
+msgid "C'est fait. Ces nuits suivent de nouveau la saison."
+msgstr "Gedaan. Deze nachten volgen opnieuw het seizoen."
+
+#: src/pages/settings/ChannelPrices.tsx
+msgid "C'est fait. Chaque plateforme a son prix."
+msgstr "Gedaan. Elk platform heeft zijn prijs."
+
+#: src/pages/settings/Channels.tsx
+msgid "C'est fait. Code enregistré ; Beds24 ne répond pas encore, testez la liaison dans un instant."
+msgstr "Gedaan. Code opgeslagen; Beds24 antwoordt nog niet, test de koppeling zo meteen."
+
+#: src/pages/settings/Accounts.tsx
+msgid "C'est fait. Compte {clean} créé."
+msgstr "Gedaan. Account {clean} aangemaakt."
+
+#: src/pages/settings/Accounts.tsx
+msgid "C'est fait. Compte supprimé."
+msgstr "Gedaan. Account verwijderd."
+
+#: src/booking/BookingPanel.tsx
+msgid "C'est fait. Confirmation renvoyée au client."
+msgstr "Gedaan. Bevestiging opnieuw naar de klant gestuurd."
+
+#: src/booking/Register.tsx
+msgid "C'est fait. Correction enregistrée."
+msgstr "Gedaan. Correctie opgeslagen."
+
+#: src/pages/settings/Startup.tsx
+msgid "C'est fait. Démarche mise à jour."
+msgstr "Gedaan. Stap bijgewerkt."
+
+#: src/pages/settings/Channels.tsx
+msgid "C'est fait. Désaccord mis de côté."
+msgstr "Gedaan. Onenigheid opzijgelegd."
+
+#: src/pages/settings/Channels.tsx
+msgid "C'est fait. Désaccord rouvert."
+msgstr "Gedaan. Onenigheid heropend."
+
+#. placeholder {0}: done.join(", ")
+#: src/pages/settings/Domain.tsx
+msgid "C'est fait. Enregistré : {0}."
+msgstr "Gedaan. Opgeslagen: {0}."
+
+#: src/pages/settings/Clients.tsx
+msgid "C'est fait. Fiche client enregistrée."
+msgstr "Gedaan. Klantenfiche opgeslagen."
+
+#: src/ui/kit.tsx
+msgid "C'est fait. Fichier {filename} téléchargé."
+msgstr "Gedaan. Bestand {filename} gedownload."
+
+#: src/pages/settings/Tarifs.tsx
+msgid "C'est fait. La saison la plus courte l'emporte désormais."
+msgstr "Gedaan. Het kortste seizoen krijgt voortaan voorrang."
+
+#: src/calendar/BlockPanel.tsx
+msgid "C'est fait. Les dates sont libres."
+msgstr "Gedaan. De data zijn vrij."
+
+#: src/pages/settings/Channels.tsx
+msgid "C'est fait. Les plateformes reçoivent le prix de votre site."
+msgstr "Gedaan. De platformen krijgen de prijs van uw site."
+
+#: src/pages/settings/Channels.tsx
+msgid "C'est fait. Liaison rétablie : Beds24 répond."
+msgstr "Gedaan. Koppeling hersteld: Beds24 antwoordt."
+
+#: src/pages/Cleaning.tsx
+msgid "C'est fait. Lien coupé."
+msgstr "Gedaan. Link afgesloten."
+
+#: src/pages/Cleaning.tsx
+msgid "C'est fait. Lien créé."
+msgstr "Gedaan. Link aangemaakt."
+
+#: src/booking/BookingPanel.tsx
+msgid "C'est fait. Lien de paiement prêt."
+msgstr "Gedaan. Betaallink klaar."
+
+#: src/pages/settings/ChannelPrices.tsx
+msgid "C'est fait. Même prix partout."
+msgstr "Gedaan. Overal dezelfde prijs."
+
+#: src/pages/Cleaning.tsx
+msgid "C'est fait. Ménage mis à jour."
+msgstr "Gedaan. Schoonmaak bijgewerkt."
+
+#: src/pages/Cleaning.tsx
+msgid "C'est fait. Ménage noté comme fait."
+msgstr "Gedaan. Schoonmaak als gedaan genoteerd."
+
+#: src/pages/Cleaning.tsx
+msgid "C'est fait. Ménage remis à faire."
+msgstr "Gedaan. Schoonmaak opnieuw op te doen gezet."
+
+#: src/booking/BookingPanel.tsx
+msgid "C'est fait. Message enregistré dans la conversation ; le mail n'est pas parti (envoi des mails coupé ici)."
+msgstr "Gedaan. Bericht opgeslagen in het gesprek; de mail is niet vertrokken (mails versturen staat hier uit)."
+
+#: src/booking/BookingPanel.tsx
+msgid "C'est fait. Message enregistré dans la conversation ; pas de mail connu pour l'envoyer."
+msgstr "Gedaan. Bericht opgeslagen in het gesprek; geen mailadres bekend om het te versturen."
+
+#: src/booking/BookingPanel.tsx
+msgid "C'est fait. Message enregistré sur la page du client ; le mail n'est pas parti (envoi des mails coupé ici)."
+msgstr "Gedaan. Bericht opgeslagen op de pagina van de klant; de mail is niet vertrokken (mails versturen staat hier uit)."
+
+#: src/booking/BookingPanel.tsx
+msgid "C'est fait. Message enregistré sur la page du client ; pas de mail connu pour l'envoyer."
+msgstr "Gedaan. Bericht opgeslagen op de pagina van de klant; geen mailadres bekend om het te versturen."
+
+#: src/booking/BookingPanel.tsx
+msgid "C'est fait. Message envoyé par mail et enregistré dans la conversation."
+msgstr "Gedaan. Bericht per mail verstuurd en opgeslagen in het gesprek."
+
+#: src/booking/BookingPanel.tsx
+msgid "C'est fait. Message envoyé par mail et enregistré sur la page du client."
+msgstr "Gedaan. Bericht per mail verstuurd en opgeslagen op de pagina van de klant."
+
+#: src/pages/Messages.tsx
+msgid "C'est fait. Message marqué comme traité."
+msgstr "Gedaan. Bericht gemarkeerd als behandeld."
+
+#: src/pages/Messages.tsx
+msgid "C'est fait. Message remis à répondre."
+msgstr "Gedaan. Bericht opnieuw op te beantwoorden gezet."
+
+#: src/pages/settings/Templates.tsx
+msgid "C'est fait. Modèle créé."
+msgstr "Gedaan. Sjabloon aangemaakt."
+
+#: src/pages/settings/Templates.tsx
+msgid "C'est fait. Modèle enregistré."
+msgstr "Gedaan. Sjabloon opgeslagen."
+
+#: src/pages/settings/Templates.tsx
+msgid "C'est fait. Modèle supprimé."
+msgstr "Gedaan. Sjabloon verwijderd."
+
+#: src/pages/settings/MyAccount.tsx
+msgid "C'est fait. Mot de passe changé."
+msgstr "Gedaan. Wachtwoord gewijzigd."
+
+#: src/booking/BookingPanel.tsx
+msgid "C'est fait. Note enregistrée."
+msgstr "Gedaan. Notitie opgeslagen."
+
+#: src/pages/settings/MyAccount.tsx
+msgid "C'est fait. Nouveau mot de passe choisi."
+msgstr "Gedaan. Nieuw wachtwoord gekozen."
+
+#: src/pages/settings/Accounts.tsx
+msgid "C'est fait. Nouveau mot de passe prêt."
+msgstr "Gedaan. Nieuw wachtwoord klaar."
+
+#. placeholder {0}: reason.trim()
+#: src/calendar/PricePanel.tsx
+#: src/calendar/Weeks.tsx
+msgid "C'est fait. Nuits bloquées : {0}."
+msgstr "Gedaan. Nachten geblokkeerd: {0}."
+
+#: src/pages/settings/Options.tsx
+msgid "C'est fait. Option créée."
+msgstr "Gedaan. Optie aangemaakt."
+
+#: src/pages/settings/Options.tsx
+msgid "C'est fait. Option enregistrée."
+msgstr "Gedaan. Optie opgeslagen."
+
+#: src/pages/settings/Options.tsx
+msgid "C'est fait. Option supprimée."
+msgstr "Gedaan. Optie verwijderd."
+
+#: src/pages/settings/Domain.tsx
+msgid "C'est fait. Ordre et textes des photos enregistrés."
+msgstr "Gedaan. Volgorde en teksten van de foto's opgeslagen."
+
+#: src/pages/settings/Domain.tsx
+msgid "C'est fait. Photo envoyée : décrivez-la pour l'afficher."
+msgstr "Gedaan. Foto verstuurd: beschrijf ze om ze te tonen."
+
+#: src/pages/settings/Domain.tsx
+msgid "C'est fait. Photo rattachée."
+msgstr "Gedaan. Foto gekoppeld."
+
+#: src/pages/settings/Channels.tsx
+msgid "C'est fait. Pourcentages enregistrés."
+msgstr "Gedaan. Percentages opgeslagen."
+
+#: src/pages/settings/Tarifs.tsx
+msgid "C'est fait. Prix changé sur {nights} nuit(s)."
+msgstr "Gedaan. Prijs gewijzigd op {nights} nacht(en)."
+
+#. placeholder {0}: unit.name
+#: src/pages/settings/Tarifs.tsx
+msgid "C'est fait. Prix de base de {0} enregistré."
+msgstr "Gedaan. Basisprijs van {0} opgeslagen."
+
+#: src/pages/settings/Channels.tsx
+msgid "C'est fait. Prix des plateformes majorés."
+msgstr "Gedaan. Prijzen op de platformen verhoogd."
+
+#. placeholder {0}: nights > 1 ? t`${nights} nuits` : t`1 nuit`
+#: src/pages/settings/Tarifs.tsx
+msgid "C'est fait. Prix enregistré sur {0}."
+msgstr "Gedaan. Prijs opgeslagen op {0}."
+
+#: src/calendar/PricePanel.tsx
+msgid "C'est fait. Prix enregistré sur {total} nuits."
+msgstr "Gedaan. Prijs opgeslagen op {total} nachten."
+
+#: src/pages/settings/ChannelPrices.tsx
+msgid "C'est fait. Promotions enregistrées, pas encore envoyées."
+msgstr "Gedaan. Promoties opgeslagen, nog niet verstuurd."
+
+#. placeholder {0}: eur(balance)
+#: src/booking/BookingPanel.tsx
+msgid "C'est fait. Rappel du solde ({0}) envoyé."
+msgstr "Gedaan. Herinnering voor het saldo ({0}) verstuurd."
+
+#: src/pages/Today.tsx
+msgid "C'est fait. Rappel envoyé par mail."
+msgstr "Gedaan. Herinnering per mail verstuurd."
+
+#: src/pages/settings/Promotions.tsx
+msgid "C'est fait. Remise créée."
+msgstr "Gedaan. Korting aangemaakt."
+
+#: src/pages/settings/Promotions.tsx
+msgid "C'est fait. Remise enregistrée."
+msgstr "Gedaan. Korting opgeslagen."
+
+#: src/pages/settings/Promotions.tsx
+msgid "C'est fait. Remise supprimée."
+msgstr "Gedaan. Korting verwijderd."
+
+#. placeholder {0}: canal || t`le canal`
+#: src/canaux/canal.ts
+msgid "C'est fait. Réponse envoyée sur {0}."
+msgstr "Gedaan. Antwoord verstuurd via {0}."
+
+#. placeholder {0}: (r as { booking: Booking }).booking.reference
+#. placeholder {0}: created.booking.reference
+#: src/sale/SaleFlow.tsx
+msgid "C'est fait. Réservation {0} enregistrée."
+msgstr "Gedaan. Reservering {0} opgeslagen."
+
+#: src/booking/BookingPanel.tsx
+msgid "C'est fait. Réservation annulée, les dates sont libres."
+msgstr "Gedaan. Reservering geannuleerd, de data zijn vrij."
+
+#: src/booking/BookingPanel.tsx
+msgid "C'est fait. Réservation confirmée, la confirmation part au client."
+msgstr "Gedaan. Reservering bevestigd, de bevestiging gaat naar de klant."
+
+#. placeholder {0}: v.name.trim()
+#: src/pages/settings/Tarifs.tsx
+msgid "C'est fait. Saison {0} créée."
+msgstr "Gedaan. Seizoen {0} aangemaakt."
+
+#. placeholder {0}: v.name.trim()
+#: src/pages/settings/Tarifs.tsx
+msgid "C'est fait. Saison {0} enregistrée."
+msgstr "Gedaan. Seizoen {0} opgeslagen."
+
+#: src/pages/settings/Tarifs.tsx
+msgid "C'est fait. Saison supprimée."
+msgstr "Gedaan. Seizoen verwijderd."
+
+#. placeholder {0}: eur(x.refundCents)
+#: src/booking/BookingPanel.tsx
+msgid "C'est fait. Séjour modifié : nouveau total {total}, {0} à rembourser à la main."
+msgstr "Gedaan. Verblijf gewijzigd: nieuw totaal {total}, {0} met de hand terug te betalen."
+
+#. placeholder {0}: x.balanceCents ? t`, ${eur(x.balanceCents)} restent à payer` : ""
+#: src/booking/BookingPanel.tsx
+msgid "C'est fait. Séjour modifié : nouveau total {total}{0}."
+msgstr "Gedaan. Verblijf gewijzigd: nieuw totaal {total}{0}."
+
+#: src/pages/settings/Accounts.tsx
+#: src/pages/settings/MyAccount.tsx
+msgid "C'est noté, fermer"
+msgstr "Genoteerd, sluiten"
+
+#. placeholder {0}: eur(balance)
+#: src/booking/BookingPanel.tsx
+msgid "C'est plus que le solde ({0}). Vérifiez le montant avant de le noter."
+msgstr "Dat is meer dan het saldo ({0}). Kijk het bedrag na voor u het noteert."
+
+#: src/pages/settings/Accounts.tsx
+msgid "C'est votre compte : vous ne pouvez ni couper ni supprimer votre propre accès."
+msgstr "Dit is uw account: u kunt uw eigen toegang niet afsluiten of verwijderen."
+
+#: src/pages/settings/ChannelPrices.tsx
+msgid "Calcul"
+msgstr "Berekening"
+
+#: src/sale/SaleFlow.tsx
+msgid "Calcul du prix…"
+msgstr "Prijs wordt berekend…"
+
+#: src/pages/settings/Tarifs.tsx
+msgid "Calculées sur vos réservations et vos prix des 31 prochains jours. Un bouton prépare le changement ; rien ne s'enregistre sans vous."
+msgstr "Berekend op uw reserveringen en uw prijzen van de komende 31 dagen. Een knop bereidt de wijziging voor; niets wordt zonder u opgeslagen."
+
+#: src/pages/Calendar.tsx
+#: src/shell/Shell.tsx
+msgid "Calendrier"
+msgstr "Kalender"
+
+#: src/pages/settings/Ical.tsx
+msgid "Calendrier relié"
+msgstr "Gekoppelde kalender"
+
+#: src/pages/settings/Ical.tsx
+msgid "Calendrier sans nom"
+msgstr "Kalender zonder naam"
+
+#: src/pages/settings/Ical.tsx
+msgid "Calendriers d'autres sites"
+msgstr "Kalenders van andere sites"
+
+#: src/pages/settings/Channels.tsx
+#: src/pages/settings/Logs.tsx
+msgid "calendriers envoyés aux plateformes"
+msgstr "kalenders naar de platformen verstuurd"
+
+#: src/pages/Settings.tsx
+#: src/pages/settings/Ical.tsx
+msgid "Calendriers reliés"
+msgstr "Gekoppelde kalenders"
+
+#: src/booking/BookingPanel.tsx
+#: src/pages/settings/Payments.tsx
+msgid "carte bancaire"
+msgstr "bankkaart"
+
+#: src/pages/settings/Domain.tsx
+msgid "Ce bien regroupe plusieurs maisons (vendu d'un bloc)"
+msgstr "Deze woning groepeert meerdere huizen (in één geheel verhuurd)"
+
+#: src/pages/settings/Domain.tsx
+msgid "Ce bien se vend"
+msgstr "Deze woning wordt verhuurd"
+
+#: src/booking/BookingPanel.tsx
+msgid "ce client"
+msgstr "deze klant"
+
+#: src/pages/settings/MyAccount.tsx
+msgid "Ce compte est aussi ouvert sur {others} autre(s) appareil(s). Changer le mot de passe les déconnecte."
+msgstr "Deze account is ook open op {others} ander(e) toestel(len). Het wachtwoord wijzigen meldt ze af."
+
+#: src/pages/settings/MyAccount.tsx
+msgid "Ce compte n'est ouvert que sur cet appareil."
+msgstr "Deze account is alleen op dit toestel open."
+
+#: src/pages/settings/Channels.tsx
+msgid "Ce domaine n'est pas encore relié à une propriété Beds24."
+msgstr "Dit domein is nog niet gekoppeld aan een accommodatie bij Beds24."
+
+#: src/sale/SaleFlow.tsx
+msgid "Ce jour d'arrivée n'est pas autorisé sur ces dates."
+msgstr "Deze aankomstdag is op deze data niet toegestaan."
+
+#: src/lib/derive.ts
+msgid "Ce jour est passé : choisissez un jour à partir d'aujourd'hui."
+msgstr "Deze dag is voorbij: kies een dag vanaf vandaag."
+
+#: src/pages/settings/Startup.tsx
+msgid "Ce qu'il faut régler avant et pendant le lancement. « Fait » : la démarche est accomplie ; « Vérifié » : c'est confirmé, pièce en main."
+msgstr "Wat er voor en tijdens de lancering geregeld moet worden. « Gedaan »: de stap is uitgevoerd; « Nagekeken »: het is bevestigd, met bewijsstuk."
+
+#: src/pages/settings/Channels.tsx
+msgid "Ce qu'une plateforme annonce et que nous n'avons pas pu reprendre : ces dates restent en vente d'un côté et prises de l'autre. Un désaccord disparaît tout seul quand la liaison ne le revoit plus."
+msgstr "Wat een platform meldt en wij niet konden overnemen: deze data blijven aan de ene kant te koop en aan de andere kant bezet. Een onenigheid verdwijnt vanzelf wanneer de koppeling ze niet meer ziet."
+
+#: src/pages/settings/Templates.tsx
+msgid "Ce que le client lira (exemple)"
+msgstr "Wat de klant zal lezen (voorbeeld)"
+
+#: src/pages/settings/Options.tsx
+msgid "Ce que le client peut ajouter à son séjour. La taxe de séjour n'est pas une option : elle se règle dans « Le domaine et les biens » et s'ajoute toute seule."
+msgstr "Wat de klant aan zijn verblijf kan toevoegen. De verblijfsbelasting is geen optie: die stelt u in bij « Het domein en de woningen » en wordt vanzelf toegevoegd."
+
+#: src/pages/settings/Promotions.tsx
+msgid "ce que le client tape, par exemple ETE2026"
+msgstr "wat de klant intypt, bijvoorbeeld ZOMER2026"
+
+#: src/pages/settings/ChannelPrices.tsx
+msgid "Ce que voient les voyageurs sur Airbnb et Booking. Le prix de votre site ne change jamais ici."
+msgstr "Wat de gasten zien op Airbnb en Booking. De prijs van uw site verandert hier nooit."
+
+#: src/ui/kit.tsx
+msgid "Ce que vous avez saisi dans cette fiche sera perdu."
+msgstr "Wat u in deze fiche hebt ingevuld, gaat verloren."
+
+#: src/pages/settings/Logs.tsx
+msgid "Ce qui a été fait"
+msgstr "Wat er gedaan is"
+
+#: src/pages/Today.tsx
+msgid "Ce qui arrive après aujourd'hui."
+msgstr "Wat er na vandaag komt."
+
+#: src/pages/settings/Domain.tsx
+msgid "Ce qui s'affiche sur le site, les mails et les conditions."
+msgstr "Wat er op de site, in de mails en in de voorwaarden verschijnt."
+
+#: src/pages/Settings.tsx
+msgid "Ce qui se règle de temps en temps. Le quotidien reste dans le menu : Aujourd'hui, Calendrier, Réservations, Messages, Ménage."
+msgstr "Wat af en toe wordt ingesteld. Het dagelijkse blijft in het menu: Vandaag, Kalender, Reserveringen, Berichten, Schoonmaak."
+
+#: src/pages/settings/ChannelPrices.tsx
+msgid "Ce serveur n'envoie rien à Beds24 (écritures fermées). Vos réglages sont gardés ici ; ils partiront quand les écritures seront ouvertes."
+msgstr "Deze server stuurt niets naar Beds24 (schrijven gesloten). Uw instellingen blijven hier bewaard; ze vertrekken zodra het schrijven open staat."
+
+#: src/api/client.ts
+msgid "Ces dates ne se vendent pas telles quelles (minimum de nuits ou jour d'arrivée). Rien n'a été changé."
+msgstr "Deze data worden niet zo verkocht (minimum aantal nachten of aankomstdag). Er is niets gewijzigd."
+
+#: src/pages/settings/Register.tsx
+msgid "Ces données ne sortent par aucun autre chemin que cet export."
+msgstr "Deze gegevens gaan langs geen enkele andere weg naar buiten dan deze export."
+
+#: src/calendar/BlockPanel.tsx
+msgid "Ces nuits redeviennent libres tout de suite, ici et sur Airbnb et Booking."
+msgstr "Deze nachten worden meteen weer vrij, hier en op Airbnb en Booking."
+
+#: src/booking/BookingPanel.tsx
+#: src/sale/SaleFlow.tsx
+msgid "Ces nuits sont déjà prises."
+msgstr "Deze nachten zijn al bezet."
+
+#: src/api/client.ts
+msgid "Ces nuits sont déjà prises. Rien n'a été changé."
+msgstr "Deze nachten zijn al bezet. Er is niets gewijzigd."
+
+#: src/pages/Settings.tsx
+msgid "Cet appareil"
+msgstr "Dit toestel"
+
+#. placeholder {0}: channelName(b)
+#: src/booking/BookingPanel.tsx
+msgid "Cette réservation vient de {0} : changez aussi les dates là-bas, sinon elles reviendront."
+msgstr "Deze reservering komt van {0}: wijzig ook daar de data, anders komen ze terug."
+
+#: src/calendar/Weeks.tsx
+#: src/pages/Today.tsx
+msgid "Cette semaine"
+msgstr "Deze week"
+
+#. placeholder {0}: failures.join(" ")
+#: src/calendar/PricePanel.tsx
+msgid "Changé en partie : {applied} nuit(s) modifiées, le reste non. {0} Vérifiez la grille."
+msgstr "Gedeeltelijk gewijzigd: {applied} nacht(en) aangepast, de rest niet. {0} Kijk het rooster na."
+
+#: src/pages/settings/Tarifs.tsx
+msgid "Changer"
+msgstr "Wijzigen"
+
+#: src/shell/Shell.tsx
+msgid "Changer de domaine sans enregistrer ?"
+msgstr "Van domein wisselen zonder op te slaan?"
+
+#: src/pages/settings/Channels.tsx
+msgid "Changer la majoration appliquée ?"
+msgstr "De toegepaste verhoging wijzigen?"
+
+#: src/calendar/Weeks.tsx
+msgid "Changer le prix"
+msgstr "De prijs wijzigen"
+
+#: src/booking/BookingPanel.tsx
+msgid "Changer le séjour"
+msgstr "Het verblijf wijzigen"
+
+#: src/sale/SaleFlow.tsx
+msgid "Changer les dates"
+msgstr "De data wijzigen"
+
+#: src/booking/BookingPanel.tsx
+msgid "Changer les dates ou le nombre de voyageurs"
+msgstr "De data of het aantal gasten wijzigen"
+
+#: src/pages/settings/ChannelPrices.tsx
+msgid "Changer les pourcentages"
+msgstr "De percentages wijzigen"
+
+#: src/pages/Settings.tsx
+#: src/pages/settings/MyAccount.tsx
+msgid "Changer mon mot de passe"
+msgstr "Mijn wachtwoord wijzigen"
+
+#: src/shell/Shell.tsx
+msgid "Changer sans enregistrer"
+msgstr "Wijzigen zonder op te slaan"
+
+#: src/pages/settings/Channels.tsx
+msgid "Chaque bien d'ici et son équivalent chez Beds24. La correspondance se règle une fois, dans Beds24."
+msgstr "Elke woning van hier en haar tegenhanger bij Beds24. De koppeling stelt u één keer in, in Beds24."
+
+#: src/pages/settings/Domain.tsx
+msgid "chaque bien peut avoir le sien, plus bas"
+msgstr "elke woning kan het hare hebben, verderop"
+
+#: src/pages/Cleaning.tsx
+msgid "Chaque départ crée un ménage. La liste se met à jour toute seule, sur les trois prochaines semaines. Ce qui est coché ici se voit partout, et sur le lien de la personne du ménage."
+msgstr "Elk vertrek maakt een schoonmaakbeurt aan. De lijst werkt zichzelf bij, voor de komende drie weken. Wat u hier aanvinkt, is overal zichtbaar, ook op de link van de schoonmaakhulp."
+
+#: src/pages/settings/ChannelPrices.tsx
+msgid "Chaque ligne compte une seule remise en plus de la durée. Airbnb décide lui-même si elles se cumulent."
+msgstr "Elke regel telt één korting bovenop de verblijfsduur. Airbnb beslist zelf of ze gecumuleerd worden."
+
+#: src/pages/settings/Accounts.tsx
+msgid "Chaque personne a son propre identifiant. Couper un accès est immédiat : la personne est déconnectée partout."
+msgstr "Elke persoon heeft een eigen gebruikersnaam. Een toegang afsluiten gebeurt meteen: de persoon wordt overal afgemeld."
+
+#: src/pages/settings/Domain.tsx
+msgid "Chaque photo doit avoir un texte d'au moins 3 lettres."
+msgstr "Elke foto moet een tekst van minstens 3 letters hebben."
+
+#. placeholder {0}: d.lastPull ? sqlWhen(d.lastPull) : t`jamais`
+#: src/pages/settings/Channels.tsx
+msgid "Chaque réservation, annulation ou changement de prix part tout de suite vers les plateformes. Dernier rapatriement : {0}."
+msgstr "Elke reservering, annulering of prijswijziging vertrekt meteen naar de platformen. Laatste ophaling: {0}."
+
+#: src/booking/BookingPanel.tsx
+msgid "Chargement de la fiche…"
+msgstr "Fiche wordt geladen…"
+
+#: src/pages/Today.tsx
+msgid "Chargement de la journée…"
+msgstr "De dag wordt geladen…"
+
+#: src/calendar/CalendarView.tsx
+msgid "Chargement du calendrier…"
+msgstr "De kalender wordt geladen…"
+
+#: src/pages/Messages.tsx
+msgid "Chargement du fil…"
+msgstr "Het gesprek wordt geladen…"
+
+#: src/pages/Bookings.tsx
+#: src/pages/Cleaning.tsx
+#: src/pages/settings/Clients.tsx
+#: src/ui/kit.tsx
+msgid "Chargement…"
+msgstr "Laden…"
+
+#: src/pages/settings/Domain.tsx
+msgid "Chemin du fichier"
+msgstr "Pad van het bestand"
+
+#. placeholder {0}: ov.map((o) => o.name).join(", ")
+#: src/pages/settings/Tarifs.tsx
+msgid "Chevauche {0} : la plus courte l'emporte sur les jours communs."
+msgstr "Overlapt met {0}: het kortste krijgt voorrang op de gemeenschappelijke dagen."
+
+#: src/pages/settings/Stats.tsx
+msgid "Chiffres {year}"
+msgstr "Cijfers {year}"
+
+#: src/pages/Settings.tsx
+msgid "Chiffres de l'année"
+msgstr "Cijfers van het jaar"
+
+#: src/sale/SaleFlow.tsx
+msgid "Choisir le bien"
+msgstr "De woning kiezen"
+
+#: src/shell/Shell.tsx
+msgid "Choisir le domaine affiché, actuellement : {label}"
+msgstr "Het getoonde domein kiezen, nu: {label}"
+
+#: src/pages/settings/Domain.tsx
+msgid "Choisir sur l'ordinateur"
+msgstr "Op de computer kiezen"
+
+#: src/pages/Bookings.tsx
+msgid "Choisissez une autre période, ou faites une nouvelle vente depuis le calendrier."
+msgstr "Kies een andere periode, of maak een nieuwe verkoop vanuit de kalender."
+
+#: src/pages/Settings.tsx
+msgid "Clair"
+msgstr "Licht"
+
+#: src/pages/settings/Clients.tsx
+msgid "Client"
+msgstr "Klant"
+
+#: src/sale/SaleFlow.tsx
+msgid "Client et paiement"
+msgstr "Klant en betaling"
+
+#: src/booking/BookingPanel.tsx
+#: src/pages/settings/Clients.tsx
+msgid "Client sans nom"
+msgstr "Klant zonder naam"
+
+#: src/pages/Settings.tsx
+#: src/pages/settings/Clients.tsx
+msgid "Clients"
+msgstr "Klanten"
+
+#: src/pages/Settings.tsx
+msgid "Clients et argent"
+msgstr "Klanten en geld"
+
+#: src/pages/settings/Promotions.tsx
+msgid "Code"
+msgstr "Code"
+
+#: src/pages/settings/Channels.tsx
+msgid "Code d'invitation Beds24"
+msgstr "Uitnodigingscode Beds24"
+
+#: src/sale/SaleFlow.tsx
+msgid "Code de réduction (facultatif)"
+msgstr "Kortingscode (facultatief)"
+
+#: src/pages/settings/Promotions.tsx
+msgid "Code promo"
+msgstr "Promotiecode"
+
+#: src/pages/settings/Promotions.tsx
+msgid "Codes promo"
+msgstr "Promotiecodes"
+
+#. placeholder {0}: year - 1
+#: src/pages/settings/Stats.tsx
+msgid "comme en {0}"
+msgstr "zoals in {0}"
+
+#: src/pages/settings/Register.tsx
+msgid "Comment le registre est tenu"
+msgstr "Hoe het register wordt bijgehouden"
+
+#: src/pages/settings/Domain.tsx
+msgid "Comment les clients paient sur votre site."
+msgstr "Hoe klanten op uw site betalen."
+
+#: src/pages/settings/Tarifs.tsx
+msgid "Comment se décide le prix d'une nuit"
+msgstr "Hoe de prijs van een nacht bepaald wordt"
+
+#: src/pages/settings/Domain.tsx
+msgid "Commune"
+msgstr "Gemeente"
+
+#: src/calendar/Weeks.tsx
+msgid "complet"
+msgstr "volzet"
+
+#: src/pages/settings/Accounts.tsx
+msgid "Compte"
+msgstr "Account"
+
+#: src/pages/settings/Options.tsx
+msgid "Compté"
+msgstr "Geteld"
+
+#: src/pages/settings/Accounts.tsx
+msgid "Compte créé"
+msgstr "Account aangemaakt"
+
+#: src/pages/settings/Logs.tsx
+msgid "compte supprimé"
+msgstr "account verwijderd"
+
+#: src/pages/settings/Domain.tsx
+msgid "Conditions de location"
+msgstr "Huurvoorwaarden"
+
+#: src/pages/settings/Logs.tsx
+msgid "confirmation de réservation"
+msgstr "reserveringsbevestiging"
+
+#: src/booking/BookingPanel.tsx
+msgid "confirmation refusée : dates reprises entre-temps"
+msgstr "bevestiging geweigerd: data intussen ingenomen"
+
+#: src/pages/settings/Logs.tsx
+msgid "confirmation renvoyée"
+msgstr "bevestiging opnieuw verstuurd"
+
+#: src/booking/BookingPanel.tsx
+msgid "confirmation renvoyée au client"
+msgstr "bevestiging opnieuw naar de klant verstuurd"
+
+#: src/pages/settings/Clients.tsx
+msgid "confirmée"
+msgstr "bevestigd"
+
+#: src/booking/BookingPanel.tsx
+#: src/calendar/Grid.tsx
+#: src/lib/derive.ts
+msgid "Confirmée et payée"
+msgstr "Bevestigd en betaald"
+
+#: src/sale/SaleFlow.tsx
+msgid "Confirmée sans attendre les arrhes"
+msgstr "Bevestigd zonder op het voorschot te wachten"
+
+#: src/pages/Bookings.tsx
+msgid "Confirmées"
+msgstr "Bevestigd"
+
+#: src/booking/BookingPanel.tsx
+msgid "Confirmer"
+msgstr "Bevestigen"
+
+#. placeholder {0}: currentUser() ?? "?"
+#. placeholder {0}: me.data.user
+#: src/pages/Settings.tsx
+#: src/pages/settings/MyAccount.tsx
+msgid "Connecté en tant que {0}"
+msgstr "Aangemeld als {0}"
+
+#: src/pages/Login.tsx
+msgid "Connectez-vous avec le même identifiant que d'habitude."
+msgstr "Meld u aan met dezelfde gebruikersnaam als gewoonlijk."
+
+#: src/pages/settings/Channels.tsx
+msgid "Connectez-vous sur beds24.com."
+msgstr "Meld u aan op beds24.com."
+
+#: src/pages/settings/Import.tsx
+msgid "Contenu du fichier elloha"
+msgstr "Inhoud van het elloha-bestand"
+
+#: src/sale/SaleFlow.tsx
+msgid "Continuer"
+msgstr "Doorgaan"
+
+#: src/ui/kit.tsx
+msgid "Continuer la saisie"
+msgstr "Verder invullen"
+
+#: src/pages/settings/Domain.tsx
+msgid "coordonnées"
+msgstr "contactgegevens"
+
+#: src/pages/settings/Clients.tsx
+msgid "Coordonnées"
+msgstr "Contactgegevens"
+
+#: src/pages/settings/Logs.tsx
+msgid "coordonnées d'un client modifiées"
+msgstr "contactgegevens van een klant gewijzigd"
+
+#: src/booking/BookingPanel.tsx
+msgid "coordonnées du client modifiées"
+msgstr "contactgegevens van de klant gewijzigd"
+
+#: src/pages/Settings.tsx
+msgid "Coordonnées et séjours de chaque client"
+msgstr "Contactgegevens en verblijven van elke klant"
+
+#: src/pages/Settings.tsx
+msgid "Coordonnées, horaires, arrhes, taxe de séjour, mails, conditions, biens"
+msgstr "Contactgegevens, uren, voorschot, verblijfsbelasting, mails, voorwaarden, woningen"
+
+#: src/pages/Cleaning.tsx
+msgid "Copié"
+msgstr "Gekopieerd"
+
+#: src/pages/settings/Accounts.tsx
+#: src/pages/settings/MyAccount.tsx
+msgid "Copie impossible : recopiez-le à la main."
+msgstr "Kopiëren onmogelijk: neem het met de hand over."
+
+#: src/pages/settings/Accounts.tsx
+#: src/pages/settings/Ical.tsx
+#: src/pages/settings/MyAccount.tsx
+msgid "Copier"
+msgstr "Kopiëren"
+
+#: src/pages/Cleaning.tsx
+#: src/sale/SaleFlow.tsx
+msgid "Copier le lien"
+msgstr "De link kopiëren"
+
+#: src/booking/BookingPanel.tsx
+msgid "Copier le lien et fermer"
+msgstr "De link kopiëren en sluiten"
+
+#: src/pages/settings/Channels.tsx
+msgid "Copiez le code et collez-le ici."
+msgstr "Kopieer de code en plak hem hier."
+
+#: src/pages/Cleaning.tsx
+msgid "Copiez-le maintenant : il ne sera plus montré. S'il se perd, coupez-le et créez-en un autre."
+msgstr "Kopieer hem nu: hij wordt niet meer getoond. Raakt hij kwijt, sluit hem af en maak een nieuwe aan."
+
+#: src/pages/settings/Channels.tsx
+msgid "Correspondance des biens"
+msgstr "Koppeling van de woningen"
+
+#: src/booking/Register.tsx
+msgid "Corriger"
+msgstr "Verbeteren"
+
+#: src/booking/Register.tsx
+msgid "Corriger une ligne du registre"
+msgstr "Een regel van het register verbeteren"
+
+#: src/pages/Cleaning.tsx
+msgid "Couper"
+msgstr "Afsluiten"
+
+#: src/pages/settings/Accounts.tsx
+msgid "Couper l'accès"
+msgstr "De toegang afsluiten"
+
+#. placeholder {0}: u.username
+#: src/pages/settings/Accounts.tsx
+msgid "Couper l'accès de {0} ?"
+msgstr "De toegang van {0} afsluiten?"
+
+#: src/pages/Cleaning.tsx
+msgid "Couper le lien"
+msgstr "De link afsluiten"
+
+#. placeholder {0}: revoking?.label ?? ""
+#: src/pages/Cleaning.tsx
+msgid "Couper le lien de {0} ?"
+msgstr "De link van {0} afsluiten?"
+
+#: src/pages/settings/Accounts.tsx
+#: src/pages/settings/Payments.tsx
+msgid "Créé le"
+msgstr "Aangemaakt op"
+
+#: src/pages/settings/Options.tsx
+#: src/pages/settings/Promotions.tsx
+#: src/pages/settings/Templates.tsx
+msgid "Créer"
+msgstr "Aanmaken"
+
+#: src/pages/settings/Tarifs.tsx
+msgid "Créer la saison"
+msgstr "Het seizoen aanmaken"
+
+#: src/pages/settings/Domain.tsx
+msgid "Créer le bien"
+msgstr "De woning aanmaken"
+
+#: src/pages/settings/Accounts.tsx
+msgid "Créer le compte"
+msgstr "De account aanmaken"
+
+#: src/booking/BookingPanel.tsx
+msgid "Créer le lien"
+msgstr "De link aanmaken"
+
+#: src/pages/Settings.tsx
+msgid "Créer un accès, changer un mot de passe, couper un accès"
+msgstr "Een toegang aanmaken, een wachtwoord wijzigen, een toegang afsluiten"
+
+#: src/pages/Cleaning.tsx
+msgid "Créer un lien"
+msgstr "Een link aanmaken"
+
+#: src/pages/settings/Channels.tsx
+msgid "Créez un « invite code » avec lecture et écriture (réservations, disponibilités, propriétés, canaux), sans liste d'adresses IP."
+msgstr "Maak een « invite code » aan met lezen en schrijven (reserveringen, beschikbaarheden, accommodaties, kanalen), zonder lijst van IP-adressen."
+
+#: src/booking/Register.tsx
+msgid "Date de naissance"
+msgstr "Geboortedatum"
+
+#: src/pages/settings/Logs.tsx
+msgid "dates bloquées"
+msgstr "data geblokkeerd"
+
+#: src/calendar/BlockPanel.tsx
+msgid "Dates bloquées"
+msgstr "Geblokkeerde data"
+
+#: src/pages/settings/Stats.tsx
+msgid "Dates cherchées sans réponse"
+msgstr "Gezochte data zonder antwoord"
+
+#: src/pages/settings/Import.tsx
+msgid "dates déjà prises"
+msgstr "data al bezet"
+
+#: src/sale/SaleFlow.tsx
+msgid "Dates et bien"
+msgstr "Data en woning"
+
+#: src/lib/suggestions.ts
+msgid "Dates fortes : {n} jours fériés ou ponts"
+msgstr "Sterke data: {n} feestdagen of brugdagen"
+
+#: src/lib/suggestions.ts
+msgid "Dates fortes : 1 jour férié ou pont"
+msgstr "Sterke data: 1 feestdag of brugdag"
+
+#: src/pages/settings/Import.tsx
+msgid "déjà là"
+msgstr "al aanwezig"
+
+#: src/booking/BookingPanel.tsx
+msgid "Déjà payé"
+msgstr "Al betaald"
+
+#. placeholder {0}: b.guestNotes
+#: src/booking/BookingPanel.tsx
+msgid "Demande du client : {0}"
+msgstr "Vraag van de klant: {0}"
+
+#: src/pages/settings/Startup.tsx
+msgid "Démarche"
+msgstr "Stap"
+
+#: src/pages/Settings.tsx
+msgid "Démarches légales et techniques, où on en est"
+msgstr "Wettelijke en technische stappen, hoe ver we staan"
+
+#: src/booking/BookingPanel.tsx
+#: src/booking/Register.tsx
+#: src/pages/Cleaning.tsx
+#: src/pages/Today.tsx
+#: src/sale/SaleFlow.tsx
+msgid "Départ"
+msgstr "Vertrek"
+
+#. placeholder {0}: dep[0]
+#: src/pages/Today.tsx
+msgid "Départ : {0}, ménage à prévoir"
+msgstr "Vertrek: {0}, schoonmaak te voorzien"
+
+#: src/pages/settings/Domain.tsx
+msgid "Départ au plus tard à"
+msgstr "Vertrek uiterlijk om"
+
+#. placeholder {0}: label(last.channel)
+#. placeholder {1}: note(last.rating)
+#: src/pages/Reviews.tsx
+msgid "Dernier, {0} {1} / 5 :"
+msgstr "Laatste, {0} {1} / 5:"
+
+#: src/pages/settings/Accounts.tsx
+msgid "Dernière connexion"
+msgstr "Laatste aanmelding"
+
+#. placeholder {0}: sqlWhen(me.data.lastLoginAt)
+#: src/pages/settings/MyAccount.tsx
+msgid "Dernière connexion : {0}."
+msgstr "Laatste aanmelding: {0}."
+
+#. placeholder {0}: sqlWhen(u.last_login_at)
+#: src/pages/settings/Accounts.tsx
+msgid "dernière connexion le {0}"
+msgstr "laatst aangemeld op {0}"
+
+#. placeholder {0}: feed.lastSyncAt ? sqlWhen(feed.lastSyncAt) : t`jamais`
+#. placeholder {1}: feed.lastStatus === "ok" ? t`sans problème` : feed.lastStatus
+#: src/pages/settings/Ical.tsx
+msgid "Dernière lecture : {0}, {1}."
+msgstr "Laatst gelezen: {0}, {1}."
+
+#: src/pages/settings/ChannelPrices.tsx
+#: src/pages/settings/Promotions.tsx
+msgid "Dernière minute"
+msgstr "Last minute"
+
+#. placeholder {0}: eur(p.lastMinuteCents)
+#: src/pages/settings/ChannelPrices.tsx
+msgid "Dernière minute : {0}"
+msgstr "Last minute: {0}"
+
+#. placeholder {0}: proches.length
+#. placeholder {1}: dfr(last.date)
+#: src/lib/suggestions.ts
+msgid "Dernière minute : {0} nuits encore libres d'ici le {1}"
+msgstr "Last minute: nog {0} vrije nachten tot {1}"
+
+#: src/pages/settings/Promotions.tsx
+msgid "Dernière minute (peu avant l'arrivée)"
+msgstr "Last minute (kort voor aankomst)"
+
+#: src/pages/settings/Tarifs.tsx
+msgid "Dernière nuit"
+msgstr "Laatste nacht"
+
+#. placeholder {0}: p.threshold ?? 0
+#: src/pages/settings/Promotions.tsx
+msgid "dès {0} nuits"
+msgstr "vanaf {0} nachten"
+
+#: src/pages/settings/Tarifs.tsx
+msgid "dès 1 nuit"
+msgstr "vanaf 1 nacht"
+
+#: src/shell/Shell.tsx
+msgid "Des modifications de cette page ne sont pas enregistrées. En changeant de domaine, elles seront perdues."
+msgstr "Wijzigingen op deze pagina zijn niet opgeslagen. Als u van domein wisselt, gaan ze verloren."
+
+#: src/ui/kit.tsx
+msgid "Des modifications de cette page ne sont pas enregistrées. Si vous partez maintenant, elles seront perdues."
+msgstr "Wijzigingen op deze pagina zijn niet opgeslagen. Als u nu vertrekt, gaan ze verloren."
+
+#: src/pages/settings/Channels.tsx
+msgid "Désaccord de calendrier"
+msgstr "Onenigheid in de kalender"
+
+#: src/pages/settings/Logs.tsx
+msgid "désaccord de calendrier mis de côté"
+msgstr "onenigheid in de kalender opzijgelegd"
+
+#: src/pages/settings/Logs.tsx
+msgid "désaccord de calendrier rouvert"
+msgstr "onenigheid in de kalender heropend"
+
+#: src/pages/settings/Channels.tsx
+msgid "Désaccords de calendrier"
+msgstr "Onenigheden in de kalender"
+
+#: src/pages/settings/Channels.tsx
+msgid "Désaccords mis de côté"
+msgstr "Opzijgelegde onenigheden"
+
+#. placeholder {0}: p.alt
+#: src/pages/settings/Domain.tsx
+msgid "Descendre {0}"
+msgstr "{0} verlagen"
+
+#: src/lib/suggestions.ts
+msgid "Descendre le minimum à {nights} nuits"
+msgstr "Het minimum verlagen tot {nights} nachten"
+
+#: src/lib/suggestions.ts
+msgid "Descendre le minimum à 1 nuit"
+msgstr "Het minimum verlagen tot 1 nacht"
+
+#: src/pages/settings/Domain.tsx
+msgid "Description sur le site"
+msgstr "Beschrijving op de site"
+
+#: src/pages/settings/Import.tsx
+msgid "Détail"
+msgstr "Detail"
+
+#: src/booking/BookingPanel.tsx
+#: src/sale/SaleFlow.tsx
+msgid "Détail du prix"
+msgstr "Detail van de prijs"
+
+#: src/pages/settings/Channels.tsx
+#: src/pages/settings/Logs.tsx
+msgid "Détail technique"
+msgstr "Technisch detail"
+
+#: src/calendar/PricePanel.tsx
+msgid "Dimanche à jeudi"
+msgstr "Zondag tot donderdag"
+
+#: src/calendar/Weeks.tsx
+msgid "Domaine : une des maisons est prise"
+msgstr "Domein: een van de huizen is bezet"
+
+#: src/pages/Settings.tsx
+msgid "Domaine montré par l'écran"
+msgstr "Domein getoond op het scherm"
+
+#: src/ui/kit.tsx
+msgid "Domaine réglé"
+msgstr "Ingesteld domein"
+
+#. placeholder {0}: d.property.beds24PropertyId
+#: src/pages/settings/Channels.tsx
+msgid "Domaine relié chez Beds24 : n° {0}."
+msgstr "Domein gekoppeld bij Beds24: nr. {0}."
+
+#. placeholder {0}: guestLabel(src)
+#: src/calendar/Grid.tsx
+msgid "Domaine, {0}"
+msgstr "Domein, {0}"
+
+#: src/pages/settings/ChannelPrices.tsx
+msgid "Donner à chaque plateforme son prix"
+msgstr "Elk platform zijn eigen prijs geven"
+
+#: src/pages/settings/Accounts.tsx
+msgid "Donner un accès"
+msgstr "Toegang geven"
+
+#: src/pages/settings/Accounts.tsx
+msgid "Donner un nouveau mot de passe"
+msgstr "Een nieuw wachtwoord geven"
+
+#: src/pages/settings/Register.tsx
+msgid "Du"
+msgstr "Van"
+
+#. placeholder {0}: longDate(r.from)
+#. placeholder {1}: longDate(r.to)
+#: src/pages/settings/Tarifs.tsx
+msgid "Du {0} au {1}"
+msgstr "Van {0} tot {1}"
+
+#. placeholder {0}: longDate(s.dateStart)
+#. placeholder {1}: longDate(s.dateEnd)
+#. placeholder {2}: seasonNights(s)
+#: src/pages/settings/Tarifs.tsx
+msgid "Du {0} au {1} ({2} nuits)"
+msgstr "Van {0} tot {1} ({2} nachten)"
+
+#. placeholder {0}: longDate(sel.first)
+#. placeholder {1}: longDate(sel.departure)
+#. placeholder {2}: nights > 1 ? t`${nights} nuits` : t`1 nuit`
+#: src/calendar/Weeks.tsx
+msgid "Du {0} au {1}, {2}"
+msgstr "Van {0} tot {1}, {2}"
+
+#: src/booking/BookingPanel.tsx
+msgid "Durée"
+msgstr "Duur"
+
+#: src/pages/settings/Stats.tsx
+msgid "Durée moyenne d'un séjour"
+msgstr "Gemiddelde duur van een verblijf"
+
+#: src/booking/BookingPanel.tsx
+msgid "Écrire"
+msgstr "Schrijven"
+
+#. placeholder {0}: b.guestName ?? t`ce client`
+#: src/booking/BookingPanel.tsx
+msgid "Écrire à {0}"
+msgstr "{0} schrijven"
+
+#: src/booking/BookingPanel.tsx
+#: src/pages/settings/Clients.tsx
+msgid "Écrire un mail"
+msgstr "Een mail schrijven"
+
+#: src/pages/settings/Channels.tsx
+msgid "Elles apparaîtront ici, dans le calendrier et dans Réservations dès que les annonces seront reliées."
+msgstr "Ze verschijnen hier, in de kalender en bij Reserveringen zodra de advertenties gekoppeld zijn."
+
+#: src/pages/settings/ChannelPrices.tsx
+msgid "Elles s'appliquent à toutes les annonces Airbnb de ce domaine, par Beds24, dès réception."
+msgstr "Ze gelden voor alle Airbnb-advertenties van dit domein, via Beds24, zodra ze ontvangen zijn."
+
+#. placeholder {0}: year - 1
+#: src/pages/settings/Stats.tsx
+msgid "En {0}"
+msgstr "In {0}"
+
+#: src/booking/BookingPanel.tsx
+#: src/pages/settings/Payments.tsx
+msgid "en attente"
+msgstr "in afwachting"
+
+#: src/pages/settings/Payments.tsx
+msgid "En attente"
+msgstr "In afwachting"
+
+#: src/pages/Bookings.tsx
+#: src/pages/settings/Startup.tsx
+msgid "En cours"
+msgstr "Bezig"
+
+#: src/messages/TemplateChips.tsx
+msgid "En écrire un"
+msgstr "Er een schrijven"
+
+#: src/pages/settings/Promotions.tsx
+msgid "En euros"
+msgstr "In euro"
+
+#: src/pages/settings/Ical.tsx
+#: src/pages/settings/Options.tsx
+#: src/pages/settings/Promotions.tsx
+#: src/pages/settings/Templates.tsx
+msgid "en pause"
+msgstr "gepauzeerd"
+
+#: src/pages/settings/ChannelPrices.tsx
+msgid "En place : chaque plateforme a son propre prix."
+msgstr "Actief: elk platform heeft zijn eigen prijs."
+
+#: src/pages/settings/Promotions.tsx
+msgid "En pourcentage"
+msgstr "In procent"
+
+#. placeholder {0}: diffDays(b.balanceDueDate as string, today)
+#: src/booking/BookingPanel.tsx
+msgid "En retard de {0} jours."
+msgstr "{0} dagen te laat."
+
+#. placeholder {0}: channelName(b)
+#: src/booking/BookingPanel.tsx
+msgid "encaissé par {0}"
+msgstr "geïnd door {0}"
+
+#. placeholder {0}: eur(b.balanceCents)
+#: src/pages/Today.tsx
+msgid "Encaisser {0}"
+msgstr "{0} innen"
+
+#: src/booking/BookingPanel.tsx
+msgid "Encaisser le solde"
+msgstr "Het saldo innen"
+
+#: src/booking/BookingPanel.tsx
+msgid "Encaisser un paiement"
+msgstr "Een betaling innen"
+
+#. placeholder {0}: 12 - next.length
+#: src/pages/settings/MyAccount.tsx
+msgid "Encore {0} caractère(s)."
+msgstr "Nog {0} teken(s)."
+
+#: src/pages/settings/Channels.tsx
+msgid "Encore rien."
+msgstr "Nog niets."
+
+#: src/booking/BookingPanel.tsx
+#: src/sale/SaleFlow.tsx
+msgid "Enfants"
+msgstr "Kinderen"
+
+#. placeholder {0}: done.join(", ")
+#. placeholder {1}: errorText(e)
+#: src/pages/settings/Domain.tsx
+msgid "Enregistré : {0}. Puis refusé : {1} Le reste n'est pas enregistré."
+msgstr "Opgeslagen: {0}. Daarna geweigerd: {1} De rest is niet opgeslagen."
+
+#. placeholder {0}: errorText(e)
+#: src/pages/settings/Tarifs.tsx
+msgid "Enregistré en partie : {0} Rouvrez la saison pour vérifier ses prix."
+msgstr "Gedeeltelijk opgeslagen: {0} Open het seizoen opnieuw om de prijzen na te kijken."
+
+#. placeholder {0}: sqlWhen(s.lastSent.at)
+#: src/pages/settings/ChannelPrices.tsx
+msgid "Enregistré ici, pas encore envoyé à Airbnb (dernier envoi : {0})."
+msgstr "Hier opgeslagen, nog niet naar Airbnb verstuurd (laatste verzending: {0})."
+
+#: src/ui/kit.tsx
+msgid "Enregistrement"
+msgstr "Opslaan"
+
+#: src/pages/Cleaning.tsx
+#: src/pages/settings/Clients.tsx
+#: src/pages/settings/Ical.tsx
+#: src/pages/settings/Options.tsx
+#: src/pages/settings/Promotions.tsx
+#: src/pages/settings/Startup.tsx
+#: src/pages/settings/Tarifs.tsx
+#: src/pages/settings/Templates.tsx
+#: src/ui/kit.tsx
+msgid "Enregistrer"
+msgstr "Opslaan"
+
+#: src/pages/settings/Channels.tsx
+msgid "Enregistrer et envoyer"
+msgstr "Opslaan en versturen"
+
+#: src/pages/settings/Domain.tsx
+msgid "Enregistrer l'ordre et les textes"
+msgstr "Volgorde en teksten opslaan"
+
+#: src/booking/Register.tsx
+msgid "Enregistrer la correction"
+msgstr "De correctie opslaan"
+
+#: src/booking/BookingPanel.tsx
+msgid "Enregistrer la note"
+msgstr "De notitie opslaan"
+
+#: src/sale/SaleFlow.tsx
+msgid "Enregistrer la réservation"
+msgstr "De reservering opslaan"
+
+#: src/booking/BookingPanel.tsx
+msgid "Enregistrer le changement"
+msgstr "De wijziging opslaan"
+
+#: src/pages/settings/Channels.tsx
+msgid "Enregistrer les pourcentages"
+msgstr "De percentages opslaan"
+
+#: src/pages/settings/ChannelPrices.tsx
+msgid "Enregistrer les promotions"
+msgstr "De promoties opslaan"
+
+#: src/pages/settings/ChannelPrices.tsx
+msgid "Enregistrez d'abord"
+msgstr "Eerst opslaan"
+
+#: src/pages/settings/Domain.tsx
+msgid "Enregistrez d'abord la page"
+msgstr "Sla eerst de pagina op"
+
+#: src/pages/settings/Channels.tsx
+msgid "Enregistrez d'abord les pourcentages"
+msgstr "Sla eerst de percentages op"
+
+#: src/ui/kit.tsx
+msgid "Enregistrez ou annulez d'abord vos modifications"
+msgstr "Sla eerst uw wijzigingen op of maak ze ongedaan"
+
+#: src/pages/settings/Logs.tsx
+msgid "Entrée du journal"
+msgstr "Logboekregel"
+
+#. placeholder {0}: i + 1
+#. placeholder {1}: ok.length
+#: src/pages/settings/Domain.tsx
+msgid "Envoi {0} sur {1}…"
+msgstr "Verzending {0} van {1}…"
+
+#: src/booking/BookingPanel.tsx
+#: src/pages/Messages.tsx
+#: src/pages/settings/ChannelPrices.tsx
+msgid "Envoyer"
+msgstr "Versturen"
+
+#: src/pages/settings/ChannelPrices.tsx
+msgid "Envoyer à Airbnb"
+msgstr "Naar Airbnb versturen"
+
+#: src/pages/settings/ChannelPrices.tsx
+msgid "Envoyer ces promotions à Airbnb ?"
+msgstr "Deze promoties naar Airbnb versturen?"
+
+#: src/pages/settings/Channels.tsx
+msgid "Envoyer les calendriers maintenant"
+msgstr "De kalenders nu versturen"
+
+#: src/pages/settings/ChannelPrices.tsx
+msgid "Envoyer les prix par plateforme ?"
+msgstr "De prijzen per platform versturen?"
+
+#: src/booking/BookingPanel.tsx
+msgid "Envoyer un lien de paiement"
+msgstr "Een betaallink sturen"
+
+#: src/booking/BookingPanel.tsx
+#: src/pages/Today.tsx
+msgid "Envoyer un rappel"
+msgstr "Een herinnering sturen"
+
+#: src/pages/settings/Import.tsx
+msgid "erreur"
+msgstr "fout"
+
+#: src/booking/BookingPanel.tsx
+#: src/pages/settings/Payments.tsx
+msgid "espèces"
+msgstr "contant"
+
+#: src/booking/BookingPanel.tsx
+msgid "Espèces"
+msgstr "Contant"
+
+#: src/pages/Bookings.tsx
+msgid "Essayez le nom de famille seul, ou la référence (par exemple PM-2026-012)."
+msgstr "Probeer alleen de familienaam, of de referentie (bijvoorbeeld PM-2026-012)."
+
+#. placeholder {0}: xs.length - 1
+#: src/pages/Today.tsx
+msgid "et {0} autres"
+msgstr "en {0} andere"
+
+#: src/pages/settings/Stats.tsx
+msgid "Étape"
+msgstr "Stap"
+
+#: src/calendar/Weeks.tsx
+#: src/sale/SaleFlow.tsx
+msgid "Étapes"
+msgstr "Stappen"
+
+#: src/pages/Bookings.tsx
+msgid "État des réservations"
+msgstr "Stand van de reserveringen"
+
+#: src/pages/settings/Channels.tsx
+msgid "Exemple"
+msgstr "Voorbeeld"
+
+#: src/pages/Bookings.tsx
+msgid "Exporter"
+msgstr "Exporteren"
+
+#: src/pages/settings/Register.tsx
+msgid "Exporter le registre"
+msgstr "Het register exporteren"
+
+#: src/pages/settings/Register.tsx
+msgid "Exporter une période"
+msgstr "Een periode exporteren"
+
+#: src/pages/settings/Stats.tsx
+msgid "Exports"
+msgstr "Exports"
+
+#: src/pages/settings/Accounts.tsx
+msgid "Fabriquer un nouveau mot de passe"
+msgstr "Een nieuw wachtwoord maken"
+
+#: src/calendar/PricePanel.tsx
+msgid "Façon de changer le prix"
+msgstr "Manier om de prijs te wijzigen"
+
+#: src/pages/settings/Domain.tsx
+msgid "facultatif : sans prix, le bien ne se vend pas"
+msgstr "facultatief: zonder prijs wordt de woning niet verhuurd"
+
+#: src/pages/settings/Domain.tsx
+msgid "Faire suivre les mails reçus à"
+msgstr "De ontvangen mails doorsturen naar"
+
+#: src/pages/settings/Startup.tsx
+msgid "Fait"
+msgstr "Gedaan"
+
+#. placeholder {0}: errorText(e)
+#: src/calendar/PricePanel.tsx
+msgid "Fait pour {done} bien(s) seulement : {0}"
+msgstr "Alleen gedaan voor {done} woning(en): {0}"
+
+#. placeholder {0}: r.holidayPct
+#: src/pages/settings/Tarifs.tsx
+msgid "fériés + {0} %"
+msgstr "feestdagen + {0} %"
+
+#: src/booking/BookingPanel.tsx
+#: src/calendar/PricePanel.tsx
+#: src/pages/Cleaning.tsx
+#: src/ui/kit.tsx
+msgid "Fermer"
+msgstr "Sluiten"
+
+#: src/booking/BookingPanel.tsx
+msgid "Fermer la fiche"
+msgstr "De fiche sluiten"
+
+#: src/ui/kit.tsx
+msgid "Fermer sans enregistrer"
+msgstr "Sluiten zonder op te slaan"
+
+#: src/ui/kit.tsx
+msgid "Fermer sans enregistrer ?"
+msgstr "Sluiten zonder op te slaan?"
+
+#: src/pages/Today.tsx
+msgid "Fiche"
+msgstr "Fiche"
+
+#: src/pages/settings/Clients.tsx
+msgid "Fiche client"
+msgstr "Klantenfiche"
+
+#: src/pages/settings/Logs.tsx
+msgid "fiche client modifiée"
+msgstr "klantenfiche gewijzigd"
+
+#: src/booking/BookingPanel.tsx
+msgid "Fiche de la réservation"
+msgstr "Fiche van de reservering"
+
+#: src/pages/settings/Clients.tsx
+msgid "Fiche illisible"
+msgstr "Fiche onleesbaar"
+
+#: src/pages/settings/Stats.tsx
+msgid "Fichiers à ouvrir dans un tableur."
+msgstr "Bestanden om in een rekenblad te openen."
+
+#: src/pages/settings/Payments.tsx
+msgid "Filtrer les paiements"
+msgstr "De betalingen filteren"
+
+#: src/pages/settings/Tarifs.tsx
+msgid "fixé à la main"
+msgstr "met de hand vastgelegd"
+
+#: src/pages/settings/Tarifs.tsx
+msgid "Fixer le prix"
+msgstr "De prijs vastleggen"
+
+#: src/calendar/PricePanel.tsx
+msgid "Fixer un prix"
+msgstr "Een prijs vastleggen"
+
+#: src/calendar/Weeks.tsx
+msgid "Fixer un prix ou augmenter de 10 %."
+msgstr "Een prijs vastleggen of met 10 % verhogen."
+
+#: src/pages/settings/Stats.tsx
+msgid "Fois"
+msgstr "Keer"
+
+#: src/pages/settings/Domain.tsx
+msgid "Frais de ménage (€)"
+msgstr "Schoonmaakkosten (€)"
+
+#: src/pages/settings/Templates.tsx
+msgid "français"
+msgstr "Frans"
+
+#: src/pages/settings/Tarifs.tsx
+msgid "garde son prix de base."
+msgstr "behoudt zijn basisprijs."
+
+#: src/booking/BookingPanel.tsx
+msgid "Garder la réservation"
+msgstr "De reservering behouden"
+
+#: src/pages/settings/Tarifs.tsx
+msgid "Garder la saison"
+msgstr "Het seizoen behouden"
+
+#: src/pages/Login.tsx
+msgid "Gestion des gîtes"
+msgstr "Beheer van de vakantiewoningen"
+
+#: src/pages/settings/Domain.tsx
+msgid "Glissez des photos ici"
+msgstr "Sleep hier foto's naartoe"
+
+#: src/calendar/CalendarView.tsx
+msgid "Grille 14 jours"
+msgstr "Rooster van 14 dagen"
+
+#: src/lib/templates.ts
+msgid "heure d'arrivée"
+msgstr "aankomstuur"
+
+#: src/lib/templates.ts
+msgid "heure de départ"
+msgstr "vertrekuur"
+
+#: src/pages/Cleaning.tsx
+msgid "Hier, pas encore coché"
+msgstr "Gisteren, nog niet aangevinkt"
+
+#: src/booking/BookingPanel.tsx
+msgid "Historique"
+msgstr "Geschiedenis"
+
+#: src/shell/Shell.tsx
+msgid "Hors ligne : vous voyez la dernière version gardée sur cet appareil. Rien ne peut être changé avant le retour du réseau."
+msgstr "Offline: u ziet de laatste versie die op dit toestel bewaard is. Er kan niets gewijzigd worden voor het netwerk terug is."
+
+#: src/pages/Login.tsx
+#: src/pages/settings/Accounts.tsx
+msgid "Identifiant"
+msgstr "Gebruikersnaam"
+
+#: src/pages/settings/Channels.tsx
+msgid "Il ne s'affichera plus comme à trancher. Le motif reste écrit, pour pouvoir relire la décision plus tard."
+msgstr "Het verschijnt niet meer als te beslissen. De reden blijft genoteerd, zodat de beslissing later na te lezen is."
+
+#: src/pages/settings/MyAccount.tsx
+msgid "Il ne sera plus jamais affiché : notez-le maintenant. Cet appareil reste connecté."
+msgstr "Het wordt nooit meer getoond: noteer het nu. Dit toestel blijft aangemeld."
+
+#: src/booking/BookingPanel.tsx
+msgid "Il reste dans l'historique de la réservation."
+msgstr "Het blijft in de geschiedenis van de reservering."
+
+#: src/pages/settings/Import.tsx
+msgid "importée"
+msgstr "geïmporteerd"
+
+#: src/pages/Bookings.tsx
+#: src/pages/Settings.tsx
+#: src/pages/settings/Import.tsx
+msgid "Importer depuis elloha"
+msgstr "Importeren uit elloha"
+
+#: src/pages/settings/Import.tsx
+msgid "Importer pour de bon"
+msgstr "Definitief importeren"
+
+#: src/pages/settings/Tarifs.tsx
+msgid "Indiquez le prix d'une nuit en semaine pour chaque bien qui a ses prix de saison."
+msgstr "Geef de prijs van een nacht in de week voor elke woning met seizoensprijzen."
+
+#: src/booking/Register.tsx
+msgid "Inscrire au registre"
+msgstr "In het register inschrijven"
+
+#: src/booking/Register.tsx
+msgid "Inscrire d'autres voyageurs"
+msgstr "Andere gasten inschrijven"
+
+#: src/booking/Register.tsx
+msgid "Inscrire les voyageurs"
+msgstr "De gasten inschrijven"
+
+#. placeholder {0}: b.reference
+#: src/booking/Register.tsx
+msgid "Inscrire les voyageurs — {0}"
+msgstr "De gasten inschrijven — {0}"
+
+#: src/pages/settings/Templates.tsx
+msgid "Insérer à l'endroit du curseur"
+msgstr "Invoegen op de plaats van de cursor"
+
+#: src/pages/settings/Accounts.tsx
+#: src/pages/settings/Channels.tsx
+#: src/pages/settings/Ical.tsx
+msgid "jamais"
+msgstr "nooit"
+
+#: src/pages/settings/Accounts.tsx
+msgid "jamais connecté"
+msgstr "nooit aangemeld"
+
+#: src/pages/settings/ChannelPrices.tsx
+msgid "Jamais envoyé à Airbnb."
+msgstr "Nooit naar Airbnb verstuurd."
+
+#: src/pages/settings/Ical.tsx
+msgid "jamais lu"
+msgstr "nooit gelezen"
+
+#: src/pages/Cleaning.tsx
+msgid "jamais ouvert"
+msgstr "nooit geopend"
+
+#: src/pages/settings/Domain.tsx
+msgid "Jointes à chaque confirmation. Une ligne « Article 1 » seule s'affiche en gras sur le site."
+msgstr "Bij elke bevestiging gevoegd. Een regel « Artikel 1 » alleen verschijnt vet op de site."
+
+#: src/lib/templates.ts
+msgid "jour d'arrivée"
+msgstr "aankomstdag"
+
+#: src/pages/settings/Logs.tsx
+msgid "Journal"
+msgstr "Logboek"
+
+#: src/pages/settings/Channels.tsx
+msgid "Journal de la liaison"
+msgstr "Logboek van de koppeling"
+
+#: src/pages/Settings.tsx
+#: src/pages/settings/Logs.tsx
+msgid "Journaux"
+msgstr "Logboeken"
+
+#: src/pages/Today.tsx
+msgid "Journée calme"
+msgstr "Rustige dag"
+
+#: src/pages/settings/ChannelPrices.tsx
+msgid "Jours avant l'arrivée (1 à 28)"
+msgstr "Dagen voor aankomst (1 tot 28)"
+
+#: src/calendar/PricePanel.tsx
+msgid "Jours de la plage"
+msgstr "Dagen van de periode"
+
+#: src/pages/settings/Tarifs.tsx
+msgid "Jours où l'on peut arriver"
+msgstr "Dagen waarop men kan aankomen"
+
+#: src/pages/settings/Domain.tsx
+msgid "JPEG, PNG ou WebP, 8 Mo au plus chacune."
+msgstr "JPEG, PNG of WebP, maximaal 8 MB per foto."
+
+#: src/pages/settings/Startup.tsx
+msgid "Julien"
+msgstr "Julien"
+
+#. placeholder {0}: longDate(p.validUntil)
+#: src/pages/settings/Promotions.tsx
+msgid "jusqu'au {0}"
+msgstr "tot {0}"
+
+#: src/pages/settings/Ical.tsx
+msgid "L'adresse n'a pas pu être copiée : sélectionnez-la et copiez-la à la main."
+msgstr "Het adres kon niet gekopieerd worden: selecteer het en kopieer het met de hand."
+
+#. placeholder {0}: u.username
+#: src/pages/settings/Accounts.tsx
+msgid "L'ancien cesse de marcher tout de suite, et {0} est déconnecté de tous ses appareils."
+msgstr "Het oude werkt meteen niet meer, en {0} wordt op al zijn toestellen afgemeld."
+
+#: src/lib/derive.ts
+msgid "l'ancien système"
+msgstr "het oude systeem"
+
+#: src/pages/settings/Tarifs.tsx
+msgid "L'année"
+msgstr "Het jaar"
+
+#: src/pages/settings/Tarifs.tsx
+msgid "L'année {year}"
+msgstr "Het jaar {year}"
+
+#: src/pages/settings/Tarifs.tsx
+msgid "L'année n'a pas pu être lue."
+msgstr "Het jaar kon niet gelezen worden."
+
+#: src/booking/BookingPanel.tsx
+msgid "L'annulation libère les dates tout de suite, ici et sur Airbnb et Booking."
+msgstr "Annuleren maakt de data meteen vrij, hier en op Airbnb en Booking."
+
+#: src/sale/SaleFlow.tsx
+msgid "L'arrivée est dans le passé."
+msgstr "De aankomst ligt in het verleden."
+
+#: src/pages/settings/Channels.tsx
+msgid "L'état des plateformes n'a pas pu être lu."
+msgstr "De stand van de platformen kon niet gelezen worden."
+
+#: src/ui/kit.tsx
+msgid "L'export n'a pas pu être préparé."
+msgstr "De export kon niet voorbereid worden."
+
+#: src/pages/settings/Domain.tsx
+msgid "L'ordre de la liste est l'ordre sur le site ; la première photo affichée sert de vignette. Le texte décrit la photo pour qui ne la voit pas : il est obligatoire."
+msgstr "De volgorde van de lijst is de volgorde op de site; de eerste getoonde foto dient als miniatuur. De tekst beschrijft de foto voor wie ze niet ziet: hij is verplicht."
+
+#: src/pages/settings/Tarifs.tsx
+msgid "La dernière nuit doit venir après la première."
+msgstr "De laatste nacht moet na de eerste komen."
+
+#: src/booking/BookingPanel.tsx
+#: src/pages/settings/Clients.tsx
+msgid "La fiche n'a pas pu être lue. Fermez-la et réessayez."
+msgstr "De fiche kon niet gelezen worden. Sluit ze en probeer opnieuw."
+
+#: src/pages/settings/Register.tsx
+msgid "La fin doit venir après le début."
+msgstr "Het einde moet na het begin komen."
+
+#: src/pages/Today.tsx
+msgid "La journée"
+msgstr "De dag"
+
+#: src/pages/settings/ChannelPrices.tsx
+msgid "La liaison avec Beds24 n'est pas en place : rétablissez-la d'abord sur l'écran Plateformes."
+msgstr "De koppeling met Beds24 is er niet: herstel ze eerst op het scherm Platformen."
+
+#: src/pages/Settings.tsx
+msgid "La liaison avec les plateformes, leurs réservations, leurs prix"
+msgstr "De koppeling met de platformen, hun reserveringen, hun prijzen"
+
+#: src/booking/Register.tsx
+msgid "La ligne d'origine reste au registre ; la correction la remplace."
+msgstr "De oorspronkelijke regel blijft in het register; de correctie vervangt hem."
+
+#: src/pages/settings/Clients.tsx
+#: src/pages/settings/Startup.tsx
+msgid "La liste n'a pas pu être lue."
+msgstr "De lijst kon niet gelezen worden."
+
+#: src/pages/Cleaning.tsx
+msgid "La liste n'a pas pu être lue. Rechargez la page."
+msgstr "De lijst kon niet gelezen worden. Herlaad de pagina."
+
+#: src/pages/Bookings.tsx
+msgid "La liste n'a pas pu être lue. Réessayez."
+msgstr "De lijst kon niet gelezen worden. Probeer opnieuw."
+
+#: src/pages/settings/Register.tsx
+msgid "La loi demande de noter chaque personne hébergée. La saisie se fait à l'arrivée, dans la fiche de la réservation (« Voyageurs inscrits »)."
+msgstr "De wet vraagt elke gehuisveste persoon te noteren. Dat gebeurt bij aankomst, in de fiche van de reservering (« Ingeschreven gasten »)."
+
+#: src/pages/settings/Promotions.tsx
+msgid "La meilleure remise automatique s'applique seule ; un code promo s'ajoute ensuite. Les remises portent sur les nuits, pas sur le ménage ni les options."
+msgstr "De beste automatische korting geldt vanzelf; een promotiecode komt daarbovenop. Kortingen gelden voor de nachten, niet voor de schoonmaak of de opties."
+
+#: src/calendar/PricePanel.tsx
+#: src/calendar/Weeks.tsx
+msgid "la nuit"
+msgstr "per nacht"
+
+#. placeholder {0}: ctx.label(n)
+#. placeholder {1}: ctx.label(n)
+#: src/lib/derive.ts
+msgid "La nuit du {0} est déjà prise. Choisissez un jour de départ au plus tard le {1}."
+msgstr "De nacht van {0} is al bezet. Kies een vertrekdag uiterlijk op {1}."
+
+#: src/pages/settings/MyAccount.tsx
+msgid "La plateforme en choisit un pour vous, facile à dicter"
+msgstr "Het platform kiest er een voor u, makkelijk te dicteren"
+
+#: src/canaux/canal.ts
+msgid "La réponse part par mail à {to} quand l'envoi des mails est actif, et s'affiche sur la page du client."
+msgstr "Het antwoord vertrekt per mail naar {to} wanneer mails versturen actief is, en verschijnt op de pagina van de klant."
+
+#: src/canaux/canal.ts
+msgid "La réponse part par mail à {to} quand l'envoi des mails est actif."
+msgstr "Het antwoord vertrekt per mail naar {to} wanneer mails versturen actief is."
+
+#. placeholder {0}: m.canal || t`le canal`
+#: src/canaux/canal.ts
+msgid "La réponse part sur {0}, dans la conversation du voyageur (par Beds24)."
+msgstr "Het antwoord vertrekt via {0}, in het gesprek met de gast (via Beds24)."
+
+#. placeholder {0}: errorText(e)
+#: src/sale/SaleFlow.tsx
+msgid "La réservation est enregistrée, mais le lien de paiement n'a pas pu être créé : {0} Créez-le depuis la fiche."
+msgstr "De reservering is opgeslagen, maar de betaallink kon niet aangemaakt worden: {0} Maak hem aan vanuit de fiche."
+
+#. placeholder {0}: errorText(e)
+#: src/sale/SaleFlow.tsx
+msgid "La réservation est enregistrée, mais le paiement n'a pas été noté : {0} Notez-le dans la fiche."
+msgstr "De reservering is opgeslagen, maar de betaling is niet genoteerd: {0} Noteer ze in de fiche."
+
+#. placeholder {0}: errorText(e)
+#: src/pages/settings/Tarifs.tsx
+msgid "La saison a été créée mais ses prix n'ont pas tous été enregistrés ({0}). Ouvrez-la pour vérifier."
+msgstr "Het seizoen is aangemaakt, maar niet al zijn prijzen zijn opgeslagen ({0}). Open het om na te kijken."
+
+#. placeholder {0}: errorText(e)
+#: src/pages/settings/Tarifs.tsx
+msgid "La saison n'a pas été créée : {0}"
+msgstr "Het seizoen is niet aangemaakt: {0}"
+
+#: src/pages/settings/Domain.tsx
+msgid "La somme des maisons qu'il regroupe"
+msgstr "De som van de huizen die het groepeert"
+
+#: src/pages/Settings.tsx
+#: src/pages/settings/Templates.tsx
+msgid "Langue"
+msgstr "Taal"
+
+#: src/pages/Settings.tsx
+msgid "Langue de l'écran"
+msgstr "Taal van het scherm"
+
+#. placeholder {0}: ctx.label(day)
+#. placeholder {1}: ctx.unitName
+#: src/lib/derive.ts
+msgid "Le {0} est déjà pris pour {1}. Choisissez un jour libre."
+msgstr "{0} is al bezet voor {1}. Kies een vrije dag."
+
+#. placeholder {0}: r.error
+#: src/pages/settings/Ical.tsx
+msgid "Le calendrier n'a pas pu être lu : {0}."
+msgstr "De kalender kon niet gelezen worden: {0}."
+
+#: src/calendar/CalendarView.tsx
+msgid "Le calendrier n'a pas pu être lu. Rechargez la page."
+msgstr "De kalender kon niet gelezen worden. Herlaad de pagina."
+
+#: src/pages/settings/Ical.tsx
+msgid "Le calendrier ne sera plus lu. Les réservations déjà reprises restent."
+msgstr "De kalender wordt niet meer gelezen. De al overgenomen reserveringen blijven."
+
+#: src/canaux/canal.ts
+msgid "le canal"
+msgstr "het kanaal"
+
+#. placeholder {0}: q ? eur(q.totalCents) : ""
+#: src/sale/SaleFlow.tsx
+msgid "Le client a déjà payé le total ({0}) : le noter comme reçu"
+msgstr "De klant heeft het totaal al betaald ({0}): als ontvangen noteren"
+
+#. placeholder {0}: eur(amount)
+#: src/booking/BookingPanel.tsx
+msgid "Le client paie {0} par carte depuis ce lien. Copiez-le pour l'envoyer par SMS ou par mail."
+msgstr "De klant betaalt {0} met de kaart via deze link. Kopieer hem om hem per sms of per mail te sturen."
+
+#: src/pages/settings/Domain.tsx
+msgid "Le client peut payer des arrhes"
+msgstr "De klant kan een voorschot betalen"
+
+#: src/pages/settings/Domain.tsx
+msgid "Le client peut payer tout le séjour d'un coup"
+msgstr "De klant kan het hele verblijf in één keer betalen"
+
+#: src/pages/settings/Promotions.tsx
+msgid "Le client tape le code sur votre site au moment de réserver."
+msgstr "De klant typt de code in op uw site bij het reserveren."
+
+#. placeholder {0}: invite.state.text
+#: src/pages/settings/Channels.tsx
+msgid "Le code n'a pas été accepté ({0}) Vérifiez qu'il est complet et qu'il n'a pas déjà servi, ou créez-en un nouveau."
+msgstr "De code is niet aanvaard ({0}) Kijk na of hij volledig is en nog niet gebruikt werd, of maak een nieuwe aan."
+
+#: src/pages/settings/Channels.tsx
+msgid "Le code ne sert qu'une fois : il est échangé contre un accès durable, gardé par le serveur. Il n'y a rien d'autre à faire."
+msgstr "De code dient maar één keer: hij wordt geruild voor een blijvende toegang, die de server bewaart. Er is verder niets te doen."
+
+#: src/pages/settings/Accounts.tsx
+msgid "Le compte disparaît. Pour une absence, coupez plutôt l'accès : il se rend en un geste."
+msgstr "De account verdwijnt. Bij een afwezigheid sluit u beter de toegang af: die geeft u met één handeling terug."
+
+#: src/pages/settings/MyAccount.tsx
+msgid "Le compte n'a pas pu être lu."
+msgstr "De account kon niet gelezen worden."
+
+#: src/booking/BookingPanel.tsx
+#: src/sale/SaleFlow.tsx
+msgid "Le départ doit venir après l'arrivée."
+msgstr "Het vertrek moet na de aankomst komen."
+
+#: src/pages/Settings.tsx
+#: src/pages/settings/Domain.tsx
+msgid "Le domaine"
+msgstr "Het domein"
+
+#: src/pages/Settings.tsx
+#: src/pages/settings/Domain.tsx
+msgid "Le domaine et les biens"
+msgstr "Het domein en de woningen"
+
+#: src/pages/Messages.tsx
+msgid "Le fil de la conversation n'a pas pu être lu. Rechargez la page avant de répondre."
+msgstr "Het gesprek kon niet gelezen worden. Herlaad de pagina voor u antwoordt."
+
+#: src/calendar/Weeks.tsx
+msgid "Le jour de départ"
+msgstr "De vertrekdag"
+
+#: src/pages/settings/Logs.tsx
+msgid "Le journal des mails n'a pas pu être lu."
+msgstr "Het logboek van de mails kon niet gelezen worden."
+
+#: src/pages/settings/Logs.tsx
+msgid "Le journal n'a pas pu être lu."
+msgstr "Het logboek kon niet gelezen worden."
+
+#: src/pages/Cleaning.tsx
+msgid "Le lien à envoyer"
+msgstr "De link om te versturen"
+
+#: src/booking/BookingPanel.tsx
+#: src/sale/SaleFlow.tsx
+msgid "Le lien n'a pas pu être copié : sélectionnez-le et copiez-le à la main."
+msgstr "De link kon niet gekopieerd worden: selecteer hem en kopieer hem met de hand."
+
+#: src/pages/Cleaning.tsx
+msgid "Le lien ne s'ouvrira plus. Les ménages déjà cochés restent cochés."
+msgstr "De link gaat niet meer open. Al aangevinkte schoonmaakbeurten blijven aangevinkt."
+
+#: src/booking/BookingPanel.tsx
+msgid "Le message s'affiche sur la page du client et part par mail à {email} quand l'envoi des mails est actif."
+msgstr "Het bericht verschijnt op de pagina van de klant en vertrekt per mail naar {email} wanneer mails versturen actief is."
+
+#: src/pages/settings/Templates.tsx
+msgid "le mot affiché sur la puce, par exemple : Accès et clés"
+msgstr "het woord op het label, bijvoorbeeld: Toegang en sleutels"
+
+#: src/sale/SaleFlow.tsx
+msgid "Le nom du client est nécessaire."
+msgstr "De naam van de klant is nodig."
+
+#: src/pages/settings/MyAccount.tsx
+msgid "Le nouveau, une seconde fois"
+msgstr "Het nieuwe, nog een keer"
+
+#: src/pages/settings/Templates.tsx
+msgid "le plus petit en premier"
+msgstr "het kleinste eerst"
+
+#: src/calendar/Weeks.tsx
+msgid "Le premier jour"
+msgstr "De eerste dag"
+
+#: src/calendar/PricePanel.tsx
+msgid "Le prix de ce bien est la somme de ses maisons : changez le prix sur chaque maison."
+msgstr "De prijs van deze woning is de som van haar huizen: wijzig de prijs op elk huis."
+
+#: src/pages/settings/Tarifs.tsx
+msgid "Le prix de chaque bien en dehors des saisons. Touchez un bien pour le changer."
+msgstr "De prijs van elke woning buiten de seizoenen. Tik op een woning om hem te wijzigen."
+
+#. placeholder {0}: dfr(fortes[0]!.date)
+#. placeholder {1}: eur(fortes[0]!.priceCents!)
+#. placeholder {2}: eur(up)
+#: src/lib/suggestions.ts
+msgid "Le prix est déjà majoré ces jours-là. Un cran de plus (+ {STRONG_DATE_PCT} %) sur chacun d'eux seulement, par exemple le {0} : {1} → {2}."
+msgstr "De prijs ligt die dagen al hoger. Nog een stapje meer (+ {STRONG_DATE_PCT} %) op elk van die dagen alleen, bijvoorbeeld op {0}: {1} → {2}."
+
+#: src/sale/SaleFlow.tsx
+msgid "Le prix n'a pas pu être calculé. Réessayez."
+msgstr "De prijs kon niet berekend worden. Probeer opnieuw."
+
+#: src/calendar/Weeks.tsx
+msgid "Le prix se calcule à l'étape suivante."
+msgstr "De prijs wordt in de volgende stap berekend."
+
+#: src/booking/Register.tsx
+msgid "Le registre n'a pas pu être lu."
+msgstr "Het register kon niet gelezen worden."
+
+#: src/pages/settings/Domain.tsx
+msgid "Le réserver bloque aussi"
+msgstr "Wie dit boekt, blokkeert ook"
+
+#: src/api/client.ts
+msgid "Le serveur n'a pas pu le faire. Rien n'a été changé ; réessayez dans un instant."
+msgstr "De server kon het niet uitvoeren. Er is niets gewijzigd; probeer zo meteen opnieuw."
+
+#. placeholder {0}: longDate(o.balanceDueDate)
+#: src/pages/Today.tsx
+msgid "Le solde était attendu le {0}."
+msgstr "Het saldo werd verwacht op {0}."
+
+#: src/pages/settings/Import.tsx
+msgid "Le test ne change rien. L'import n'est possible qu'après un test du même texte."
+msgstr "De test verandert niets. Importeren kan pas na een test van dezelfde tekst."
+
+#: src/pages/settings/Tarifs.tsx
+msgid "Le week-end, ce sont les nuits du vendredi et du samedi. Les jours fériés belges, leurs veilles et les ponts sont majorés tout seuls du pourcentage choisi."
+msgstr "Het weekend zijn de nachten van vrijdag en zaterdag. Belgische feestdagen, de dag ervoor en brugdagen krijgen vanzelf het gekozen percentage erbij."
+
+#: src/booking/Register.tsx
+msgid "Lecture du registre…"
+msgstr "Het register wordt gelezen…"
+
+#: src/calendar/Grid.tsx
+#: src/calendar/Weeks.tsx
+msgid "Légende"
+msgstr "Legende"
+
+#: src/pages/settings/Domain.tsx
+msgid "Légende (facultatif)"
+msgstr "Bijschrift (facultatief)"
+
+#: src/pages/settings/Domain.tsx
+msgid "Les biens"
+msgstr "De woningen"
+
+#: src/pages/settings/Ical.tsx
+msgid "Les calendriers n'ont pas pu être lus."
+msgstr "De kalenders konden niet gelezen worden."
+
+#: src/pages/settings/Stats.tsx
+msgid "Les chiffres n'ont pas pu être lus."
+msgstr "De cijfers konden niet gelezen worden."
+
+#: src/pages/settings/Accounts.tsx
+msgid "Les comptes n'ont pas pu être lus."
+msgstr "De accounts konden niet gelezen worden."
+
+#. placeholder {0}: channelName(b)
+#: src/booking/BookingPanel.tsx
+msgid "Les dates, l'annulation et le paiement de cette réservation se gèrent sur {0} : la grille suivra."
+msgstr "De data, de annulering en de betaling van deze reservering worden beheerd op {0}: het rooster volgt."
+
+#: src/calendar/Grid.tsx
+msgid "les deux maisons"
+msgstr "de twee huizen"
+
+#. placeholder {0}: c.unitName
+#: src/pages/Cleaning.tsx
+msgid "Les deux maisons, après {0}"
+msgstr "De twee huizen, na {0}"
+
+#: src/pages/Today.tsx
+msgid "Les deux maisons, après le Domaine"
+msgstr "De twee huizen, na het domein"
+
+#: src/pages/settings/MyAccount.tsx
+msgid "Les deux ne sont pas pareils."
+msgstr "De twee zijn niet gelijk."
+
+#: src/pages/settings/Domain.tsx
+msgid "Les enfants paient aussi la taxe"
+msgstr "Ook kinderen betalen de belasting"
+
+#: src/pages/settings/Tarifs.tsx
+msgid "Les jours où un prix ou un minimum a été posé depuis le calendrier. Ils passent avant les saisons."
+msgstr "De dagen waarop een prijs of een minimum vanuit de kalender is vastgelegd. Ze gaan voor op de seizoenen."
+
+#: src/pages/Cleaning.tsx
+msgid "Les liens n'ont pas pu être lus."
+msgstr "De links konden niet gelezen worden."
+
+#: src/pages/settings/Register.tsx
+msgid "Les lignes s'effacent toutes seules à la fin de la durée de conservation."
+msgstr "De regels worden vanzelf gewist aan het einde van de bewaartermijn."
+
+#: src/pages/settings/Stats.tsx
+msgid "Les mêmes chiffres en tableau"
+msgstr "Dezelfde cijfers in een tabel"
+
+#: src/pages/Messages.tsx
+msgid "Les messages de votre site, les mails des clients et les messages d'Airbnb et de Booking (par Beds24) arrivent ici."
+msgstr "De berichten van uw site, de mails van klanten en de berichten van Airbnb en Booking (via Beds24) komen hier binnen."
+
+#: src/pages/settings/Templates.tsx
+msgid "Les messages déjà envoyés ne changent pas. Pour le garder sans le proposer, décochez plutôt « Proposé quand on répond »."
+msgstr "Al verstuurde berichten veranderen niet. Om het te bewaren zonder het voor te stellen, vinkt u beter « Voorgesteld bij het antwoorden » uit."
+
+#: src/pages/Messages.tsx
+msgid "Les messages n'ont pas pu être lus."
+msgstr "De berichten konden niet gelezen worden."
+
+#: src/pages/settings/Templates.tsx
+msgid "Les modèles n'ont pas pu être lus."
+msgstr "De sjablonen konden niet gelezen worden."
+
+#: src/messages/TemplateChips.tsx
+msgid "Les modèles n'ont pas pu être lus. Vous pouvez écrire sans."
+msgstr "De sjablonen konden niet gelezen worden. U kunt zonder schrijven."
+
+#: src/pages/settings/Options.tsx
+msgid "Les options n'ont pas pu être lues."
+msgstr "De opties konden niet gelezen worden."
+
+#: src/pages/settings/Payments.tsx
+msgid "Les paiements n'ont pas pu être lus."
+msgstr "De betalingen konden niet gelezen worden."
+
+#: src/pages/settings/Domain.tsx
+msgid "Les photos n'ont pas pu être lues."
+msgstr "De foto's konden niet gelezen worden."
+
+#: src/pages/settings/Channels.tsx
+msgid "Les plateformes ne reçoivent plus vos disponibilités : elles pourraient vendre des dates déjà prises ici. Rétablissez la liaison avec un code d'invitation Beds24."
+msgstr "De platformen krijgen uw beschikbaarheden niet meer: ze kunnen data verkopen die hier al bezet zijn. Herstel de koppeling met een uitnodigingscode van Beds24."
+
+#: src/pages/settings/Channels.tsx
+msgid "Les plateformes prennent une commission : on y affiche un prix un peu plus haut qu'en direct. Le prix de votre site ne change jamais."
+msgstr "De platformen nemen een commissie: daar staat een iets hogere prijs dan bij rechtstreekse boeking. De prijs van uw site verandert nooit."
+
+#: src/pages/settings/Channels.tsx
+msgid "Les plateformes recevront le prix de votre site, sans compenser leur commission. Les calendriers repartent tout de suite."
+msgstr "De platformen krijgen de prijs van uw site, zonder hun commissie te compenseren. De kalenders vertrekken meteen."
+
+#: src/pages/settings/Channels.tsx
+msgid "Les plateformes reçoivent vos disponibilités et vos prix par Beds24, un service de liaison. Vous n'avez pas à ouvrir Beds24 : tout se suit ici."
+msgstr "De platformen krijgen uw beschikbaarheden en prijzen via Beds24, een koppelingsdienst. U hoeft Beds24 niet te openen: alles volgt u hier."
+
+#: src/pages/settings/Channels.tsx
+msgid "Les prix envoyés aux plateformes n'ont pas pu être lus."
+msgstr "De prijzen die naar de platformen gaan, konden niet gelezen worden."
+
+#: src/calendar/CalendarView.tsx
+msgid "Les prix n'ont pas pu être lus : ne les changez pas avant d'avoir rechargé la page."
+msgstr "De prijzen konden niet gelezen worden: wijzig ze niet voor u de pagina hebt herladen."
+
+#: src/pages/settings/Tarifs.tsx
+msgid "Les prix n'ont pas pu être lus."
+msgstr "De prijzen konden niet gelezen worden."
+
+#: src/pages/settings/Tarifs.tsx
+msgid "Les prix n'ont pas pu être lus. Rechargez la page."
+msgstr "De prijzen konden niet gelezen worden. Herlaad de pagina."
+
+#: src/pages/settings/ChannelPrices.tsx
+msgid "Les prix par plateforme n'ont pas pu être lus."
+msgstr "De prijzen per platform konden niet gelezen worden."
+
+#: src/pages/settings/ChannelPrices.tsx
+msgid "Les promotions Airbnb n'ont pas pu être lues."
+msgstr "De Airbnb-promoties konden niet gelezen worden."
+
+#: src/pages/settings/Domain.tsx
+msgid "Les réglages n'ont pas pu être lus."
+msgstr "De instellingen konden niet gelezen worden."
+
+#: src/pages/settings/Promotions.tsx
+msgid "Les remises n'ont pas pu être lues."
+msgstr "De kortingen konden niet gelezen worden."
+
+#: src/pages/settings/Promotions.tsx
+msgid "Les réservations déjà faites gardent leur remise. Pour l'arrêter sans la perdre, mettez-la plutôt en pause."
+msgstr "Al gemaakte reserveringen behouden hun korting. Om ze te stoppen zonder ze te verliezen, zet u ze beter op pauze."
+
+#: src/pages/settings/Options.tsx
+msgid "Les réservations qui l'ont déjà gardent leur prix. Pour l'arrêter sans la perdre, décochez plutôt « Proposée aux clients »."
+msgstr "Reserveringen die ze al hebben, behouden hun prijs. Om ze te stoppen zonder ze te verliezen, vinkt u beter « Aan klanten voorgesteld » uit."
+
+#: src/pages/settings/Tarifs.tsx
+msgid "Les suggestions n'ont pas pu être calculées."
+msgstr "De suggesties konden niet berekend worden."
+
+#: src/pages/settings/Templates.tsx
+msgid "Les textes proposés quand vous répondez à un client, dans Messages et dans la fiche réservation. Les mots entre accolades se remplissent tout seuls avec la réservation."
+msgstr "De teksten die voorgesteld worden wanneer u een klant antwoordt, in Berichten en in de reserveringsfiche. De woorden tussen accolades worden vanzelf ingevuld met de reservering."
+
+#: src/pages/Settings.tsx
+msgid "Les textes tout prêts pour répondre aux clients : accès, horaires, solde, après le séjour"
+msgstr "Kant-en-klare teksten om klanten te antwoorden: toegang, uren, saldo, na het verblijf"
+
+#: src/calendar/BlockPanel.tsx
+msgid "Lever le blocage"
+msgstr "De blokkering opheffen"
+
+#: src/calendar/BlockPanel.tsx
+msgid "Lever le blocage ?"
+msgstr "De blokkering opheffen?"
+
+#: src/pages/settings/Logs.tsx
+msgid "liaison Beds24 rétablie"
+msgstr "koppeling met Beds24 hersteld"
+
+#: src/pages/settings/Channels.tsx
+msgid "Liaison coupée"
+msgstr "Koppeling verbroken"
+
+#: src/pages/settings/Channels.tsx
+msgid "Liaison en place"
+msgstr "Koppeling actief"
+
+#: src/pages/settings/Channels.tsx
+msgid "liaison rétablie avec un code d'invitation"
+msgstr "koppeling hersteld met een uitnodigingscode"
+
+#: src/pages/settings/Logs.tsx
+msgid "liaisons d'un bien changées"
+msgstr "koppelingen van een woning gewijzigd"
+
+#. placeholder {0}: a.name.trim()
+#: src/pages/settings/Domain.tsx
+msgid "liaisons de {0}"
+msgstr "koppelingen van {0}"
+
+#: src/booking/BookingPanel.tsx
+#: src/sale/SaleFlow.tsx
+msgid "Lien copié."
+msgstr "Link gekopieerd."
+
+#: src/booking/BookingPanel.tsx
+msgid "Lien de paiement"
+msgstr "Betaallink"
+
+#: src/sale/SaleFlow.tsx
+msgid "Lien de paiement à transmettre au client :"
+msgstr "Betaallink om aan de klant te bezorgen:"
+
+#: src/booking/BookingPanel.tsx
+msgid "Lien de paiement des arrhes"
+msgstr "Betaallink voor het voorschot"
+
+#: src/booking/BookingPanel.tsx
+msgid "Lien de paiement du solde"
+msgstr "Betaallink voor het saldo"
+
+#: src/pages/settings/Payments.tsx
+msgid "lien expiré sans paiement"
+msgstr "link verlopen zonder betaling"
+
+#: src/pages/Cleaning.tsx
+msgid "Lien pour la personne du ménage"
+msgstr "Link voor de schoonmaakhulp"
+
+#: src/pages/settings/Payments.tsx
+msgid "lien remplacé par un autre"
+msgstr "link vervangen door een andere"
+
+#: src/pages/settings/Import.tsx
+msgid "Ligne"
+msgstr "Regel"
+
+#: src/pages/settings/Promotions.tsx
+msgid "Long séjour"
+msgstr "Lang verblijf"
+
+#: src/pages/settings/Promotions.tsx
+msgid "Long séjour (à partir d'un nombre de nuits)"
+msgstr "Lang verblijf (vanaf een aantal nachten)"
+
+#: src/pages/Settings.tsx
+msgid "Long séjour, réservation tôt ou tardive, codes pour votre site"
+msgstr "Lang verblijf, vroeg of laat boeken, codes voor uw site"
+
+#. placeholder {0}: sqlWhen(f.lastSyncAt)
+#: src/pages/settings/Ical.tsx
+msgid "lu le {0}"
+msgstr "gelezen op {0}"
+
+#: src/pages/settings/Ical.tsx
+msgid "Lu toutes les 15 minutes"
+msgstr "Om de 15 minuten gelezen"
+
+#: src/pages/settings/Ical.tsx
+msgid "Lus toutes les 15 minutes. Si une date lue est déjà prise ici, elle est refusée et signalée."
+msgstr "Om de 15 minuten gelezen. Is een gelezen datum hier al bezet, dan wordt ze geweigerd en gemeld."
+
+#: src/pages/settings/MyAccount.tsx
+msgid "M'en proposer un"
+msgstr "Stel er mij een voor"
+
+#: src/booking/BookingPanel.tsx
+msgid "mail"
+msgstr "mail"
+
+#: src/canaux/canal.ts
+#: src/pages/settings/Clients.tsx
+#: src/pages/settings/Logs.tsx
+#: src/sale/SaleFlow.tsx
+msgid "Mail"
+msgstr "Mail"
+
+#: src/pages/settings/Domain.tsx
+msgid "Mail de contact"
+msgstr "Contactmail"
+
+#: src/booking/BookingPanel.tsx
+#: src/pages/settings/Logs.tsx
+msgid "Mails envoyés"
+msgstr "Verstuurde mails"
+
+#: src/pages/settings/Domain.tsx
+msgid "Mails reçus"
+msgstr "Ontvangen mails"
+
+#: src/pages/settings/Channels.tsx
+msgid "Majoration"
+msgstr "Verhoging"
+
+#. placeholder {0}: c.label
+#: src/pages/settings/Channels.tsx
+msgid "Majoration {0}, en pourcentage"
+msgstr "Verhoging {0}, in procent"
+
+#: src/pages/settings/Logs.tsx
+msgid "majoration appliquée aux plateformes"
+msgstr "verhoging toegepast op de platformen"
+
+#: src/pages/settings/Tarifs.tsx
+msgid "Majoration des fériés (%)"
+msgstr "Verhoging op feestdagen (%)"
+
+#: src/pages/settings/Logs.tsx
+msgid "majorations des plateformes changées"
+msgstr "verhogingen van de platformen gewijzigd"
+
+#: src/pages/settings/Channels.tsx
+msgid "Majorer"
+msgstr "Verhogen"
+
+#: src/pages/settings/Channels.tsx
+msgid "Majorer les prix envoyés aux plateformes ?"
+msgstr "De prijzen voor de platformen verhogen?"
+
+#: src/pages/Messages.tsx
+msgid "Marquer comme traité"
+msgstr "Als behandeld markeren"
+
+#: src/pages/Cleaning.tsx
+#: src/pages/Today.tsx
+#: src/shell/Shell.tsx
+msgid "Ménage"
+msgstr "Schoonmaak"
+
+#: src/calendar/Grid.tsx
+msgid "Ménage à faire aujourd'hui"
+msgstr "Schoonmaak vandaag"
+
+#. placeholder {0}: u.name
+#. placeholder {1}: longDate(b.checkout)
+#: src/calendar/Grid.tsx
+msgid "Ménage à faire, {0}, {1}"
+msgstr "Schoonmaak te doen, {0}, {1}"
+
+#: src/pages/Cleaning.tsx
+msgid "Ménage fait"
+msgstr "Schoonmaak gedaan"
+
+#. placeholder {0}: u.name
+#. placeholder {1}: longDate(b.checkout)
+#: src/calendar/Grid.tsx
+msgid "Ménage fait, {0}, {1}"
+msgstr "Schoonmaak gedaan, {0}, {1}"
+
+#. placeholder {0}: task.unitName
+#: src/pages/Cleaning.tsx
+msgid "Ménage, {0}"
+msgstr "Schoonmaak, {0}"
+
+#: src/shell/Shell.tsx
+msgid "Menu principal"
+msgstr "Hoofdmenu"
+
+#: src/pages/settings/Logs.tsx
+msgid "message"
+msgstr "bericht"
+
+#: src/pages/Today.tsx
+msgid "Message à lire"
+msgstr "Bericht te lezen"
+
+#: src/pages/settings/Logs.tsx
+msgid "message envoyé à un client"
+msgstr "bericht aan een klant verstuurd"
+
+#: src/booking/BookingPanel.tsx
+msgid "message envoyé au client"
+msgstr "bericht aan de klant verstuurd"
+
+#: src/pages/Messages.tsx
+#: src/pages/Today.tsx
+#: src/shell/Shell.tsx
+msgid "Messages"
+msgstr "Berichten"
+
+#: src/pages/settings/Channels.tsx
+msgid "Mettre ce désaccord de côté ?"
+msgstr "Deze onenigheid opzijleggen?"
+
+#: src/pages/settings/Channels.tsx
+msgid "Mettre de côté"
+msgstr "Opzijleggen"
+
+#: src/calendar/PricePanel.tsx
+msgid "Minimum de nuits"
+msgstr "Minimum aantal nachten"
+
+#: src/pages/settings/Channels.tsx
+msgid "mis de côté"
+msgstr "opzijgelegd"
+
+#: src/pages/Settings.tsx
+#: src/pages/settings/Startup.tsx
+msgid "Mise en route"
+msgstr "Opstart"
+
+#: src/pages/settings/Logs.tsx
+msgid "mise en route mise à jour"
+msgstr "opstart bijgewerkt"
+
+#: src/pages/settings/Templates.tsx
+msgid "Modèle de réponse"
+msgstr "Antwoordsjabloon"
+
+#: src/pages/settings/Templates.tsx
+msgid "Modèles"
+msgstr "Sjablonen"
+
+#: src/pages/Settings.tsx
+#: src/pages/settings/Templates.tsx
+msgid "Modèles de réponse"
+msgstr "Antwoordsjablonen"
+
+#: src/booking/BookingPanel.tsx
+msgid "modification refusée : dates déjà prises"
+msgstr "wijziging geweigerd: data al bezet"
+
+#: src/ui/kit.tsx
+msgid "Modifications non enregistrées."
+msgstr "Wijzigingen niet opgeslagen."
+
+#: src/booking/BookingPanel.tsx
+msgid "Modifier"
+msgstr "Wijzigen"
+
+#: src/booking/BookingPanel.tsx
+msgid "Modifier la note"
+msgstr "De notitie wijzigen"
+
+#: src/pages/settings/Domain.tsx
+msgid "moins d'une heure"
+msgstr "minder dan een uur"
+
+#. placeholder {0}: eur(cuts[0]!)
+#: src/pages/settings/Tarifs.tsx
+msgid "moins de {0}"
+msgstr "minder dan {0}"
+
+#: src/pages/settings/Stats.tsx
+msgid "Mois"
+msgstr "Maand"
+
+#: src/pages/settings/Stats.tsx
+msgid "Mois d'arrivée"
+msgstr "Maand van aankomst"
+
+#: src/pages/Settings.tsx
+#: src/pages/settings/MyAccount.tsx
+msgid "Mon compte"
+msgstr "Mijn account"
+
+#: src/booking/BookingPanel.tsx
+msgid "Montant reçu (€)"
+msgstr "Ontvangen bedrag (€)"
+
+#. placeholder {0}: p.alt
+#: src/pages/settings/Domain.tsx
+msgid "Monter {0}"
+msgstr "{0} verhogen"
+
+#: src/pages/Login.tsx
+msgid "Mot de passe"
+msgstr "Wachtwoord"
+
+#: src/pages/settings/MyAccount.tsx
+msgid "Mot de passe actuel"
+msgstr "Huidig wachtwoord"
+
+#: src/pages/settings/Accounts.tsx
+#: src/pages/settings/MyAccount.tsx
+msgid "Mot de passe copié."
+msgstr "Wachtwoord gekopieerd."
+
+#. placeholder {0}: shown?.username ?? ""
+#: src/pages/settings/Accounts.tsx
+msgid "Mot de passe de {0}. Il ne sera plus jamais affiché : notez-le ou transmettez-le maintenant."
+msgstr "Wachtwoord van {0}. Het wordt nooit meer getoond: noteer het of geef het nu door."
+
+#: src/pages/settings/Options.tsx
+msgid "Mot pour l'unité (facultatif)"
+msgstr "Woord voor de eenheid (facultatief)"
+
+#: src/pages/settings/Channels.tsx
+msgid "Motif"
+msgstr "Reden"
+
+#. placeholder {0}: c.ignoreReason
+#: src/pages/settings/Channels.tsx
+msgid "motif : {0}"
+msgstr "reden: {0}"
+
+#. placeholder {0}: b.cancelReason
+#. placeholder {0}: block.reason
+#. placeholder {0}: c.ignoreReason
+#: src/booking/BookingPanel.tsx
+#: src/calendar/BlockPanel.tsx
+#: src/pages/settings/Channels.tsx
+msgid "Motif : {0}"
+msgstr "Reden: {0}"
+
+#: src/booking/BookingPanel.tsx
+msgid "Motif de l'annulation"
+msgstr "Reden van de annulering"
+
+#: src/pages/settings/Payments.tsx
+msgid "Moyen"
+msgstr "Betaalwijze"
+
+#: src/booking/BookingPanel.tsx
+#: src/pages/settings/Payments.tsx
+msgid "n'a pas abouti"
+msgstr "is niet gelukt"
+
+#: src/booking/Register.tsx
+msgid "Nationalité"
+msgstr "Nationaliteit"
+
+#: src/pages/settings/Channels.tsx
+msgid "Ne plus majorer"
+msgstr "Niet meer verhogen"
+
+#: src/pages/settings/Channels.tsx
+msgid "Ne plus majorer ?"
+msgstr "Niet meer verhogen?"
+
+#: src/pages/settings/Domain.tsx
+msgid "ne se vend plus"
+msgstr "wordt niet meer verkocht"
+
+#. placeholder {0}: e.birthDate.split("-").reverse().join("/")
+#. placeholder {1}: e.nationality
+#. placeholder {2}: label(e.idType)
+#. placeholder {3}: e.idNumber
+#: src/booking/Register.tsx
+msgid "né(e) le {0}, {1}, {2} {3}"
+msgstr "geboren op {0}, {1}, {2} {3}"
+
+#: src/pages/settings/Templates.tsx
+msgid "néerlandais"
+msgstr "Nederlands"
+
+#: src/lib/derive.ts
+msgid "Ni arrivée ni départ aujourd'hui."
+msgstr "Vandaag geen aankomst of vertrek."
+
+#: src/pages/settings/Clients.tsx
+msgid "ni mail ni téléphone"
+msgstr "geen mail of telefoon"
+
+#: src/booking/BookingPanel.tsx
+msgid "Ni téléphone ni mail sur cette réservation."
+msgstr "Geen telefoon of mail bij deze reservering."
+
+#: src/booking/Register.tsx
+#: src/pages/settings/Clients.tsx
+#: src/pages/settings/Domain.tsx
+#: src/pages/settings/Ical.tsx
+#: src/pages/settings/Options.tsx
+#: src/pages/settings/Tarifs.tsx
+#: src/sale/SaleFlow.tsx
+msgid "Nom"
+msgstr "Naam"
+
+#: src/pages/settings/Promotions.tsx
+msgid "Nom affiché au client (facultatif)"
+msgstr "Naam die de klant ziet (facultatief)"
+
+#: src/lib/templates.ts
+msgid "nom du bien"
+msgstr "naam van de woning"
+
+#: src/pages/settings/Templates.tsx
+msgid "Nom du modèle"
+msgstr "Naam van het sjabloon"
+
+#: src/pages/settings/Clients.tsx
+msgid "Nom, mail ou téléphone"
+msgstr "Naam, mail of telefoon"
+
+#: src/pages/Bookings.tsx
+msgid "Nom, mail, téléphone ou référence"
+msgstr "Naam, mail, telefoon of referentie"
+
+#: src/pages/settings/Stats.tsx
+msgid "Nombre"
+msgstr "Aantal"
+
+#: src/pages/settings/Promotions.tsx
+msgid "Nombre d'utilisations au plus"
+msgstr "Maximaal aantal keer te gebruiken"
+
+#: src/booking/Register.tsx
+msgid "Nombre de voyageurs"
+msgstr "Aantal gasten"
+
+#: src/booking/BookingPanel.tsx
+msgid "non communiqué"
+msgstr "niet meegedeeld"
+
+#: src/pages/settings/ChannelPrices.tsx
+msgid "Non remboursable"
+msgstr "Niet-terugbetaalbaar"
+
+#. placeholder {0}: eur(p.nonRefundableCents)
+#: src/pages/settings/ChannelPrices.tsx
+msgid "Non remboursable : {0}"
+msgstr "Niet-terugbetaalbaar: {0}"
+
+#: src/pages/settings/Ical.tsx
+msgid "Nos calendriers, à donner aux autres sites"
+msgstr "Onze kalenders, voor andere sites"
+
+#: src/pages/Cleaning.tsx
+#: src/pages/settings/Clients.tsx
+msgid "Note"
+msgstr "Notitie"
+
+#: src/pages/Cleaning.tsx
+msgid "noté"
+msgstr "genoteerd"
+
+#. placeholder {0}: p.note
+#: src/pages/settings/Payments.tsx
+msgid "Note : {0}"
+msgstr "Notitie: {0}"
+
+#: src/booking/BookingPanel.tsx
+msgid "Note (facultatif)"
+msgstr "Notitie (facultatief)"
+
+#: src/booking/BookingPanel.tsx
+#: src/pages/settings/Clients.tsx
+msgid "Note (le client ne la voit pas)"
+msgstr "Notitie (de klant ziet ze niet)"
+
+#: src/pages/Cleaning.tsx
+msgid "noté par {by}"
+msgstr "genoteerd door {by}"
+
+#: src/pages/Cleaning.tsx
+msgid "Note pour le ménage"
+msgstr "Notitie voor de schoonmaak"
+
+#: src/booking/BookingPanel.tsx
+msgid "Note sur la réservation"
+msgstr "Notitie bij de reservering"
+
+#. placeholder {0}: eur(cents > 0 ? cents : 0)
+#: src/booking/BookingPanel.tsx
+msgid "Noter {0} reçus"
+msgstr "{0} als ontvangen noteren"
+
+#: src/booking/BookingPanel.tsx
+msgid "Noter un paiement reçu"
+msgstr "Een ontvangen betaling noteren"
+
+#: src/booking/BookingPanel.tsx
+msgid "Notes"
+msgstr "Notities"
+
+#: src/pages/settings/Ical.tsx
+msgid "Nouveau calendrier"
+msgstr "Nieuwe kalender"
+
+#: src/pages/settings/Promotions.tsx
+msgid "Nouveau code"
+msgstr "Nieuwe code"
+
+#: src/pages/settings/Templates.tsx
+msgid "Nouveau modèle"
+msgstr "Nieuw sjabloon"
+
+#: src/pages/settings/Logs.tsx
+msgid "nouveau mot de passe"
+msgstr "nieuw wachtwoord"
+
+#: src/pages/settings/Accounts.tsx
+#: src/pages/settings/MyAccount.tsx
+msgid "Nouveau mot de passe"
+msgstr "Nieuw wachtwoord"
+
+#. placeholder {0}: u.username
+#: src/pages/settings/Accounts.tsx
+msgid "Nouveau mot de passe pour {0} ?"
+msgstr "Nieuw wachtwoord voor {0}?"
+
+#: src/pages/Login.tsx
+msgid "Nouvel écran, en essai"
+msgstr "Nieuw scherm, in testfase"
+
+#: src/pages/settings/Options.tsx
+msgid "Nouvelle option"
+msgstr "Nieuwe optie"
+
+#: src/pages/settings/Domain.tsx
+msgid "Nouvelle photo : décrivez-la, puis cochez « Affichée »."
+msgstr "Nieuwe foto: beschrijf ze en vink dan « Getoond » aan."
+
+#: src/pages/settings/Promotions.tsx
+msgid "Nouvelle remise"
+msgstr "Nieuwe korting"
+
+#: src/pages/settings/Tarifs.tsx
+msgid "Nouvelle saison"
+msgstr "Nieuw seizoen"
+
+#: src/calendar/CalendarView.tsx
+#: src/sale/SaleFlow.tsx
+msgid "Nouvelle vente"
+msgstr "Nieuwe verkoop"
+
+#. placeholder {0}: longDate(edit.from)
+#. placeholder {0}: longDate(r.from)
+#. placeholder {0}: longDate(sel.from)
+#: src/calendar/PricePanel.tsx
+#: src/pages/settings/Tarifs.tsx
+msgid "Nuit du {0}"
+msgstr "Nacht van {0}"
+
+#: src/pages/settings/Domain.tsx
+#: src/pages/settings/Tarifs.tsx
+msgid "Nuit du week-end (€)"
+msgstr "Weekendnacht (€)"
+
+#: src/pages/settings/Domain.tsx
+#: src/pages/settings/Tarifs.tsx
+msgid "Nuit en semaine (€)"
+msgstr "Weeknacht (€)"
+
+#: src/lib/suggestions.ts
+msgid "Nuit orpheline du {date}"
+msgstr "Losse nacht van {date}"
+
+#: src/pages/settings/Tarifs.tsx
+msgid "nuit vendue"
+msgstr "verkochte nacht"
+
+#: src/pages/settings/ChannelPrices.tsx
+msgid "Nuits"
+msgstr "Nachten"
+
+#. placeholder {0}: longDate(r.from)
+#. placeholder {0}: longDate(sel.from)
+#. placeholder {1}: longDate(r.to)
+#. placeholder {1}: longDate(sel.to)
+#: src/calendar/PricePanel.tsx
+#: src/pages/settings/Tarifs.tsx
+msgid "Nuits du {0} au {1}"
+msgstr "Nachten van {0} tot {1}"
+
+#: src/pages/settings/Domain.tsx
+#: src/pages/settings/Tarifs.tsx
+msgid "Nuits minimum"
+msgstr "Minimum aantal nachten"
+
+#: src/pages/settings/Tarifs.tsx
+msgid "Nuits minimum à l'arrivée"
+msgstr "Minimum aantal nachten bij aankomst"
+
+#: src/pages/settings/Stats.tsx
+msgid "Nuits occupées"
+msgstr "Bezette nachten"
+
+#: src/lib/suggestions.ts
+msgid "Nuits orphelines du {date}"
+msgstr "Losse nachten van {date}"
+
+#: src/pages/settings/Stats.tsx
+msgid "Nuits vendues"
+msgstr "Verkochte nachten"
+
+#: src/booking/Register.tsx
+msgid "Numéro de la pièce"
+msgstr "Nummer van het document"
+
+#: src/pages/settings/Startup.tsx
+msgid "numéro obtenu, date, qui a appelé…"
+msgstr "verkregen nummer, datum, wie gebeld heeft…"
+
+#: src/pages/settings/Clients.tsx
+msgid "option"
+msgstr "optie"
+
+#: src/pages/Bookings.tsx
+#: src/pages/settings/Options.tsx
+msgid "Option"
+msgstr "Optie"
+
+#. placeholder {0}: q ? eur(q.depositCents) : ""
+#: src/sale/SaleFlow.tsx
+msgid "Option : les dates sont gardées en attendant les arrhes ({0})"
+msgstr "Optie: de data worden vastgehouden in afwachting van het voorschot ({0})"
+
+#: src/pages/settings/Logs.tsx
+msgid "option créée"
+msgstr "optie aangemaakt"
+
+#: src/pages/settings/Logs.tsx
+msgid "option en attente"
+msgstr "optie in afwachting"
+
+#: src/pages/Today.tsx
+msgid "Option en attente des arrhes"
+msgstr "Optie in afwachting van het voorschot"
+
+#: src/pages/settings/Logs.tsx
+msgid "option modifiée"
+msgstr "optie gewijzigd"
+
+#: src/pages/settings/Options.tsx
+msgid "Option payante"
+msgstr "Betalende optie"
+
+#: src/pages/settings/Logs.tsx
+msgid "option supprimée"
+msgstr "optie verwijderd"
+
+#: src/booking/BookingPanel.tsx
+#: src/calendar/Grid.tsx
+#: src/lib/derive.ts
+msgid "Option, arrhes pas encore payées"
+msgstr "Optie, voorschot nog niet betaald"
+
+#: src/calendar/Weeks.tsx
+msgid "Option, pas encore payée"
+msgstr "Optie, nog niet betaald"
+
+#: src/pages/settings/Options.tsx
+msgid "Options"
+msgstr "Opties"
+
+#: src/pages/Bookings.tsx
+msgid "Options en cours"
+msgstr "Lopende opties"
+
+#: src/pages/Settings.tsx
+#: src/pages/settings/Options.tsx
+msgid "Options payantes"
+msgstr "Betalende opties"
+
+#: src/pages/settings/Stats.tsx
+msgid "Où les visiteurs du site s'arrêtent"
+msgstr "Waar de bezoekers van de site afhaken"
+
+#: src/pages/settings/Startup.tsx
+msgid "Où on en est"
+msgstr "Hoe ver we staan"
+
+#. placeholder {0}: sqlWhen(l.lastUsedAt)
+#: src/pages/Cleaning.tsx
+msgid "ouvert {0}"
+msgstr "geopend {0}"
+
+#: src/pages/settings/Channels.tsx
+msgid "Ouvrez Settings, puis Apps & Integrations, puis API."
+msgstr "Open Settings, dan Apps & Integrations, dan API."
+
+#: src/pages/settings/Ical.tsx
+#: src/pages/settings/Tarifs.tsx
+msgid "Ouvrir"
+msgstr "Openen"
+
+#: src/pages/Today.tsx
+#: src/sale/SaleFlow.tsx
+msgid "Ouvrir la fiche"
+msgstr "De fiche openen"
+
+#: src/pages/settings/Startup.tsx
+msgid "Ouvrir la page de la démarche"
+msgstr "De pagina van de stap openen"
+
+#: src/pages/settings/Logs.tsx
+msgid "Ouvrir la réservation"
+msgstr "De reservering openen"
+
+#. placeholder {0}: booking.reference
+#. placeholder {0}: p.bookingReference ?? ""
+#: src/pages/Messages.tsx
+#: src/pages/settings/Payments.tsx
+msgid "Ouvrir la réservation {0}"
+msgstr "Reservering {0} openen"
+
+#: src/pages/Today.tsx
+msgid "Ouvrir le calendrier"
+msgstr "De kalender openen"
+
+#: src/booking/BookingPanel.tsx
+#: src/pages/settings/Domain.tsx
+#: src/pages/settings/Payments.tsx
+#: src/sale/SaleFlow.tsx
+msgid "Paiement"
+msgstr "Betaling"
+
+#: src/booking/BookingPanel.tsx
+msgid "paiement en ligne"
+msgstr "onlinebetaling"
+
+#: src/booking/BookingPanel.tsx
+#: src/pages/settings/Logs.tsx
+msgid "paiement noté à la main"
+msgstr "betaling met de hand genoteerd"
+
+#: src/pages/settings/Payments.tsx
+msgid "Paiement noté à la main"
+msgstr "Betaling met de hand genoteerd"
+
+#: src/booking/BookingPanel.tsx
+msgid "Paiements"
+msgstr "Betalingen"
+
+#: src/pages/Settings.tsx
+#: src/pages/settings/Payments.tsx
+msgid "Paiements reçus"
+msgstr "Ontvangen betalingen"
+
+#: src/pages/settings/Startup.tsx
+msgid "Papa"
+msgstr "Papa"
+
+#: src/pages/settings/Logs.tsx
+msgid "Par"
+msgstr "Door"
+
+#: src/pages/settings/Stats.tsx
+msgid "Par bien"
+msgstr "Per woning"
+
+#: src/pages/settings/Ical.tsx
+msgid "Par exemple : Airbnb, le Moulin"
+msgstr "Bijvoorbeeld: Airbnb, de Molen"
+
+#: src/pages/settings/Tarifs.tsx
+msgid "Par exemple : Été, Vacances de Noël"
+msgstr "Bijvoorbeeld: Zomer, Kerstvakantie"
+
+#: src/pages/settings/Domain.tsx
+msgid "Par exemple : La Maison C"
+msgstr "Bijvoorbeeld: Huis C"
+
+#: src/pages/Cleaning.tsx
+msgid "Par exemple : Martine"
+msgstr "Bijvoorbeeld: Martine"
+
+#: src/pages/settings/Options.tsx
+msgid "Par exemple : Panier petit-déjeuner"
+msgstr "Bijvoorbeeld: Ontbijtmand"
+
+#: src/pages/settings/Options.tsx
+msgid "par exemple : panier, séance"
+msgstr "bijvoorbeeld: mand, sessie"
+
+#: src/pages/settings/Options.tsx
+msgid "par nuit"
+msgstr "per nacht"
+
+#: src/pages/settings/Options.tsx
+msgid "par personne"
+msgstr "per persoon"
+
+#: src/pages/settings/Options.tsx
+msgid "par personne et par nuit"
+msgstr "per persoon en per nacht"
+
+#: src/pages/settings/Domain.tsx
+msgid "Par personne et par nuit (€)"
+msgstr "Per persoon en per nacht (€)"
+
+#: src/pages/settings/Options.tsx
+msgid "par séjour"
+msgstr "per verblijf"
+
+#: src/booking/BookingPanel.tsx
+#: src/lib/derive.ts
+msgid "par téléphone"
+msgstr "telefonisch"
+
+#. placeholder {0}: year - 1
+#: src/pages/settings/Stats.tsx
+msgid "Part des nuits occupées, en %. Le trait gris marque {0}."
+msgstr "Aandeel bezette nachten, in %. De grijze lijn toont {0}."
+
+#: src/pages/Today.tsx
+msgid "Partent"
+msgstr "Vertrekken"
+
+#: src/pages/settings/Logs.tsx
+msgid "parti"
+msgstr "vertrokken"
+
+#: src/pages/settings/Tarifs.tsx
+msgid "Partie des prix"
+msgstr "Deel van de prijzen"
+
+#: src/messages/TemplateChips.tsx
+msgid "Partir d'un modèle"
+msgstr "Vertrekken van een sjabloon"
+
+#: src/ui/kit.tsx
+msgid "Partir sans enregistrer"
+msgstr "Weggaan zonder op te slaan"
+
+#: src/ui/kit.tsx
+msgid "Partir sans enregistrer ?"
+msgstr "Weggaan zonder op te slaan?"
+
+#: src/pages/Today.tsx
+msgid "Pas d'arrivée prévue ensuite."
+msgstr "Daarna geen aankomst gepland."
+
+#. placeholder {0}: year - 1
+#: src/pages/settings/Stats.tsx
+msgid "pas de chiffre en {0}"
+msgstr "geen cijfer in {0}"
+
+#: src/api/client.ts
+msgid "Pas de connexion avec le serveur. Vérifiez internet, puis réessayez."
+msgstr "Geen verbinding met de server. Kijk uw internet na en probeer opnieuw."
+
+#: src/booking/BookingPanel.tsx
+msgid "Pas de mail sur cette réservation : le message s'affichera seulement sur la page du client."
+msgstr "Geen mail bij deze reservering: het bericht verschijnt alleen op de pagina van de klant."
+
+#: src/calendar/BlockPanel.tsx
+msgid "Pas de motif noté."
+msgstr "Geen reden genoteerd."
+
+#: src/pages/settings/Tarifs.tsx
+msgid "Pas de nuit coincée entre deux séjours, pas de dates proches à brader, pas de férié à relever dans le mois qui vient."
+msgstr "Geen nacht tussen twee verblijven in, geen nabije data om af te prijzen, geen feestdag om te verhogen in de komende maand."
+
+#: src/calendar/Grid.tsx
+#: src/pages/settings/Tarifs.tsx
+msgid "pas de prix"
+msgstr "geen prijs"
+
+#: src/pages/settings/ChannelPrices.tsx
+msgid "pas de remise"
+msgstr "geen korting"
+
+#: src/pages/Messages.tsx
+msgid "Pas de réservation liée chez nous pour ce message."
+msgstr "Geen gekoppelde reservering bij ons voor dit bericht."
+
+#. placeholder {0}: message.fromEmail
+#: src/pages/Messages.tsx
+msgid "Pas de réservation liée. {0}"
+msgstr "Geen gekoppelde reservering. {0}"
+
+#: src/pages/settings/Payments.tsx
+msgid "pas encore"
+msgstr "nog niet"
+
+#: src/pages/settings/Tarifs.tsx
+msgid "Pas encore de prix de base : ce bien ne se vend pas."
+msgstr "Nog geen basisprijs: deze woning wordt niet verhuurd."
+
+#: src/pages/settings/Channels.tsx
+msgid "pas encore relié"
+msgstr "nog niet gekoppeld"
+
+#. placeholder {0}: a.state.text
+#. placeholder {0}: send.state.text
+#: src/booking/BookingPanel.tsx
+#: src/pages/Messages.tsx
+msgid "Pas envoyé. {0} Votre texte est gardé."
+msgstr "Niet verstuurd. {0} Uw tekst is bewaard."
+
+#: src/pages/settings/Logs.tsx
+msgid "pas parti"
+msgstr "niet vertrokken"
+
+#: src/pages/Bookings.tsx
+msgid "Passées"
+msgstr "Voorbij"
+
+#: src/pages/settings/Stats.tsx
+msgid "Passent à l'étape"
+msgstr "Gaan door naar de stap"
+
+#: src/sale/SaleFlow.tsx
+msgid "payé avant l'enregistrement"
+msgstr "betaald voor de registratie"
+
+#: src/pages/Bookings.tsx
+msgid "Payée"
+msgstr "Betaald"
+
+#: src/pages/settings/Clients.tsx
+msgid "Pays"
+msgstr "Land"
+
+#. placeholder {0}: u.name
+#: src/pages/settings/Tarifs.tsx
+msgid "Pendant cette saison, {0} garde son prix de base."
+msgstr "Tijdens dit seizoen behoudt {0} zijn basisprijs."
+
+#: src/pages/Bookings.tsx
+msgid "Période"
+msgstr "Periode"
+
+#: src/calendar/CalendarView.tsx
+msgid "Période précédente"
+msgstr "Vorige periode"
+
+#: src/calendar/CalendarView.tsx
+msgid "Période suivante"
+msgstr "Volgende periode"
+
+#: src/pages/Today.tsx
+msgid "Personne aujourd'hui."
+msgstr "Vandaag niemand."
+
+#: src/pages/Today.tsx
+msgid "Personne n'arrive ni ne part aujourd'hui. Le calendrier montre les semaines à venir."
+msgstr "Vandaag komt niemand aan en vertrekt niemand. De kalender toont de komende weken."
+
+#: src/booking/Register.tsx
+msgid "Personne n'est encore inscrit. La saisie se fait à l'arrivée, pièces d'identité en main."
+msgstr "Nog niemand ingeschreven. De inschrijving gebeurt bij aankomst, met de identiteitsbewijzen bij de hand."
+
+#: src/pages/settings/Stats.tsx
+msgid "Personnes"
+msgstr "Personen"
+
+#: src/pages/Settings.tsx
+msgid "Personnes hébergées, export pour la police"
+msgstr "Gehuisveste personen, export voor de politie"
+
+#: src/pages/Settings.tsx
+#: src/pages/settings/Accounts.tsx
+msgid "Personnes qui ont accès"
+msgstr "Personen met toegang"
+
+#: src/pages/settings/Domain.tsx
+msgid "Personnes, au plus"
+msgstr "Personen, maximaal"
+
+#: src/pages/settings/Domain.tsx
+msgid "Personnes, en temps normal"
+msgstr "Personen, normaal"
+
+#: src/pages/settings/Domain.tsx
+msgid "Photo de secours (adresse)"
+msgstr "Reservefoto (adres)"
+
+#: src/pages/settings/Domain.tsx
+msgid "Photos"
+msgstr "Foto's"
+
+#: src/booking/Register.tsx
+msgid "Pièce d'identité"
+msgstr "Identiteitsbewijs"
+
+#: src/pages/Reviews.tsx
+#: src/pages/settings/Channels.tsx
+msgid "plateforme"
+msgstr "platform"
+
+#: src/pages/settings/ChannelPrices.tsx
+#: src/pages/settings/Channels.tsx
+msgid "Plateforme"
+msgstr "Platform"
+
+#: src/booking/BookingPanel.tsx
+#: src/ui/kit.tsx
+msgid "Plus"
+msgstr "Meer"
+
+#: src/pages/Cleaning.tsx
+msgid "Pour"
+msgstr "Voor"
+
+#. placeholder {0}: w.owner(i.owner)
+#: src/pages/settings/Startup.tsx
+msgid "pour {0}"
+msgstr "voor {0}"
+
+#. placeholder {0}: w.owner(item.owner)
+#: src/pages/settings/Startup.tsx
+msgid "Pour {0}."
+msgstr "Voor {0}."
+
+#: src/pages/settings/Stats.tsx
+msgid "Pour décider"
+msgstr "Om te beslissen"
+
+#: src/calendar/Weeks.tsx
+msgid "Pour la famille, des travaux ou une autre raison."
+msgstr "Voor de familie, werken of een andere reden."
+
+#: src/pages/settings/Ical.tsx
+msgid "Pour les sites qui ne passent pas par Beds24 : chacun lit nos dates, et nous lisons les siennes. Le délai côté Airbnb est d'environ deux heures."
+msgstr "Voor sites die niet via Beds24 gaan: elk leest onze data, en wij lezen de zijne. De vertraging bij Airbnb is ongeveer twee uur."
+
+#: src/pages/settings/Templates.tsx
+msgid "Pour quels gîtes"
+msgstr "Voor welke vakantiewoningen"
+
+#: src/pages/Cleaning.tsx
+msgid "Pour qui"
+msgstr "Voor wie"
+
+#: src/pages/settings/Logs.tsx
+msgid "Pour retrouver qui a fait quoi, et ce qui a été écrit aux clients."
+msgstr "Om terug te vinden wie wat heeft gedaan, en wat er aan klanten geschreven is."
+
+#: src/pages/settings/Domain.tsx
+msgid "Pour un fichier déjà sur le site (dossier des images, préparé par le script d'optimisation)."
+msgstr "Voor een bestand dat al op de site staat (map met afbeeldingen, voorbereid door het optimalisatiescript)."
+
+#: src/calendar/Weeks.tsx
+msgid "Pourquoi ?"
+msgstr "Waarom?"
+
+#: src/calendar/PricePanel.tsx
+msgid "Pourquoi ? (travaux, famille…)"
+msgstr "Waarom? (werken, familie…)"
+
+#: src/pages/settings/Tarifs.tsx
+msgid "Première nuit"
+msgstr "Eerste nacht"
+
+#: src/booking/Register.tsx
+#: src/pages/settings/Clients.tsx
+#: src/sale/SaleFlow.tsx
+msgid "Prénom"
+msgstr "Voornaam"
+
+#: src/lib/templates.ts
+msgid "prénom du client"
+msgstr "voornaam van de klant"
+
+#: src/pages/settings/Logs.tsx
+msgid "préparé, envoi coupé"
+msgstr "voorbereid, versturen uitgeschakeld"
+
+#: src/sale/SaleFlow.tsx
+msgid "Préparer un lien de paiement par carte"
+msgstr "Een betaallink per kaart voorbereiden"
+
+#: src/pages/settings/Import.tsx
+msgid "prête"
+msgstr "klaar"
+
+#: src/sale/SaleFlow.tsx
+msgid "Prix"
+msgstr "Prijs"
+
+#: src/pages/settings/Options.tsx
+msgid "Prix (€)"
+msgstr "Prijs (€)"
+
+#. placeholder {0}: x.unit.name
+#: src/pages/settings/Tarifs.tsx
+msgid "Prix {year}, {0}"
+msgstr "Prijzen {year}, {0}"
+
+#: src/pages/settings/Tarifs.tsx
+msgid "Prix = somme des deux maisons : rien à régler ici."
+msgstr "Prijs = som van de twee huizen: hier niets in te stellen."
+
+#. placeholder {0}: eur(firstDay.priceCents)
+#. placeholder {1}: firstDay.minNights ? t`, au moins ${firstDay.minNights} nuits` : ""
+#: src/calendar/Weeks.tsx
+msgid "Prix actuel : {0} la nuit{1}."
+msgstr "Huidige prijs: {0} per nacht{1}."
+
+#: src/pages/settings/Logs.tsx
+msgid "prix changé"
+msgstr "prijs gewijzigd"
+
+#: src/pages/settings/Logs.tsx
+msgid "prix créé"
+msgstr "prijs aangemaakt"
+
+#: src/pages/settings/Tarifs.tsx
+msgid "Prix de base"
+msgstr "Basisprijs"
+
+#: src/pages/Settings.tsx
+msgid "Prix de base, saisons, prix fixés à la main, l'année en couleurs"
+msgstr "Basisprijs, seizoenen, met de hand vastgelegde prijzen, het jaar in kleuren"
+
+#: src/pages/settings/Domain.tsx
+msgid "Prix de ce bien"
+msgstr "Prijs van deze woning"
+
+#: src/calendar/PricePanel.tsx
+#: src/pages/settings/Tarifs.tsx
+msgid "Prix de la nuit (€)"
+msgstr "Prijs per nacht (€)"
+
+#. placeholder {0}: eur(qd.quote.totalCents)
+#. placeholder {1}: eur(b.paidCents)
+#: src/booking/BookingPanel.tsx
+msgid "Prix des nuits sur ces dates : {0}, hors options déjà vendues (déjà payé : {1}). Le total exact s'affiche après l'enregistrement."
+msgstr "Prijs van de nachten op deze data: {0}, zonder al verkochte opties (al betaald: {1}). Het exacte totaal verschijnt na het opslaan."
+
+#: src/pages/settings/Tarifs.tsx
+msgid "Prix du jour"
+msgstr "Prijs van de dag"
+
+#. placeholder {0}: mult(l.multiplier)
+#. placeholder {1}: pctTxt(l.markupPct)
+#: src/pages/settings/ChannelPrices.tsx
+msgid "prix du site × {0} (+ {1} %)"
+msgstr "prijs van de site × {0} (+ {1} %)"
+
+#: src/pages/settings/Tarifs.tsx
+msgid "Prix envoyés à Airbnb et Booking"
+msgstr "Prijzen naar Airbnb en Booking"
+
+#: src/pages/settings/Channels.tsx
+msgid "Prix envoyés aux plateformes"
+msgstr "Prijzen naar de platformen"
+
+#: src/calendar/CalendarView.tsx
+msgid "Prix et minimum"
+msgstr "Prijs en minimum"
+
+#: src/pages/Settings.tsx
+#: src/pages/settings/Tarifs.tsx
+msgid "Prix et saisons"
+msgstr "Prijzen en seizoenen"
+
+#: src/pages/Settings.tsx
+msgid "Prix et ventes"
+msgstr "Prijzen en verkoop"
+
+#: src/pages/settings/Logs.tsx
+msgid "prix fixé à la main"
+msgstr "prijs met de hand vastgelegd"
+
+#: src/pages/settings/Tarifs.tsx
+msgid "Prix fixés à la main"
+msgstr "Met de hand vastgelegde prijzen"
+
+#: src/pages/settings/Stats.tsx
+msgid "Prix moyen d'une nuit"
+msgstr "Gemiddelde prijs per nacht"
+
+#: src/pages/settings/ChannelPrices.tsx
+msgid "Prix par plateforme"
+msgstr "Prijs per platform"
+
+#: src/pages/settings/Channels.tsx
+msgid "Prix par plateforme en place : Beds24 ajoute à chaque plateforme son pourcentage ci-dessous. Le bouton « Appliquer » ne compte plus tant qu'ils sont en place."
+msgstr "Prijs per platform actief: Beds24 voegt aan elk platform zijn percentage hieronder toe. De knop « Toepassen » telt niet meer zolang die actief zijn."
+
+#: src/calendar/Grid.tsx
+msgid "Prix souligné : changé à la main"
+msgstr "Onderstreepte prijs: met de hand gewijzigd"
+
+#: src/pages/settings/Logs.tsx
+msgid "prix supprimé"
+msgstr "prijs verwijderd"
+
+#: src/calendar/Grid.tsx
+msgid "Prix, nuits min."
+msgstr "Prijs, min. nachten"
+
+#: src/pages/settings/Ical.tsx
+msgid "problème"
+msgstr "probleem"
+
+#: src/pages/Cleaning.tsx
+msgid "Prochaine arrivée"
+msgstr "Volgende aankomst"
+
+#. placeholder {0}: c.next.persons
+#. placeholder {1}: c.next.checkin === c.date ? t`aujourd'hui` : longDate(c.next.checkin)
+#: src/pages/Today.tsx
+msgid "Prochains voyageurs : {0} personnes, {1}."
+msgstr "Volgende gasten: {0} personen, {1}."
+
+#: src/pages/settings/ChannelPrices.tsx
+msgid "Promotions Airbnb"
+msgstr "Airbnb-promoties"
+
+#: src/pages/Settings.tsx
+#: src/pages/settings/ChannelPrices.tsx
+#: src/pages/settings/Channels.tsx
+msgid "Promotions Airbnb et prix par plateforme"
+msgstr "Airbnb-promoties en prijs per platform"
+
+#: src/pages/settings/Templates.tsx
+msgid "Proposé quand on répond"
+msgstr "Voorgesteld bij het antwoorden"
+
+#: src/pages/settings/Options.tsx
+msgid "Proposée aux clients"
+msgstr "Aan klanten voorgesteld"
+
+#: src/lib/suggestions.ts
+msgid "Proposer + {STRONG_DATE_PCT} %"
+msgstr "+ {STRONG_DATE_PCT} % voorstellen"
+
+#: src/lib/suggestions.ts
+msgid "Proposer − {LAST_MINUTE_PCT} %"
+msgstr "− {LAST_MINUTE_PCT} % voorstellen"
+
+#: src/pages/settings/Options.tsx
+msgid "Quantité au plus"
+msgstr "Maximale hoeveelheid"
+
+#: src/calendar/Weeks.tsx
+msgid "Que faire ?"
+msgstr "Wat doen?"
+
+#: src/api/client.ts
+msgid "Quelque chose n'a pas marché. Réessayez."
+msgstr "Er ging iets mis. Probeer opnieuw."
+
+#: src/pages/Cleaning.tsx
+msgid "Quels gîtes"
+msgstr "Welke vakantiewoningen"
+
+#: src/pages/Cleaning.tsx
+msgid "Qui"
+msgstr "Wie"
+
+#. placeholder {0}: c.task.assignee
+#: src/pages/Today.tsx
+msgid "Qui : {0}"
+msgstr "Wie: {0}"
+
+#: src/pages/Settings.tsx
+msgid "Qui a fait quoi, mails envoyés aux clients"
+msgstr "Wie wat heeft gedaan, mails aan klanten"
+
+#: src/pages/Cleaning.tsx
+msgid "Qui s'en occupe"
+msgstr "Wie het doet"
+
+#: src/pages/Cleaning.tsx
+msgid "Qui s'en occupe, note"
+msgstr "Wie het doet, notitie"
+
+#. placeholder {0}: m.errorDetail
+#: src/pages/settings/Logs.tsx
+msgid "Raison : {0}"
+msgstr "Reden: {0}"
+
+#: src/pages/settings/Options.tsx
+#: src/pages/settings/Templates.tsx
+msgid "Rang dans la liste"
+msgstr "Plaats in de lijst"
+
+#: src/pages/settings/Tarifs.tsx
+msgid "Ranger selon la règle"
+msgstr "Volgens de regel ordenen"
+
+#: src/pages/settings/Channels.tsx
+msgid "Rapatrier les réservations"
+msgstr "De reserveringen ophalen"
+
+#: src/pages/settings/Logs.tsx
+msgid "rappel du solde"
+msgstr "saldoherinnering"
+
+#: src/booking/BookingPanel.tsx
+#: src/pages/settings/Logs.tsx
+msgid "rappel du solde envoyé"
+msgstr "saldoherinnering verstuurd"
+
+#: src/pages/settings/Domain.tsx
+msgid "Rattacher"
+msgstr "Koppelen"
+
+#: src/pages/settings/Domain.tsx
+msgid "Rattacher une photo déjà déposée"
+msgstr "Een al geplaatste foto koppelen"
+
+#: src/pages/settings/Clients.tsx
+msgid "Rechercher un client"
+msgstr "Een klant zoeken"
+
+#: src/pages/Bookings.tsx
+msgid "Rechercher une réservation"
+msgstr "Een reservering zoeken"
+
+#: src/calendar/Weeks.tsx
+msgid "Recommencer"
+msgstr "Opnieuw beginnen"
+
+#: src/booking/Register.tsx
+msgid "Recopiez chaque pièce d'identité. Un enregistrement est définitif : une erreur se corrige ensuite par une nouvelle ligne."
+msgstr "Neem elk identiteitsbewijs over. Een registratie is definitief: een fout verbetert u daarna met een nieuwe regel."
+
+#: src/pages/settings/Payments.tsx
+msgid "reçu"
+msgstr "ontvangen"
+
+#: src/pages/settings/Payments.tsx
+msgid "Reçu le"
+msgstr "Ontvangen op"
+
+#: src/booking/BookingPanel.tsx
+msgid "Reçu par"
+msgstr "Ontvangen door"
+
+#: src/pages/settings/Payments.tsx
+msgid "Reçus"
+msgstr "Ontvangen"
+
+#: src/booking/BookingPanel.tsx
+msgid "Référence"
+msgstr "Referentie"
+
+#: src/booking/BookingPanel.tsx
+msgid "registre"
+msgstr "register"
+
+#: src/pages/Settings.tsx
+#: src/pages/settings/Register.tsx
+msgid "Registre des voyageurs"
+msgstr "Gastenregister"
+
+#: src/pages/settings/Logs.tsx
+msgid "registre exporté"
+msgstr "register geëxporteerd"
+
+#: src/pages/settings/Domain.tsx
+msgid "réglages"
+msgstr "instellingen"
+
+#: src/pages/Settings.tsx
+#: src/shell/Shell.tsx
+#: src/ui/kit.tsx
+msgid "Réglages"
+msgstr "Instellingen"
+
+#: src/pages/settings/Logs.tsx
+msgid "réglages du domaine changés"
+msgstr "instellingen van het domein gewijzigd"
+
+#. placeholder {0}: wrong.map((w) => t`${w.longer.name} passe devant ${w.shorter.name}`).join(" ; ")
+#: src/pages/settings/Tarifs.tsx
+msgid "Réglé dans l'ancien écran, l'ordre ne suit pas la règle : {0}. Rangez pour que la plus courte l'emporte."
+msgstr "Ingesteld in het oude scherm, de volgorde volgt de regel niet: {0}. Orden zodat het kortste voorrang krijgt."
+
+#: src/pages/settings/Channels.tsx
+msgid "Régler les promotions et les prix par plateforme"
+msgstr "De promoties en de prijs per platform instellen"
+
+#: src/pages/settings/Startup.tsx
+msgid "réglés"
+msgstr "betaald"
+
+#. placeholder {0}: u.beds24RoomId
+#: src/pages/settings/Channels.tsx
+msgid "relié (chambre n° {0})"
+msgstr "gekoppeld (kamer nr. {0})"
+
+#: src/pages/settings/Ical.tsx
+msgid "Relire maintenant"
+msgstr "Nu opnieuw lezen"
+
+#. placeholder {0}: bad.join(", ")
+#: src/pages/settings/Ical.tsx
+msgid "Relu, sauf : {0} (voir leur fiche)."
+msgstr "Opnieuw gelezen, behalve: {0} (zie hun fiche)."
+
+#: src/pages/settings/Payments.tsx
+msgid "Remboursement"
+msgstr "Terugbetaling"
+
+#: src/pages/Messages.tsx
+msgid "Remettre à répondre"
+msgstr "Opnieuw op te beantwoorden zetten"
+
+#: src/pages/settings/ChannelPrices.tsx
+#: src/pages/settings/Promotions.tsx
+msgid "Remise"
+msgstr "Korting"
+
+#: src/pages/settings/Promotions.tsx
+msgid "Remise (%)"
+msgstr "Korting (%)"
+
+#: src/pages/settings/Promotions.tsx
+msgid "Remise (€)"
+msgstr "Korting (€)"
+
+#: src/pages/settings/Promotions.tsx
+msgid "Remise active"
+msgstr "Actieve korting"
+
+#: src/pages/settings/Logs.tsx
+msgid "remise créée"
+msgstr "korting aangemaakt"
+
+#: src/pages/settings/Promotions.tsx
+msgid "Remise en pourcentage ou en euros"
+msgstr "Korting in procent of in euro"
+
+#: src/pages/settings/Logs.tsx
+msgid "remise modifiée"
+msgstr "korting gewijzigd"
+
+#: src/pages/settings/ChannelPrices.tsx
+msgid "Remise pour un tarif sans remboursement"
+msgstr "Korting voor een tarief zonder terugbetaling"
+
+#: src/pages/settings/Logs.tsx
+msgid "remise supprimée"
+msgstr "korting verwijderd"
+
+#: src/pages/settings/Promotions.tsx
+msgid "Remises automatiques"
+msgstr "Automatische kortingen"
+
+#: src/pages/Settings.tsx
+#: src/pages/settings/Promotions.tsx
+msgid "Remises et codes promo"
+msgstr "Kortingen en promotiecodes"
+
+#: src/pages/Settings.tsx
+msgid "Remises long séjour, réservation tôt, dernière minute ; un prix propre à chaque plateforme"
+msgstr "Kortingen voor lang verblijf, vroeg boeken, last minute; een eigen prijs per platform"
+
+#: src/pages/settings/Channels.tsx
+msgid "Remises long séjour, réservation tôt, dernière minute et non remboursable sur Airbnb ; un prix propre à chaque plateforme, calculé par Beds24 avec les pourcentages ci-dessus."
+msgstr "Kortingen voor lang verblijf, vroeg boeken, last minute en niet-terugbetaalbaar op Airbnb; een eigen prijs per platform, door Beds24 berekend met de percentages hierboven."
+
+#: src/pages/settings/Stats.tsx
+msgid "Remplissage"
+msgstr "Bezetting"
+
+#: src/pages/settings/Stats.tsx
+msgid "Remplissage mois par mois"
+msgstr "Bezetting per maand"
+
+#. placeholder {0}: year - 1
+#: src/pages/settings/Stats.tsx
+msgid "Remplissage par mois en {year}, comparé à {0}"
+msgstr "Bezetting per maand in {year}, vergeleken met {0}"
+
+#: src/pages/Settings.tsx
+msgid "Remplissage, revenus, comparaison avec l'an passé, exports"
+msgstr "Bezetting, inkomsten, vergelijking met vorig jaar, exports"
+
+#: src/pages/settings/Accounts.tsx
+msgid "Rendre l'accès"
+msgstr "De toegang teruggeven"
+
+#. placeholder {0}: u.username
+#: src/pages/settings/Accounts.tsx
+msgid "Rendre l'accès à {0} ?"
+msgstr "De toegang teruggeven aan {0}?"
+
+#: src/pages/settings/ChannelPrices.tsx
+msgid "Renvoyer à Beds24"
+msgstr "Opnieuw naar Beds24 sturen"
+
+#: src/booking/BookingPanel.tsx
+msgid "Renvoyer la confirmation"
+msgstr "De bevestiging opnieuw sturen"
+
+#: src/booking/BookingPanel.tsx
+msgid "Renvoyer la confirmation au client"
+msgstr "De bevestiging opnieuw naar de klant sturen"
+
+#: src/pages/Today.tsx
+msgid "Répondre"
+msgstr "Antwoorden"
+
+#: src/pages/Reviews.tsx
+msgid "Répondre dans Beds24"
+msgstr "Antwoorden in Beds24"
+
+#: src/pages/settings/Domain.tsx
+msgid "Répondre tout de suite par un accusé de réception"
+msgstr "Meteen antwoorden met een ontvangstbevestiging"
+
+#: src/pages/Settings.tsx
+msgid "Reprendre des réservations d'un fichier"
+msgstr "Reserveringen overnemen uit een bestand"
+
+#: src/pages/settings/Payments.tsx
+msgid "Réservation"
+msgstr "Reservering"
+
+#. placeholder {0}: channelName(b)
+#: src/booking/BookingPanel.tsx
+msgid "Réservation {0}"
+msgstr "Reservering {0}"
+
+#: src/booking/BookingPanel.tsx
+#: src/pages/settings/Logs.tsx
+msgid "réservation annulée"
+msgstr "reservering geannuleerd"
+
+#: src/booking/BookingPanel.tsx
+msgid "Réservation annulée."
+msgstr "Reservering geannuleerd."
+
+#: src/booking/BookingPanel.tsx
+#: src/pages/settings/Logs.tsx
+msgid "réservation confirmée"
+msgstr "reservering bevestigd"
+
+#: src/pages/settings/Channels.tsx
+msgid "Réservation d'ici"
+msgstr "Reservering van hier"
+
+#: src/booking/BookingPanel.tsx
+#: src/pages/settings/Logs.tsx
+msgid "réservation prise par téléphone"
+msgstr "telefonische reservering"
+
+#: src/pages/settings/ChannelPrices.tsx
+#: src/pages/settings/Promotions.tsx
+msgid "Réservation tôt"
+msgstr "Vroeg boeken"
+
+#: src/pages/settings/Promotions.tsx
+msgid "Réservation tôt (longtemps avant l'arrivée)"
+msgstr "Vroeg boeken (lang voor aankomst)"
+
+#: src/pages/Bookings.tsx
+#: src/pages/settings/Stats.tsx
+#: src/shell/Shell.tsx
+msgid "Réservations"
+msgstr "Reserveringen"
+
+#: src/pages/settings/Channels.tsx
+msgid "réservations rapatriées"
+msgstr "reserveringen opgehaald"
+
+#: src/pages/settings/Channels.tsx
+msgid "Réservations venues des plateformes"
+msgstr "Reserveringen van de platformen"
+
+#: src/booking/BookingPanel.tsx
+msgid "Réservé"
+msgstr "Geboekt"
+
+#. placeholder {0}: p.threshold ?? 0
+#: src/pages/settings/Promotions.tsx
+msgid "réservé {0} jours ou moins avant l'arrivée"
+msgstr "{0} dagen of minder voor aankomst geboekt"
+
+#: src/calendar/Grid.tsx
+msgid "Réservé ailleurs"
+msgstr "Elders geboekt"
+
+#. placeholder {0}: p.threshold ?? 0
+#: src/pages/settings/Promotions.tsx
+msgid "réservé au moins {0} jours avant l'arrivée"
+msgstr "minstens {0} dagen voor aankomst geboekt"
+
+#: src/calendar/Weeks.tsx
+msgid "Réservé et payé"
+msgstr "Geboekt en betaald"
+
+#. placeholder {0}: channelName(b)
+#: src/pages/Today.tsx
+msgid "Réservé et payé sur {0}."
+msgstr "Geboekt en betaald op {0}."
+
+#: src/pages/Today.tsx
+msgid "Réservé par téléphone."
+msgstr "Telefonisch geboekt."
+
+#. placeholder {0}: channelName(b)
+#: src/pages/Today.tsx
+msgid "Réservé sur {0}."
+msgstr "Geboekt op {0}."
+
+#. placeholder {0}: eur(p.earlyBirdCents)
+#: src/pages/settings/ChannelPrices.tsx
+msgid "Réservé tôt : {0}"
+msgstr "Vroeg geboekt: {0}"
+
+#: src/pages/settings/Domain.tsx
+msgid "Réserver ce bien bloque aussi"
+msgstr "Deze woning boeken blokkeert ook"
+
+#. placeholder {0}: eur(balance)
+#: src/pages/Bookings.tsx
+msgid "reste {0}"
+msgstr "nog {0}"
+
+#. placeholder {0}: eur(balance)
+#: src/booking/BookingPanel.tsx
+msgid "Reste à payer : {0}. Indiquez ce que vous avez reçu."
+msgstr "Nog te betalen: {0}. Geef aan wat u ontvangen hebt."
+
+#: src/pages/Today.tsx
+msgid "Reste à payer à l'arrivée :"
+msgstr "Nog te betalen bij aankomst:"
+
+#: src/shell/Shell.tsx
+msgid "Rester sur ce domaine"
+msgstr "Op dit domein blijven"
+
+#: src/ui/kit.tsx
+msgid "Rester sur la page"
+msgstr "Op de pagina blijven"
+
+#: src/pages/settings/Import.tsx
+msgid "Résultat"
+msgstr "Resultaat"
+
+#: src/pages/settings/Channels.tsx
+msgid "Rétablir la liaison"
+msgstr "De koppeling herstellen"
+
+#: src/pages/settings/Channels.tsx
+msgid "Rétablir la liaison avec un nouveau code"
+msgstr "De koppeling herstellen met een nieuwe code"
+
+#: src/pages/Settings.tsx
+msgid "Retenu sur cet appareil seulement."
+msgstr "Alleen op dit toestel onthouden."
+
+#: src/pages/Settings.tsx
+msgid "Retenu sur cet appareil seulement. Sans choix, l'écran suit la langue du navigateur."
+msgstr "Alleen op dit toestel onthouden. Zonder keuze volgt het scherm de taal van de browser."
+
+#: src/pages/settings/Ical.tsx
+msgid "Retirer"
+msgstr "Verwijderen"
+
+#. placeholder {0}: feed?.name ?? ""
+#: src/pages/settings/Ical.tsx
+msgid "Retirer {0} ?"
+msgstr "{0} verwijderen?"
+
+#: src/pages/settings/Ical.tsx
+msgid "Retirer ce calendrier"
+msgstr "Deze kalender verwijderen"
+
+#: src/pages/Messages.tsx
+msgid "Retour à la liste"
+msgstr "Terug naar de lijst"
+
+#: src/sale/SaleFlow.tsx
+msgid "Retour au prix"
+msgstr "Terug naar de prijs"
+
+#: src/pages/settings/Logs.tsx
+msgid "retour au prix de saison"
+msgstr "terug naar de seizoensprijs"
+
+#: src/pages/settings/ChannelPrices.tsx
+msgid "Revenir au même prix"
+msgstr "Terug naar dezelfde prijs"
+
+#: src/pages/settings/ChannelPrices.tsx
+msgid "Revenir au même prix partout"
+msgstr "Overal terug naar dezelfde prijs"
+
+#: src/pages/settings/ChannelPrices.tsx
+msgid "Revenir au même prix partout ?"
+msgstr "Overal terug naar dezelfde prijs?"
+
+#: src/calendar/PricePanel.tsx
+#: src/pages/settings/Tarifs.tsx
+msgid "Revenir au prix de saison"
+msgstr "Terug naar de seizoensprijs"
+
+#: src/pages/settings/Stats.tsx
+msgid "Revenus"
+msgstr "Inkomsten"
+
+#: src/pages/settings/Channels.tsx
+msgid "Revu"
+msgstr "Opnieuw gezien"
+
+#: src/pages/settings/Tarifs.tsx
+msgid "Rien à suggérer"
+msgstr "Niets voor te stellen"
+
+#: src/pages/Today.tsx
+msgid "Rien aujourd'hui."
+msgstr "Vandaag niets."
+
+#: src/pages/settings/Logs.tsx
+msgid "Rien d'écrit pour l'instant"
+msgstr "Nog niets geschreven"
+
+#: src/pages/settings/Tarifs.tsx
+msgid "Rien de fixé à la main"
+msgstr "Niets met de hand vastgelegd"
+
+#: src/pages/Today.tsx
+msgid "Rien de prévu."
+msgstr "Niets gepland."
+
+#. placeholder {0}: failures.join(" ")
+#: src/calendar/PricePanel.tsx
+msgid "Rien n'a été changé. {0}"
+msgstr "Er is niets gewijzigd. {0}"
+
+#: src/pages/settings/Channels.tsx
+msgid "Rouvrir"
+msgstr "Heropenen"
+
+#: src/pages/settings/Tarifs.tsx
+msgid "S'applique à toutes les nuits qui ne sont ni dans une saison, ni fixées à la main."
+msgstr "Geldt voor alle nachten die niet in een seizoen vallen en niet met de hand vastgelegd zijn."
+
+#: src/pages/settings/Tarifs.tsx
+msgid "Saison"
+msgstr "Seizoen"
+
+#: src/pages/settings/Logs.tsx
+msgid "saison créée"
+msgstr "seizoen aangemaakt"
+
+#: src/pages/settings/Logs.tsx
+msgid "saison modifiée"
+msgstr "seizoen gewijzigd"
+
+#: src/pages/settings/Tarifs.tsx
+msgid "Saison sans nom"
+msgstr "Seizoen zonder naam"
+
+#: src/pages/settings/Logs.tsx
+msgid "saison supprimée"
+msgstr "seizoen verwijderd"
+
+#: src/pages/settings/Tarifs.tsx
+msgid "Saisons"
+msgstr "Seizoenen"
+
+#: src/pages/settings/Tarifs.tsx
+msgid "Saisons passées"
+msgstr "Voorbije seizoenen"
+
+#. placeholder {0}: longDate(b.holdExpiresAt.slice(0, 10))
+#. placeholder {0}: longDate(h.holdExpiresAt.slice(0, 10))
+#: src/booking/BookingPanel.tsx
+#: src/pages/Today.tsx
+msgid "Sans arrhes reçues, les dates se libèrent le {0}."
+msgstr "Zonder ontvangen voorschot komen de data vrij op {0}."
+
+#. placeholder {0}: s.unlinked.join(", ")
+#: src/pages/settings/ChannelPrices.tsx
+msgid "Sans équivalent chez Beds24, non envoyé : {0}."
+msgstr "Geen tegenhanger bij Beds24, niet verstuurd: {0}."
+
+#: src/pages/settings/Startup.tsx
+msgid "Sans objet"
+msgstr "Niet van toepassing"
+
+#. placeholder {0}: eur(edit.fallbackCents)
+#: src/pages/settings/Tarifs.tsx
+msgid "Sans prix fixé à la main : {0} la nuit."
+msgstr "Zonder met de hand vastgelegde prijs: {0} per nacht."
+
+#: src/pages/settings/Ical.tsx
+msgid "sans problème"
+msgstr "geen probleem"
+
+#: src/pages/settings/Payments.tsx
+msgid "Sans suite"
+msgstr "Zonder gevolg"
+
+#: src/pages/Settings.tsx
+msgid "Sauna, bain chaud, linge, petit-déjeuner…"
+msgstr "Sauna, hottub, linnen, ontbijt…"
+
+#: src/pages/Login.tsx
+msgid "Se connecter"
+msgstr "Aanmelden"
+
+#: src/pages/Settings.tsx
+msgid "Se déconnecter"
+msgstr "Afmelden"
+
+#: src/pages/settings/Stats.tsx
+msgid "Séjour cherché"
+msgstr "Gezocht verblijf"
+
+#: src/pages/settings/Payments.tsx
+msgid "Séjour entier"
+msgstr "Volledig verblijf"
+
+#: src/booking/BookingPanel.tsx
+#: src/pages/settings/Logs.tsx
+msgid "séjour modifié"
+msgstr "verblijf gewijzigd"
+
+#: src/pages/settings/ChannelPrices.tsx
+msgid "Séjour sur votre site"
+msgstr "Verblijf op uw site"
+
+#. placeholder {0}: bookings.length
+#: src/pages/settings/Clients.tsx
+msgid "Séjours ({0})"
+msgstr "Verblijven ({0})"
+
+#: src/pages/settings/ChannelPrices.tsx
+msgid "Séjours longs"
+msgstr "Lange verblijven"
+
+#. placeholder {0}: dayNum(s)
+#. placeholder {1}: monthName(s) !== monthName(e) ? ` ${monthName(s)}` : ""
+#. placeholder {2}: dayNum(e) === 1 ? "1er" : dayNum(e)
+#. placeholder {3}: monthName(e)
+#: src/calendar/Weeks.tsx
+msgid "Semaine du {0}{1} au {2} {3}"
+msgstr "Week van {0}{1} tot {2} {3}"
+
+#: src/calendar/CalendarView.tsx
+msgid "Semaines"
+msgstr "Weken"
+
+#: src/pages/settings/Domain.tsx
+msgid "sert aussi pour la taxe de séjour"
+msgstr "dient ook voor de verblijfsbelasting"
+
+#: src/pages/settings/Domain.tsx
+msgid "servie seulement si le bien n'a pas de galerie"
+msgstr "alleen gebruikt als de woning geen galerij heeft"
+
+#: src/pages/settings/Tarifs.tsx
+msgid "Ses prix disparaissent pour tous les biens ; ces jours-là reviennent au prix de base (ou à une autre saison)."
+msgstr "De prijzen verdwijnen voor alle woningen; die dagen krijgen opnieuw de basisprijs (of een ander seizoen)."
+
+#: src/pages/settings/Domain.tsx
+msgid "Ses propres prix"
+msgstr "Eigen prijzen"
+
+#: src/lib/templates.ts
+msgid "signature"
+msgstr "handtekening"
+
+#: src/pages/settings/Tarifs.tsx
+msgid "Sinon, le prix de base du bien."
+msgstr "Anders de basisprijs van de woning."
+
+#: src/pages/settings/Tarifs.tsx
+msgid "Sinon, le prix de la saison qui couvre ce jour. Si deux saisons se chevauchent, la plus courte l'emporte."
+msgstr "Anders de prijs van het seizoen dat deze dag dekt. Als twee seizoenen overlappen, krijgt het kortste voorrang."
+
+#: src/sale/SaleFlow.tsx
+msgid "Sinon, le solde reste à encaisser dans la fiche."
+msgstr "Anders blijft het saldo te innen in de fiche."
+
+#: src/pages/Today.tsx
+msgid "SMS"
+msgstr "Sms"
+
+#: src/pages/settings/Domain.tsx
+msgid "soit environ {hours} h"
+msgstr "ongeveer {hours} u"
+
+#: src/booking/BookingPanel.tsx
+#: src/pages/settings/Payments.tsx
+msgid "Solde"
+msgstr "Saldo"
+
+#: src/booking/BookingPanel.tsx
+#: src/calendar/Grid.tsx
+#: src/calendar/Weeks.tsx
+#: src/lib/derive.ts
+#: src/pages/Bookings.tsx
+msgid "Solde à encaisser"
+msgstr "Saldo te innen"
+
+#: src/pages/settings/Domain.tsx
+msgid "Solde à payer, jours avant l'arrivée"
+msgstr "Saldo te betalen, dagen voor aankomst"
+
+#: src/pages/Today.tsx
+msgid "Solde en retard"
+msgstr "Saldo te laat"
+
+#: src/lib/templates.ts
+msgid "solde restant"
+msgstr "resterend saldo"
+
+#. placeholder {0}: longDate(q.balanceDueDate)
+#: src/sale/SaleFlow.tsx
+msgid "Solde, à payer avant le {0}"
+msgstr "Saldo, te betalen voor {0}"
+
+#: src/pages/Settings.tsx
+msgid "Sombre"
+msgstr "Donker"
+
+#: src/pages/settings/Tarifs.tsx
+msgid "Suggestion"
+msgstr "Suggestie"
+
+#: src/pages/settings/Tarifs.tsx
+msgid "Suggestions"
+msgstr "Suggesties"
+
+#: src/pages/settings/Promotions.tsx
+msgid "Supprimer"
+msgstr "Verwijderen"
+
+#. placeholder {0}: option?.name ?? ""
+#. placeholder {0}: template?.name ?? ""
+#: src/pages/settings/Options.tsx
+#: src/pages/settings/Templates.tsx
+msgid "Supprimer {0} ?"
+msgstr "{0} verwijderen?"
+
+#: src/pages/settings/Promotions.tsx
+msgid "Supprimer {title} ?"
+msgstr "{title} verwijderen?"
+
+#: src/pages/settings/Options.tsx
+msgid "Supprimer l'option"
+msgstr "De optie verwijderen"
+
+#: src/pages/settings/Tarifs.tsx
+msgid "Supprimer la saison"
+msgstr "Het seizoen verwijderen"
+
+#. placeholder {0}: season?.name ?? ""
+#: src/pages/settings/Tarifs.tsx
+msgid "Supprimer la saison {0} ?"
+msgstr "Het seizoen {0} verwijderen?"
+
+#: src/pages/settings/Accounts.tsx
+msgid "Supprimer le compte"
+msgstr "De account verwijderen"
+
+#. placeholder {0}: u.username
+#: src/pages/settings/Accounts.tsx
+msgid "Supprimer le compte {0} ?"
+msgstr "De account {0} verwijderen?"
+
+#: src/pages/settings/Templates.tsx
+msgid "Supprimer le modèle"
+msgstr "Het sjabloon verwijderen"
+
+#: src/pages/settings/Logs.tsx
+msgid "Sur"
+msgstr "Op"
+
+#. placeholder {0}: channelName(b)
+#: src/booking/BookingPanel.tsx
+#: src/pages/Bookings.tsx
+msgid "sur {0}"
+msgstr "op {0}"
+
+#: src/pages/settings/Domain.tsx
+msgid "Taxe de séjour"
+msgstr "Verblijfsbelasting"
+
+#: src/pages/settings/Clients.tsx
+#: src/pages/settings/Domain.tsx
+#: src/sale/SaleFlow.tsx
+msgid "Téléphone"
+msgstr "Telefoon"
+
+#. placeholder {0}: x.imported
+#. placeholder {1}: x.conflicts
+#. placeholder {2}: x.skipped
+#. placeholder {3}: x.errors
+#: src/pages/settings/Import.tsx
+msgid "Test terminé : {0} prête(s), {1} en conflit, {2} déjà là, {3} erreur(s). Rien n'a été écrit."
+msgstr "Test klaar: {0} klaar, {1} in conflict, {2} al aanwezig, {3} fout(en). Er is niets geschreven."
+
+#: src/pages/settings/Import.tsx
+msgid "Tester"
+msgstr "Testen"
+
+#: src/pages/settings/Channels.tsx
+msgid "Tester la liaison"
+msgstr "De koppeling testen"
+
+#: src/pages/settings/Templates.tsx
+msgid "Texte"
+msgstr "Tekst"
+
+#: src/pages/settings/Domain.tsx
+msgid "Texte de l'accusé de réception"
+msgstr "Tekst van de ontvangstbevestiging"
+
+#: src/pages/settings/Domain.tsx
+msgid "Texte de la photo"
+msgstr "Tekst van de foto"
+
+#: src/pages/settings/Domain.tsx
+msgid "Texte des conditions"
+msgstr "Tekst van de voorwaarden"
+
+#: src/sale/SaleFlow.tsx
+msgid "Total"
+msgstr "Totaal"
+
+#: src/booking/BookingPanel.tsx
+msgid "Total du séjour"
+msgstr "Totaal van het verblijf"
+
+#. placeholder {0}: cur.bookingsCount
+#: src/pages/settings/Stats.tsx
+msgid "Total, {0} réservation"
+msgstr "Totaal, {0} reservering"
+
+#. placeholder {0}: cur.bookingsCount
+#: src/pages/settings/Stats.tsx
+msgid "Total, {0} réservations"
+msgstr "Totaal, {0} reserveringen"
+
+#: src/pages/Cleaning.tsx
+msgid "touchez quand la maison est prête"
+msgstr "tik wanneer het huis klaar is"
+
+#: src/calendar/PricePanel.tsx
+#: src/pages/Messages.tsx
+#: src/pages/settings/Payments.tsx
+msgid "Tous"
+msgstr "Alle"
+
+#: src/booking/Register.tsx
+msgid "Tous les champs sont demandés par la loi."
+msgstr "Alle velden zijn wettelijk verplicht."
+
+#: src/pages/settings/Clients.tsx
+msgid "Tous les clients des deux domaines. La recherche lit le nom et le mail."
+msgstr "Alle klanten van de twee domeinen. De zoekopdracht leest de naam en de mail."
+
+#: src/pages/Bookings.tsx
+msgid "Tous les états"
+msgstr "Alle statussen"
+
+#: src/pages/Cleaning.tsx
+#: src/pages/settings/Templates.tsx
+msgid "tous les gîtes"
+msgstr "alle vakantiewoningen"
+
+#: src/pages/settings/Tarifs.tsx
+msgid "Tous les jours"
+msgstr "Elke dag"
+
+#. placeholder {0}: pctFr(m.channels.find((c) => c.channel === apply)?.markupPct ?? 0)
+#: src/pages/settings/Channels.tsx
+msgid "Tous les prix envoyés aux plateformes augmentent de + {0} %, pour tous les biens et toutes les dates. Ils repartent tout de suite. Le prix de votre site ne change pas."
+msgstr "Alle prijzen naar de platformen stijgen met + {0} %, voor alle woningen en alle data. Ze vertrekken meteen. De prijs van uw site verandert niet."
+
+#: src/pages/Cleaning.tsx
+#: src/pages/Settings.tsx
+#: src/pages/settings/Templates.tsx
+#: src/shell/Shell.tsx
+msgid "Tous mes gîtes"
+msgstr "Al mijn vakantiewoningen"
+
+#: src/pages/Settings.tsx
+msgid "Tout ce qui a été encaissé ou attendu"
+msgstr "Alles wat geïnd of verwacht werd"
+
+#: src/pages/settings/Ical.tsx
+msgid "Tout relire maintenant"
+msgstr "Nu alles opnieuw lezen"
+
+#: src/pages/settings/Tarifs.tsx
+msgid "Toute l'année se vend au prix de base. Créez une saison pour l'été, les vacances ou les fêtes."
+msgstr "Het hele jaar wordt tegen de basisprijs verkocht. Maak een seizoen aan voor de zomer, de vakanties of de feestdagen."
+
+#: src/pages/Bookings.tsx
+msgid "Toutes"
+msgstr "Alle"
+
+#: src/pages/settings/Tarifs.tsx
+msgid "Toutes les nuits à venir suivent les saisons et le prix de base. Pour changer un jour, touchez-le dans le calendrier."
+msgstr "Alle komende nachten volgen de seizoenen en de basisprijs. Om een dag te wijzigen, tikt u erop in de kalender."
+
+#: src/pages/settings/ChannelPrices.tsx
+msgid "Toutes les plateformes recevront de nouveau le même prix. Les calendriers repartent tout de suite."
+msgstr "Alle platformen krijgen opnieuw dezelfde prijs. De kalenders vertrekken meteen."
+
+#: src/pages/settings/Stats.tsx
+msgid "Toutes les réservations"
+msgstr "Alle reserveringen"
+
+#: src/pages/settings/Stats.tsx
+msgid "Trois lectures pour régler l'ouverture des calendriers et les prix."
+msgstr "Drie cijfers om de opening van de kalenders en de prijzen in te stellen."
+
+#: src/pages/settings/Promotions.tsx
+msgid "Type de remise"
+msgstr "Soort korting"
+
+#: src/lib/derive.ts
+msgid "un autre site"
+msgstr "een andere site"
+
+#. placeholder {0}: s.lowScore
+#: src/pages/Reviews.tsx
+msgid "Un avis sous {0} attend une réponse."
+msgstr "Een beoordeling onder {0} wacht op een antwoord."
+
+#: src/pages/settings/Channels.tsx
+msgid "un calendrier relié"
+msgstr "een gekoppelde kalender"
+
+#: src/lib/derive.ts
+msgid "un départ"
+msgstr "een vertrek"
+
+#. placeholder {0}: scope === "all" ? "" : ", pour le domaine affiché"
+#: src/pages/settings/Register.tsx
+msgid "Un fichier tableur avec les personnes dont le séjour croise ces dates{0}. L'export est noté dans le journal."
+msgstr "Een rekenbladbestand met de personen van wie het verblijf deze data kruist{0}. De export wordt in het logboek genoteerd."
+
+#: src/booking/BookingPanel.tsx
+#: src/booking/Register.tsx
+#: src/calendar/PricePanel.tsx
+#: src/calendar/Weeks.tsx
+#: src/lib/action.tsx
+#: src/pages/Cleaning.tsx
+#: src/pages/Login.tsx
+#: src/pages/Messages.tsx
+#: src/pages/settings/Accounts.tsx
+#: src/pages/settings/Channels.tsx
+#: src/pages/settings/Clients.tsx
+#: src/pages/settings/Domain.tsx
+#: src/pages/settings/Ical.tsx
+#: src/pages/settings/Import.tsx
+#: src/pages/settings/MyAccount.tsx
+#: src/pages/settings/Options.tsx
+#: src/pages/settings/Promotions.tsx
+#: src/pages/settings/Startup.tsx
+#: src/pages/settings/Tarifs.tsx
+#: src/pages/settings/Templates.tsx
+#: src/sale/SaleFlow.tsx
+#: src/ui/kit.tsx
+msgid "Un instant…"
+msgstr "Even geduld…"
+
+#: src/pages/Cleaning.tsx
+msgid "Un lien à envoyer par SMS : elle voit les ménages des deux semaines à venir et coche « fait », sans compte ni mot de passe. Aucun nom de voyageur n'y apparaît. Un lien se coupe à tout moment."
+msgstr "Een link om per sms te sturen: ze ziet de schoonmaakbeurten van de komende twee weken en vinkt « gedaan » aan, zonder account of wachtwoord. Er staat geen enkele gastnaam op. Een link kan op elk moment afgesloten worden."
+
+#: src/pages/Today.tsx
+msgid "un message à lire"
+msgstr "een bericht te lezen"
+
+#: src/pages/settings/ChannelPrices.tsx
+msgid "Un pourcentage a changé depuis le dernier envoi : renvoyez-les."
+msgstr "Een percentage is gewijzigd sinds de laatste verzending: stuur ze opnieuw."
+
+#: src/pages/Cleaning.tsx
+msgid "un prénom suffit, il s'affiche sur le lien de partage"
+msgstr "een voornaam volstaat, hij verschijnt op de deellink"
+
+#: src/pages/settings/Tarifs.tsx
+msgid "Un prix fixé à la main sur ce jour passe avant tout."
+msgstr "Een met de hand vastgelegde prijs op deze dag gaat voor alles."
+
+#. placeholder {0}: p.nights
+#. placeholder {1}: eur(p.stayCents)
+#. placeholder {2}: eur(p.withLengthCents)
+#: src/pages/settings/ChannelPrices.tsx
+msgid "Un séjour de {0} nuits à {1} part à {2} sur Airbnb"
+msgstr "Een verblijf van {0} nachten van {1} kost {2} op Airbnb"
+
+#: src/pages/Today.tsx
+msgid "un solde à encaisser"
+msgstr "een saldo te innen"
+
+#: src/lib/derive.ts
+msgid "une arrivée"
+msgstr "een aankomst"
+
+#: src/pages/settings/Tarifs.tsx
+msgid "Une case par nuit, plus foncée quand le prix est plus haut. Touchez une case pour lire ou changer son prix."
+msgstr "Eén vakje per nacht, donkerder wanneer de prijs hoger is. Tik op een vakje om de prijs te lezen of te wijzigen."
+
+#: src/pages/settings/Register.tsx
+msgid "Une ligne enregistrée ne se modifie pas : une correction ajoute une ligne qui remplace l'ancienne."
+msgstr "Een opgeslagen regel wordt niet gewijzigd: een correctie voegt een regel toe die de oude vervangt."
+
+#: src/calendar/Grid.tsx
+msgid "Une maison est prise"
+msgstr "Een huis is bezet"
+
+#: src/pages/settings/Domain.tsx
+msgid "Une nouvelle maison, ou un ensemble vendu d'un bloc comme le Domaine entier."
+msgstr "Een nieuw huis, of een geheel dat in één keer verhuurd wordt, zoals het hele domein."
+
+#. placeholder {0}: eur(s.exampleDirectCents)
+#: src/pages/settings/ChannelPrices.tsx
+msgid "Une nuit à {0} sur votre site"
+msgstr "Een nacht van {0} op uw site"
+
+#: src/calendar/PricePanel.tsx
+msgid "Une nuit de moins"
+msgstr "Eén nacht minder"
+
+#: src/calendar/PricePanel.tsx
+msgid "Une nuit de plus"
+msgstr "Eén nacht meer"
+
+#: src/pages/settings/Domain.tsx
+msgid "Une option garde les dates pendant (minutes)"
+msgstr "Een optie houdt de data vast gedurende (minuten)"
+
+#: src/pages/Today.tsx
+msgid "Une partie des données n'a pas pu être lue : la journée peut être incomplète. Rechargez la page."
+msgstr "Een deel van de gegevens kon niet gelezen worden: de dag kan onvolledig zijn. Herlaad de pagina."
+
+#: src/pages/Today.tsx
+msgid "Une partie des données n'a pas pu être lue : les chiffres ci-dessous peuvent être incomplets. Rechargez la page."
+msgstr "Een deel van de gegevens kon niet gelezen worden: de cijfers hieronder kunnen onvolledig zijn. Herlaad de pagina."
+
+#: src/pages/settings/Channels.tsx
+msgid "une plateforme"
+msgstr "een platform"
+
+#: src/pages/settings/Tarifs.tsx
+msgid "Une saison donne d'autres prix sur une période de l'année. Pour un ou deux jours, fixez plutôt le prix à la main depuis le calendrier."
+msgstr "Een seizoen geeft andere prijzen voor een periode van het jaar. Voor een of twee dagen legt u de prijs beter met de hand vast vanuit de kalender."
+
+#. placeholder {0}: p.uses
+#: src/pages/settings/Promotions.tsx
+msgid "utilisé {0} fois"
+msgstr "{0} keer gebruikt"
+
+#. placeholder {0}: p.uses
+#. placeholder {1}: p.maxUses
+#: src/pages/settings/Promotions.tsx
+msgid "utilisé {0} fois sur {1}"
+msgstr "{0} keer gebruikt op {1}"
+
+#: src/pages/settings/Promotions.tsx
+msgid "Valable à partir du"
+msgstr "Geldig vanaf"
+
+#: src/pages/settings/Promotions.tsx
+msgid "Valable jusqu'au"
+msgstr "Geldig tot"
+
+#: src/calendar/PricePanel.tsx
+#: src/calendar/Weeks.tsx
+msgid "Vendre ces nuits"
+msgstr "Deze nachten verkopen"
+
+#: src/pages/settings/Tarifs.tsx
+msgid "vendredi et samedi"
+msgstr "vrijdag en zaterdag"
+
+#: src/calendar/PricePanel.tsx
+msgid "Vendredis et samedis"
+msgstr "Vrijdagen en zaterdagen"
+
+#: src/pages/settings/Channels.tsx
+msgid "vendu ici seulement ; ses deux maisons se ferment toutes seules ailleurs"
+msgstr "alleen hier verhuurd; de twee huizen worden elders vanzelf gesloten"
+
+#: src/pages/settings/Channels.tsx
+msgid "Venu de"
+msgstr "Afkomstig van"
+
+#: src/pages/settings/Startup.tsx
+msgid "Vérifié, pièce en main"
+msgstr "Nagekeken, met bewijsstuk"
+
+#. placeholder {0}: property.name
+#: src/pages/settings/Import.tsx
+msgid "Vers {0}. Collez l'export des réservations à venir (une ligne par réservation, colonnes unite, arrivee, depart, nom, prenom, email, telephone, adultes, enfants, total, paye, reference)."
+msgstr "Naar {0}. Plak de export van de komende reserveringen (één regel per reservering, kolommen unite, arrivee, depart, nom, prenom, email, telephone, adultes, enfants, total, paye, reference)."
+
+#. placeholder {0}: channelName(b)
+#: src/calendar/Grid.tsx
+msgid "via {0}"
+msgstr "via {0}"
+
+#. placeholder {0}: channelName(b)
+#: src/booking/BookingPanel.tsx
+msgid "Via {0}"
+msgstr "Via {0}"
+
+#. placeholder {0}: f.set.deposit_pct
+#: src/pages/settings/Domain.tsx
+msgid "vide = {0} % comme le domaine"
+msgstr "leeg = {0} % zoals het domein"
+
+#: src/pages/settings/Tarifs.tsx
+msgid "vide = celui de la saison"
+msgstr "leeg = dat van het seizoen"
+
+#: src/pages/settings/Tarifs.tsx
+msgid "vide = prix de saison"
+msgstr "leeg = seizoensprijs"
+
+#: src/pages/settings/Options.tsx
+#: src/pages/settings/Promotions.tsx
+msgid "vide = sans limite"
+msgstr "leeg = onbeperkt"
+
+#: src/booking/BookingPanel.tsx
+#: src/pages/settings/Payments.tsx
+msgid "virement"
+msgstr "overschrijving"
+
+#: src/booking/BookingPanel.tsx
+msgid "Virement"
+msgstr "Overschrijving"
+
+#: src/pages/Cleaning.tsx
+msgid "visible sur le lien de partage : n'y mettez pas le nom des voyageurs"
+msgstr "zichtbaar op de deellink: zet er geen namen van gasten op"
+
+#: src/pages/settings/Channels.tsx
+msgid "Voir le calendrier"
+msgstr "De kalender bekijken"
+
+#: src/sale/SaleFlow.tsx
+msgid "Voir le prix"
+msgstr "De prijs bekijken"
+
+#: src/booking/BookingPanel.tsx
+msgid "Votre message"
+msgstr "Uw bericht"
+
+#: src/pages/settings/MyAccount.tsx
+msgid "Votre mot de passe à vous. Pour donner ou couper l'accès à quelqu'un d'autre, c'est dans « Personnes qui ont accès »."
+msgstr "Uw eigen wachtwoord. Om iemand anders toegang te geven of af te sluiten, gaat u naar « Personen met toegang »."
+
+#: src/pages/settings/MyAccount.tsx
+msgid "Votre nouveau mot de passe"
+msgstr "Uw nieuwe wachtwoord"
+
+#: src/pages/Messages.tsx
+msgid "Votre réponse"
+msgstr "Uw antwoord"
+
+#: src/api/client.ts
+msgid "Votre session a expiré. Reconnectez-vous."
+msgstr "Uw sessie is verlopen. Meld u opnieuw aan."
+
+#: src/lib/derive.ts
+msgid "votre site"
+msgstr "uw site"
+
+#: src/canaux/canal.ts
+msgid "Votre site"
+msgstr "Uw site"
+
+#: src/pages/Messages.tsx
+msgid "Vous"
+msgstr "U"
+
+#: src/pages/settings/MyAccount.tsx
+msgid "Vous êtes entré avec l'accès de secours du serveur : ce mot de passe-là se change dans la configuration du serveur, pas ici. Créez-vous un compte dans « Personnes qui ont accès »."
+msgstr "U bent binnengekomen met de noodtoegang van de server: dat wachtwoord wijzigt u in de configuratie van de server, niet hier. Maak een account voor uzelf aan bij « Personen met toegang »."
+
+#. placeholder {0}: i + 1
+#. placeholder {0}: m.canal
+#: src/booking/Register.tsx
+#: src/canaux/canal.ts
+msgid "Voyageur {0}"
+msgstr "Gast {0}"
+
+#: src/canaux/canal.ts
+msgid "Voyageur du canal"
+msgstr "Gast van het kanaal"
+
+#: src/booking/BookingPanel.tsx
+msgid "Voyageurs"
+msgstr "Gasten"
+
+#: src/booking/BookingPanel.tsx
+msgid "Voyageurs inscrits"
+msgstr "Ingeschreven gasten"
+
+#: src/pages/settings/Logs.tsx
+msgid "voyageurs inscrits au registre"
+msgstr "gasten ingeschreven in het register"
+
+#: src/pages/settings/Channels.tsx
+msgid "Vu la première fois"
+msgstr "Voor het eerst gezien"

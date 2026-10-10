@@ -1,5 +1,6 @@
 // Retours d'action fiables (plan v4, changement 3) : le bouton se verrouille
 // pendant l'envoi, puis dit « C'est fait » ou l'erreur en clair. Jamais muet.
+import { t } from "@lingui/core/macro";
 import { IconAlertTriangle, IconCheck } from "@tabler/icons-react";
 import { useState, type ReactNode } from "react";
 
@@ -57,7 +58,7 @@ export function ActionButton(props: {
         }}
       >
         {state.status === "done" ? <IconCheck size={20} /> : props.icon}
-        {busy ? "Un instant…" : state.status === "done" ? "C'est fait" : props.children}
+        {busy ? t`Un instant…` : state.status === "done" ? t`C'est fait` : props.children}
       </button>
       {props.showError !== false && state.status === "error" ? <ErrorLine text={state.text} /> : null}
     </>

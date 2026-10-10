@@ -3,6 +3,7 @@
 // nécessaire. En bas, ce qui ne regarde que cet appareil : clair ou sombre,
 // domaine affiché, déconnexion.
 import { Trans, useLingui } from "@lingui/react/macro";
+import { setLocale } from "../i18n";
 import { useMantineColorScheme } from "@mantine/core";
 import { IconCheck, IconChevronRight, IconLogout, IconMoon, IconSun } from "@tabler/icons-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -19,7 +20,7 @@ interface Entry {
 }
 
 export function SettingsPage() {
-  const { t } = useLingui();
+  const { t, i18n } = useLingui();
   const { data: properties = [] } = useProperties();
   const { scope, setScope } = useScope();
   const navigate = useNavigate();
@@ -119,6 +120,25 @@ export function SettingsPage() {
               </button>
               <button type="button" aria-pressed={dark} onClick={() => setColorScheme("dark")}>
                 <IconMoon size={20} /> <Trans>Sombre</Trans>
+              </button>
+            </div>
+          </div>
+          <div className="row-set">
+            <span>
+              <b>
+                <Trans>Langue</Trans>
+              </b>
+              <small>
+                <Trans>Retenu sur cet appareil seulement. Sans choix, l'écran suit la langue du navigateur.</Trans>
+              </small>
+            </span>
+            {/* Chaque langue s'écrit dans sa propre langue : on la reconnaît même sans la lire. */}
+            <div className="seg" role="group" aria-label={t`Langue de l'écran`} style={{ margin: 0 }}>
+              <button type="button" lang="fr" aria-pressed={i18n.locale === "fr"} onClick={() => setLocale("fr")}>
+                Français
+              </button>
+              <button type="button" lang="nl" aria-pressed={i18n.locale === "nl"} onClick={() => setLocale("nl")}>
+                Nederlands
               </button>
             </div>
           </div>

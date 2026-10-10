@@ -316,7 +316,7 @@ export function SaleFlow({ prefill, onClose }: { prefill: SalePrefill | null; on
                     setLinkError(null);
                     if (mode === "confirmed" && paidAll) {
                       try {
-                        await api(`/bookings/${r.booking.id}/payments`, { method: "POST", body: { amountCents: r.booking.totalCents, method: "other", kind: "full", note: "payé avant l'enregistrement" } });
+                        await api(`/bookings/${r.booking.id}/payments`, { method: "POST", body: { amountCents: r.booking.totalCents, method: "other", kind: "full", note: t`payé avant l'enregistrement` } });
                       } catch (e) {
                         setLinkError(t`La réservation est enregistrée, mais le paiement n'a pas été noté : ${errorText(e)} Notez-le dans la fiche.`);
                       }

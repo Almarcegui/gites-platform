@@ -1,3 +1,5 @@
+import { t } from "@lingui/core/macro";
+
 // Modèles de réponse (plan v4, fonction 2) : le texte vient de la base
 // (Réglages › Modèles de réponse, migration 0023) ; ici, seulement le
 // remplissage des variables à partir de la réservation.
@@ -16,15 +18,19 @@ export interface TemplateContext {
   signature: string;
 }
 
-export const TEMPLATE_VARIABLES: { key: string; label: string }[] = [
-  { key: "prenom", label: "prénom du client" },
-  { key: "bien", label: "nom du bien" },
-  { key: "arrivee", label: "jour d'arrivée" },
-  { key: "solde", label: "solde restant" },
-  { key: "heure_arrivee", label: "heure d'arrivée" },
-  { key: "heure_depart", label: "heure de départ" },
-  { key: "signature", label: "signature" },
-];
+/** Les variables et leur libellé, dans la langue de l'écran (le nom entre
+ *  accolades, lui, ne change pas : il est écrit dans les modèles). */
+export function templateVariables(): { key: string; label: string }[] {
+  return [
+    { key: "prenom", label: t`prénom du client` },
+    { key: "bien", label: t`nom du bien` },
+    { key: "arrivee", label: t`jour d'arrivée` },
+    { key: "solde", label: t`solde restant` },
+    { key: "heure_arrivee", label: t`heure d'arrivée` },
+    { key: "heure_depart", label: t`heure de départ` },
+    { key: "signature", label: t`signature` },
+  ];
+}
 
 export function fillTemplate(body: string, c: TemplateContext): string {
   const values: Record<string, string> = {

@@ -3,6 +3,7 @@
 // test/suggestions.test.ts) : une nuit coincée entre deux séjours, des dates
 // proches encore libres, des fériés déjà majorés. Une suggestion PRÉ-REMPLIT
 // la saisie ; rien ne s'enregistre sans le geste de la personne.
+import { t } from "@lingui/core/macro";
 import type { DayRate, IsoDate } from "../api/types";
 import { addDays, diffDays } from "./dates";
 import { eur } from "./money";
@@ -65,12 +66,13 @@ export function buildSuggestions(input: {
     if (nights > 2) continue;
     const d = byDate.get(from);
     if (!d || d.minNights == null || d.minNights <= nights) continue;
-    const s = nights > 1 ? "s" : "";
+    const min = d.minNights;
+    const date = dfr(from);
     out.push({
       kind: "orphelines",
-      title: `Nuit${s} orpheline${s} du ${dfr(from)}`,
-      why: `${nights} nuit${s} libre${s} entre deux séjours, alors que le minimum est de ${d.minNights} nuits : personne ne peut réserver ce trou.`,
-      action: `Descendre le minimum à ${nights} nuit${s}`,
+      title: nights > 1 ? t`Nuits orphelines du ${date}` : t`Nuit orpheline du ${date}`,
+      why: nights > 1 ? t`${nights} nuits libres entre deux séjours, alors que le minimum est de ${min} nuits : personne ne peut réserver ce trou.` : t`1 nuit libre entre deux séjours, alors que le minimum est de ${min} nuits : personne ne peut réserver ce trou.`,
+      action: nights > 1 ? t`Descendre le minimum à ${nights} nuits` : t`Descendre le minimum à 1 nuit`,
       from,
       to,
       prefill: { minNights: nights },
@@ -86,9 +88,9 @@ export function buildSuggestions(input: {
     const cut = Math.round((first.priceCents! * (100 - LAST_MINUTE_PCT)) / 100);
     out.push({
       kind: "derniere-minute",
-      title: `Dernière minute : ${proches.length} nuits encore libres d'ici le ${dfr(last.date)}`,
-      why: `− ${LAST_MINUTE_PCT} % sur chacune de ces nuits libres, par exemple ${eur(first.priceCents!)} → ${eur(cut)}. Au-delà, vous vendriez moins cher que votre prix de base. Les nuits déjà vendues ne bougent pas.`,
-      action: `Proposer − ${LAST_MINUTE_PCT} %`,
+      title: t`Dernière minute : ${proches.length} nuits encore libres d'ici le ${dfr(last.date)}`,
+      why: t`− ${LAST_MINUTE_PCT} % sur chacune de ces nuits libres, par exemple ${eur(first.priceCents!)} → ${eur(cut)}. Au-delà, vous vendriez moins cher que votre prix de base. Les nuits déjà vendues ne bougent pas.`,
+      action: t`Proposer − ${LAST_MINUTE_PCT} %`,
       from: first.date,
       to: last.date,
       prefill: {},
@@ -99,12 +101,12 @@ export function buildSuggestions(input: {
   const fortes = days.filter((d) => d.holidayRated && d.date >= today && libre(d.date) && d.priceCents != null && d.overridePriceCents == null);
   if (fortes.length > 0) {
     const up = Math.round((fortes[0]!.priceCents! * (100 + STRONG_DATE_PCT)) / 100);
-    const s = fortes.length > 1 ? "s" : "";
+    const n = fortes.length;
     out.push({
       kind: "dates-fortes",
-      title: `Dates fortes : ${fortes.length} jour${s} férié${s} ou pont`,
-      why: `Le prix est déjà majoré ces jours-là. Un cran de plus (+ ${STRONG_DATE_PCT} %) sur chacun d'eux seulement, par exemple le ${dfr(fortes[0]!.date)} : ${eur(fortes[0]!.priceCents!)} → ${eur(up)}.`,
-      action: `Proposer + ${STRONG_DATE_PCT} %`,
+      title: n > 1 ? t`Dates fortes : ${n} jours fériés ou ponts` : t`Dates fortes : 1 jour férié ou pont`,
+      why: t`Le prix est déjà majoré ces jours-là. Un cran de plus (+ ${STRONG_DATE_PCT} %) sur chacun d'eux seulement, par exemple le ${dfr(fortes[0]!.date)} : ${eur(fortes[0]!.priceCents!)} → ${eur(up)}.`,
+      action: t`Proposer + ${STRONG_DATE_PCT} %`,
       from: fortes[0]!.date,
       to: fortes[fortes.length - 1]!.date,
       prefill: {},

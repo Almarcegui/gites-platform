@@ -1,5 +1,8 @@
 // Modèles de réponse (plan v4, fonction 2) : les textes proposés dans Messages
 // et dans la fiche réservation. Une ligne par modèle, sa fiche en panneau.
+import { t } from "@lingui/core/macro";
+import { hourLabel, longDate } from "../../lib/dates";
+import { eur } from "../../lib/money";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { NumberInput, Select, Switch, Textarea, TextInput } from "@mantine/core";
 import { IconPlus } from "@tabler/icons-react";
@@ -10,13 +13,13 @@ import { api } from "../../api/client";
 import { useProperties } from "../../api/hooks";
 import type { MessageTemplate } from "../../api/types";
 import { ErrorLine, useAction } from "../../lib/action";
-import { fillTemplate, TEMPLATE_VARIABLES } from "../../lib/templates";
+import { fillTemplate, templateVariables } from "../../lib/templates";
 import { Confirm, Empty, Loading, Page, Section, SidePanel } from "../../ui/kit";
 
-const LANG: Record<MessageTemplate["lang"], string> = { fr: "français", nl: "néerlandais", en: "anglais" };
+const langLabel = (l: MessageTemplate["lang"]): string => (l === "nl" ? t`néerlandais` : l === "en" ? t`anglais` : t`français`);
 
 /** Exemple de remplissage montré sous le texte : le résultat se lit avant l'envoi. */
-const SAMPLE = { firstName: "Claire", unitName: "La Scierie", arrival: "samedi 17 octobre", checkinTime: "16 h", checkoutTime: "10 h", balance: "450,00 €", signature: "Les Gîtes du Pré Moré" };
+const sample = () => ({ firstName: "Claire", unitName: "La Scierie", arrival: longDate("2026-10-17"), checkinTime: hourLabel("16:00"), checkoutTime: hourLabel("10:00"), balance: eur(45000), signature: "Les Gîtes du Pré Moré" });
 
 export function TemplatesPage() {
   const { t } = useLingui();
@@ -46,7 +49,7 @@ export function TemplatesPage() {
                 <button key={m.id} type="button" className={`list-row two${m.active ? "" : " off"}`} onClick={() => setOpen(m)}>
                   <span>
                     <b>{m.name}</b>
-                    <small>{[LANG[m.lang], where(m.propertyId), m.active ? "" : t`en pause`].filter(Boolean).join(", ")}</small>
+                    <small>{[langLabel(m.lang), where(m.propertyId), m.active ? "" : t`en pause`].filter(Boolean).join(", ")}</small>
                   </span>
                 </button>
               ))}
@@ -118,7 +121,7 @@ function TemplatePanel({ template, onClose }: { template: MessageTemplate | null
     >
       <TextInput size="md" label={t`Nom du modèle`} description={t`le mot affiché sur la puce, par exemple : Accès et clés`} maxLength={60} value={v.name} onChange={(e) => setV({ ...v, name: e.currentTarget.value })} />
       <div className="grid2" style={{ marginTop: 12 }}>
-        <Select size="md" label={t`Langue`} allowDeselect={false} value={v.lang} onChange={(x) => setV({ ...v, lang: (x as MessageTemplate["lang"]) ?? "fr" })} data={(["fr", "nl", "en"] as const).map((l) => ({ value: l, label: LANG[l] }))} />
+        <Select size="md" label={t`Langue`} allowDeselect={false} value={v.lang} onChange={(x) => setV({ ...v, lang: (x as MessageTemplate["lang"]) ?? "fr" })} data={(["fr", "nl", "en"] as const).map((l) => ({ value: l, label: langLabel(l) }))} />
         <Select size="md" label={t`Pour quels gîtes`} allowDeselect={false} value={v.pid} onChange={(x) => setV({ ...v, pid: x ?? "all" })} data={[{ value: "all", label: t`Tous mes gîtes` }, ...properties.map((p) => ({ value: String(p.id), label: p.name }))]} />
       </div>
       <Textarea ref={area} mt="md" size="md" autosize minRows={8} label={t`Texte`} maxLength={4000} value={v.body} onChange={(e) => setV({ ...v, body: e.currentTarget.value })} />
@@ -126,7 +129,7 @@ function TemplatePanel({ template, onClose }: { template: MessageTemplate | null
         <Trans>Insérer à l'endroit du curseur</Trans>
       </p>
       <div className="chips" role="group" aria-labelledby="vars-l">
-        {TEMPLATE_VARIABLES.map((x) => (
+        {templateVariables().map((x) => (
           <button key={x.key} type="button" className="chip" onClick={() => insert(x.key)} title={x.label}>
             {`{${x.key}}`} <small style={{ marginLeft: 4 }}>{x.label}</small>
           </button>
@@ -136,7 +139,7 @@ function TemplatePanel({ template, onClose }: { template: MessageTemplate | null
         <Trans>Ce que le client lira (exemple)</Trans>
       </p>
       <div className="bub out" style={{ whiteSpace: "pre-wrap" }}>
-        {fillTemplate(v.body, SAMPLE)}
+        {fillTemplate(v.body, sample())}
       </div>
       <div className="grid2" style={{ marginTop: 12 }}>
         <NumberInput size="md" label={t`Rang dans la liste`} description={t`le plus petit en premier`} min={0} value={v.sort} onChange={(x) => setV({ ...v, sort: x })} />

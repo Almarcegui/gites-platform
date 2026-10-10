@@ -1,3 +1,4 @@
+import { t } from "@lingui/core/macro";
 // Accès à l'API admin JSON (/api/admin/*), même origine que l'écran.
 //
 // La session est celle de l'ancien back-office : `POST /api/admin/login`
@@ -117,7 +118,7 @@ export async function api<T>(path: string, init: { method?: string; body?: unkno
   try {
     res = await fetch(url, { method: init.method ?? "GET", headers, body: init.body !== undefined ? JSON.stringify(init.body) : undefined });
   } catch {
-    throw new ApiError(0, "Pas de connexion avec le serveur. Vérifiez internet, puis réessayez.", null);
+    throw new ApiError(0, t`Pas de connexion avec le serveur. Vérifiez internet, puis réessayez.`, null);
   }
   const data: unknown = await res.json().catch(() => null);
   if (!res.ok) {
@@ -140,7 +141,7 @@ export async function apiUpload<T>(path: string, form: FormData): Promise<T> {
   try {
     res = await fetch(new URL(`/api/admin${path}`, window.location.origin), { method: "POST", headers, body: form });
   } catch {
-    throw new ApiError(0, "Pas de connexion avec le serveur. Vérifiez internet, puis réessayez.", null);
+    throw new ApiError(0, t`Pas de connexion avec le serveur. Vérifiez internet, puis réessayez.`, null);
   }
   const data: unknown = await res.json().catch(() => null);
   if (!res.ok) {
@@ -185,7 +186,7 @@ export async function logout(): Promise<void> {
 export function errorText(e: unknown): string {
   if (e instanceof ApiError) return humanize(e.message, e.status);
   if (e instanceof Error) return e.message;
-  return "Quelque chose n'a pas marché. Réessayez.";
+  return t`Quelque chose n'a pas marché. Réessayez.`;
 }
 
 /** Les messages du serveur sont en français mais parfois en termes de
@@ -193,9 +194,9 @@ export function errorText(e: unknown): string {
 function humanize(msg: string, status: number): string {
   const m = msg.trim();
   if (status === 0) return m;
-  if (status === 401) return "Votre session a expiré. Reconnectez-vous.";
-  if (/créneau (déjà occupé|indisponible)/.test(m)) return "Ces nuits sont déjà prises. Rien n'a été changé.";
-  if (/^devis impossible/.test(m)) return "Ces dates ne se vendent pas telles quelles (minimum de nuits ou jour d'arrivée). Rien n'a été changé.";
-  if (status >= 500) return "Le serveur n'a pas pu le faire. Rien n'a été changé ; réessayez dans un instant.";
+  if (status === 401) return t`Votre session a expiré. Reconnectez-vous.`;
+  if (/créneau (déjà occupé|indisponible)/.test(m)) return t`Ces nuits sont déjà prises. Rien n'a été changé.`;
+  if (/^devis impossible/.test(m)) return t`Ces dates ne se vendent pas telles quelles (minimum de nuits ou jour d'arrivée). Rien n'a été changé.`;
+  if (status >= 500) return t`Le serveur n'a pas pu le faire. Rien n'a été changé ; réessayez dans un instant.`;
   return m.charAt(0).toUpperCase() + m.slice(1) + (/[.!?]$/.test(m) ? "" : ".");
 }

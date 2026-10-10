@@ -1,6 +1,8 @@
 // Journaux : « ce qui a été fait » (journal d'audit, GET /audit) et « mails
 // envoyés » (GET /email-log). Ces deux routes existaient sans écran. Une ligne
 // ouvre son détail en panneau latéral.
+import { i18n, type MessageDescriptor } from "@lingui/core";
+import { msg } from "@lingui/core/macro";
 import { useLingui } from "@lingui/react/macro";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
@@ -12,61 +14,69 @@ import { useOpenBooking } from "../../shell/Shell";
 import { eur } from "../../lib/money";
 import { Empty, Fold, Loading, Page, SidePanel, sqlWhen } from "../../ui/kit";
 
-const ACTIONS: Record<string, string> = {
-  "booking.create_manual": "réservation prise par téléphone",
-  "booking.confirm_manual": "réservation confirmée",
-  "booking.cancel": "réservation annulée",
-  "booking.modify": "séjour modifié",
-  "booking.modify_guest": "coordonnées d'un client modifiées",
-  "payment.manual": "paiement noté à la main",
-  "email.balance_reminder": "rappel du solde envoyé",
-  "email.voucher_resent": "confirmation renvoyée",
-  "message.reply": "message envoyé à un client",
-  "rate.override": "prix fixé à la main",
-  "rate.override_clear": "retour au prix de saison",
-  "rate.create": "prix créé",
-  "rate.update": "prix changé",
-  "rate.delete": "prix supprimé",
-  "season.create": "saison créée",
-  "season.update": "saison modifiée",
-  "season.delete": "saison supprimée",
-  "promotion.create": "remise créée",
-  "promotion.update": "remise modifiée",
-  "promotion.delete": "remise supprimée",
-  "option.create": "option créée",
-  "option.update": "option modifiée",
-  "option.delete": "option supprimée",
-  "settings.update": "réglages du domaine changés",
-  "unit.update": "bien modifié",
-  "unit.create": "bien créé",
-  "unit.links": "liaisons d'un bien changées",
-  "user.create": "accès créé",
-  "user.reset_password": "nouveau mot de passe",
-  "user.enable": "accès rendu",
-  "user.disable": "accès coupé",
-  "user.delete": "compte supprimé",
-  "guest.update": "fiche client modifiée",
-  "guest_register.record": "voyageurs inscrits au registre",
-  "guest_register.export": "registre exporté",
-  "block.create": "dates bloquées",
-  "block.delete": "blocage levé",
-  "beds24.push": "calendriers envoyés aux plateformes",
-  "beds24.invite_code": "liaison Beds24 rétablie",
-  "pricing.channel_markups": "majorations des plateformes changées",
-  "pricing.push_channel": "majoration appliquée aux plateformes",
-  "checklist.update": "mise en route mise à jour",
-  "sync_conflict.ignored": "désaccord de calendrier mis de côté",
-  "sync_conflict.reopened": "désaccord de calendrier rouvert",
+const ACTIONS: Record<string, MessageDescriptor> = {
+  "booking.create_manual": msg`réservation prise par téléphone`,
+  "booking.confirm_manual": msg`réservation confirmée`,
+  "booking.cancel": msg`réservation annulée`,
+  "booking.modify": msg`séjour modifié`,
+  "booking.modify_guest": msg`coordonnées d'un client modifiées`,
+  "payment.manual": msg`paiement noté à la main`,
+  "email.balance_reminder": msg`rappel du solde envoyé`,
+  "email.voucher_resent": msg`confirmation renvoyée`,
+  "message.reply": msg`message envoyé à un client`,
+  "rate.override": msg`prix fixé à la main`,
+  "rate.override_clear": msg`retour au prix de saison`,
+  "rate.create": msg`prix créé`,
+  "rate.update": msg`prix changé`,
+  "rate.delete": msg`prix supprimé`,
+  "season.create": msg`saison créée`,
+  "season.update": msg`saison modifiée`,
+  "season.delete": msg`saison supprimée`,
+  "promotion.create": msg`remise créée`,
+  "promotion.update": msg`remise modifiée`,
+  "promotion.delete": msg`remise supprimée`,
+  "option.create": msg`option créée`,
+  "option.update": msg`option modifiée`,
+  "option.delete": msg`option supprimée`,
+  "settings.update": msg`réglages du domaine changés`,
+  "unit.update": msg`bien modifié`,
+  "unit.create": msg`bien créé`,
+  "unit.links": msg`liaisons d'un bien changées`,
+  "user.create": msg`accès créé`,
+  "user.reset_password": msg`nouveau mot de passe`,
+  "user.enable": msg`accès rendu`,
+  "user.disable": msg`accès coupé`,
+  "user.delete": msg`compte supprimé`,
+  "guest.update": msg`fiche client modifiée`,
+  "guest_register.record": msg`voyageurs inscrits au registre`,
+  "guest_register.export": msg`registre exporté`,
+  "block.create": msg`dates bloquées`,
+  "block.delete": msg`blocage levé`,
+  "beds24.push": msg`calendriers envoyés aux plateformes`,
+  "beds24.invite_code": msg`liaison Beds24 rétablie`,
+  "pricing.channel_markups": msg`majorations des plateformes changées`,
+  "pricing.push_channel": msg`majoration appliquée aux plateformes`,
+  "checklist.update": msg`mise en route mise à jour`,
+  "sync_conflict.ignored": msg`désaccord de calendrier mis de côté`,
+  "sync_conflict.reopened": msg`désaccord de calendrier rouvert`,
 };
 
 function actionLabel(a: string): string {
-  return ACTIONS[a] ?? a.replace(/[._]/g, " ");
+  const d = ACTIONS[a];
+  return d ? i18n._(d) : a.replace(/[._]/g, " ");
 }
 
+const KINDS: Record<string, MessageDescriptor> = {
+  voucher: msg`confirmation de réservation`,
+  balance_reminder: msg`rappel du solde`,
+  message: msg`message`,
+  auto_reply: msg`accusé de réception`,
+  hold: msg`option en attente`,
+  cancel: msg`annulation`,
+};
 function kindLabel(k: string): string {
-  return (
-    ({ voucher: "confirmation de réservation", balance_reminder: "rappel du solde", message: "message", auto_reply: "accusé de réception", hold: "option en attente", cancel: "annulation" }) as Record<string, string>
-  )[k] ?? k.replace(/_/g, " ");
+  const d = KINDS[k];
+  return d ? i18n._(d) : k.replace(/_/g, " ");
 }
 
 export function LogsPage() {

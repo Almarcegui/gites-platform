@@ -3,6 +3,8 @@
 // rapatrier, envoyer), les prix envoyés aux plateformes, les correspondances,
 // les réservations venues des plateformes, les désaccords de calendrier
 // (« conflits ») et le journal. Mêmes routes que l'ancien « Canaux OTA ».
+import { i18n } from "@lingui/core";
+import { msg } from "@lingui/core/macro";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { NumberInput, Textarea, TextInput } from "@mantine/core";
 import { IconAlertTriangle, IconCheck, IconPlugConnected } from "@tabler/icons-react";
@@ -149,13 +151,10 @@ export function ChannelsPage() {
 }
 
 function beds24Action(a: string): string {
-  return (
-    {
-      "beds24.push": "calendriers envoyés aux plateformes",
-      "beds24.pull": "réservations rapatriées",
-      "beds24.invite_code": "liaison rétablie avec un code d'invitation",
-    } as Record<string, string>
-  )[a] ?? a.replace(/^beds24\./, "").replace(/_/g, " ");
+  if (a === "beds24.push") return i18n._(msg`calendriers envoyés aux plateformes`);
+  if (a === "beds24.pull") return i18n._(msg`réservations rapatriées`);
+  if (a === "beds24.invite_code") return i18n._(msg`liaison rétablie avec un code d'invitation`);
+  return a.replace(/^beds24\./, "").replace(/_/g, " ");
 }
 
 function LinkCard({ d, propertyId }: { d: ChannelsOverview; propertyId: number }) {

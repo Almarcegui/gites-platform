@@ -2,6 +2,8 @@
 // mail cliquables, trois actions selon l'état, le reste sous « Plus », les
 // détails repliés. Toute action passe par useAction : verrou, puis « C'est
 // fait » ou l'erreur en clair.
+import { i18n, type MessageDescriptor } from "@lingui/core";
+import { msg } from "@lingui/core/macro";
 import { Trans, useLingui } from "@lingui/react/macro";
 import { Drawer, Menu, Modal, NumberInput, Select, Textarea, TextInput } from "@mantine/core";
 import {
@@ -307,25 +309,29 @@ function Fold({ title, count, children }: { title: string; count: string; childr
   );
 }
 
+const METHODS: Record<string, MessageDescriptor> = { transfer: msg`virement`, cash: msg`espèces`, stripe: msg`carte bancaire`, other: msg`autre moyen` };
 function methodLabel(m: string): string {
-  return { transfer: "virement", cash: "espèces", stripe: "carte bancaire", other: "autre moyen" }[m] ?? m;
+  const d = METHODS[m];
+  return d ? i18n._(d) : m;
 }
 
-const HISTORY: Record<string, string> = {
-  "booking.create_manual": "réservation prise par téléphone",
-  "booking.confirm_manual": "réservation confirmée",
-  "booking.confirm_conflict": "confirmation refusée : dates reprises entre-temps",
-  "booking.cancel": "réservation annulée",
-  "booking.modify": "séjour modifié",
-  "booking.modify_guest": "coordonnées du client modifiées",
-  "booking.modify_conflict": "modification refusée : dates déjà prises",
-  "payment.manual": "paiement noté à la main",
-  "email.balance_reminder": "rappel du solde envoyé",
-  "email.voucher_resent": "confirmation renvoyée au client",
-  "message.reply": "message envoyé au client",
+const HISTORY: Record<string, MessageDescriptor> = {
+  "booking.create_manual": msg`réservation prise par téléphone`,
+  "booking.confirm_manual": msg`réservation confirmée`,
+  "booking.confirm_conflict": msg`confirmation refusée : dates reprises entre-temps`,
+  "booking.cancel": msg`réservation annulée`,
+  "booking.modify": msg`séjour modifié`,
+  "booking.modify_guest": msg`coordonnées du client modifiées`,
+  "booking.modify_conflict": msg`modification refusée : dates déjà prises`,
+  "payment.manual": msg`paiement noté à la main`,
+  "email.balance_reminder": msg`rappel du solde envoyé`,
+  "email.voucher_resent": msg`confirmation renvoyée au client`,
+  "message.reply": msg`message envoyé au client`,
 };
 function historyLabel(action: string): string {
-  return HISTORY[action] ?? (action.startsWith("stripe") || action.startsWith("payment") ? "paiement en ligne" : action.startsWith("email") ? "mail" : "autre changement");
+  const d = HISTORY[action];
+  if (d) return i18n._(d);
+  return action.startsWith("stripe") || action.startsWith("payment") ? i18n._(msg`paiement en ligne`) : action.startsWith("email") ? i18n._(msg`mail`) : i18n._(msg`autre changement`);
 }
 
 // --- actions principales ---------------------------------------------------------
@@ -774,8 +780,12 @@ function NotesDialog({ open, b, onClose }: { open: boolean; b: Booking; onClose:
 /** Ce qui est vraiment parti : un message est toujours visible sur la page du
  *  client ; le mail ne part que si l'envoi est actif. */
 export function deliveryText(delivery: string | undefined, linked = true): string {
-  const where = linked ? "sur la page du client" : "dans la conversation";
-  if (delivery === "sent") return `C'est fait. Message envoyé par mail et enregistré ${where}.`;
-  if (delivery === "stub") return `C'est fait. Message enregistré ${where} ; le mail n'est pas parti (envoi des mails coupé ici).`;
-  return `C'est fait. Message enregistré ${where} ; pas de mail connu pour l'envoyer.`;
+  if (linked) {
+    if (delivery === "sent") return i18n._(msg`C'est fait. Message envoyé par mail et enregistré sur la page du client.`);
+    if (delivery === "stub") return i18n._(msg`C'est fait. Message enregistré sur la page du client ; le mail n'est pas parti (envoi des mails coupé ici).`);
+    return i18n._(msg`C'est fait. Message enregistré sur la page du client ; pas de mail connu pour l'envoyer.`);
+  }
+  if (delivery === "sent") return i18n._(msg`C'est fait. Message envoyé par mail et enregistré dans la conversation.`);
+  if (delivery === "stub") return i18n._(msg`C'est fait. Message enregistré dans la conversation ; le mail n'est pas parti (envoi des mails coupé ici).`);
+  return i18n._(msg`C'est fait. Message enregistré dans la conversation ; pas de mail connu pour l'envoyer.`);
 }
