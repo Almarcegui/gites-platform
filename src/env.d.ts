@@ -28,6 +28,6 @@ interface Env {
    *  désactivé : les deux clés vont ensemble, cf. services/turnstile.ts. */
   TURNSTILE_SECRET_KEY?: string;
   /** Autorise les ÉCRITURES vers Beds24 (compte réel, pas de bac à sable).
-   *  Déduit sinon de PUBLIC_BASE_URL en https:// — cf. beds24WritesAllowed(). */
+   *  Seule la valeur "true" autorise (fermé par défaut) — cf. beds24WritesAllowed(). */
   BEDS24_WRITE_ENABLED?: string;
 }

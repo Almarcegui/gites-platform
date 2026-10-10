@@ -34,6 +34,11 @@ class FakeBeds24 {
   /** Transforme le nom stocké (Beds24 qui encode ou renomme). */
   storeName: (n: string) => string = (n) => n;
   restrictedTo: number | null = null;
+  scopes = ["all:properties"];
+  /** Appelé à chaque POST /properties, avant traitement (pannes simulées). */
+  onPost: (() => Promise<void> | void) | null = null;
+  /** Lève un réseau mort au prochain POST, sans rien appliquer. */
+  dropNextPost = false;
 
   handler = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const url = new URL(String(input));
@@ -44,7 +49,7 @@ class FakeBeds24 {
     if (url.pathname === "/v2/authentication/details") {
       return ok({
         validToken: true,
-        token: { ownerId: 271828, deviceName: "gites-platform", scopes: ["all:properties"], onlyPropertyId: this.restrictedTo },
+        token: { ownerId: 271828, deviceName: "gites-platform", scopes: this.scopes, onlyPropertyId: this.restrictedTo },
       });
     }
     if (url.pathname === "/v2/properties" && method === "GET") {
@@ -53,6 +58,13 @@ class FakeBeds24 {
     if (url.pathname === "/v2/properties" && method === "POST") {
       const body = JSON.parse(String(init?.body)) as Record<string, unknown>[];
       this.posts.push(body);
+      if (this.onPost) await this.onPost();
+      if (this.dropNextPost) {
+        this.dropNextPost = false;
+        throw new TypeError("network connection lost");
+      }
+      const invalid = validate(body);
+      if (invalid.length) return ok([{ success: false, errors: invalid.map((message) => ({ action: "validate", field: "", message })) }], 201);
       const forced = this.forced.shift();
       if (forced && !forced.apply) return ok(forced.body, forced.status);
       const out = body.map((item) => {
@@ -78,6 +90,34 @@ class FakeBeds24 {
     if (url.pathname === "/v2/inventory/rooms/calendar") return ok([{ success: true }], 201);
     throw new Error(`route Beds24 non simulée : ${method} ${url.pathname}`);
   };
+}
+
+/** Contrôle du corps contre le schéma apiV2.yaml (énumérations, bornes) et
+ *  la liste publiée des featureCodes : un code inventé est refusé. */
+const PROPERTY_TYPES = new Set(["apartment", "cottage", "house", "villa", "chalet", "farmhouse", "mill"]);
+const ROOM_TYPES = new Set(["holidayHome", "villa", "chalet", "apartment", "studio"]);
+const FEATURE_CODES = new Set([
+  "KITCHEN", "DINING_TABLE", "LIVING_ROOM", "HEATING", "FIRE_PIT", "FIREPLACE", "WATER_VIEW", "PETS_CONSIDERED",
+  "WIFI", "PARKING", "SAUNA", "GARDEN", "OVEN", "WASHER", "DISHWASHER", "INTERNET", "BEDROOM", "BED_DOUBLE",
+]);
+const QUARTER = /^([01]\d|2[0-3]):(00|15|30|45)$/;
+function validate(body: Record<string, unknown>[]): string[] {
+  const out: string[] = [];
+  for (const p of body) {
+    if (p.propertyType != null && !PROPERTY_TYPES.has(String(p.propertyType))) out.push(`propertyType ${String(p.propertyType)}`);
+    if (p.country != null && String(p.country).length > 2) out.push("country maxLength 2");
+    for (const k of ["checkInStart", "checkOutEnd"]) if (p[k] != null && !QUARTER.test(String(p[k]))) out.push(k);
+    for (const r of (p.roomTypes as Record<string, unknown>[]) ?? []) {
+      if (r.roomType != null && !ROOM_TYPES.has(String(r.roomType))) out.push(`roomType ${String(r.roomType)}`);
+      if (r.qty != null && (Number(r.qty) < 1 || Number(r.qty) > 99)) out.push("qty");
+      if (r.minStay != null && (Number(r.minStay) < 1 || Number(r.minStay) > 365)) out.push("minStay");
+      for (const line of (r.featureCodes as string[][]) ?? []) {
+        if (!Array.isArray(line)) out.push("featureCodes : tableau de tableaux attendu");
+        else for (const c of line) if (!FEATURE_CODES.has(c)) out.push(`featureCode inconnu ${c}`);
+      }
+    }
+  }
+  return out;
 }
 
 let fake: FakeBeds24;
@@ -135,7 +175,13 @@ async function mapping() {
 describe("plan de création (lecture de notre base)", () => {
   it("propriété et rooms complètes ; le Domaine entier reste en direct", async () => {
     const plan = await buildPropertyPlan(t.db, 1, "https://gites.example");
-    expect(plan).toMatchObject({ name: NOM, country: "BE", currency: "EUR", city: "Daverdisse", checkInStart: "18:00", checkOutEnd: "18:00" });
+    expect(plan).toMatchObject({
+      name: NOM, country: "BE", currency: "EUR", checkInStart: "18:00", checkOutEnd: "18:00",
+      // adresse publiée par les pages vitrine (JSON-LD), pas le champ libre de seed
+      address: "Hameau du Pré Moré", postcode: "6890", city: "Redu", state: "Luxembourg",
+      phone: "0498/440 883", // le téléphone en base prime sur celui des pages
+    });
+    expect(plan.houseRules).toContain("Les voyageurs reprennent avec eux");
     // l'adresse de contact de seed (TODO_…) ne part pas chez un tiers
     expect(plan.email).toBeUndefined();
     expect(plan.description).toContain("1674");
@@ -240,7 +286,7 @@ describe("POST /api/admin/beds24/creer-propriete", () => {
     };
     expect(fake.posts).toHaveLength(2);
     const core = fake.posts[0]![0]!;
-    expect(core).toMatchObject({ name: NOM, country: "BE", currency: "EUR", city: "Daverdisse", checkInStart: "18:00", checkOutEnd: "18:00" });
+    expect(core).toMatchObject({ name: NOM, country: "BE", currency: "EUR", city: "Redu", postcode: "6890", checkInStart: "18:00", checkOutEnd: "18:00" });
     expect(core.id).toBeUndefined();
     expect(core.texts).toBeUndefined(); // les textes partent au second temps
     const coreRooms = core.roomTypes as Record<string, unknown>[];
@@ -288,8 +334,10 @@ describe("POST /api/admin/beds24/creer-propriete", () => {
     const res = await creer();
     expect(res.status).toBe(200);
     const r = (await res.json()) as { propriete: { creee: boolean }; rooms: { creee: boolean }[] };
-    expect(fake.posts).toHaveLength(1); // seulement l'enrichissement
-    expect(fake.posts[0]![0]!.id).toBe(555001);
+    // mise à jour complète (noyau + rooms existantes par id), puis textes
+    expect(fake.posts).toHaveLength(2);
+    expect(fake.posts[0]![0]).toMatchObject({ id: 555001, city: "Redu", checkInStart: "18:00" });
+    expect((fake.posts[0]![0]!.roomTypes as { id: number; cleaningFee: number }[]).map((x) => [x.id, x.cleaningFee])).toEqual([[555011, 120], [555012, 90]]);
     expect(r.propriete.creee).toBe(false);
     expect(r.rooms.every((x) => !x.creee)).toBe(true);
     expect(await mapping()).toEqual({ property: 555001, rooms: [555011, 555012, null] });
@@ -298,7 +346,13 @@ describe("POST /api/admin/beds24/creer-propriete", () => {
   it("propriété retrouvée avec une room manquante : seule la room manquante est ajoutée", async () => {
     fake.props.push({ id: 555001, name: NOM, roomTypes: [{ id: 555011, name: "La Maison du Scieur" }] });
     expect((await creer()).status).toBe(200);
-    expect(fake.posts[0]).toEqual([{ id: 555001, roomTypes: [expect.objectContaining({ name: "La Scierie", qty: 1, cleaningFee: 90 })] }]);
+    const upd = fake.posts[0]![0]!;
+    expect(upd.id).toBe(555001);
+    expect(upd.roomTypes).toEqual([
+      expect.objectContaining({ id: 555011, name: "La Maison du Scieur" }),
+      expect.objectContaining({ name: "La Scierie", qty: 1, cleaningFee: 90 }),
+    ]);
+    expect((upd.roomTypes as Record<string, unknown>[])[1]!.id).toBeUndefined();
     const m = await mapping();
     expect(m.property).toBe(555001);
     expect(m.rooms[0]).toBe(555011);
@@ -329,7 +383,7 @@ describe("POST /api/admin/beds24/creer-propriete", () => {
   });
 
   it("tentative inachevée + propriété apparue sous un autre nom → 409 sans la capter", async () => {
-    await t.db.prepare("INSERT INTO app_settings (key, value) VALUES ('beds24_creation_tentative:1', ?1)").bind(JSON.stringify({ beforeIds: [] })).run();
+    await t.db.prepare("INSERT INTO app_settings (key, value) VALUES ('beds24_creation_tentative:1', ?1)").bind(JSON.stringify({ beforeIds: [], at: Date.now(), issue: "inconnu" })).run();
     fake.props.push({ id: 777, name: "Le Moulin de Braives", roomTypes: [] });
     const res = await creer();
     expect(res.status).toBe(409);
@@ -356,6 +410,8 @@ describe("POST /api/admin/beds24/creer-propriete", () => {
     expect(res.status).toBe(502);
     expect(((await res.json()) as { error: string }).error).toContain("country : invalid country code");
     expect(await mapping()).toEqual({ property: 344555, rooms: [711713, 711714, null] });
+    // refus certain : le marqueur de tentative est levé, un nouvel essai peut créer
+    expect(await t.db.prepare("SELECT 1 FROM app_settings WHERE key = 'beds24_creation_tentative:1'").first()).toBeNull();
     expect(await t.db.prepare("SELECT 1 FROM app_settings WHERE key = 'beds24_creation_verrou'").first()).toBeNull();
   });
 
@@ -401,6 +457,53 @@ describe("POST /api/admin/beds24/creer-propriete", () => {
     expect(res.status).toBe(200);
     const r = (await res.json()) as { pushed: { roomId: number }[] };
     expect(r.pushed.map((x) => x.roomId)).toEqual(fake.props[0]!.roomTypes.map((x) => x.id));
+  });
+
+  it("issue inconnue (réseau coupé) sans rien d'apparu : pas de nouvel essai pendant 30 min, puis reprise", async () => {
+    fake.dropNextPost = true;
+    const first = await creer();
+    expect(first.status).toBe(502);
+    expect(((await first.json()) as { error: string }).error).toMatch(/résultat inconnu/);
+    expect(fake.props).toHaveLength(0);
+    const second = await creer();
+    expect(second.status).toBe(409);
+    expect(((await second.json()) as { error: string }).error).toMatch(/issue inconnue/);
+    expect(fake.posts).toHaveLength(1);
+    // 31 minutes plus tard, rien n'est apparu : l'écriture n'a pas eu lieu
+    const raw = await t.db.prepare("SELECT value FROM app_settings WHERE key = 'beds24_creation_tentative:1'").first<{ value: string }>();
+    const a = JSON.parse(raw!.value) as { at: number };
+    await t.db.prepare("UPDATE app_settings SET value = ?1 WHERE key = 'beds24_creation_tentative:1'").bind(JSON.stringify({ ...a, at: a.at - 31 * 60 * 1000 })).run();
+    expect((await creer()).status).toBe(200);
+    expect(fake.props).toHaveLength(1);
+  });
+
+  it("élément avec errors mais sans success → échec, pas de mapping", async () => {
+    fake.forced.push({ status: 201, body: [{ errors: [{ field: "name", message: "too long" }] }] });
+    const res = await creer();
+    expect(res.status).toBe(502);
+    expect(((await res.json()) as { error: string }).error).toContain("name : too long");
+    expect((await mapping()).property).toBe(344555);
+  });
+
+  it("jeton en lecture seule sur les propriétés → bouton absent et création refusée", async () => {
+    fake.scopes = ["read:properties", "inventory"];
+    const s = (await (await call("GET", "/api/admin/beds24/status")).json()) as { ecriturePropriete: boolean; creationPossible: boolean };
+    expect(s.ecriturePropriete).toBe(false);
+    expect(s.creationPossible).toBe(false);
+    expect((await creer()).status).toBe(409);
+    expect(fake.posts).toHaveLength(0);
+  });
+
+  it("verrou volé pendant l'appel → abandon avant d'écrire le mapping", async () => {
+    fake.onPost = async () => {
+      await t.db.prepare("UPDATE app_settings SET value = 'voleur' WHERE key = 'beds24_creation_verrou'").run();
+    };
+    const res = await creer();
+    expect(res.status).toBe(409);
+    expect(((await res.json()) as { error: string }).error).toMatch(/verrou de création perdu/);
+    expect((await mapping()).property).toBe(344555);
+    // le verrou d'autrui n'est pas libéré par l'appel qui l'a perdu
+    expect(await t.db.prepare("SELECT value FROM app_settings WHERE key = 'beds24_creation_verrou'").first()).toEqual({ value: "voleur" });
   });
 
   it("push refusé par élément (réponse en tableau) → 502 en clair, plus de 500 opaque", async () => {

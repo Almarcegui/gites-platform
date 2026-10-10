@@ -41,16 +41,24 @@ export function resetBeds24TokenCache(): void {
 let cachedToken: { value: string; expiresAt: number } | null = null;
 
 export class Beds24Error extends Error {
-  constructor(message: string, public status?: number) {
+  /** `refus` : Beds24 a répondu non, rien n'a été appliqué. `inconnu` : panne
+   *  réseau, délai ou erreur 5xx — une écriture a PU être appliquée. */
+  constructor(message: string, public status?: number, public issue: "refus" | "inconnu" = "refus") {
     super(message);
   }
 }
 
 async function accessToken(env: Env): Promise<string> {
   if (cachedToken && Date.now() < cachedToken.expiresAt) return cachedToken.value;
-  const res = await fetch(`${BEDS24_API}/authentication/token`, {
-    headers: { refreshToken: await refreshTokenValue(env) },
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${BEDS24_API}/authentication/token`, {
+      headers: { refreshToken: await refreshTokenValue(env) },
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    });
+  } catch (e) {
+    throw new Beds24Error(`renouvellement du token Beds24 injoignable (${e instanceof Error ? e.message : String(e)})`);
+  }
   const data = (await res.json().catch(() => ({}))) as { token?: string; error?: string };
   if (!res.ok || !data.token) {
     throw new Beds24Error(`échec du renouvellement de token Beds24 : ${data.error ?? res.status}`, res.status);
@@ -67,12 +75,11 @@ async function accessToken(env: Env): Promise<string> {
  *  Airbnb et Booking. Jusqu'ici, seule la panne DNS du VPN Emeria empêchait
  *  ça, par accident (audit ECC 2026-07-30). Les lectures restent libres. */
 export function beds24WritesAllowed(env: Env): boolean {
-  if (env.BEDS24_WRITE_ENABLED === "true") return true;
-  // Un « false » explicite l'emporte sur le https : l'environnement d'essai
-  // (https, BEDS24_WRITE_ENABLED=false) n'écrit jamais dans le compte réel,
-  // même si quelqu'un y colle un code d'invitation (contrôle 10/10/2026).
-  if (env.BEDS24_WRITE_ENABLED === "false") return false;
-  return (env.PUBLIC_BASE_URL ?? "").startsWith("https://");
+  // Fermé par défaut (contrôle Codex 10/10/2026) : seule la production pose
+  // BEDS24_WRITE_ENABLED="true" (wrangler.jsonc, env.production). Le https ne
+  // suffit plus : l'environnement d'essai est en https et ne doit jamais
+  // écrire dans le compte réel, même si on y colle un code d'invitation.
+  return env.BEDS24_WRITE_ENABLED === "true";
 }
 
 /** L'API v2 répond parfois 200 avec un échec par élément
@@ -107,9 +114,12 @@ function collectFailures(data: unknown): string[] {
   // un refus y passait inaperçu.
   if (Array.isArray(data)) {
     for (const item of data) {
-      if (item && typeof item === "object" && (item as Record<string, unknown>).success === false) {
-        out.push(describe(item as Record<string, unknown>));
-      }
+      if (!item || typeof item !== "object") continue;
+      const o = item as Record<string, unknown>;
+      // `success` n'est pas obligatoire dans multiplePostResponse : un élément
+      // qui porte des `errors` sans se dire réussi est un échec.
+      const hasErrors = Array.isArray(o.errors) && o.errors.length > 0;
+      if (o.success === false || (o.success !== true && hasErrors)) out.push(describe(o));
     }
     return out;
   }
@@ -160,10 +170,14 @@ export async function beds24Fetch<T>(
     // écriture, l'issue est INCONNUE (Beds24 a pu l'appliquer).
     throw new Beds24Error(
       `Beds24 ${method} ${path} injoignable (${e instanceof Error ? e.message : String(e)})${method !== "GET" ? " — résultat inconnu côté Beds24" : ""}`,
+      undefined,
+      "inconnu",
     );
   }
   const data = (await res.json().catch(() => ({}))) as T & { success?: boolean; error?: string };
-  if (!res.ok) throw new Beds24Error(`Beds24 ${path} → ${res.status} ${data.error ?? ""}`.trim(), res.status);
+  if (!res.ok) {
+    throw new Beds24Error(`Beds24 ${path} → ${res.status} ${data.error ?? ""}`.trim(), res.status, res.status >= 500 ? "inconnu" : "refus");
+  }
   const failures = collectFailures(data);
   if (failures.length > 0) {
     throw new Beds24Error(

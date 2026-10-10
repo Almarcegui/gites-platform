@@ -32,7 +32,10 @@
 //     échoue (réponse perdue, nom transformé par Beds24), l'appel suivant
 //     reprend la propriété apparue depuis au lieu d'en créer une seconde ;
 //   - le mapping n'est écrit qu'après RELECTURE du compte ;
-//   - verrou en base (jeton aléatoire, 5 min) contre le double clic.
+//   - verrou en base contre le double clic : jeton aléatoire, bail de 5 min
+//     renouvelé avant chaque écriture (abandon si perdu) ;
+//   - après une écriture à l'issue inconnue (réseau, 5xx), aucune nouvelle
+//     écriture pendant 30 min si rien n'est apparu dans le compte.
 
 import {
   audit,
@@ -45,7 +48,7 @@ import {
   type UnitRow,
 } from "../db/repo";
 import { pushedPriceCents } from "../core/price-guardrails";
-import { HOUSE_RULES, PROPERTY_A_COMPLETER, PROPERTY_DESCRIPTION, unitContent } from "../core/beds24-contenu";
+import { ADRESSE_VITRINE, HOUSE_RULES, PROPERTY_A_COMPLETER, PROPERTY_DESCRIPTION, unitContent } from "../core/beds24-contenu";
 import { resolvePushMarkup } from "./beds24-sync";
 import {
   Beds24Error,
@@ -101,7 +104,9 @@ export interface PropertyPlan {
   propertyType: string;
   currency: string;
   address?: string;
+  postcode?: string;
   city?: string;
+  state?: string;
   country: string;
   email?: string;
   phone?: string;
@@ -197,17 +202,19 @@ export async function buildPropertyPlan(db: D1Database, propertyId: number, publ
     };
   });
 
-  const address = clean(property.address);
+  const vitrine = ADRESSE_VITRINE[property.slug];
+  const address = vitrine?.address ?? clean(property.address);
+  const phone = clean(property.contactPhone) ?? vitrine?.phone;
   const checkInStart = quarterHour(settings.checkinTime);
   const checkOutEnd = quarterHour(settings.checkoutTime);
   aCompleter.push(
-    "Coordonnées GPS (latitude, longitude) : absentes de notre base",
-    "Code postal et rue exacte : notre base n'a qu'une adresse libre" + (address ? ` (« ${address} »)` : ""),
+    "Coordonnées GPS (latitude, longitude) : absentes de notre base et de nos pages",
     "Heure limite d'arrivée (checkInEnd) : non définie chez nous",
   );
+  if (!vitrine) aCompleter.push("Code postal et rue exacte : notre base n'a qu'une adresse libre" + (address ? ` (« ${address} »)` : ""));
   if (!checkInStart || !checkOutEnd) aCompleter.push("Heures d'arrivée/départ : réglage absent ou hors quart d'heure");
   if (!clean(property.contactEmail)) aCompleter.push("E-mail de contact : absent ou provisoire (TODO) dans notre base");
-  if (!clean(property.contactPhone)) aCompleter.push("Téléphone de contact : absent de notre base");
+  if (!phone) aCompleter.push("Téléphone de contact : absent de notre base");
   aCompleter.push(...PROPERTY_A_COMPLETER);
 
   return {
@@ -216,10 +223,12 @@ export async function buildPropertyPlan(db: D1Database, propertyId: number, publ
     propertyType: PROPERTY_TYPE,
     currency: property.currency || "EUR",
     address,
-    city: clean(property.commune),
+    postcode: vitrine?.postcode,
+    city: vitrine?.city ?? clean(property.commune),
+    state: vitrine?.state,
     country: PAYS,
     email: clean(property.contactEmail),
-    phone: clean(property.contactPhone),
+    phone,
     checkInStart,
     checkOutEnd,
     description: PROPERTY_DESCRIPTION,
@@ -279,7 +288,9 @@ function mappingStatus(
  *  sont pas listés dans la doc. */
 function canWriteProperties(compte: Beds24Compte | undefined): boolean | null {
   if (!compte || compte.scopes.length === 0) return null;
-  return compte.scopes.some((s) => /propert/i.test(s) && /^(write|all)/i.test(s));
+  // Formes rencontrées : « properties » (liste de l'invite code dans la doc),
+  // « write:properties » / « all:properties ». « read:properties » seul = non.
+  return compte.scopes.some((s) => /^((write|all):)?properties$/i.test(s.trim()));
 }
 
 /** Diagnostic complet pour l'écran Canaux : compte relié, propriétés du
@@ -301,18 +312,25 @@ export async function beds24Liaison(env: Env, propertyId: number) {
     mappingARefaire,
     // Bouton « Créer la propriété » : liaison active, mapping absent ou
     // périmé, écriture permise sur ce serveur, jeton qui voit tout le compte.
-    creationPossible: Boolean(status.connected && mappingARefaire && ecritureAutorisee && !jetonRestreint),
+    creationPossible: Boolean(
+      status.connected && mappingARefaire && ecritureAutorisee && !jetonRestreint && canWriteProperties(status.compte) !== false,
+    ),
   };
 }
 
 const LOCK_KEY = "beds24_creation_verrou";
 const LOCK_TTL_SECONDS = 300;
 const attemptKey = (propertyId: number) => `beds24_creation_tentative:${propertyId}`;
+/** Après une écriture à l'issue inconnue, on n'en refait pas avant ce délai :
+ *  Beds24 peut montrer la propriété avec retard. */
+const ATTEMPT_QUIET_MS = 30 * 60 * 1000;
+/** Une tentative plus vieille qu'un jour est oubliée (rien n'est apparu). */
+const ATTEMPT_FORGET_MS = 24 * 3600 * 1000;
 
 async function takeLock(db: D1Database): Promise<string | null> {
-  // Un verrou plus vieux que le TTL (Worker tué en plein appel) est repris.
-  // Le TTL (5 min) dépasse largement la durée maximale d'un appel : six
-  // requêtes Beds24 au plus, chacune coupée à 30 s.
+  // Un verrou dont le bail n'a pas été renouvelé depuis le TTL (Worker tué en
+  // plein appel) est repris. Le détenteur renouvelle son bail avant chaque
+  // écriture (renewLock) : un appel lent ne se fait pas voler le verrou.
   await db
     .prepare(`DELETE FROM app_settings WHERE key = ?1 AND updated_at < datetime('now', ?2)`)
     .bind(LOCK_KEY, `-${LOCK_TTL_SECONDS} seconds`)
@@ -325,10 +343,75 @@ async function takeLock(db: D1Database): Promise<string | null> {
   return (res.meta?.changes ?? 0) > 0 ? owner : null;
 }
 
+/** Renouvelle le bail ; s'il a été perdu, on abandonne AVANT d'écrire. */
+async function renewLock(db: D1Database, owner: string): Promise<void> {
+  const res = await db
+    .prepare("UPDATE app_settings SET updated_at = datetime('now') WHERE key = ?1 AND value = ?2")
+    .bind(LOCK_KEY, owner)
+    .run();
+  if ((res.meta?.changes ?? 0) === 0) {
+    throw new CreationRefusee("verrou de création perdu (appel trop long) — rien n'a été écrit après sa perte, relancer", 409);
+  }
+}
+
 async function releaseLock(db: D1Database, owner: string): Promise<void> {
   // Seul le détenteur libère : un verrou repris par un autre appel reste à lui.
   await db.prepare("DELETE FROM app_settings WHERE key = ?1 AND value = ?2").bind(LOCK_KEY, owner).run();
 }
+
+interface Attempt {
+  /** Ids des propriétés du compte AVANT l'écriture. */
+  beforeIds: number[];
+  /** Propriété visée quand l'écriture ajoutait des rooms à une existante. */
+  targetId?: number;
+  at: number;
+  issue: "en_cours" | "inconnu";
+}
+
+async function writeAttempt(db: D1Database, propertyId: number, a: Attempt): Promise<void> {
+  await db
+    .prepare(
+      "INSERT INTO app_settings (key, value, updated_at) VALUES (?1, ?2, datetime('now')) " +
+        "ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = datetime('now')",
+    )
+    .bind(attemptKey(propertyId), JSON.stringify(a))
+    .run();
+}
+
+async function clearAttempt(db: D1Database, propertyId: number): Promise<void> {
+  await db.prepare("DELETE FROM app_settings WHERE key = ?1").bind(attemptKey(propertyId)).run();
+}
+
+/** POST d'écriture encadré : marqueur posé avant, levé si Beds24 a refusé
+ *  pour de bon, passé à « inconnu » si l'issue l'est (réseau, 5xx). */
+async function guardedPost(
+  env: Env,
+  propertyId: number,
+  owner: string,
+  attempt: Omit<Attempt, "at" | "issue">,
+  body: unknown,
+): Promise<unknown> {
+  await renewLock(env.DB, owner);
+  await writeAttempt(env.DB, propertyId, { ...attempt, at: Date.now(), issue: "en_cours" });
+  try {
+    return await beds24Fetch(env, "/properties", { method: "POST", body });
+  } catch (e) {
+    if (e instanceof Beds24Error && e.issue === "refus") await clearAttempt(env.DB, propertyId);
+    else await writeAttempt(env.DB, propertyId, { ...attempt, at: Date.now(), issue: "inconnu" });
+    throw e;
+  }
+}
+
+/** Id de la propriété créée, s'il figure dans la réponse au POST. */
+function newIdFromResponse(data: unknown): number | null {
+  if (!Array.isArray(data)) return null;
+  const item = data[0] as Record<string, unknown> | undefined;
+  const n = item && typeof item.new === "object" && item.new ? (item.new as Record<string, unknown>).id : undefined;
+  return typeof n === "number" && Number.isFinite(n) ? n : null;
+}
+
+const heure = (ms: number) =>
+  new Date(ms).toLocaleTimeString("fr-BE", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Brussels" });
 
 function roomCore(r: RoomPlan): Record<string, unknown> {
   return {
@@ -348,7 +431,9 @@ function propertyCore(plan: PropertyPlan, rooms: RoomPlan[]): Record<string, unk
     propertyType: plan.propertyType,
     currency: plan.currency,
     ...(plan.address ? { address: plan.address } : {}),
+    ...(plan.postcode ? { postcode: plan.postcode } : {}),
     ...(plan.city ? { city: plan.city } : {}),
+    ...(plan.state ? { state: plan.state } : {}),
     country: plan.country,
     ...(plan.email ? { email: plan.email } : {}),
     ...(plan.phone ? { phone: plan.phone } : {}),
@@ -384,7 +469,7 @@ function sentSummary(plan: PropertyPlan) {
   return {
     propriete: [
       "nom", "type (cottage)", `devise ${plan.currency}`, `pays ${plan.country}`,
-      ...(plan.address ? ["adresse"] : []), ...(plan.city ? ["commune"] : []),
+      ...(plan.address ? ["adresse"] : []), ...(plan.postcode ? ["code postal"] : []), ...(plan.city ? ["localité"] : []),
       ...(plan.email ? ["e-mail"] : []), ...(plan.phone ? ["téléphone"] : []),
       ...(plan.checkInStart ? [`arrivée dès ${plan.checkInStart}`] : []),
       ...(plan.checkOutEnd ? [`départ avant ${plan.checkOutEnd}`] : []),
@@ -419,8 +504,8 @@ export interface CreationResult {
   avertissements: string[];
 }
 
-/** Crée (ou retrouve) la propriété et ses rooms chez Beds24, écrit le
- *  mapping, puis envoie textes et équipements. Lève CreationRefusee
+/** Crée (ou retrouve et met à jour) la propriété et ses rooms chez Beds24,
+ *  écrit le mapping, puis envoie textes et équipements. Lève CreationRefusee
  *  (garde-fou) ou Beds24Error (refus de l'API, message en clair). */
 export async function createBeds24Property(env: Env, propertyId: number, actor: string): Promise<CreationResult> {
   const db = env.DB;
@@ -443,6 +528,12 @@ export async function createBeds24Property(env: Env, propertyId: number, actor: 
         409,
       );
     }
+    if (canWriteProperties(status.compte) === false) {
+      throw new CreationRefusee(
+        `le jeton Beds24 n'a pas le droit d'écrire les propriétés (droits : ${status.compte?.scopes.join(", ")}) — générer un code d'invitation avec « properties »`,
+        409,
+      );
+    }
     const before = status.properties ?? [];
     const mapping = mappingStatus(property, units, before);
     if (mapping.etat === "actif") {
@@ -453,20 +544,38 @@ export async function createBeds24Property(env: Env, propertyId: number, actor: 
       );
     }
 
-    // Tentative précédente inachevée : une propriété apparue depuis est la nôtre.
+    // Tentative précédente inachevée (marqueur posé avant chaque écriture).
     const avertissements: string[] = [];
     let existing: Beds24PropertySummary | null = null;
+    let attempt: Attempt | null = null;
     const attemptRaw = await getSetting(db, attemptKey(propertyId));
     if (attemptRaw) {
-      const knownIds = new Set<number>(((JSON.parse(attemptRaw) as { beforeIds?: number[] }).beforeIds ?? []).map(Number));
+      try {
+        attempt = JSON.parse(attemptRaw) as Attempt;
+      } catch {
+        attempt = null;
+      }
+      if (!attempt || !Number.isFinite(attempt.at) || Date.now() - attempt.at > ATTEMPT_FORGET_MS) {
+        await clearAttempt(db, propertyId);
+        attempt = null;
+      }
+    }
+    const quiet = attempt != null && Date.now() - attempt.at < ATTEMPT_QUIET_MS;
+    const tooSoon = (what: string) =>
+      new CreationRefusee(
+        `${what} à ${heure(attempt!.at)} a une issue inconnue (réponse de Beds24 perdue) et rien n'est encore visible dans le compte — Beds24 peut l'afficher avec retard : vérifier dans Beds24, ou relancer après ${heure(attempt!.at + ATTEMPT_QUIET_MS)}`,
+        409,
+      );
+    if (attempt && attempt.targetId == null) {
+      const knownIds = new Set<number>((attempt.beforeIds ?? []).map(Number));
       const appeared = before.filter((p) => !knownIds.has(p.id));
+      const candidate = appeared[0];
       if (appeared.length > 1) {
         throw new CreationRefusee(
           `une création précédente n'a pas abouti et ${appeared.length} propriétés sont apparues depuis dans le compte (#${appeared.map((p) => p.id).join(", #")}) — vérifier dans Beds24 avant de relancer`,
           409,
         );
       }
-      const candidate = appeared[0];
       if (appeared.length === 1 && candidate) {
         // On ne reprend d'office que si le nom concorde : une propriété créée
         // à la main entre-temps (autre domaine) ne doit pas être captée.
@@ -478,6 +587,8 @@ export async function createBeds24Property(env: Env, propertyId: number, actor: 
         }
         existing = candidate;
         avertissements.push(`reprise de la propriété #${candidate.id} apparue lors d'une tentative précédente inachevée`);
+      } else if (quiet) {
+        throw tooSoon("la création précédente");
       }
     }
     if (!existing) {
@@ -491,46 +602,60 @@ export async function createBeds24Property(env: Env, propertyId: number, actor: 
       }
       existing = homonymes[0] ?? null;
     }
-    const missing = plan.rooms.filter((r) => !(existing?.roomTypes ?? []).some((rt) => sameName(rt.name, r.name)));
+    const roomOf = (r: RoomPlan) => (existing?.roomTypes ?? []).filter((rt) => sameName(rt.name, r.name));
+    const missing = plan.rooms.filter((r) => roomOf(r).length === 0);
+    if (existing && attempt?.targetId === existing.id && quiet && missing.length > 0) {
+      throw tooSoon("l'ajout de rooms précédent");
+    }
+    for (const r of plan.rooms) {
+      if (roomOf(r).length > 1) {
+        throw new CreationRefusee(`room « ${r.name} » en double dans la propriété Beds24 #${existing!.id} — supprimer le doublon dans Beds24`, 409);
+      }
+    }
     const propertyCreated = existing == null;
 
     let prop: Beds24PropertySummary;
     if (existing == null) {
-      // Marqueur AVANT le POST : si la suite échoue, on saura reconnaître la
-      // propriété créée au lieu d'en refaire une.
-      await db
-        .prepare(
-          "INSERT INTO app_settings (key, value, updated_at) VALUES (?1, ?2, datetime('now')) " +
-            "ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = datetime('now')",
-        )
-        .bind(attemptKey(propertyId), JSON.stringify({ beforeIds: before.map((p) => p.id), name: plan.name }))
-        .run();
-      const res = await beds24Fetch(env, "/properties", { method: "POST", body: [propertyCore(plan, plan.rooms)] });
+      const res = await guardedPost(env, propertyId, owner, { beforeIds: before.map((p) => p.id) }, [propertyCore(plan, plan.rooms)]);
       avertissements.push(...responseMessages(res));
       const after = await beds24ListProperties(env);
+      const newId = newIdFromResponse(res);
       const knownIds = new Set(before.map((p) => p.id));
       const appeared = after.filter((p) => !knownIds.has(p.id));
       const byName = after.filter((p) => sameName(p.name, plan.name));
-      const found = appeared.length === 1 ? appeared[0] : byName.length === 1 ? byName[0] : undefined;
+      const found =
+        (newId != null ? after.find((p) => p.id === newId) : undefined) ??
+        (appeared.length === 1 ? appeared[0] : byName.length === 1 ? byName[0] : undefined);
       if (!found) {
+        await writeAttempt(db, propertyId, { beforeIds: before.map((p) => p.id), at: Date.now(), issue: "inconnu" });
         throw new Beds24Error(
           `Beds24 a répondu à la création mais la propriété n'est pas identifiable à la relecture (${appeared.length} nouvelle(s)) — mapping non écrit ; un nouvel essai reprendra la propriété apparue sans en créer une autre`,
+          undefined,
+          "inconnu",
         );
       }
       prop = found;
-    } else if (missing.length > 0) {
+    } else {
+      // Propriété reprise : on la remet entièrement à nos valeurs (noyau +
+      // toutes les rooms, existantes par id, manquantes ajoutées) — le
+      // récapitulatif dit alors vrai.
       const target = existing;
-      const res = await beds24Fetch(env, "/properties", {
-        method: "POST",
-        body: [{ id: target.id, roomTypes: missing.map(roomCore) }],
-      });
+      const body = [
+        {
+          id: target.id,
+          ...propertyCore(plan, []),
+          roomTypes: plan.rooms.map((r) => {
+            const ex = roomOf(r)[0];
+            return ex ? { id: ex.id, ...roomCore(r) } : roomCore(r);
+          }),
+        },
+      ];
+      const res = await guardedPost(env, propertyId, owner, { beforeIds: before.map((p) => p.id), targetId: target.id }, body);
       avertissements.push(...responseMessages(res));
       const after = await beds24ListProperties(env);
       const found = after.find((p) => p.id === target.id);
       if (!found) throw new Beds24Error(`propriété Beds24 #${target.id} introuvable à la relecture — mapping non écrit`);
       prop = found;
-    } else {
-      prop = existing;
     }
 
     const rooms = plan.rooms.map((r) => {
@@ -553,6 +678,7 @@ export async function createBeds24Property(env: Env, propertyId: number, actor: 
     // ancien room id resté sur une autre unité du domaine, journal, et levée
     // du marqueur de tentative.
     const keep = new Set(rooms.map((r) => r.unitId));
+    await renewLock(db, owner);
     await db.batch([
       db.prepare("UPDATE properties SET beds24_property_id = ?1 WHERE id = ?2").bind(prop.id, propertyId),
       ...rooms.map((r) => db.prepare("UPDATE units SET beds24_room_id = ?1 WHERE id = ?2").bind(r.beds24RoomId, r.unitId)),
@@ -572,9 +698,11 @@ export async function createBeds24Property(env: Env, propertyId: number, actor: 
     ]);
 
     // Enrichissement, au mieux : textes et équipements. Un refus est rapporté
-    // et journalisé ; la propriété et le mapping restent en place.
+    // et journalisé ; la propriété et le mapping restent en place. Écriture
+    // sur des ids connus (modification) : la rejouer ne crée rien.
     let contenu: CreationResult["contenu"] = { ok: true };
     try {
+      await renewLock(db, owner);
       const res = await beds24Fetch(env, "/properties", {
         method: "POST",
         body: [
@@ -595,7 +723,7 @@ export async function createBeds24Property(env: Env, propertyId: number, actor: 
       });
       avertissements.push(...responseMessages(res));
     } catch (e) {
-      if (!(e instanceof Beds24Error)) throw e;
+      if (!(e instanceof Beds24Error) && !(e instanceof CreationRefusee)) throw e;
       contenu = { ok: false, erreur: e.message };
     }
     await audit(db, "admin", contenu.ok ? "beds24.creer_propriete_contenu" : "beds24.creer_propriete_contenu_echec", `property:${propertyId}`, {

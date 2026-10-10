@@ -360,7 +360,8 @@ describe("Beds24 — garde-fou dev/prod et réponses partiellement refusées", (
   it("les écritures sont bloquées hors production, les lectures restent libres", async () => {
     const local = { ...env, BEDS24_REFRESH_TOKEN: "refresh_test" } as Env;
     expect(beds24WritesAllowed(local)).toBe(false);
-    expect(beds24WritesAllowed({ ...local, PUBLIC_BASE_URL: "https://gites.example" })).toBe(true);
+    // fermé par défaut : le https seul n'autorise plus rien (contrôle 10/10/2026)
+    expect(beds24WritesAllowed({ ...local, PUBLIC_BASE_URL: "https://gites.example" })).toBe(false);
     expect(beds24WritesAllowed({ ...local, BEDS24_WRITE_ENABLED: "true" })).toBe(true);
     // Environnement d'essai : https mais « false » explicite → jamais d'écriture.
     expect(beds24WritesAllowed({ ...local, PUBLIC_BASE_URL: "https://gites.example", BEDS24_WRITE_ENABLED: "false" })).toBe(false);
@@ -380,7 +381,7 @@ describe("Beds24 — garde-fou dev/prod et réponses partiellement refusées", (
 
   it("un 200 contenant des éléments en échec est traité comme une erreur", async () => {
     const prod = {
-      ...env, BEDS24_REFRESH_TOKEN: "refresh_test", PUBLIC_BASE_URL: "https://gites.example",
+      ...env, BEDS24_REFRESH_TOKEN: "refresh_test", PUBLIC_BASE_URL: "https://gites.example", BEDS24_WRITE_ENABLED: "true",
     } as Env;
     const realFetch = globalThis.fetch;
     globalThis.fetch = (async (input: RequestInfo | URL) => {

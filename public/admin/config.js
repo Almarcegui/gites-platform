@@ -965,7 +965,9 @@ export function registerConfigViews() {
           <span id="b24createNote" class="small muted"></span></p>` : ""}
         ${s.mappingARefaire && !s.creationPossible ? `<p class="small muted" style="margin-top:6px">Création de la propriété indisponible ici : ${
           !s.ecritureAutorisee ? "écriture Beds24 coupée sur ce serveur (elle se fait depuis le site en ligne)"
-            : s.jetonRestreint ? "le jeton Beds24 est restreint à une seule propriété — générer un code d'invitation sans restriction" : "liaison inactive"}.</p>` : ""}`;
+            : s.jetonRestreint ? "le jeton Beds24 est restreint à une seule propriété — générer un code d'invitation sans restriction"
+            : s.ecriturePropriete === false ? "le jeton Beds24 n'a pas le droit d'écrire les propriétés — générer un code d'invitation avec « properties »"
+            : "liaison inactive"}.</p>` : ""}`;
       const btn = root.querySelector("#b24create");
       if (btn) btn.onclick = () => createProperty(btn);
     };

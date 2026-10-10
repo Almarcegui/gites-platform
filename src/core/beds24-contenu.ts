@@ -72,8 +72,21 @@ export const PROPERTY_DESCRIPTION =
 export const HOUSE_RULES = [
   "Étant donné le caractère ouvert de la propriété, aucun chien n'est toléré sans être tenu en laisse autour du moulin.",
   "Période de chasse du 1er octobre au 31 décembre : rester sur les chemins.",
-  "Les déchets sont triés ; verre, papier-carton et PMC sont repris par les hôtes, le compost accueille les déchets organiques.",
+  "Les déchets sont triés. Les voyageurs reprennent avec eux le verre, le papier-carton et les PMC ; le compost sur place accueille les déchets organiques.",
 ].join("\n");
+
+/** Adresse publique du domaine, telle que la publient les pages vitrine
+ *  (données structurées JSON-LD de public/la-maison-du-scieur/ et
+ *  public/la-scierie/). Prime sur `properties.address`, champ libre. */
+export const ADRESSE_VITRINE: Record<string, { address: string; postcode: string; city: string; state: string; phone: string }> = {
+  "pre-more": {
+    address: "Hameau du Pré Moré",
+    postcode: "6890",
+    city: "Redu",
+    state: "Luxembourg",
+    phone: "+32498440883",
+  },
+};
 
 /** Contenu d'une unité : la page vitrine d'abord, sinon sa description en base. */
 export function unitContent(slug: string, dbDescription: string | null): UnitContent | null {
