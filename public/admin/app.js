@@ -3,6 +3,7 @@
 // Les vues de configuration vivent dans config.js.
 
 import { stayBadge } from "./badges.js";
+import { propertyChoice } from "./scope.js";
 import { registerCalendarView } from "./calendar.js";
 import { registerConfigViews } from "./config.js";
 
@@ -27,6 +28,50 @@ export const state = {
 /** Les vues qui exigent un domaine précis retombent sur le premier. */
 export function currentPropertyId() {
   return state.propertyId || state.properties[0]?.id || 1;
+}
+
+/** Domaine visé par une ÉCRITURE qui ne vaut que pour un domaine (nouvelle
+ *  vente, import elloha). Un domaine sélectionné → celui-là. « Tous les
+ *  domaines » avec plusieurs biens → on demande, au lieu de retomber en
+ *  silence sur le premier : une vente du Moulin ne doit pas pouvoir partir
+ *  sur le Pré Moré faute de l'avoir dit (issue #52). Résout `null` si la
+ *  boîte est fermée sans choix, ou si aucun domaine n'est connu : l'appelant
+ *  abandonne alors l'action. */
+export function chooseProperty(title) {
+  const choice = propertyChoice(state.propertyId, state.properties);
+  if (choice.kind === "direct") return Promise.resolve(choice.id);
+  if (choice.kind === "none") {
+    toast("Aucun domaine configuré — rien n'a été fait", true);
+    return Promise.resolve(null);
+  }
+  return new Promise((resolve) => {
+    let chosen = null;
+    const modal = openModal(`
+      <h2>${esc(title)} <button class="x">×</button></h2>
+      <p>Tu regardes « Tous les domaines ». Pour quel domaine ?</p>
+      <div class="row" style="margin-top:12px">${state.properties
+        .map((p) => `<div class="n"><button type="button" class="btn o" data-pick="${p.id}">${esc(p.name)}</button></div>`)
+        .join("")}</div>`);
+    // Croix, Échap et clic sur le fond referment la boîte par `openModal` lui-
+    // même : on guette donc son retrait du DOM, quelle qu'en soit la cause.
+    const watch = new MutationObserver(() => {
+      if (modal.isConnected) return;
+      watch.disconnect();
+      resolve(chosen);
+    });
+    watch.observe(modal.parentNode, { childList: true });
+    modal.querySelectorAll("[data-pick]").forEach((b) => (b.onclick = () => {
+      chosen = Number(b.dataset.pick);
+      modal.remove();
+    }));
+  });
+}
+
+/** Suffixe de titre « — Nom du domaine », seulement quand il y en a plusieurs. */
+function propertySuffix(pid) {
+  if (state.properties.length <= 1) return "";
+  const p = state.properties.find((x) => x.id === pid);
+  return p ? ` — ${esc(p.name)}` : "";
 }
 
 export function authHeaders() {
@@ -1264,9 +1309,11 @@ async function openEditBooking(b, onDone) {
 
 // --- Import elloha (phase 2) — CSV collé, simulation d'abord ----------------
 
-function openEllohaImport() {
+async function openEllohaImport() {
+  const pid = await chooseProperty("Importer les réservations elloha");
+  if (pid == null) return;
   const modal = openModal(`
-    <h2>Importer les réservations elloha <button class="x">×</button></h2>
+    <h2>Importer les réservations elloha${propertySuffix(pid)} <button class="x">×</button></h2>
     <div class="note">Colle ici l'export CSV des réservations FUTURES du compte elloha.
       En-têtes attendus : <span class="mono">unite;arrivee;depart;nom;prenom;email;telephone;adultes;enfants;total;paye;reference</span>
       — le format réel de l'export elloha sera calé au moment de la phase 2 (TODO_FORMAT_ELLOHA).
@@ -1281,7 +1328,7 @@ function openEllohaImport() {
   const run = async (dryRun) => {
     const csv = modal.querySelector("#impCsv").value;
     if (!csv.trim()) return toast("Colle d'abord le CSV", true);
-    const { result } = await api(`/api/admin/import/elloha?property=${currentPropertyId()}`, {
+    const { result } = await api(`/api/admin/import/elloha?property=${pid}`, {
       method: "POST",
       body: { csv, dryRun },
     });
@@ -1654,13 +1701,15 @@ export async function renderGuestRegister(modal, bookingId, booking) {
 // --- Nouvelle vente (résa téléphone) ---------------------------------------
 
 export async function openNewSale() {
-  const { units } = await api(`/api/admin/units?property=${currentPropertyId()}`);
-  const propData = await api(`/api/admin/options?property=${currentPropertyId()}`);
+  const pid = await chooseProperty("Nouvelle vente (téléphone)");
+  if (pid == null) return;
+  const { units } = await api(`/api/admin/units?property=${pid}`);
+  const propData = await api(`/api/admin/options?property=${pid}`);
   const options = propData.options.filter((o) => o.active);
   const today = todayIso();
 
   const modal = openModal(`
-    <h2>Nouvelle vente (téléphone) <button class="x">×</button></h2>
+    <h2>Nouvelle vente (téléphone)${propertySuffix(pid)} <button class="x">×</button></h2>
     <div class="row mb">
       <div><label class="f">Hébergement</label><select id="nsUnit">
         ${units.filter((u) => u.active).map((u) => `<option value="${u.id}">${esc(u.name)}</option>`).join("")}</select></div>
