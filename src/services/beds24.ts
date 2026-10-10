@@ -180,9 +180,13 @@ export async function beds24Fetch<T>(
   }
   const failures = collectFailures(data);
   if (failures.length > 0) {
+    // Un élément refusé à côté d'un `new`/`modified` peut traduire une
+    // application PARTIELLE (le POST n'est pas réputé atomique) : issue inconnue.
+    const partial = Array.isArray(data) && data.some((i) => i && typeof i === "object" && ("new" in i || "modified" in i));
     throw new Beds24Error(
-      `Beds24 ${path} → 200 mais ${failures.length} élément(s) refusé(s) : ${failures.slice(0, 3).join(" · ")}`,
+      `Beds24 ${path} → ${res.status} mais ${failures.length} élément(s) refusé(s) : ${failures.slice(0, 3).join(" · ")}`,
       res.status,
+      partial ? "inconnu" : "refus",
     );
   }
   return data;

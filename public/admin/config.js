@@ -961,10 +961,11 @@ export function registerConfigViews() {
           <ul class="small" style="margin:4px 0 0 18px">${m.rooms.map((r) => `<li>${esc(r.unitName)} → ${r.beds24RoomId ? `<span class="mono">room #${r.beds24RoomId}</span>` : "—"} ${etatTag(r.etat)}</li>`).join("")}</ul>` : ""}
         ${m && m.etat === "perime" ? `<p class="small" style="margin-top:6px">L'identifiant enregistré n'existe pas dans ce compte (ancien compte résilié) : les calendriers ne partent nulle part tant que la propriété n'est pas recréée.</p>` : ""}
         ${s.ecriturePropriete === false ? `<p class="small" style="margin-top:6px"><span class="tag t-warn">Droits du jeton</span> le code d'invitation ne semble pas autoriser l'écriture des propriétés (${esc(s.compte.scopes.join(", "))}) : la création risque d'être refusée.</p>` : ""}
-        ${s.creationPossible ? `<p style="margin-top:10px"><button class="btn sm" id="b24create">Créer la propriété sur Beds24</button>
+        ${s.creationPossible ? `<p style="margin-top:10px"><button class="btn sm" id="b24create">${s.contenuEnAttente ? "Terminer l'envoi des textes sur Beds24" : "Créer la propriété sur Beds24"}</button>
           <span id="b24createNote" class="small muted"></span></p>` : ""}
         ${s.mappingARefaire && !s.creationPossible ? `<p class="small muted" style="margin-top:6px">Création de la propriété indisponible ici : ${
-          !s.ecritureAutorisee ? "écriture Beds24 coupée sur ce serveur (elle se fait depuis le site en ligne)"
+          !s.contenuPrepare ? "textes, adresse et équipements pas encore préparés pour ce domaine (réservé au Pré Moré)"
+            : !s.ecritureAutorisee ? "écriture Beds24 coupée sur ce serveur (elle se fait depuis le site en ligne)"
             : s.jetonRestreint ? "le jeton Beds24 est restreint à une seule propriété — générer un code d'invitation sans restriction"
             : s.ecriturePropriete === false ? "le jeton Beds24 n'a pas le droit d'écrire les propriétés — générer un code d'invitation avec « properties »"
             : "liaison inactive"}.</p>` : ""}`;

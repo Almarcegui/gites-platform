@@ -149,11 +149,14 @@ export const sameName = (a: string, b: string): boolean => {
   return n(a) === n(b);
 };
 
+/** Le contenu éditorial (adresse, textes, équipements) existe-t-il pour ce domaine ? */
+const contenuPrepare = (property: PropertyRow): boolean => ADRESSE_VITRINE[property.slug] != null;
+
 const sellable = (units: UnitRow[]): UnitRow[] => units.filter((u) => u.active && !u.isComposite);
 
 /** HH:MM au quart d'heure — les seules valeurs de l'énumération Beds24. */
 const quarterHour = (v: string | undefined): string | undefined =>
-  v && /^([01]\d|2[0-3]):(00|15|30|45)$/.test(v.trim()) ? v.trim() : undefined;
+  v && /^(([01]\d|2[0-3]):(00|15|30|45)|24:00)$/.test(v.trim()) ? v.trim() : undefined;
 
 const euros = (cents: number | null | undefined): number | undefined =>
   cents != null && cents > 0 ? Math.round(cents) / 100 : undefined;
@@ -162,6 +165,14 @@ const euros = (cents: number | null | undefined): number | undefined =>
 export async function buildPropertyPlan(db: D1Database, propertyId: number, publicBaseUrl: string): Promise<PropertyPlan> {
   const property = await getProperty(db, propertyId);
   if (!property) throw new CreationRefusee("domaine introuvable", 404);
+  if (!contenuPrepare(property)) {
+    // Textes, adresse et équipements sont propres au Pré Moré : les envoyer
+    // pour un autre domaine créerait une annonce réelle au contenu faux.
+    throw new CreationRefusee(
+      `contenu Beds24 non préparé pour « ${property.name} » (src/core/beds24-contenu.ts) — création réservée au Pré Moré pour l'instant`,
+      400,
+    );
+  }
   const [units, rules, markup, settings] = await Promise.all([
     listUnits(db, propertyId),
     listRateRules(db, propertyId),
@@ -303,6 +314,11 @@ export async function beds24Liaison(env: Env, propertyId: number) {
   const ecritureAutorisee = beds24WritesAllowed(env);
   const jetonRestreint = status.compte?.limiteAPropriete != null;
   const mappingARefaire = Boolean(mapping && (mapping.etat === "absent" || mapping.etat === "perime"));
+  const prepare = property ? contenuPrepare(property) : false;
+  // Mapping écrit mais textes/équipements jamais partis (arrêt entre les deux).
+  const contenuEnAttente = Boolean(
+    mapping?.etat === "actif" && (await getSetting(env.DB, contentKey(propertyId))) != null,
+  );
   return {
     ...status,
     ecritureAutorisee,
@@ -310,10 +326,13 @@ export async function beds24Liaison(env: Env, propertyId: number) {
     jetonRestreint,
     mapping,
     mappingARefaire,
+    contenuPrepare: prepare,
+    contenuEnAttente,
     // Bouton « Créer la propriété » : liaison active, mapping absent ou
     // périmé, écriture permise sur ce serveur, jeton qui voit tout le compte.
     creationPossible: Boolean(
-      status.connected && mappingARefaire && ecritureAutorisee && !jetonRestreint && canWriteProperties(status.compte) !== false,
+      status.connected && (mappingARefaire || contenuEnAttente) && prepare && ecritureAutorisee && !jetonRestreint &&
+        canWriteProperties(status.compte) !== false,
     ),
   };
 }
@@ -321,6 +340,8 @@ export async function beds24Liaison(env: Env, propertyId: number) {
 const LOCK_KEY = "beds24_creation_verrou";
 const LOCK_TTL_SECONDS = 300;
 const attemptKey = (propertyId: number) => `beds24_creation_tentative:${propertyId}`;
+/** Posé avec le mapping, levé quand textes et équipements sont partis. */
+const contentKey = (propertyId: number) => `beds24_contenu_a_envoyer:${propertyId}`;
 /** Après une écriture à l'issue inconnue, on n'en refait pas avant ce délai :
  *  Beds24 peut montrer la propriété avec retard. */
 const ATTEMPT_QUIET_MS = 30 * 60 * 1000;
@@ -362,8 +383,10 @@ async function releaseLock(db: D1Database, owner: string): Promise<void> {
 interface Attempt {
   /** Ids des propriétés du compte AVANT l'écriture. */
   beforeIds: number[];
-  /** Propriété visée quand l'écriture ajoutait des rooms à une existante. */
+  /** Propriété visée quand l'écriture mettait à jour une existante. */
   targetId?: number;
+  /** Ids de ses rooms AVANT l'écriture. */
+  beforeRoomIds?: number[];
   at: number;
   issue: "en_cours" | "inconnu";
 }
@@ -536,6 +559,22 @@ export async function createBeds24Property(env: Env, propertyId: number, actor: 
     }
     const before = status.properties ?? [];
     const mapping = mappingStatus(property, units, before);
+    if (mapping.etat === "actif" && (await getSetting(db, contentKey(propertyId))) != null) {
+      // Reprise : mapping écrit, textes et équipements jamais partis.
+      const mappedRooms = plan.rooms.map((r) => {
+        const u = units.find((x) => x.id === r.unitId);
+        return { unitId: r.unitId, name: r.name, beds24RoomId: u?.beds24RoomId ?? 0, creee: false };
+      });
+      if (mappedRooms.some((r) => !r.beds24RoomId)) {
+        throw new CreationRefusee("mapping incomplet pour reprendre l'envoi des textes — vérifier la correspondance des hébergements", 409);
+      }
+      return await finishContent(env, owner, plan, propertyId, actor, {
+        propriete: { beds24PropertyId: property.beds24PropertyId!, name: plan.name, creee: false },
+        rooms: mappedRooms,
+        ancienMapping: { beds24PropertyId: property.beds24PropertyId, rooms: mappedRooms.map((r) => ({ unitId: r.unitId, beds24RoomId: r.beds24RoomId })) },
+        avertissements: ["reprise de l'envoi des textes et équipements (interrompu après l'écriture du mapping)"],
+      });
+    }
     if (mapping.etat === "actif") {
       throw new CreationRefusee(
         `la propriété Beds24 #${property.beds24PropertyId} est déjà mappée et existe dans le compte — rien à créer (pousser les calendriers suffit)`,
@@ -590,6 +629,29 @@ export async function createBeds24Property(env: Env, propertyId: number, actor: 
       } else if (quiet) {
         throw tooSoon("la création précédente");
       }
+    }
+    if (attempt && attempt.targetId != null) {
+      // La tentative précédente mettait à jour une propriété précise : on s'y
+      // rattache, et une room apparue sous un autre nom bloque (résolution
+      // manuelle) au lieu d'être recréée en double.
+      const target = before.find((p) => p.id === attempt!.targetId);
+      if (!target) {
+        throw new CreationRefusee(
+          `la propriété Beds24 #${attempt.targetId} visée par la tentative précédente n'est plus dans le compte — vérifier dans Beds24 avant de relancer`,
+          409,
+        );
+      }
+      const knownRooms = new Set<number>((attempt.beforeRoomIds ?? []).map(Number));
+      const strangers = (target.roomTypes ?? []).filter(
+        (rt) => !knownRooms.has(rt.id) && !plan.rooms.some((r) => sameName(r.name, rt.name)),
+      );
+      if (strangers.length > 0) {
+        throw new CreationRefusee(
+          `une mise à jour précédente n'a pas abouti et des rooms inattendues sont apparues dans #${target.id} (${strangers.map((r) => `#${r.id} « ${r.name} »`).join(", ")}) — si ce sont les nôtres, les renommer comme chez nous dans Beds24 puis relancer`,
+          409,
+        );
+      }
+      existing = target;
     }
     if (!existing) {
       const homonymes = before.filter((p) => sameName(p.name, plan.name));
@@ -650,7 +712,11 @@ export async function createBeds24Property(env: Env, propertyId: number, actor: 
           }),
         },
       ];
-      const res = await guardedPost(env, propertyId, owner, { beforeIds: before.map((p) => p.id), targetId: target.id }, body);
+      const res = await guardedPost(
+        env, propertyId, owner,
+        { beforeIds: before.map((p) => p.id), targetId: target.id, beforeRoomIds: (target.roomTypes ?? []).map((r) => r.id) },
+        body,
+      );
       avertissements.push(...responseMessages(res));
       const after = await beds24ListProperties(env);
       const found = after.find((p) => p.id === target.id);
@@ -695,59 +761,89 @@ export async function createBeds24Property(env: Env, propertyId: number, actor: 
           avertissements,
         })),
       db.prepare("DELETE FROM app_settings WHERE key = ?1").bind(attemptKey(propertyId)),
+      db
+        .prepare(
+          "INSERT INTO app_settings (key, value, updated_at) VALUES (?1, ?2, datetime('now')) " +
+            "ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = datetime('now')",
+        )
+        .bind(contentKey(propertyId), String(prop.id)),
     ]);
 
-    // Enrichissement, au mieux : textes et équipements. Un refus est rapporté
-    // et journalisé ; la propriété et le mapping restent en place. Écriture
-    // sur des ids connus (modification) : la rejouer ne crée rien.
-    let contenu: CreationResult["contenu"] = { ok: true };
-    try {
-      await renewLock(db, owner);
-      const res = await beds24Fetch(env, "/properties", {
-        method: "POST",
-        body: [
-          {
-            id: prop.id,
-            texts: [{ language: LANGUE, propertyDescription: plan.description, houseRules: plan.houseRules }],
-            roomTypes: rooms.map((r) => {
-              const p = plan.rooms.find((x) => x.unitId === r.unitId)!;
-              return {
-                id: r.beds24RoomId,
-                ...(p.description ? { texts: [{ language: LANGUE, roomDescription: p.description }] } : {}),
-                // Une ligne de codes : forme du champ « Features » (wiki Beds24).
-                ...(p.featureCodes.length ? { featureCodes: [p.featureCodes] } : {}),
-              };
-            }),
-          },
-        ],
-      });
-      avertissements.push(...responseMessages(res));
-    } catch (e) {
-      if (!(e instanceof Beds24Error) && !(e instanceof CreationRefusee)) throw e;
-      contenu = { ok: false, erreur: e.message };
-    }
-    await audit(db, "admin", contenu.ok ? "beds24.creer_propriete_contenu" : "beds24.creer_propriete_contenu_echec", `property:${propertyId}`, {
-      par: actor, beds24PropertyId: prop.id, ...contenu,
-    });
-
-    return {
-      ok: true,
-      propriete,
-      rooms,
-      directOnly: plan.directOnly,
-      ancienMapping,
-      envoye: sentSummary(plan),
-      contenu,
-      aCompleter: {
-        propriete: [
-          ...(contenu.ok ? [] : [`Textes et équipements refusés par Beds24 (${contenu.erreur}) : à saisir à la main`]),
-          ...plan.aCompleter,
-        ],
-        rooms: plan.rooms.map((r) => ({ unitId: r.unitId, name: r.name, points: r.aCompleter, photos: r.photos })),
-      },
-      avertissements,
-    };
+    return await finishContent(env, owner, plan, propertyId, actor, { propriete, rooms, ancienMapping, avertissements });
   } finally {
     await releaseLock(db, owner);
   }
+}
+
+/** Second temps : textes et équipements sur des ids connus (modification —
+ *  la rejouer ne crée rien), puis le récapitulatif. Un refus est rapporté et
+ *  journalisé ; la propriété et le mapping restent en place. */
+async function finishContent(
+  env: Env,
+  owner: string,
+  plan: PropertyPlan,
+  propertyId: number,
+  actor: string,
+  done: Pick<CreationResult, "propriete" | "rooms" | "ancienMapping" | "avertissements">,
+): Promise<CreationResult> {
+  const db = env.DB;
+  const { propriete, rooms, ancienMapping, avertissements } = done;
+  const prop = { id: propriete.beds24PropertyId };
+
+  // Enrichissement, au mieux : textes et équipements. Un refus est rapporté
+  // et journalisé ; la propriété et le mapping restent en place. Écriture
+  // sur des ids connus (modification) : la rejouer ne crée rien.
+  let contenu: CreationResult["contenu"] = { ok: true };
+  try {
+    await renewLock(db, owner);
+    const res = await beds24Fetch(env, "/properties", {
+      method: "POST",
+      body: [
+        {
+          id: prop.id,
+          texts: [{ language: LANGUE, propertyDescription: plan.description, houseRules: plan.houseRules }],
+          roomTypes: rooms.map((r) => {
+            const p = plan.rooms.find((x) => x.unitId === r.unitId)!;
+            return {
+              id: r.beds24RoomId,
+              ...(p.description ? { texts: [{ language: LANGUE, roomDescription: p.description }] } : {}),
+              // Une ligne de codes : forme du champ « Features » (wiki Beds24).
+              ...(p.featureCodes.length ? { featureCodes: [p.featureCodes] } : {}),
+            };
+          }),
+        },
+      ],
+    });
+    avertissements.push(...responseMessages(res));
+    await db.prepare("DELETE FROM app_settings WHERE key = ?1").bind(contentKey(propertyId)).run();
+  } catch (e) {
+    if (!(e instanceof Beds24Error) && !(e instanceof CreationRefusee)) throw e;
+    contenu = { ok: false, erreur: e.message };
+    // Refus certain : le rejouer échouerait pareil, on rend la main (le
+    // reste est listé « à compléter »). Issue inconnue : reprise possible.
+    if (e instanceof Beds24Error && e.issue === "refus") {
+      await db.prepare("DELETE FROM app_settings WHERE key = ?1").bind(contentKey(propertyId)).run();
+    }
+  }
+  await audit(db, "admin", contenu.ok ? "beds24.creer_propriete_contenu" : "beds24.creer_propriete_contenu_echec", `property:${propertyId}`, {
+    par: actor, beds24PropertyId: prop.id, ...contenu,
+  });
+
+  return {
+    ok: true,
+    propriete,
+    rooms,
+    directOnly: plan.directOnly,
+    ancienMapping,
+    envoye: sentSummary(plan),
+    contenu,
+    aCompleter: {
+      propriete: [
+        ...(contenu.ok ? [] : [`Textes et équipements refusés par Beds24 (${contenu.erreur}) : à saisir à la main`]),
+        ...plan.aCompleter,
+      ],
+      rooms: plan.rooms.map((r) => ({ unitId: r.unitId, name: r.name, points: r.aCompleter, photos: r.photos })),
+    },
+    avertissements,
+  };
 }

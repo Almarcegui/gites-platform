@@ -100,7 +100,7 @@ const FEATURE_CODES = new Set([
   "KITCHEN", "DINING_TABLE", "LIVING_ROOM", "HEATING", "FIRE_PIT", "FIREPLACE", "WATER_VIEW", "PETS_CONSIDERED",
   "WIFI", "PARKING", "SAUNA", "GARDEN", "OVEN", "WASHER", "DISHWASHER", "INTERNET", "BEDROOM", "BED_DOUBLE",
 ]);
-const QUARTER = /^([01]\d|2[0-3]):(00|15|30|45)$/;
+const QUARTER = /^(([01]\d|2[0-3]):(00|15|30|45)|24:00)$/;
 function validate(body: Record<string, unknown>[]): string[] {
   const out: string[] = [];
   for (const p of body) {
@@ -146,7 +146,7 @@ beforeEach(async () => {
     t.db.prepare("UPDATE units SET beds24_room_id = 711713 WHERE id = 1"),
     t.db.prepare("UPDATE units SET beds24_room_id = 711714 WHERE id = 2"),
     t.db.prepare("UPDATE units SET beds24_room_id = NULL WHERE id = 3"),
-    t.db.prepare("DELETE FROM app_settings WHERE key LIKE 'beds24_creation_%'"),
+    t.db.prepare("DELETE FROM app_settings WHERE key LIKE 'beds24_creation_%' OR key LIKE 'beds24_contenu_%'"),
   ]);
 });
 afterEach(() => {
@@ -203,6 +203,25 @@ describe("plan de création (lecture de notre base)", () => {
     expect(plan.rooms[0]!.aCompleter[0]).toMatch(/^Photos \(8\)/);
     expect(plan.aCompleter.join(" ")).toMatch(/GPS/);
     expect(plan.directOnly.map((d) => d.name)).toEqual(["Le Domaine entier"]);
+  });
+
+  it("24:00 est une heure Beds24 valide", async () => {
+    await t.db.prepare("UPDATE settings SET value = '24:00' WHERE property_id = 1 AND key = 'checkout_time'").run();
+    try {
+      expect((await buildPropertyPlan(t.db, 1, "https://x")).checkOutEnd).toBe("24:00");
+    } finally {
+      await t.db.prepare("UPDATE settings SET value = '18:00' WHERE property_id = 1 AND key = 'checkout_time'").run();
+    }
+  });
+
+  it("autre domaine (Moulin de Braives) : contenu non préparé → aperçu et création refusés, pas de bouton", async () => {
+    await expect(buildPropertyPlan(t.db, 2, "https://x")).rejects.toBeInstanceOf(CreationRefusee);
+    expect((await call("GET", "/api/admin/beds24/creer-propriete/apercu?property=2")).status).toBe(400);
+    expect((await call("POST", "/api/admin/beds24/creer-propriete", { propertyId: 2, confirmer: true })).status).toBe(400);
+    const s = (await (await call("GET", "/api/admin/beds24/status?property=2")).json()) as { contenuPrepare: boolean; creationPossible: boolean };
+    expect(s.contenuPrepare).toBe(false);
+    expect(s.creationPossible).toBe(false);
+    expect(fake.posts).toHaveLength(0);
   });
 
   it("noms comparés sans casse, espaces ni entités HTML", () => {
@@ -506,6 +525,50 @@ describe("POST /api/admin/beds24/creer-propriete", () => {
     expect(await t.db.prepare("SELECT value FROM app_settings WHERE key = 'beds24_creation_verrou'").first()).toEqual({ value: "voleur" });
   });
 
+  it("reprise d'une mise à jour : une room apparue sous un autre nom bloque au lieu d'être doublée", async () => {
+    fake.props.push({ id: 555001, name: NOM, roomTypes: [{ id: 555011, name: "La Maison du Scieur" }, { id: 555099, name: "Scierie (importée)" }] });
+    await t.db.prepare("INSERT INTO app_settings (key, value) VALUES ('beds24_creation_tentative:1', ?1)")
+      .bind(JSON.stringify({ beforeIds: [555001], targetId: 555001, beforeRoomIds: [555011], at: Date.now() - 40 * 60 * 1000, issue: "inconnu" })).run();
+    const res = await creer();
+    expect(res.status).toBe(409);
+    expect(((await res.json()) as { error: string }).error).toMatch(/rooms inattendues/);
+    expect(fake.posts).toHaveLength(0);
+  });
+
+  it("création partielle (new + errors) : issue inconnue, le marqueur reste", async () => {
+    fake.forced.push({ status: 201, body: [{ success: false, new: { id: 1 }, errors: [{ field: "roomTypes", message: "partial" }] }] });
+    expect((await creer()).status).toBe(502);
+    const raw = await t.db.prepare("SELECT value FROM app_settings WHERE key = 'beds24_creation_tentative:1'").first<{ value: string }>();
+    expect(JSON.parse(raw!.value).issue).toBe("inconnu");
+    // nouvel essai immédiat : refusé tant que rien n'est apparu
+    expect((await creer()).status).toBe(409);
+  });
+
+  it("arrêt entre le mapping et l'envoi des textes : le bouton revient et reprend l'envoi seul", async () => {
+    let n = 0;
+    fake.onPost = () => {
+      if (++n === 2) fake.dropNextPost = true; // l'enrichissement part dans le vide
+    };
+    const first = (await (await creer()).json()) as { contenu: { ok: boolean } };
+    expect(first.contenu.ok).toBe(false);
+    const created = fake.props[0]!;
+    expect((await mapping()).property).toBe(created.id);
+    const s = (await (await call("GET", "/api/admin/beds24/status")).json()) as { contenuEnAttente: boolean; creationPossible: boolean };
+    expect(s.contenuEnAttente).toBe(true);
+    expect(s.creationPossible).toBe(true);
+    fake.onPost = null;
+    const res = await creer();
+    expect(res.status).toBe(200);
+    const r = (await res.json()) as { contenu: { ok: boolean }; propriete: { beds24PropertyId: number; creee: boolean } };
+    expect(r.contenu.ok).toBe(true);
+    expect(r.propriete).toMatchObject({ beds24PropertyId: created.id, creee: false });
+    expect(fake.props).toHaveLength(1);
+    expect(fake.posts.at(-1)![0]!.texts).toBeDefined();
+    expect(await t.db.prepare("SELECT 1 FROM app_settings WHERE key = 'beds24_contenu_a_envoyer:1'").first()).toBeNull();
+    // et ensuite plus rien à faire : 409
+    expect((await creer()).status).toBe(409);
+  });
+
   it("push refusé par élément (réponse en tableau) → 502 en clair, plus de 500 opaque", async () => {
     await creer();
     const original = fake.handler;
@@ -517,6 +580,8 @@ describe("POST /api/admin/beds24/creer-propriete", () => {
     });
     const res = await call("POST", "/api/admin/beds24/push", { propertyId: 1, days: 3 });
     expect(res.status).toBe(502);
-    expect(((await res.json()) as { error: string }).error).toContain("roomId : not found");
+    const err = ((await res.json()) as { error: string }).error;
+    expect(err).toContain("roomId : not found");
+    expect(err).toContain("→ 201 mais"); // le vrai statut, pas « 200 »
   });
 });
