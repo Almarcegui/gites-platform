@@ -327,12 +327,14 @@ export async function replyOnChannel(
     const failures = arrayFailures(res);
     if (failures.length > 0) throw new Beds24Error(`Beds24 a refusé la réponse : ${failures.join(" · ")}`);
   } catch (e) {
-    // Refus EXPLICITE de Beds24 (statut HTTP ou élément refusé) : rien n'est
+    // Refus EXPLICITE de Beds24 (4xx ou élément refusé) : rien n'est
     // parti, la réservation locale « en cours » s'efface (elle n'a jamais été
     // une donnée métier) et le texte reste dans l'écran pour réessayer.
     // Panne réseau ou délai : l'envoi a PU avoir lieu — la ligne reste, marquée
     // « inconnu », et le garde-fou des 2 minutes empêche le renvoi immédiat.
-    const refused = e instanceof Beds24Error && (e.status != null || e.message.startsWith("Beds24 a refusé"));
+    // Le classement vient de beds24Fetch (#104) : un 5xx ou une application
+    // partielle y sont « inconnu », pas un refus — on garde alors la ligne.
+    const refused = e instanceof Beds24Error && e.issue === "refus";
     if (refused) {
       await db.batch([
         db.prepare("DELETE FROM channel_messages WHERE message_id = ?1").bind(id),

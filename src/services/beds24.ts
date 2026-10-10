@@ -76,7 +76,8 @@ async function accessToken(env: Env): Promise<string> {
  *  ça, par accident (audit ECC 2026-07-30). Les lectures restent libres. */
 export function beds24WritesAllowed(env: Env): boolean {
   // Fermé par défaut (contrôle Codex 10/10/2026) : seule la production pose
-  // BEDS24_WRITE_ENABLED="true" (wrangler.jsonc, env.production). Le https ne
+  // BEDS24_WRITE_ENABLED="true" (wrangler.jsonc, env.production ; variable
+  // d'environnement du site Node sur Infomaniak, cf. .env.example). Le https ne
   // suffit plus : l'environnement d'essai est en https et ne doit jamais
   // écrire dans le compte réel, même si on y colle un code d'invitation.
   return env.BEDS24_WRITE_ENABLED === "true";

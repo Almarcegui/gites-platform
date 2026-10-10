@@ -215,6 +215,23 @@ describe("fil unifié et réponse par le canal", () => {
     expect(calls.filter((c) => c.method === "POST")).toHaveLength(0);
   });
 
+  it("Beds24 en 5xx : issue inconnue, la ligne reste « inconnu », pas de renvoi immédiat", async () => {
+    await pullChannelMessages(env());
+    const id = await guestMessageId();
+    postStatus = 503;
+    try {
+      const r = await api("POST", `/api/admin/messages/${id}/reply`, { body: "Peut-être partie (503)" });
+      expect(r.status).toBe(502);
+      expect(String(r.data.error)).toContain("peut-être partie");
+    } finally {
+      postStatus = 201;
+    }
+    expect((await t.db.prepare("SELECT delivery FROM messages WHERE direction = 'out' AND channel = 'beds24'").all()).results).toEqual([{ delivery: "inconnu" }]);
+    calls = [];
+    expect((await api("POST", `/api/admin/messages/${id}/reply`, { body: "Peut-être partie (503)" })).status).toBe(502);
+    expect(calls.filter((c) => c.method === "POST")).toHaveLength(0);
+  });
+
   it("double clic : la même réponse ne part qu'une fois", async () => {
     await pullChannelMessages(env());
     const id = await guestMessageId();

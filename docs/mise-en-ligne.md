@@ -73,7 +73,8 @@ ne peuvent pas être faits depuis le dépôt.
 - [ ] **Julien** — choisir le domaine définitif (décision #12 « plus tard »),
       le faire pointer sur le site Infomaniak, certificat Let's Encrypt.
 - [ ] Changer `PUBLIC_BASE_URL` : liens des vouchers et des mails, retours
-      Stripe, et la garde des écritures Beds24 (`https://` = production).
+      Stripe. Les écritures Beds24 ne dépendent plus du `https://` : poser
+      `BEDS24_WRITE_ENABLED=true` (seule valeur qui les ouvre).
 - [ ] Les anciennes adresses WordPress (`src/services/redirects.ts`) ne
       redirigent que sur le domaine définitif : vérifier après la bascule.
 - [ ] Mettre à jour l'URL de la sonde (`scripts/gites_sonde.py`, plist

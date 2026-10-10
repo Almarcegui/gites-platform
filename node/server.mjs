@@ -84,7 +84,7 @@ const env = {
   STRIPE_PUBLISHABLE_KEY: process.env.STRIPE_PUBLISHABLE_KEY,
   STRIPE_UI: process.env.STRIPE_UI,
   // Mails par SMTP (Infomaniak) : actif quand les quatre sont posés et
-  // EMAILS_ENABLED=true — cf. src/services/smtp.ts. Prime sur Resend.
+  // EMAILS_ENABLED=true — cf. node/smtp.mjs. Prime sur Resend.
   SMTP_HOST: process.env.SMTP_HOST,
   SMTP_PORT: process.env.SMTP_PORT,
   SMTP_USER: process.env.SMTP_USER,
@@ -361,6 +361,7 @@ server.listen(PORT, () => {
   const transport = env.EMAILS_ENABLED !== "true" ? null : env.SMTP_SEND ? `SMTP ${env.SMTP_HOST}` : env.RESEND_API_KEY ? "Resend" : null;
   console.log(`[gites] emails : ${transport ? `ACTIFS (${transport})` : "stub (journalisés)"}`);
   console.log(`[gites] photos : ${UPLOADS_DIR}`);
+  console.log(`[gites] beds24 : écritures ${env.BEDS24_WRITE_ENABLED === "true" ? "ACTIVES" : "FERMÉES (BEDS24_WRITE_ENABLED ≠ true)"}`);
   console.log(`[gites] admin  : ${(env.ADMIN_ALLOWED_IPS || "").trim() ? `réservé à ${env.ADMIN_ALLOWED_IPS}${TRUST_PROXY ? " (via X-Forwarded-For)" : ""}` : "ouvert à toute adresse"}`);
   if (!env.ADMIN_TOKEN) console.warn("[gites] ⚠️ ADMIN_TOKEN absent — le back-office refusera tout (garde fail-closed)");
   if (!CRON_KEY) console.warn("[gites] ⚠️ CRON_KEY absente — /internal/cron est désactivé");
