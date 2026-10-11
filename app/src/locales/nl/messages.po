@@ -1779,8 +1779,8 @@ msgid "C'est fait. Compte supprimé."
 msgstr "Gedaan. Account verwijderd."
 
 #: src/booking/BookingPanel.tsx
-msgid "C'est fait. Confirmation renvoyée au client."
-msgstr "Gedaan. Bevestiging opnieuw naar de klant gestuurd."
+msgid "C'est fait. Confirmation et contrat renvoyés au client."
+msgstr "Gedaan. Bevestiging en contract opnieuw naar de klant gestuurd."
 
 #: src/booking/Register.tsx
 msgid "C'est fait. Correction enregistrée."
@@ -2525,6 +2525,18 @@ msgstr "Huurvoorwaarden"
 msgid "confirmation de réservation"
 msgstr "reserveringsbevestiging"
 
+#: src/pages/settings/Logs.tsx
+msgid "confirmation et contrat de location"
+msgstr "bevestiging en huurcontract"
+
+#: src/pages/settings/Logs.tsx
+msgid "confirmation et contrat renvoyés"
+msgstr "bevestiging en contract opnieuw verstuurd"
+
+#: src/booking/BookingPanel.tsx
+msgid "confirmation et contrat renvoyés au client"
+msgstr "bevestiging en contract opnieuw naar de klant gestuurd"
+
 #: src/booking/BookingPanel.tsx
 msgid "confirmation refusée : dates reprises entre-temps"
 msgstr "bevestiging geweigerd: data intussen ingenomen"
@@ -2546,10 +2558,6 @@ msgstr "bevestigd"
 #: src/lib/derive.ts
 msgid "Confirmée et payée"
 msgstr "Bevestigd en betaald"
-
-#: src/sale/SaleFlow.tsx
-msgid "Confirmée sans attendre les arrhes"
-msgstr "Bevestigd zonder op het voorschot te wachten"
 
 #: src/pages/Bookings.tsx
 msgid "Confirmées"
@@ -2589,6 +2597,18 @@ msgstr "Doorgaan"
 #: src/ui/kit.tsx
 msgid "Continuer la saisie"
 msgstr "Verder invullen"
+
+#: src/booking/BookingPanel.tsx
+msgid "Contrat de location (PDF)"
+msgstr "Huurcontract (PDF)"
+
+#: src/booking/BookingPanel.tsx
+msgid "Contrat ouvert dans un nouvel onglet."
+msgstr "Contract geopend in een nieuw tabblad."
+
+#: src/booking/BookingPanel.tsx
+msgid "Contrat PDF"
+msgstr "Contract (PDF)"
 
 #: src/pages/settings/Domain.tsx
 msgid "coordonnées"
@@ -3832,16 +3852,6 @@ msgid "La réponse part sur {0}, dans la conversation du voyageur (par Beds24)."
 msgstr "Het antwoord vertrekt via {0}, in het gesprek met de gast (via Beds24)."
 
 #. placeholder {0}: errorText(e)
-#: src/sale/SaleFlow.tsx
-msgid "La réservation est enregistrée, mais le lien de paiement n'a pas pu être créé : {0} Créez-le depuis la fiche."
-msgstr "De reservering is opgeslagen, maar de betaallink kon niet aangemaakt worden: {0} Maak hem aan vanuit de fiche."
-
-#. placeholder {0}: errorText(e)
-#: src/sale/SaleFlow.tsx
-msgid "La réservation est enregistrée, mais le paiement n'a pas été noté : {0} Notez-le dans la fiche."
-msgstr "De reservering is opgeslagen, maar de betaling is niet genoteerd: {0} Noteer ze in de fiche."
-
-#. placeholder {0}: errorText(e)
 #: src/pages/settings/Tarifs.tsx
 msgid "La saison a été créée mais ses prix n'ont pas tous été enregistrés ({0}). Ouvrez-la pour vérifier."
 msgstr "Het seizoen is aangemaakt, maar niet al zijn prijzen zijn opgeslagen ({0}). Open het om na te kijken."
@@ -3898,11 +3908,6 @@ msgstr "De kalender wordt niet meer gelezen. De al overgenomen reserveringen bli
 #: src/canaux/canal.ts
 msgid "le canal"
 msgstr "het kanaal"
-
-#. placeholder {0}: q ? eur(q.totalCents) : ""
-#: src/sale/SaleFlow.tsx
-msgid "Le client a déjà payé le total ({0}) : le noter comme reçu"
-msgstr "De klant heeft het totaal al betaald ({0}): als ontvangen noteren"
 
 #. placeholder {0}: eur(amount)
 #: src/booking/BookingPanel.tsx
@@ -4135,6 +4140,11 @@ msgstr "De sleutels konden niet gelezen worden."
 msgid "Les comptes n'ont pas pu être lus."
 msgstr "De accounts konden niet gelezen worden."
 
+#. placeholder {0}: q ? eur(q.depositCents) : ""
+#: src/sale/SaleFlow.tsx
+msgid "Les dates sont gardées en option. Si le client a un mail, il reçoit un lien vers sa réservation : il y accepte les conditions générales, paie les arrhes ({0}) et reçoit alors sa confirmation avec le contrat."
+msgstr "De data worden in optie bewaard. Heeft de klant een e-mailadres, dan krijgt hij een link naar zijn reservering: hij aanvaardt er de algemene voorwaarden, betaalt het voorschot ({0}) en ontvangt dan zijn bevestiging met het contract."
+
 #. placeholder {0}: channelName(b)
 #: src/booking/BookingPanel.tsx
 msgid "Les dates, l'annulation et le paiement de cette réservation se gèrent sur {0} : la grille suivra."
@@ -4351,10 +4361,6 @@ msgstr "Link gekopieerd."
 msgid "Lien de paiement"
 msgstr "Betaallink"
 
-#: src/sale/SaleFlow.tsx
-msgid "Lien de paiement à transmettre au client :"
-msgstr "Betaallink om aan de klant te bezorgen:"
-
 #: src/booking/BookingPanel.tsx
 msgid "Lien de paiement des arrhes"
 msgstr "Betaallink voor het voorschot"
@@ -4374,6 +4380,10 @@ msgstr "Link voor de schoonmaakhulp"
 #: src/pages/settings/Payments.tsx
 msgid "lien remplacé par un autre"
 msgstr "link vervangen door een andere"
+
+#: src/sale/SaleFlow.tsx
+msgid "Lien vers la réservation du client :"
+msgstr "Link naar de reservering van de klant:"
 
 #: src/pages/settings/Import.tsx
 msgid "Ligne"
@@ -4988,11 +4998,6 @@ msgstr "optie"
 msgid "Option"
 msgstr "Optie"
 
-#. placeholder {0}: q ? eur(q.depositCents) : ""
-#: src/sale/SaleFlow.tsx
-msgid "Option : les dates sont gardées en attendant les arrhes ({0})"
-msgstr "Optie: de data worden vastgehouden in afwachting van het voorschot ({0})"
-
 #: src/pages/settings/Logs.tsx
 msgid "option créée"
 msgstr "optie aangemaakt"
@@ -5098,7 +5103,6 @@ msgstr "De kalender openen"
 #: src/booking/BookingPanel.tsx
 #: src/pages/settings/Domain.tsx
 #: src/pages/settings/Payments.tsx
-#: src/sale/SaleFlow.tsx
 msgid "Paiement"
 msgstr "Betaling"
 
@@ -5326,10 +5330,6 @@ msgstr "Gaan door naar de stap"
 msgid "Payé"
 msgstr "Betaald"
 
-#: src/sale/SaleFlow.tsx
-msgid "payé avant l'enregistrement"
-msgstr "betaald voor de registratie"
-
 #: src/pages/Bookings.tsx
 msgid "Payée"
 msgstr "Betaald"
@@ -5407,6 +5407,10 @@ msgstr "Foto's ({photos}): de API aanvaardt ze niet. De lijst met adressen wordt
 #: src/booking/Register.tsx
 msgid "Pièce d'identité"
 msgstr "Identiteitsbewijs"
+
+#: src/booking/BookingPanel.tsx
+msgid "Pièce jointe :"
+msgstr "Bijlage:"
 
 #: src/pages/Reviews.tsx
 #: src/pages/settings/Channels.tsx
@@ -5507,10 +5511,6 @@ msgstr "voorbereid (verzending uit)"
 #: src/pages/settings/Logs.tsx
 msgid "préparé, envoi coupé"
 msgstr "voorbereid, versturen uitgeschakeld"
-
-#: src/sale/SaleFlow.tsx
-msgid "Préparer un lien de paiement par carte"
-msgstr "Een betaallink per kaart voorbereiden"
 
 #: src/pages/settings/Import.tsx
 msgid "prête"
@@ -6439,10 +6439,6 @@ msgstr "Anders de basisprijs van de woning."
 #: src/pages/settings/Tarifs.tsx
 msgid "Sinon, le prix de la saison qui couvre ce jour. Si deux saisons se chevauchent, la plus courte l'emporte."
 msgstr "Anders de prijs van het seizoen dat deze dag dekt. Als twee seizoenen overlappen, krijgt het kortste voorrang."
-
-#: src/sale/SaleFlow.tsx
-msgid "Sinon, le solde reste à encaisser dans la fiche."
-msgstr "Anders blijft het saldo te innen in de fiche."
 
 #: src/pages/Bookings.tsx
 msgid "site"

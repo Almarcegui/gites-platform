@@ -2513,7 +2513,19 @@ export interface EmailLogRow {
   /** Message d'erreur du fournisseur quand `status = 'failed'` (migration 0011).
    *  Affiché sur la fiche réservation : « échoué » sans motif n'aide personne. */
   errorDetail: string | null;
+  /** Pièces jointes du message, nom et taille (migration 0030). Vide = aucune. */
+  attachments: { filename: string; bytes: number }[];
   createdAt: string;
+}
+
+function parseAttachmentsLog(v: unknown): { filename: string; bytes: number }[] {
+  if (typeof v !== "string" || v === "") return [];
+  try {
+    const list = JSON.parse(v) as { filename?: unknown; bytes?: unknown }[];
+    return list.map((a) => ({ filename: String(a.filename ?? ""), bytes: Number(a.bytes ?? 0) }));
+  } catch {
+    return [];
+  }
 }
 
 export async function listEmailLog(db: D1Database, bookingId?: number, limit = 100): Promise<EmailLogRow[]> {
@@ -2525,6 +2537,7 @@ export async function listEmailLog(db: D1Database, bookingId?: number, limit = 1
     id: num(r.id), bookingId: numOrNull(r.booking_id), toEmail: str(r.to_email), subject: str(r.subject),
     bodyText: str(r.body_text), kind: str(r.kind), status: str(r.status),
     errorDetail: r.error_detail == null ? null : str(r.error_detail),
+    attachments: parseAttachmentsLog(r.attachments),
     createdAt: str(r.created_at),
   }));
 }
@@ -2535,6 +2548,29 @@ export async function hasEmailOfKind(db: D1Database, bookingId: number, kind: st
     .bind(bookingId, kind)
     .first();
   return !!row;
+}
+
+/** Un mail de l'un de ces types a-t-il déjà été journalisé pour la réservation,
+ *  hors envois échoués (un envoi qui a échoué peut être retenté) ? */
+export async function hasEmailOfKinds(db: D1Database, bookingId: number, kinds: string[]): Promise<boolean> {
+  const marks = kinds.map((_, i) => `?${i + 2}`).join(", ");
+  const row = await db
+    .prepare(`SELECT 1 AS one FROM email_log WHERE booking_id = ?1 AND kind IN (${marks}) AND status != 'failed' LIMIT 1`)
+    .bind(bookingId, ...kinds)
+    .first();
+  return !!row;
+}
+
+/** Preuve d'acceptation des CGV d'une réservation (posée à la réservation en ligne). */
+export async function getCgvAcceptance(
+  db: D1Database,
+  bookingId: number,
+): Promise<{ version: string | null; acceptedAt: string | null; ip: string | null }> {
+  const row = (await db
+    .prepare("SELECT cgv_version, cgv_accepted_at, cgv_ip FROM bookings WHERE id = ?1")
+    .bind(bookingId)
+    .first()) as Raw | null;
+  return { version: strOrNull(row?.cgv_version), acceptedAt: strOrNull(row?.cgv_accepted_at), ip: strOrNull(row?.cgv_ip) };
 }
 
 export interface AuditRow {

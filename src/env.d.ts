@@ -42,7 +42,13 @@ interface Env {
   MAIL_FROM?: string;
   /** Transport SMTP injecté par node/server.mjs (node:net/node:tls, absent sur
    *  Workers, dont le runtime n'ouvre pas de socket SMTP sortante). */
-  SMTP_SEND?: (mail: { to: string; subject: string; text: string }) => Promise<{ id: string }>;
+  SMTP_SEND?: (mail: {
+    to: string;
+    subject: string;
+    text: string;
+    html?: string;
+    attachments?: { filename: string; contentType: string; content: Uint8Array }[];
+  }) => Promise<{ id: string }>;
   /** Instantané complet de la base SQLite (VACUUM INTO), injecté par
    *  node/server.mjs ; absent sur Workers (export SQL à la place). */
   SQLITE_SNAPSHOT?: () => Promise<Uint8Array>;
