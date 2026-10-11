@@ -95,7 +95,8 @@ L'ancienne adresse `/api/webhooks/stripe` (sans identifiant) ne vérifie plus qu
 
 ## 8. Sécurité, honnêtement
 
-- Les trois clés sont stockées **en clair** dans la table `property_stripe` : le projet n'a aucun chiffrement au repos (les clés de service ne gardent qu'une empreinte, ce qui ne convient pas à une clé qu'il faut rejouer chez Stripe). La protection est celle de la base et de ses sauvegardes, comme pour le jeton Beds24. L'export SQL de sauvegarde contient donc ces clés : le conserver comme un secret.
-- L'API ne les renvoie jamais : seuls « posée le … » et les quatre derniers caractères sont affichés. Ni le journal d'audit ni les messages d'erreur ne les contiennent.
+- Les trois clés sont stockées **en clair** dans la table `property_stripe` : le projet n'a aucun chiffrement au repos (les clés de service ne gardent qu'une empreinte, ce qui ne convient pas à une clé qu'il faut rejouer chez Stripe). La protection est celle de la base elle-même, comme pour le jeton Beds24.
+- Les **sauvegardes ne contiennent pas** la clé secrète ni le secret du webhook (export SQL et export SQLite les omettent, la clé publiable, publique, est gardée). Conséquence : après une restauration, les ressaisir dans Réglages > Comptes Stripe.
+- L'API ne les renvoie jamais : seul « posée le … » est affiché (et, pour la clé publiable seulement, ses quatre derniers caractères). Ni le journal d'audit ni les messages d'erreur ne les contiennent.
 - Le script du pilote local (`scripts/pilote-donnees.mjs`) vide la table après chargement d'une sauvegarde : rien ne doit sortir du Mac.
 - Une clé publiable est faite pour être publique ; la clé secrète ne quitte jamais le serveur.
