@@ -25,7 +25,11 @@ déjà journalisé, de type `confirmation` ou `voucher`, hors statut `failed`, b
 l'envoi automatique ; un envoi `failed` peut être retenté. Deux déclenchements
 simultanés (webhook rejoué, double clic) ne passent pas tous les deux : un verrou
 (`confirmation_claims`, migration 0030, une ligne par réservation) est posé AVANT
-l'envoi et rendu si l'envoi échoue. Le reçu de paiement
+l'envoi et rendu seulement si l'échec est constaté (statut `failed`, ou mail impossible
+à construire). Si le Worker s'interrompt entre le verrou et le journal, ou si le
+journal échoue après l'acceptation du mail par le transport, le verrou reste : on
+préfère une confirmation à renvoyer à la main (« Renvoyer la confirmation ») à un
+doublon chez le client. Le reçu de paiement
 (`payment_receipt`) reste un mail à part, émis à chaque encaissement.
 
 Le mail est en français ou en néerlandais selon `bookings.lang` (puis la langue du

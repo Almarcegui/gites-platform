@@ -475,8 +475,9 @@ export async function sendConfirmation(
     if ((claim.meta?.changes ?? 0) === 0) return false;
     claimed = true;
   }
+  const filename = contractFileName(ctx.booking.reference);
+  let message: Parameters<typeof queueEmail>[2];
   try {
-    const filename = contractFileName(ctx.booking.reference);
     const email = buildConfirmationEmail({
       booking: ctx.booking,
       property: ctx.property,
@@ -484,7 +485,7 @@ export async function sendConfirmation(
       voucherUrl: voucherUrl(env, ctx.booking),
       attachmentName: filename,
     });
-    const status = await queueEmail(db, env, {
+    message = {
       bookingId,
       to: ctx.booking.guestEmail,
       subject: email.subject,
@@ -492,12 +493,17 @@ export async function sendConfirmation(
       bodyHtml: email.bodyHtml,
       attachments: [{ filename, contentType: "application/pdf", content: buildContractPdf(ctx) }],
       kind: "confirmation",
-    });
-    // Envoi échoué : on rend le verrou, un nouvel essai automatique reste possible.
-    if (status === "failed" && claimed) await db.prepare("DELETE FROM confirmation_claims WHERE booking_id = ?1").bind(bookingId).run();
+    };
   } catch (e) {
+    // Rien n'est parti : le verrou est rendu.
     if (claimed) await db.prepare("DELETE FROM confirmation_claims WHERE booking_id = ?1").bind(bookingId).run();
     throw e;
   }
+  // Une exception de queueEmail laisse le verrou en place : le transport a pu
+  // accepter le mail avant que le journal échoue, et un doublon chez le client
+  // est pire qu'une confirmation à renvoyer à la main (bouton « Renvoyer »).
+  // Seul un échec CONSTATÉ (statut `failed`) rend le verrou.
+  const status = await queueEmail(db, env, message);
+  if (status === "failed" && claimed) await db.prepare("DELETE FROM confirmation_claims WHERE booking_id = ?1").bind(bookingId).run();
   return true;
 }
