@@ -76,9 +76,9 @@ export function PaymentsPage() {
                       {sqlWhen(p.receivedAt ?? p.createdAt)}
                     </button>
                   </td>
-                  <td className="ref">{p.bookingReference}</td>
+                  <td className="ref" data-l={t`Réservation`}>{p.bookingReference}</td>
                   <td>{w.kind(p.kind)}</td>
-                  <td className="hide-s">{w.method(p.method)}</td>
+                  <td className="hide-s" data-l={t`Moyen`}>{w.method(p.method)}</td>
                   <td className="r amt mc-r">{p.kind === "refund" ? `− ${eur(p.amountCents)}` : eur(p.amountCents)}</td>
                   <td className="hide-s">
                     <span className={`pill ${w.tone(p)}`}>{w.status(p)}</span>

@@ -1049,7 +1049,13 @@ body:has(.savebar) .amel-fab.amel-B { bottom: calc(156px + env(safe-area-inset-b
 
   /* tableaux en cartes : titre à gauche, montant à droite, le reste dessous */
   .tbl-wrap:has(.mcards) { overflow: visible; }
-  .tbl.mcards thead { display: none; }
+  .tbl.mcards thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .tbl.mcards.bk thead { position: static; width: auto; height: auto; overflow: visible; clip: auto; }
+  .tbl.mcards.bk thead tr { display: flex; gap: 8px 20px; min-height: 0; padding: 0 14px; background: var(--surface-2); border-bottom: 1px solid var(--line); }
+  .tbl.mcards.bk thead th { display: block; padding: 0; height: auto; border: 0; position: static; background: none; font-size: 15px; }
+  .tbl.mcards.bk thead th.hide-s, .tbl.mcards.bk thead th:first-child { display: none; }
+  .tbl.mcards.bk .th-sort { min-height: 44px; }
+  .tbl.mcards td[data-l]::before { content: attr(data-l) " : "; color: var(--ink-3); }
   .tbl.mcards, .tbl.mcards tbody { display: block; }
   .tbl.mcards tr { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; align-items: center; padding: 12px 14px; border-top: 1px solid var(--line-2); min-height: 64px; }
   .tbl.mcards tr:first-child { border-top: 0; }
