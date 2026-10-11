@@ -2,8 +2,8 @@
 // au-dessus de la grille multi-biens. Au téléphone (B) : la phrase du jour et
 // le fil horaire en cartes.
 import { Trans, useLingui } from "@lingui/react/macro";
-import { IconBrush, IconCurrencyEuro, IconDeviceMobileMessage, IconLock, IconLogin2, IconLogout2, IconMessage, IconPhone } from "@tabler/icons-react";
-import { useNavigate } from "@tanstack/react-router";
+import { IconBrush, IconCalendarOff, IconCoins, IconCurrencyEuro, IconPlus, IconTicket, IconDeviceMobileMessage, IconLock, IconLogin2, IconLogout2, IconMessage, IconPhone } from "@tabler/icons-react";
+import { Link, useNavigate } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 
 import { api } from "../api/client";
@@ -20,6 +20,7 @@ import { eur } from "../lib/money";
 import { useLayout } from "../lib/useLayout";
 import { HealthStrip } from "../shell/Health";
 import { useOpenBooking } from "../shell/Shell";
+import { useSale } from "../sale/SaleFlow";
 import { AlertsCard, MonthKpis, WeekMovements } from "./Dashboard";
 import { ReviewsCard, ReviewsStrip, useReviews } from "./Reviews";
 
@@ -252,6 +253,35 @@ function EventCard({ e, domains }: { e: DayEvent; domains: DomainData[] }) {
   );
 }
 
+/** Les gestes du quotidien à un toucher du haut de la page (Julien, 12/10 : un paiement à vérifier ou un prix à changer ne doivent pas se cacher dans « Plus »). */
+function QuickActions() {
+  const { t } = useLingui();
+  const sell = useSale();
+  const items = [
+    { k: "vente", label: t`Nouvelle vente`, icon: <IconPlus size={22} aria-hidden />, run: () => sell() },
+    { k: "bloc", label: t`Bloquer des dates`, icon: <IconCalendarOff size={22} aria-hidden />, to: "/calendrier" },
+    { k: "pay", label: t`Paiements`, icon: <IconCoins size={22} aria-hidden />, to: "/reglages/paiements" },
+    { k: "prix", label: t`Changer un prix`, icon: <IconTicket size={22} aria-hidden />, to: "/reglages/tarifs" },
+  ];
+  return (
+    <nav className="quick" aria-label={t`Raccourcis`}>
+      {items.map((x) =>
+        x.to ? (
+          <Link key={x.k} to={x.to} className="btn">
+            {x.icon}
+            {x.label}
+          </Link>
+        ) : (
+          <button key={x.k} type="button" className="btn" onClick={x.run}>
+            {x.icon}
+            {x.label}
+          </button>
+        ),
+      )}
+    </nav>
+  );
+}
+
 function TodayB() {
   const { t } = useLingui();
   const d = useDay();
@@ -299,6 +329,7 @@ function TodayB() {
           {daySentence(d.arrivals.length, d.departures.length)} {tight && tight.next ? <b>{t`${tight.unitName} doit être prête pour ${hourLabel(tight.next.checkinTime)}.`}</b> : null} {tailText}
         </p>
         {d.incomplete ? <ErrorLine text={t`Une partie des données n'a pas pu être lue : la journée peut être incomplète. Rechargez la page.`} /> : null}
+        <QuickActions />
         <HealthStrip overviews={d.overviews} />
         {d.isLoading && rail.length === 0 ? <p className="loading">{t`Chargement de la journée…`}</p> : null}
         {rail.length ? (
@@ -345,21 +376,24 @@ function TodayB() {
               </div>
             </article>
           ))}
-          {d.holds.map((h) => (
-            <article key={`h${h.id}`} className="card k-opt">
+          {d.holds.length ? (
+            <article className="card k-opt">
               <span className="kind">
                 <IconLock size={22} />
-                {t`Option en attente des arrhes`}
+                {d.holds.length > 1 ? t`${d.holds.length} options en attente des arrhes` : t`Option en attente des arrhes`}
               </span>
-              <h3>{h.unitName}</h3>
-              <p>{h.holdExpiresAt ? t`Sans arrhes reçues, les dates se libèrent le ${longDate(h.holdExpiresAt.slice(0, 10))}.` : t`Arrhes pas encore reçues.`}</p>
-              <div className="row-b">
-                <button type="button" className="btn pri" onClick={() => openBooking(h.id)}>
-                  {t`Ouvrir la fiche`}
-                </button>
-              </div>
+              <ul className="holds">
+                {d.holds.map((h) => (
+                  <li key={`h${h.id}`}>
+                    <button type="button" onClick={() => openBooking(h.id)}>
+                      <b>{h.unitName}</b>
+                      <span>{h.holdExpiresAt ? t`libérée le ${longDate(h.holdExpiresAt.slice(0, 10))} sans arrhes` : t`arrhes pas encore reçues`}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
             </article>
-          ))}
+          ) : null}
           {d.messages.slice(0, 3).map((m: Message) => (
             <article key={`m${m.id}`} className="card k-msg">
               <span className="kind">
