@@ -288,7 +288,11 @@ export function parseLiveRules(raw: unknown): LiveRule[] | null {
 
 // « × » du premier envoi (10/10/2026) reconnu ; le nom envoyé est en ASCII,
 // un caractère de moins que Beds24 pourrait refuser dans un nom de ligne.
-const OUR_NAME = /\(prix direct [×x] [\d,]+\)$/;
+// Beds24 limite le nom d'une ligne de prix à 20 caractères (refus « Text too long (Max 20 char) »
+// lu le 11/10/2026 sur la réponse brute) : nom court « Airbnb x1,18 ». L'ancienne forme longue
+// reste reconnue pour nettoyer une ligne qu'un ancien envoi aurait laissée.
+const OUR_NAME = /^(?:[A-Za-z. ]+ x[\d,]+|.*\(prix direct [×x] [\d,]+\))$/;
+const SHORT_LABEL: Record<string, string> = { airbnb: "Airbnb", booking: "Booking", vrbo: "Vrbo", expedia: "Expedia" };
 
 /** Ligne posée par nous : sur une des lignes fixes des canaux, avec le nom que
  *  nous lui donnons. Un simple lien vers la ligne 1 ne suffit pas (une ligne
@@ -313,7 +317,8 @@ export function isEmptyRule(rule: LiveRule): boolean {
 }
 
 export function derivedRuleName(l: DerivedLine): string {
-  return `${l.label} (prix direct x ${String(l.multiplier).replace(".", ",")})`;
+  const name = `${SHORT_LABEL[l.beds24Channel] ?? l.beds24Channel} x${String(l.multiplier).replace(".", ",")}`;
+  return name.slice(0, 20);
 }
 
 export type RulesPlan = { ok: true; rules: Record<string, unknown>[] } | { ok: false; message: string };
