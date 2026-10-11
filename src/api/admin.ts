@@ -67,6 +67,7 @@ import {
   getFeed,
   getGuest,
   getProperty,
+  hasEmailOfKinds,
   getQuoteContext,
   getRateRule,
   insertGuestEntry,
@@ -146,10 +147,12 @@ import {
   quoteFromContext,
   sendConfirmation,
   startCheckout,
+  stripeConfigForBooking,
   voucherUrl,
   type QuoteBody,
 } from "../services/booking-flow";
-import { buildBalanceReminderEmail, buildPaymentLinkEmail, queueEmail, queueEmailDetailed } from "../services/email";
+import { dropPreparedRefunds, executeRefunds, planCancellation, prepareRefunds, replayRefund } from "../services/annulation";
+import { buildBalanceReminderEmail, buildCancellationEmail, buildPaymentLinkEmail, queueEmail, queueEmailDetailed } from "../services/email";
 import { buildContractPdf, contractFileName, loadContractContext } from "../services/contrat";
 import { importElloha } from "../services/elloha-import";
 import { importAgendaGoogle, MAX_AGENDA_EVENTS } from "../services/agenda-import";
@@ -1877,16 +1880,77 @@ export function registerAdminRoutes(router: Router): void {
     return json({ booking, paymentUrl, optionUrl, optionMailQueued }, 201);
   }));
 
+  // Annulation (CGV art. 4-5, décision du 12/10/2026) : voir services/annulation.ts.
+  // `simuler: true` rend le plan sans rien faire ; un plan qui rembourse par
+  // Stripe exige `confirmer: true`.
   router.post("/api/admin/bookings/:id/cancel", guard(async (req, env, p, _url, execCtx) => {
     const id = intParam(p.id, 0);
-    const body = await readJson<{ reason?: string }>(req);
+    const body = await readJson<{ reason?: string; par?: string; simuler?: boolean; confirmer?: boolean; forceMajeure?: boolean; sejourEntame?: boolean }>(req);
+    const par = body?.par ?? "locataire";
+    if (par !== "locataire" && par !== "proprietaire") return apiError(400, "par : « locataire » ou « proprietaire »");
     const booking = await getBooking(env.DB, id);
     if (!booking) return apiError(404, "réservation inconnue");
+    if (booking.status === "cancelled") return apiError(409, "déjà annulée");
+    const cfg = await stripeConfigForBooking(env.DB, env, booking);
+    const plan = await planCancellation(env.DB, cfg, booking, par, { forceMajeure: body?.forceMajeure === true, sejourEntame: body?.sejourEntame === true });
+    if (body?.simuler === true) return json({ ok: true, simule: true, plan });
+    if (plan.stripeRefundCents > 0 && body?.confirmer !== true) {
+      return json({ error: "Cette annulation rembourse de l'argent par Stripe : confirmer: true est requis (simuler: true pour voir le plan).", plan }, 400);
+    }
+    // Argent en jeu (arrhes gardées, remboursement, indemnité) : jamais par une clé de service
+    // (script, agent) — une session humaine seulement.
+    if (plan.mode === "arrhes" && !isHuman(req)) return apiError(403, "annuler une réservation payée se fait depuis une session humaine (pas par une clé de service)");
+    // Les lignes de remboursement existent AVANT l'annulation : une panne entre les deux les laisse reprenables.
+    const prepared = await prepareRefunds(env.DB, booking, plan.stripeRefunds);
     const done = await cancelBooking(env.DB, id, String(body?.reason ?? "annulation admin"));
-    if (!done) return apiError(409, "déjà annulée");
-    await audit(env.DB, "admin", "booking.cancel", `booking:${id}`, { reason: body?.reason, par: currentUser(req) });
+    if (!done) {
+      await dropPreparedRefunds(env.DB, booking, prepared.map((x) => x.rowId));
+      return apiError(409, "déjà annulée");
+    }
+    await audit(env.DB, "admin", "booking.cancel", `booking:${id}`, { reason: body?.reason, par: currentUser(req), annulePar: par, plan });
     if (booking.propertyId != null) triggerBeds24Push(env.DB, env, execCtx, booking.propertyId);
-    return json({ ok: true, note: "Remboursement éventuel à traiter manuellement dans Stripe (politique d'annulation : TODO Julien)." });
+
+    // Un remboursement échoué ne défait pas l'annulation : il est signalé et rejouable.
+    const refunds = prepared.length > 0 ? await executeRefunds(env.DB, cfg, booking, prepared) : [];
+    const failed = refunds.filter((r) => r.status === "failed");
+    if (failed.length > 0) await audit(env.DB, "admin", "refund.failed", `booking:${id}`, { failed });
+    if (refunds.length > 0) await audit(env.DB, "admin", "refund.done", `booking:${id}`, { refunds });
+    if (plan.indemnityCents > 0 || plan.manualRefundCents > 0) {
+      await audit(env.DB, "admin", "refund.manual_due", `booking:${id}`, { indemnityCents: plan.indemnityCents, manualRefundCents: plan.manualRefundCents });
+    }
+
+    // Mail au client : une fois, à l'annulation, et seulement si de l'argent ou
+    // une réservation confirmée est en jeu (une option non payée n'en reçoit pas).
+    let mail: "stub" | "sent" | "failed" | "non" = "non";
+    try {
+      const concerned = plan.mode === "arrhes" || booking.status === "confirmed";
+      if (plan.mode !== "canal" && concerned && booking.guestEmail && booking.propertyId != null && !(await hasEmailOfKinds(env.DB, id, ["cancellation"]))) {
+        const property = await getProperty(env.DB, booking.propertyId);
+        if (property) {
+          const email = buildCancellationEmail(booking, property, plan);
+          mail = await queueEmail(env.DB, env, { bookingId: id, to: booking.guestEmail, subject: email.subject, bodyText: email.bodyText, kind: "cancellation" });
+        }
+      }
+    } catch (e) {
+      mail = "failed";
+      await audit(env.DB, "admin", "cancellation_mail.error", `booking:${id}`, { error: e instanceof Error ? e.message : String(e) });
+    }
+    return json({ ok: true, plan, refunds, mail, note: plan.note });
+  }));
+
+  // Rejeu d'un remboursement Stripe échoué (ligne payments kind=refund, status=failed).
+  router.post("/api/admin/bookings/:id/refunds/:refundId/retry", guard(async (req, env, p) => {
+    if (!isHuman(req)) return apiError(403, "un remboursement se rejoue depuis une session humaine (pas par une clé de service)");
+    const id = intParam(p.id, 0);
+    const booking = await getBooking(env.DB, id);
+    if (!booking) return apiError(404, "réservation inconnue");
+    const cfg = await stripeConfigForBooking(env.DB, env, booking);
+    try {
+      const outcome = await replayRefund(env.DB, cfg, booking, intParam(p.refundId, 0));
+      return json({ ok: outcome.status !== "failed", refund: outcome });
+    } catch (e) {
+      return apiError(409, e instanceof Error ? e.message : String(e));
+    }
   }));
 
   router.post("/api/admin/bookings/:id/confirm", guard(async (req, env, p) => {

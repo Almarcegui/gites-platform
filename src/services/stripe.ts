@@ -428,3 +428,66 @@ export async function fetchPaymentFees(
     return null;
   }
 }
+
+// ---------------------------------------------------------------------------
+// Remboursements (annulation, CGV art. 5)
+// ---------------------------------------------------------------------------
+
+/** Rembourse `amountCents` d'un PaymentIntent (`POST /v1/refunds`). Lève en cas
+ *  d'échec : l'appelant garde la ligne `payments` en `failed` et la rejoue.
+ *
+ *  L'`Idempotency-Key` est celle de la LIGNE de remboursement (`gp-refund-<id>`) :
+ *  rejouer la même ligne après un délai de réseau ne rembourse jamais deux fois.
+ *  Stripe refuse de toute façon de rembourser plus que l'encaissé. */
+export async function createRefund(
+  cfg: StripeConfig,
+  p: { paymentIntent: string; amountCents: number; idempotencyKey: string; reference: string; refundRowId: number },
+): Promise<{ id: string; status: string }> {
+  if (!stripeEnabled(cfg)) throw new Error("Stripe non configuré");
+  if (!Number.isInteger(p.amountCents) || p.amountCents <= 0) throw new Error("montant de remboursement invalide");
+  const body = new URLSearchParams({
+    payment_intent: p.paymentIntent,
+    amount: String(p.amountCents),
+    "metadata[reference]": p.reference,
+    "metadata[origine]": "annulation",
+    "metadata[refund_row]": String(p.refundRowId),
+  });
+  const res = await fetch(`${STRIPE_API}/refunds`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${cfg.secretKey}`,
+      "content-type": "application/x-www-form-urlencoded",
+      "idempotency-key": p.idempotencyKey,
+    },
+    body: body.toString(),
+  });
+  if (!res.ok) throw new Error(`Stripe refund ${res.status}: ${stripeErrorText(await res.text(), cfg)}`);
+  const refund = (await res.json()) as { id?: string; status?: string };
+  if (!refund.id) throw new Error("Stripe refund : réponse inexploitable");
+  return { id: refund.id, status: refund.status ?? "unknown" };
+}
+
+/** Retrouve chez Stripe le remboursement créé pour NOTRE ligne `refundRowId`
+ *  (métadonnée `refund_row`), et non un montant agrégé : un remboursement fait à
+ *  la main dans le tableau de bord ne doit pas passer pour le nôtre. `null` =
+ *  Stripe ne l'a pas ; `"inconnu"` = Stripe injoignable ou réponse illisible. */
+export async function findRefundForRow(
+  cfg: StripeConfig,
+  intentId: string,
+  refundRowId: number,
+): Promise<{ id: string; status: string } | null | "inconnu"> {
+  if (!stripeEnabled(cfg) || !intentId.startsWith("pi_")) return "inconnu";
+  try {
+    const res = await fetch(`${STRIPE_API}/refunds?payment_intent=${encodeURIComponent(intentId)}&limit=100`, {
+      headers: { authorization: `Bearer ${cfg.secretKey}` },
+    });
+    if (!res.ok) return "inconnu";
+    const list = (await res.json()) as { data?: { id?: string; status?: string; metadata?: Record<string, string> }[]; has_more?: boolean };
+    if (!Array.isArray(list.data)) return "inconnu";
+    const hit = list.data.find((r) => r.metadata?.refund_row === String(refundRowId) && r.id);
+    if (hit) return { id: String(hit.id), status: hit.status ?? "unknown" };
+    return list.has_more ? "inconnu" : null;
+  } catch {
+    return "inconnu";
+  }
+}

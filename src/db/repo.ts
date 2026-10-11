@@ -2743,6 +2743,9 @@ export async function healthSignals(db: D1Database, propertyId: number, now: Dat
          JOIN bookings b ON b.id = p.booking_id
          JOIN units u ON u.id = b.unit_id
         WHERE p.status = 'succeeded' AND b.status != 'confirmed' AND u.property_id = ?1
+          AND p.kind != 'refund'
+          AND NOT (b.status = 'cancelled' AND b.cancelled_at IS NOT NULL AND b.cancel_reason NOT IN ('hold_expired', 'hold_replaced')
+                   AND COALESCE(p.received_at, p.created_at) <= b.cancelled_at)
         ORDER BY p.id DESC LIMIT 20`,
     )
     .bind(propertyId)
