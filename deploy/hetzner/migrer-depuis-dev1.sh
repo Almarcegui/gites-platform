@@ -74,8 +74,9 @@ adm "bash -s -- $TMP" <<'REMOTE'
 set -euo pipefail
 TMP="$1"
 # Chemins lus dans le .env (variables non secrètes seulement).
-SQLITE_PATH="$(grep -E '^SQLITE_PATH=' /srv/gites/.env | cut -d= -f2-)"
-UPLOADS_DIR="$(grep -E '^UPLOADS_DIR=' /srv/gites/.env | cut -d= -f2-)"
+# /srv/gites est 750 gites:gites : l'administrateur lit le .env par sudo (variables non secrètes seulement).
+SQLITE_PATH="$(sudo grep -E '^SQLITE_PATH=' /srv/gites/.env | cut -d= -f2-)"
+UPLOADS_DIR="$(sudo grep -E '^UPLOADS_DIR=' /srv/gites/.env | cut -d= -f2-)"
 [ -n "$SQLITE_PATH" ] && [ -n "$UPLOADS_DIR" ] || { echo "SQLITE_PATH ou UPLOADS_DIR absent du .env" >&2; exit 1; }
 # Les noms de l'archive doivent être des fichiers plats de photo (même règle que la sauvegarde).
 mauvais="$(tar -tf "$TMP/photos.tar" | grep -vcE '^(\./)?([0-9a-f]{32}\.(jpg|png|webp))?$' || true)"
@@ -106,10 +107,10 @@ done
 adm 'sudo systemctl start gites-cron.timer'
 
 echo "5/7 Contrôle des données…"
-SQLITE_DISTANT="$(adm "grep -E '^SQLITE_PATH=' /srv/gites/.env | cut -d= -f2-")"
-RESAS_DISTANTES="$(adm "sqlite3 '$SQLITE_DISTANT' 'SELECT COUNT(*) FROM bookings'")"
-INTEGRITE="$(adm "sqlite3 '$SQLITE_DISTANT' 'PRAGMA integrity_check;'")"
-NB_PHOTOS="$(adm "ls -1 \"\$(grep -E '^UPLOADS_DIR=' /srv/gites/.env | cut -d= -f2-)\" | wc -l" | tr -d ' ')"
+SQLITE_DISTANT="$(adm "sudo grep -E '^SQLITE_PATH=' /srv/gites/.env | cut -d= -f2-")"
+RESAS_DISTANTES="$(adm "sudo -u gites sqlite3 '$SQLITE_DISTANT' 'SELECT COUNT(*) FROM bookings'")"
+INTEGRITE="$(adm "sudo -u gites sqlite3 '$SQLITE_DISTANT' 'PRAGMA integrity_check;'")"
+NB_PHOTOS="$(adm "sudo ls -1 \"\$(sudo grep -E '^UPLOADS_DIR=' /srv/gites/.env | cut -d= -f2-)\" | wc -l" | tr -d ' ')"
 NB_PHOTOS_LOCALES="$(tar -tf "$PHOTOS_LOCALES" | grep -cE '[0-9a-f]{32}\.(jpg|png|webp)$' || true)"
 echo "  réservations : $RESAS_DISTANTES (sauvegarde : $RESAS_LOCALES) ; integrity_check : $INTEGRITE ; photos : $NB_PHOTOS (archive : $NB_PHOTOS_LOCALES)"
 [ "$RESAS_DISTANTES" = "$RESAS_LOCALES" ] || { echo "ÉCART de réservations : ne pas basculer le DNS." >&2; exit 1; }
