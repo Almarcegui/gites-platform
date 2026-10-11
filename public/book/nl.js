@@ -267,4 +267,6 @@ export const NL = {
   "✓ Ajouté": "✓ Toegevoegd",
   "Message envoyé à l'équipe. Un e-mail de confirmation vous est envoyé à l'instant (objet : [{ref}]) ; la réponse arrive sur cette page et par e-mail.": "Bericht verstuurd naar het team. U ontvangt zo meteen een bevestigingsmail (onderwerp: [{ref}]); het antwoord komt op deze pagina en per e-mail.",
   "Message envoyé à l'équipe — la réponse arrive sur cette page et par e-mail.": "Bericht verstuurd naar het team — het antwoord komt op deze pagina en per e-mail.",
+  "arrivée": "aankomst",
+  "départ": "vertrek",
 };

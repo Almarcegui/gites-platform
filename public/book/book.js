@@ -359,7 +359,10 @@ async function renderCalendar() {
       d.arrivalDays != null ? arrivalLabel(d.arrivalDays) : "",
     ].filter(Boolean);
     const title = hints.length ? ` title="${esc(hints.join(" · "))}"` : "";
-    html += `<button type="button" class="${cls}" data-date="${d.date}"${title} ${d.past ? "disabled" : ""}>
+    const full = new Date(d.date + "T12:00:00Z").toLocaleDateString(LOCALE, { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
+    const role = d.date === selIn ? `, ${t("arrivée")}` : d.date === selOut ? `, ${t("départ")}` : "";
+    const aria = ` aria-label="${esc(full + role + (d.past ? "" : d.available ? (d.minPrice != null ? ", " + sub : "") : ", " + t("complet")))}" aria-pressed="${isSel ? "true" : "false"}"`;
+    html += `<button type="button" class="${cls}" data-date="${d.date}"${title}${aria} ${d.past ? "disabled" : ""}>
       <span class="d">${Number(d.date.slice(8, 10))}</span><span class="p">${sub}</span>${mn}</button>`;
   }
   $("calGrid").innerHTML = html;
@@ -865,6 +868,10 @@ async function refreshQuote() {
   if (!SELECTED) return;
   const seq = ++quoteSeq;
   const zone = $("quoteZone");
+  // Le montant affiché n'est plus celui que le serveur facturerait : on ferme
+  // le paiement le temps du recalcul (sinon « Payer X € » partirait avec Y €).
+  QUOTE = null;
+  payButtonRefresh();
   try {
     const { quote } = await api("/api/public/quote", {
       unitId: SELECTED.id,

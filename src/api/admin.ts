@@ -3009,7 +3009,7 @@ export function registerAdminRoutes(router: Router): void {
       bookingId: booking.id,
       guestId: booking.guestId,
       toEmail: booking.guestEmail ?? null,
-      subject: `Votre réservation ${booking.reference}`,
+      subject: `[${booking.reference}] Votre réservation`,
       body: text,
     });
     return json({ ok: true, ...result });
