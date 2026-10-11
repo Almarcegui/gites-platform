@@ -6,7 +6,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { D1Database } from "@cloudflare/workers-types";
 import { createTestDb, type TestDb } from "./helpers/d1";
 import { createBookingAtomic, insertOutboundMessage, listMessages, upsertGuest } from "../src/db/repo";
-import { MAILBOX_STATE_KEY, NO_SOCKET_MESSAGE, closestBooking, getMailboxState, pullMailbox } from "../src/services/mailbox";
+import { MAILBOX_LEASE_KEY, MAILBOX_STATE_KEY, NO_SOCKET_MESSAGE, closestBooking, getMailboxState, pullMailbox } from "../src/services/mailbox";
 import { getSetting } from "../src/services/settings";
 
 let t: TestDb;
@@ -24,7 +24,7 @@ beforeEach(async () => {
   for (const table of ["messages", "payments", "email_log", "audit_log", "bookings", "guests"]) {
     await db.prepare(`DELETE FROM ${table}`).run();
   }
-  await db.prepare("DELETE FROM app_settings WHERE key = ?1").bind(MAILBOX_STATE_KEY).run();
+  await db.prepare("DELETE FROM app_settings WHERE key IN (?1, ?2)").bind(MAILBOX_STATE_KEY, MAILBOX_LEASE_KEY).run();
 });
 
 // --- faux serveur IMAP -------------------------------------------------------
@@ -180,6 +180,26 @@ describe("pullMailbox : import, curseur, idempotence", () => {
     expect(second.reason).toMatch(/déjà en cours/);
     release();
     expect((await first).imported).toBe(1);
+    // bail rendu : la relève suivante passe
+    expect((await pullMailbox(env, NOW)).ran).toBe(true);
+  });
+
+  it("bail laissé par une instance plantée : il expire seul, et le curseur ne recule jamais", async () => {
+    const box = fakeMailbox([{ uid: 1, raw: simple(1) }, { uid: 2, raw: simple(2) }]);
+    const env = envWith(box.fetch);
+    // un bail vivant : refus
+    await db.prepare("INSERT INTO app_settings (key, value) VALUES (?1, ?2)").bind(MAILBOX_LEASE_KEY, "2026-07-12T10:03:00.000Z").run();
+    expect((await pullMailbox(env, NOW)).ran).toBe(false);
+    // 10 minutes plus tard, le bail est périmé
+    const later = new Date(NOW.getTime() + 10 * 60_000);
+    expect((await pullMailbox(env, later)).imported).toBe(2);
+    expect((await getMailboxState(db)).lastUid).toBe(2);
+    // une instance lente qui finirait avec un vieux curseur ne fait pas reculer l'état
+    const slow = fakeMailbox([{ uid: 1, raw: simple(1) }], 1);
+    const state = await getMailboxState(db);
+    expect(state.lastUid).toBe(2);
+    await pullMailbox(envWith(slow.fetch), new Date(later.getTime() + 10 * 60_000));
+    expect((await getMailboxState(db)).lastUid).toBe(2);
   });
 });
 

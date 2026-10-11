@@ -164,23 +164,46 @@ function fixBinaryHeader(value: string): string {
   }
 }
 
-/** Valeur d'un paramètre d'en-tête (name="…", name=…, name*=utf-8''%C3%A9 de la RFC 2231). */
+/** Décode une valeur RFC 2231 (charset'langue'%XX) ; sans charset, les %XX sont lus en UTF-8. */
+function decodeExtValue(value: string): string {
+  const ext = /^([^']*)'[^']*'(.*)$/.exec(value);
+  const charset = ext ? ext[1] || "utf-8" : "utf-8";
+  const encoded = ext ? ext[2]! : value;
+  try {
+    const pct = encoded.replace(/%([0-9A-Fa-f]{2})/g, (_x, h: string) => String.fromCharCode(parseInt(h, 16)));
+    return decodeBytes(binaryToBytes(pct), charset);
+  } catch {
+    return value;
+  }
+}
+
+/** Paramètre coupé en segments (filename*0=… filename*1*=…), RFC 2231 § 3 : on recolle dans l'ordre. */
+function continuedParam(headerValue: string, param: string): string | null {
+  const re = new RegExp(`(?:^|[;\\s])${param}\\*(\\d+)(\\*?)\\s*=\\s*(?:"((?:[^"\\\\]|\\\\.)*)"|([^;\\s]*))`, "gi");
+  const segs = new Map<number, { encoded: boolean; value: string }>();
+  for (const m of headerValue.matchAll(re)) {
+    const index = Number(m[1]);
+    if (index > 50 || segs.has(index)) continue;
+    segs.set(index, { encoded: m[2] === "*", value: m[3] !== undefined ? m[3].replace(/\\(.)/g, "$1") : (m[4] ?? "") });
+  }
+  if (!segs.size) return null;
+  const ordered = [...segs.entries()].sort((a, b) => a[0] - b[0]);
+  if (ordered[0]![0] !== 0) return null;
+  // le charset n'est annoncé que dans le premier segment encodé
+  const first = ordered[0]![1];
+  const head = first.encoded ? /^([^']*'[^']*')/.exec(first.value)?.[1] ?? "" : "";
+  const joined = ordered.map(([, s], i) => (s.encoded ? (i === 0 ? s.value.slice(head.length) : s.value) : encodeURIComponent(s.value).replace(/'/g, "%27"))).join("");
+  const out = (head ? decodeExtValue(head + joined) : decodeExtValue(joined)).trim();
+  return out || null;
+}
+
+/** Valeur d'un paramètre d'en-tête (name="…", name=…, name*=utf-8''%C3%A9 et segments de la RFC 2231). */
 function headerParam(headerValue: string, param: string): string | null {
   const re = new RegExp(`(?:^|[;\\s])${param}(\\*?)\\s*=\\s*(?:"((?:[^"\\\\]|\\\\.)*)"|([^;\\s]*))`, "i");
   const m = re.exec(headerValue);
-  if (!m) return null;
+  if (!m) return continuedParam(headerValue, param);
   let value = m[2] !== undefined ? m[2].replace(/\\(.)/g, "$1") : (m[3] ?? "");
-  if (m[1] === "*") {
-    const ext = /^([^']*)'[^']*'(.*)$/.exec(value);
-    if (ext) {
-      try {
-        const pct = ext[2]!.replace(/%([0-9A-Fa-f]{2})/g, (_x, h: string) => String.fromCharCode(parseInt(h, 16)));
-        value = decodeBytes(binaryToBytes(pct), ext[1] || "utf-8");
-      } catch {
-        /* garde la valeur brute */
-      }
-    }
-  }
+  if (m[1] === "*") value = decodeExtValue(value);
   value = value.trim();
   return value || null;
 }
@@ -347,6 +370,21 @@ export function extractMessageIds(value: string | null | undefined): string[] {
   return [...(value ?? "").matchAll(/<[^<>\s]{1,300}>/g)].map((m) => m[0]);
 }
 
+/** Le premier Authentication-Results de Google atteste-t-il l'adresse `from` ? dmarc=pass suffit (il
+ *  vérifie l'alignement avec le From) ; un dkim=pass seul ne vaut que si le domaine qui signe est
+ *  celui du From (ou son parent) : l'attaquant qui signe avec son propre domaine ne passe pas. */
+export function authenticatesSender(authResults: string, from: string): boolean {
+  if (/\bdmarc=pass\b/i.test(authResults)) return true;
+  const fromDomain = from.split("@")[1]?.toLowerCase() ?? "";
+  if (!fromDomain) return false;
+  for (const part of authResults.split(";")) {
+    if (!/\bdkim=pass\b/i.test(part)) continue;
+    const d = /\bheader\.(?:d|i)=@?(?:[^@\s;]*@)?([a-z0-9.-]+)/i.exec(part)?.[1]?.toLowerCase();
+    if (d && (fromDomain === d || fromDomain.endsWith(`.${d}`))) return true;
+  }
+  return false;
+}
+
 export interface ParseOptions {
   /** `raw` est une chaîne « binaire » (un caractère par octet), telle que rendue par node/imap.mjs. */
   binary?: boolean;
@@ -389,7 +427,7 @@ export function parseRawEmail(raw: string, options: ParseOptions = {}): ParsedEm
   // a posé en tête) et seulement s'il vient de Gmail ; un en-tête forgé par l'expéditeur est plus bas.
   const auth = headers.get("authentication-results") ?? "";
   const authServer = (auth.split(";")[0] ?? "").trim().toLowerCase();
-  const senderAuthenticated = /(^|\.)google\.com$/.test(authServer) && /\b(dmarc|dkim)=pass\b/i.test(auth);
+  const senderAuthenticated = /(^|\.)google\.com$/.test(authServer) && authenticatesSender(auth, from);
 
   return {
     messageId: ids[0] ?? (messageIdRaw ? cleanHeader(messageIdRaw).slice(0, 300) || null : null),

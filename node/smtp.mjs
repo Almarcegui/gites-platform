@@ -207,6 +207,7 @@ export async function sendSmtp(config, mail, options = {}) {
   threadHeader("In-Reply-To", mail.inReplyTo);
   threadHeader("References", mail.references);
   if (!/^[^\s@<>]+@[^\s@<>]+$/.test(to)) throw new Error("SMTP : adresse du destinataire invalide");
+  if (!/^[^\s@<>]+@[^\s@<>]+$/.test(envelopeFrom)) throw new Error("SMTP : adresse de l'expéditeur (MAIL_FROM) invalide");
   const timeoutMs = options.timeoutMs ?? 30_000;
   // SNI : un nom d'hôte seulement (Node refuse une adresse IP comme servername)
   const tlsOptions = { ...(isIP(host) ? {} : { servername: host }), ...(options.tls || {}) };

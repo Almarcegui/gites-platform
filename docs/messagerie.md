@@ -29,8 +29,9 @@ Routing.
 - **Où** : `node/imap.mjs` (client IMAP maison, `node:tls`, zéro dépendance), injecté en
   `env.IMAP_FETCH` par `node/server.mjs`. Logique : `src/services/mailbox.ts`.
 - **Quand** : au cron (toutes les 15 min, `/internal/cron`), et, en filet, toutes les
-  `MAILBOX_POLL_MINUTES` (10 par défaut) tant que le processus Node vit. Un verrou interdit deux
-  relèves à la fois.
+  `MAILBOX_POLL_MINUTES` (10 par défaut) tant que le processus Node vit. Un **bail en base** (5 minutes,
+  expire seul après un plantage) interdit deux relèves à la fois, même entre deux instances du
+  site, et le curseur ne recule jamais à `UIDVALIDITY` égale.
 - **Lecture seule** : la boîte est ouverte en `EXAMINE` ; rien n'y est marqué lu, déplacé ni
   supprimé. Le client n'envoie que `CAPABILITY`, `LOGIN`, `EXAMINE`, `UID SEARCH`, `UID FETCH …
   BODY.PEEK` et `LOGOUT`.
@@ -40,6 +41,10 @@ Routing.
   `UIDVALIDITY` changée (boîte reconstruite) : retour à la fenêtre de 14 jours, et le
   Message-ID évite tout doublon.
 - **Lots** : 40 mails au plus par appel, 3 appels au plus par relève ; le reste au passage suivant.
+- **Aucun mail perdu** : si le serveur ne rend pas tous les messages d'un lot, ceux qui manquent
+  sont redemandés ; ceux qui existent encore sans être rendus font échouer le passage **sans
+  avancer le curseur** (reprise au passage suivant) ; un message vraiment expulsé entre-temps est
+  confirmé par un contrôle (`UID SEARCH UID …`) avant d'être sauté.
 - **Idempotence** : un mail déjà connu (même Message-ID) est ignoré. Sans Message-ID, un
   identifiant stable est fabriqué à partir de l'UID.
 - **Taille** : 512 Ko au plus par mail descendent (`BODY.PEEK[]<0.N>`). Au-delà, le début est
@@ -95,13 +100,15 @@ Pas d'accusé de réception automatique sur ce chemin : seule une personne répo
   qui n'en serait pas un (pas d'injection d'en-tête, ex. un `Bcc:` caché dans un sujet).
 - **Usurpation de l'adresse des gîtes** : un mail dont l'expéditeur est l'adresse de la boîte, de
   `MAIL_FROM` ou de l'adresse de contact d'un domaine sans que Gmail atteste l'expéditeur (premier en-tête
-  `Authentication-Results` posé par Google : `dkim=pass` ou `dmarc=pass`) est marqué, une alerte
+  `Authentication-Results` posé par Google : `dmarc=pass`, ou `dkim=pass` signé par le domaine de
+  l'adresse annoncée, jamais par un autre domaine) est marqué, une alerte
   s'affiche et la réponse est bloquée (elle écrirait à l'adresse des gîtes). Même refus pour tout
   mail dont l'expéditeur est l'une des adresses des gîtes.
 - Le mot de passe ne figure dans aucun message d'erreur ni journal ; la connexion refuse le clair
   (TLS dès la connexion) et `LOGINDISABLED`.
-- Plafonds : ligne de réponse 64 Ko, littéral IMAP 1 Mo au plus (ou la taille demandée),
-  profondeur MIME 6, 50 pièces listées, délai global de 60 s.
+- Plafonds : ligne de réponse 1 Mo, littéral IMAP 1 Mo au plus (ou la taille demandée), 2 000
+  réponses non étiquetées et un volume cumulé borné par commande, profondeur MIME 6, 50 pièces
+  listées, délai global de 60 s.
 
 ## Variables
 

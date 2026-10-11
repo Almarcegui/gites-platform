@@ -39,11 +39,20 @@ interface FakeOptions {
   loginDisabled?: boolean;
   /** Réponse FETCH démesurée : annonce un littéral énorme. */
   hugeLiteral?: boolean;
+  /** UID omis une seule fois de la réponse FETCH (réponse partielle transitoire). */
+  dropOnce?: number[];
+  /** UID jamais rendus par FETCH mais toujours présents (panne). */
+  hide?: number[];
+  /** UID rendus par SEARCH puis disparus (expulsés entre-temps). */
+  gone?: number[];
+  /** Après le FETCH, déverse un nombre démesuré de petites réponses non étiquetées. */
+  flood?: boolean;
 }
 
 /** Faux serveur IMAP. `log` garde les commandes reçues (sans le mot de passe). */
 async function fakeImap(opts: FakeOptions) {
   const log: string[] = [];
+  const dropped = new Set<number>();
   const password = opts.password ?? "secret-app-password";
   const server: Server = createTlsServer({ key: cert!.key, cert: cert!.cert }, (sock: TLSSocket) => {
     let buf = "";
@@ -65,6 +74,11 @@ async function fakeImap(opts: FakeOptions) {
           sock.write(ok ? `${tag} OK LOGIN réussi\r\n` : `${tag} NO [AUTHENTICATIONFAILED] Identifiants refusés\r\n`);
         } else if (cmd === "EXAMINE") {
           sock.write(`* 3 EXISTS\r\n* OK [UIDVALIDITY ${opts.uidValidity ?? 7}] UIDs valides\r\n${tag} OK [READ-ONLY] EXAMINE terminé\r\n`);
+        } else if (cmd === "UID" && /^SEARCH UID [\d,]+$/.test(rest)) {
+          // contrôle d'existence après un FETCH incomplet
+          const asked = rest.slice("SEARCH UID ".length).split(",").map(Number);
+          const alive = asked.filter((u) => opts.mails.some((x) => x.uid === u) && !opts.gone?.includes(u));
+          sock.write(`* SEARCH ${alive.join(" ")}\r\n${tag} OK SEARCH terminé\r\n`);
         } else if (cmd === "UID" && rest.startsWith("SEARCH")) {
           let uids = opts.mails.map((x) => x.uid);
           const after = /^SEARCH UID (\d+):\*/.exec(rest);
@@ -84,7 +98,11 @@ async function fakeImap(opts: FakeOptions) {
           const limit = Number(f[2]);
           for (const uid of f[1]!.split(",").map(Number)) {
             const mail = opts.mails.find((x) => x.uid === uid);
-            if (!mail) continue;
+            if (!mail || opts.hide?.includes(uid) || opts.gone?.includes(uid)) continue;
+            if (opts.dropOnce?.includes(uid) && !dropped.has(uid)) {
+              dropped.add(uid);
+              continue;
+            }
             const part = mail.raw.subarray(0, limit);
             if (opts.hugeLiteral) {
               sock.write(`* 1 FETCH (UID ${uid} RFC822.SIZE 99999999 BODY[]<0> {99999999}\r\n`);
@@ -96,6 +114,7 @@ async function fakeImap(opts: FakeOptions) {
               Buffer.from(")\r\n", "latin1"),
             ]));
           }
+          if (opts.flood) for (let i = 0; i < 5000; i++) sock.write(`* ${i + 10} EXISTS\r\n`);
           sock.write(`${tag} OK FETCH terminé\r\n`);
         } else if (cmd === "LOGOUT") {
           sock.write(`* BYE à bientôt\r\n${tag} OK LOGOUT terminé\r\n`);
@@ -161,7 +180,7 @@ describe("client IMAP : configuration et briques", () => {
     big.feed(Buffer.from("* 1 FETCH (BODY[] {101}\r\n", "latin1"));
     await expect(big.next()).rejects.toThrow(/littéral/);
     const long = new ResponseReader(100);
-    long.feed(Buffer.alloc(70 * 1024, 0x41));
+    long.feed(Buffer.alloc(1100 * 1024, 0x41));
     await expect(long.next()).rejects.toThrow(/trop longue/);
   });
 });
@@ -275,6 +294,46 @@ describe("client IMAP contre un faux serveur TLS", () => {
     const srv = await fakeImap({ mails: [mail(1)], hugeLiteral: true });
     try {
       await expect(fetchNewMail(srv.config, { uidValidity: null, lastUid: null, sinceDays: 14, max: 10 }, OPTS)).rejects.toThrow(/littéral/);
+    } finally {
+      await srv.close();
+    }
+  });
+
+  tls("FETCH incomplet transitoire : les UID manquants sont redemandés, rien n'est perdu", async () => {
+    const srv = await fakeImap({ mails: [mail(1), mail(2), mail(3)], dropOnce: [2] });
+    try {
+      const out = await fetchNewMail(srv.config, { uidValidity: null, lastUid: null, sinceDays: 14, max: 10 }, OPTS);
+      expect(out.mails.map((m: { uid: number }) => m.uid)).toEqual([1, 2, 3]);
+      expect(srv.log.filter((l) => l.startsWith("UID FETCH"))).toHaveLength(2);
+    } finally {
+      await srv.close();
+    }
+  });
+
+  tls("message qui existe mais n'est pas rendu : erreur, le curseur ne doit pas avancer", async () => {
+    const srv = await fakeImap({ mails: [mail(1), mail(2)], hide: [2] });
+    try {
+      await expect(fetchNewMail(srv.config, { uidValidity: null, lastUid: null, sinceDays: 14, max: 10 }, OPTS)).rejects.toThrow(/n'a pas rendu les messages UID 2/);
+    } finally {
+      await srv.close();
+    }
+  });
+
+  tls("message expulsé entre SEARCH et FETCH : confirmé par un contrôle, sauté sans erreur", async () => {
+    const srv = await fakeImap({ mails: [mail(1), mail(2), mail(3)], gone: [2] });
+    try {
+      const out = await fetchNewMail(srv.config, { uidValidity: null, lastUid: null, sinceDays: 14, max: 10 }, OPTS);
+      expect(out.mails.map((m: { uid: number }) => m.uid)).toEqual([1, 3]);
+      expect(out.highestUid).toBe(3);
+    } finally {
+      await srv.close();
+    }
+  });
+
+  tls("serveur bavard : trop de réponses non étiquetées, connexion abandonnée", async () => {
+    const srv = await fakeImap({ mails: [mail(1)], flood: true });
+    try {
+      await expect(fetchNewMail(srv.config, { uidValidity: null, lastUid: null, sinceDays: 14, max: 10 }, OPTS)).rejects.toThrow(/trop de données/);
     } finally {
       await srv.close();
     }

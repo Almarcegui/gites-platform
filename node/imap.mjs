@@ -31,7 +31,10 @@ export function imapConfigFromEnv(e = process.env) {
   return { host, port, user, password };
 }
 
-const MAX_LINE = 64 * 1024;
+// une ligne peut porter une longue liste d'UID (SEARCH) : 1 Mo en tient plus de 100 000
+const MAX_LINE = 1024 * 1024;
+/** Réponses non étiquetées d'une commande : nombre au plus (EXISTS, FETCH, SEARCH… en prennent quelques dizaines). */
+const MAX_UNTAGGED = 2000;
 const MAX_OTHER_LITERAL = 1024 * 1024;
 
 /** Chaîne IMAP entre guillemets ; refuse ce qui ne peut pas s'y mettre. */
@@ -157,10 +160,11 @@ export async function fetchNewMail(config, query, options = {}) {
 
   let seq = 0;
   /** Envoie une commande, rend les réponses non étiquetées puis la réponse étiquetée. */
-  const run = async (command, step, { secret = false } = {}) => {
+  const run = async (command, step, { secret = false, maxTotal = 2 * MAX_LINE } = {}) => {
     const tag = `A${String(++seq).padStart(3, "0")}`;
     socket.write(`${tag} ${command}\r\n`);
     const untagged = [];
+    let total = 0;
     for (;;) {
       const r = await Promise.race([reader.next(), deadline]);
       if (r.text.startsWith(`${tag} `)) {
@@ -173,6 +177,9 @@ export async function fetchNewMail(config, query, options = {}) {
         return { untagged, status: m[2] };
       }
       if (/^\* BYE\b/i.test(r.text)) throw new Error(`IMAP : le serveur ferme la connexion (${r.text.slice(0, 200)})`);
+      // un serveur bavard ne remplit pas la mémoire : nombre et volume cumulés bornés par commande
+      total += r.text.length + r.literals.reduce((n, l) => n + l.length, 0);
+      if (untagged.length >= MAX_UNTAGGED || total > maxTotal) throw new Error(`IMAP à l'étape ${step} : trop de données reçues, connexion abandonnée`);
       untagged.push(r);
     }
   };
@@ -224,26 +231,40 @@ export async function fetchNewMail(config, query, options = {}) {
 
     const mails = [];
     if (batch.length > 0) {
-      const f = await run(`UID FETCH ${uidSet(batch)} (UID RFC822.SIZE BODY.PEEK[]<0.${maxBytes}>)`, "UID FETCH");
-      const byUid = new Map();
-      for (const r of f.untagged) {
-        if (!/^\* \d+ FETCH\b/i.test(r.text)) continue;
-        const uid = /\bUID (\d+)/i.exec(r.text)?.[1];
-        if (!uid) continue;
-        const size = Number(/\bRFC822\.SIZE (\d+)/i.exec(r.text)?.[1] ?? 0);
-        const lit = /\0(\d+)\0/.exec(r.text);
-        const bytes = lit ? r.literals[Number(lit[1])] : null;
-        byUid.set(Number(uid), { size, bytes });
+      const maxTotal = batch.length * (maxBytes + 8192) + MAX_OTHER_LITERAL;
+      /** Un FETCH pour ces UID ; rend ceux dont le serveur a donné le message. */
+      const fetchSome = async (uids) => {
+        const f = await run(`UID FETCH ${uidSet(uids)} (UID RFC822.SIZE BODY.PEEK[]<0.${maxBytes}>)`, "UID FETCH", { maxTotal });
+        const got = new Map();
+        for (const r of f.untagged) {
+          if (!/^\* \d+ FETCH\b/i.test(r.text)) continue;
+          const uid = /\bUID (\d+)/i.exec(r.text)?.[1];
+          if (!uid) continue;
+          const size = Number(/\bRFC822\.SIZE (\d+)/i.exec(r.text)?.[1] ?? 0);
+          const lit = /\0(\d+)\0/.exec(r.text);
+          // BODY[] NIL ou "" : un message vide, pas un message manquant
+          const bytes = lit ? r.literals[Number(lit[1])] : /BODY\[\](<\d+>)? (NIL|"")/i.test(r.text) ? Buffer.alloc(0) : null;
+          if (bytes) got.set(Number(uid), { size, bytes });
+        }
+        return got;
+      };
+      const byUid = await fetchSome(batch);
+      let missing = batch.filter((u) => !byUid.has(u));
+      if (missing.length) {
+        // réponse partielle ? on redemande ceux qui manquent, une fois
+        for (const [uid, v] of await fetchSome(missing)) byUid.set(uid, v);
+        missing = batch.filter((u) => !byUid.has(u));
+      }
+      if (missing.length) {
+        // un message expulsé entre le SEARCH et le FETCH a vraiment disparu ; un message qui existe
+        // encore sans être rendu est une panne : on s'arrête SANS avancer le curseur
+        const still = parseSearch((await run(`UID SEARCH UID ${uidSet(missing)}`, "UID SEARCH (contrôle)")).untagged);
+        if (still.length) throw new Error(`IMAP : le serveur n'a pas rendu les messages UID ${still.slice(0, 5).join(", ")} : relève reprise au prochain passage`);
       }
       for (const uid of batch) {
         const got = byUid.get(uid);
-        if (!got || !got.bytes) continue; // message disparu entre le SEARCH et le FETCH
-        mails.push({
-          uid,
-          raw: got.bytes.toString("latin1"),
-          size: got.size || got.bytes.length,
-          truncated: got.size > got.bytes.length,
-        });
+        if (!got) continue; // disparu (confirmé ci-dessus)
+        mails.push({ uid, raw: got.bytes.toString("latin1"), size: got.size || got.bytes.length, truncated: got.size > got.bytes.length });
       }
     }
     try {

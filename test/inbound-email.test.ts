@@ -286,6 +286,12 @@ describe("parseRawEmail : structure MIME", () => {
     expect(parseRawEmail(m).attachments!.map((a) => a.name)).toEqual(["réservation €.pdf", "Contrat été.pdf"]);
   });
 
+  it("paramètre coupé en segments (RFC 2231 : filename*0*=, filename*1*=, segments non encodés)", () => {
+    const m = ["From: a@b.c", "Subject: x", 'Content-Type: multipart/mixed; boundary="Z"', "", "--Z", "Content-Type: text/plain", "", "voir",
+      "--Z", "Content-Type: application/pdf", "Content-Disposition: attachment;", " filename*0*=UTF-8''Le%20contrat%20de%20location%20;", " filename*1*=%C3%A9t%C3%A9;", " filename*2=\".pdf\"", "", "x", "--Z--", ""].join("\r\n");
+    expect(parseRawEmail(m).attachments![0]!.name).toBe("Le contrat de location été.pdf");
+  });
+
   it("profondeur MIME bornée : un multipart qui s'emboîte à l'infini ne boucle pas", () => {
     let body = "Content-Type: text/plain\r\n\r\nfond";
     for (let i = 0; i < 40; i++) body = `Content-Type: multipart/mixed; boundary="b${i}"\r\n\r\n--b${i}\r\n${body}\r\n--b${i}--`;
@@ -317,8 +323,14 @@ describe("parseRawEmail : en-têtes de fil et sécurité", () => {
   it("Authentication-Results : seul le premier, et seulement s'il vient de Google", () => {
     const forged = ["From: a@b.c", "Authentication-Results: mx.google.com; dkim=fail", "Authentication-Results: mx.google.com; dkim=pass", "", "t"].join("\r\n");
     expect(parseRawEmail(forged).senderAuthenticated).toBe(false);
-    const own = ["From: a@b.c", "Authentication-Results: mx.google.com; spf=pass; dkim=pass header.i=@gmail.com", "", "t"].join("\r\n");
+    const own = ["From: g@gmail.com", "Authentication-Results: mx.google.com; spf=pass; dkim=pass header.i=@gmail.com", "", "t"].join("\r\n");
     expect(parseRawEmail(own).senderAuthenticated).toBe(true);
+    // DKIM valide mais signé par le domaine de l'attaquant, pas celui de l'adresse annoncée
+    const alien = ["From: g@gmail.com", "Authentication-Results: mx.google.com; dkim=pass header.d=attaquant.test header.s=x; spf=pass", "", "t"].join("\r\n");
+    expect(parseRawEmail(alien).senderAuthenticated).toBe(false);
+    // domaine parent aligné, ou DMARC (qui vérifie l'alignement lui-même)
+    expect(parseRawEmail(["From: g@mail.exemple.be", "Authentication-Results: mx.google.com; dkim=pass header.d=exemple.be", "", "t"].join("\r\n")).senderAuthenticated).toBe(true);
+    expect(parseRawEmail(["From: g@exemple.be", "Authentication-Results: mx.google.com; dkim=pass header.d=attaquant.test; dmarc=pass (p=NONE) header.from=exemple.be", "", "t"].join("\r\n")).senderAuthenticated).toBe(true);
     const other = ["From: a@b.c", "Authentication-Results: mx.attaquant.test; dkim=pass", "", "t"].join("\r\n");
     expect(parseRawEmail(other).senderAuthenticated).toBe(false);
   });

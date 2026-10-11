@@ -220,7 +220,37 @@ export async function ingestMail(
   return { inserted: id !== null, linked: link.booking != null };
 }
 
-let running = false;
+// Bail en base (et non un drapeau en mémoire) : deux instances du site, ou un cron et le
+// minuteur, ne relèvent jamais en même temps ; un plantage laisse un bail qui expire seul.
+export const MAILBOX_LEASE_KEY = "mailbox_imap_lease";
+const LEASE_MINUTES = 5;
+
+async function acquireLease(db: D1Database, now: Date): Promise<boolean> {
+  const until = new Date(now.getTime() + LEASE_MINUTES * 60_000).toISOString();
+  const res = await db
+    .prepare(
+      `INSERT INTO app_settings (key, value, updated_at) VALUES (?1, ?2, datetime('now'))
+       ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = datetime('now')
+        WHERE app_settings.value < ?3`,
+    )
+    .bind(MAILBOX_LEASE_KEY, until, now.toISOString())
+    .run();
+  return res.meta.changes === 1;
+}
+
+async function releaseLease(db: D1Database): Promise<void> {
+  await db.prepare("UPDATE app_settings SET value = '' WHERE key = ?1").bind(MAILBOX_LEASE_KEY).run().catch(() => undefined);
+}
+
+/** Écrit l'état en gardant le curseur monotone : à UIDVALIDITY égale, lastUid ne recule jamais. */
+async function saveState(db: D1Database, patch: MailboxState): Promise<MailboxState> {
+  const cur = await getMailboxState(db);
+  let lastUid = patch.lastUid ?? null;
+  if (cur.uidValidity != null && cur.uidValidity === patch.uidValidity && (cur.lastUid ?? 0) > (lastUid ?? 0)) lastUid = cur.lastUid ?? null;
+  const next = { ...cur, ...patch, lastUid };
+  await setSetting(db, MAILBOX_STATE_KEY, JSON.stringify(next));
+  return next;
+}
 
 /** La relève du cron (et du bouton « Relever maintenant »). Ne lève jamais : tout est dans le résultat. */
 export async function pullMailbox(env: Env, now: Date = new Date()): Promise<MailboxResult> {
@@ -239,11 +269,10 @@ export async function pullMailbox(env: Env, now: Date = new Date()): Promise<Mai
     }
     return result;
   }
-  if (running) {
+  if (!(await acquireLease(db, now))) {
     result.reason = "Une relève est déjà en cours.";
     return result;
   }
-  running = true;
   result.ran = true;
   try {
     const own = await ownAddresses(db, env);
@@ -272,8 +301,8 @@ export async function pullMailbox(env: Env, now: Date = new Date()): Promise<Mai
       } finally {
         // le curseur n'avance que jusqu'au dernier mail réellement enregistré
         lastUid = done;
-        state = { ...state, uidValidity, lastUid, at: now.toISOString(), error: null, disabled: null };
-        await setSetting(db, MAILBOX_STATE_KEY, JSON.stringify({ ...state, imported: result.imported }));
+        state = await saveState(db, { uidValidity, lastUid, at: now.toISOString(), error: null, disabled: null, imported: result.imported });
+        lastUid = state.lastUid ?? lastUid;
       }
       result.more = batch.more;
       if (!batch.more) break;
@@ -290,9 +319,9 @@ export async function pullMailbox(env: Env, now: Date = new Date()): Promise<Mai
     if (state.error !== message) {
       await audit(db, "cron", "mailbox.imap.error", undefined, { error: message });
     }
-    await setSetting(db, MAILBOX_STATE_KEY, JSON.stringify({ ...state, error: message, at: now.toISOString() })).catch(() => undefined);
+    await saveState(db, { ...state, error: message, at: now.toISOString() }).catch(() => undefined);
   } finally {
-    running = false;
+    await releaseLease(db);
   }
   return result;
 }
