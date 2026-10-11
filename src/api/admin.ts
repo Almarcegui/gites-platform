@@ -163,6 +163,7 @@ import { syncFeed } from "../services/ical";
 import { countDirectBookings, countSearchStages, listSearchLog } from "../services/search-log";
 import { registerLot2AdminRoutes } from "./admin-lot2";
 import { PriceLinkingError, registerLot3AdminRoutes, sendPriceLinking } from "./admin-lot3";
+import { registerStripeAdminRoutes } from "./admin-stripe";
 
 // --- garde d'authentification -------------------------------------------------
 
@@ -580,6 +581,7 @@ export function registerAdminRoutes(router: Router): void {
   registerLot2AdminRoutes(router);
   // Lot 3 : promotions Airbnb, prix dérivés par canal, avis (src/api/admin-lot3.ts).
   registerLot3AdminRoutes(router);
+  registerStripeAdminRoutes(router);
 
   // --- connexion --------------------------------------------------------------
   // SEULE route /api/admin/* volontairement HORS guard : elle sert à obtenir
