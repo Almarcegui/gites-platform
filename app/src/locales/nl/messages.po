@@ -855,6 +855,10 @@ msgid "À {0}, le {1}."
 msgstr "Om {0}, op {1}."
 
 #: src/pages/settings/Ical.tsx
+msgid "À cocher pour un agenda tenu à la main qui bloque aussi le jour du départ (du 22 au 26 = départ le 26). Airbnb, Booking et Beds24 laissent le jour du départ libre : pour eux, ne pas cocher."
+msgstr ""
+
+#: src/pages/settings/Ical.tsx
 msgid "À coller dans Airbnb (« Importer un calendrier ») ou ailleurs. Si le Domaine entier est réservé, les deux maisons y apparaissent prises."
 msgstr "Te plakken in Airbnb (« Kalender importeren ») of elders. Als het hele domein geboekt is, staan beide huizen er als bezet."
 
@@ -3968,6 +3972,10 @@ msgstr "de Beds24-token mag geen accommodaties schrijven: maak een uitnodigingsc
 #: src/calendar/Weeks.tsx
 msgid "Le jour de départ"
 msgstr "De vertrekdag"
+
+#: src/pages/settings/Ical.tsx
+msgid "Le jour du départ est inclus dans ce calendrier"
+msgstr ""
 
 #: src/pages/settings/Logs.tsx
 msgid "Le journal des mails n'a pas pu être lu."
