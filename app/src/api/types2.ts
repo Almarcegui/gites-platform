@@ -438,7 +438,7 @@ export interface Beds24PropertyPlan {
   country: string;
   checkInStart?: string;
   checkOutEnd?: string;
-  rooms: { unitId: number; name: string; maxPeople: number; minStay?: number; rackRate?: number; cleaningFee?: number; description?: string; featureCodes: string[]; photos: { url: string; legende: string }[] }[];
+  rooms: { unitId: number; name: string; maxPeople: number; minStay?: number; rackRate?: number; cleaningFee?: number; description?: string; featureCodes: string[][]; photos: { url: string; legende: string }[] }[];
   directOnly: { unitId: number; name: string; raison: string }[];
   aCompleter: string[];
 }

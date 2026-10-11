@@ -89,11 +89,14 @@ const lineLabel = (l) => (l?.publicLabel && l.unitPriceCents != null
   // paiement disparaît : reproposer « Payer » ici, c'est inviter au double
   // débit (contre-review Gemini 2026-08-30). Le serveur refuse d'ailleurs en
   // 409, mais l'utilisateur ne doit pas avoir à découvrir l'erreur.
+  // Option ouverte par le back-office : les CGV ne sont pas encore acceptées.
+  const needCgv = b.status === "pending" && data.cgvAccepted === false;
   const payBlock = redirectStatus === "processing" ? "" : holdAlive
     ? `<div class="card" id="payCard"><h3>${t("Finaliser la réservation")}</h3>
         <p class="small muted">${t("Votre créneau vous est bloqué encore {duree} — terminez le paiement pour confirmer.", { duree: `<b id="holdLeft">${holdLabel(holdMsLeft)}</b>` })}</p>
+        ${needCgv ? `<div class="agree"><label class="small"><input type="checkbox" id="vCgv"> ${t('J\'accepte les <a href="#" id="cgvLink">conditions générales et le contrat de location</a> *')}</label></div>` : ""}
         <div id="payMsg"></div>
-        <button class="btn big" id="payNow" style="margin-top:8px">💳 ${t("Finaliser le paiement sécurisé")}</button></div>`
+        <button class="btn big" id="payNow" style="margin-top:8px"${needCgv ? " disabled" : ""}>💳 ${t("Finaliser le paiement sécurisé")}</button></div>`
     : b.status === "pending"
     ? `<div class="card" id="payCard">${expiredHtml}</div>`
     : b.status === "confirmed" && b.balanceCents > 0
@@ -157,7 +160,7 @@ const lineLabel = (l) => (l?.publicLabel && l.unitPriceCents != null
       <textarea id="msgText" rows="3" placeholder="${t("Votre message…")}"></textarea>
       <p style="margin-top:8px"><button class="btn" id="msgSend">${t("Envoyer")}</button> <span id="msgNote" class="small muted"></span></p>
     </div>
-    <div class="card"><h3>${t("Conditions générales &amp; contrat de location")}</h3>
+    <div class="card" id="cgvCard"><h3>${t("Conditions générales &amp; contrat de location")}</h3>
       <div class="cgv-box">${data.cgvText?.trim() ? (LANG === "nl" ? `<p class="cgv-h"><b>${CGV_NOTE_NL}</b></p>` : "") + cgvHtml(data.cgvText) + (b.depositPct != null ? `<p class="cgv-h"><b>${t("Pour {nom}, le pourcentage d'arrhes de l'article 4.1 est de {pct} %.", { nom: esc(b.unitName), pct: b.depositPct })}</b></p>` : "") : `<p>${t("Conditions générales à venir.")}</p>`}</div></div>
     <p class="footer-note"><a href="javascript:print()">${t("Imprimer / enregistrer en PDF")}</a></p>`;
 
@@ -213,13 +216,17 @@ const lineLabel = (l) => (l?.publicLabel && l.unitPriceCents != null
   }
 
   const payBtn = document.getElementById("payNow");
+  const vCgv = document.getElementById("vCgv");
+  if (vCgv && payBtn) vCgv.onchange = () => { payBtn.disabled = !vCgv.checked; };
+  const cgvLink = document.getElementById("cgvLink");
+  if (cgvLink) cgvLink.onclick = (e) => { e.preventDefault(); document.getElementById("cgvCard")?.scrollIntoView({ behavior: "smooth" }); };
   if (payBtn) {
     payBtn.onclick = async () => {
       payBtn.disabled = true;
       payBtn.textContent = t("Préparation du paiement…");
       const r = await fetch(`/api/public/bookings/${encodeURIComponent(ref)}/pay`, {
         method: "POST", headers: apiHeaders({ "content-type": "application/json" }),
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ email, ...(vCgv ? { cgvAccepted: vCgv.checked } : {}) }),
       });
       const d = await r.json();
       // Paiement intégré (issue #26) : le formulaire remplace le bouton, dans

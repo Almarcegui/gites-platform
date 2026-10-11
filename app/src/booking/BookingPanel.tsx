@@ -13,6 +13,7 @@ import {
   IconCopy,
   IconCurrencyEuro,
   IconDots,
+  IconFileText,
   IconHome,
   IconMail,
   IconMessage,
@@ -24,7 +25,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState, type ReactNode } from "react";
 
-import { api } from "../api/client";
+import { api, openAdminPdf } from "../api/client";
 import { useBooking, useGuest, useProperties } from "../api/hooks";
 import type { AuditEntry, Booking, BookingDetail, Guest, QuoteResponse } from "../api/types";
 import { ErrorLine, useAction } from "../lib/action";
@@ -337,7 +338,10 @@ function Fiche({ detail, dialog, setDialog }: { detail: BookingDetail; dialog: D
                   .map((m) => (
                     <tr key={m.id}>
                       <td>{sqlWhen(m.createdAt)}</td>
-                      <td>{m.subject}</td>
+                      <td>
+                        {m.subject}
+                        {m.attachments && m.attachments.length > 0 ? <small>{t`Pièce jointe :`} {m.attachments.map((a) => a.filename).join(", ")}</small> : null}
+                      </td>
                       <td>{m.toEmail ?? ""}</td>
                       <td>
                         <span className={`pill ${m.status === "sent" ? "soldee" : m.status === "failed" ? "annulee" : "muted-pill"}`}>
@@ -443,6 +447,7 @@ const HISTORY: Record<string, MessageDescriptor> = {
   "payment.manual": msg`paiement noté à la main`,
   "email.balance_reminder": msg`rappel du solde envoyé`,
   "email.voucher_resent": msg`confirmation renvoyée au client`,
+  "email.confirmation_resent": msg`confirmation et contrat renvoyés au client`,
   "message.reply": msg`message envoyé au client`,
 };
 function historyLabel(action: string): string {
@@ -458,7 +463,8 @@ function MainActions({ b, state, balance, setDialog }: { b: Booking; state: Book
   const confirm = useAction();
   const remind = useAction();
   const voucher = useAction();
-  const err = [confirm, remind, voucher].find((a) => a.state.status === "error")?.state;
+  const contrat = useAction();
+  const err = [confirm, remind, voucher, contrat].find((a) => a.state.status === "error")?.state;
   const btn = (key: string, icon: ReactNode, label: string, onClick: () => void, pri = false, a?: ReturnType<typeof useAction>) => (
     <button
       key={key}
@@ -494,13 +500,14 @@ function MainActions({ b, state, balance, setDialog }: { b: Booking; state: Book
   } else {
     acts = [
       write,
-      btn("voucher", <IconSend size={22} />, t`Renvoyer la confirmation`, () => void voucher.run(() => api(`/bookings/${b.id}/resend-voucher`, { method: "POST" }), t`C'est fait. Confirmation renvoyée au client.`), false, voucher),
+      btn("voucher", <IconSend size={22} />, t`Renvoyer la confirmation`, () => void voucher.run(() => api(`/bookings/${b.id}/resend-confirmation`, { method: "POST" }), t`C'est fait. Confirmation et contrat renvoyés au client.`), false, voucher),
+      btn("contrat", <IconFileText size={22} />, t`Contrat PDF`, () => void contrat.run(() => openAdminPdf(`/bookings/${b.id}/contrat.pdf`), t`Contrat ouvert dans un nouvel onglet.`), false, contrat),
       btn("edit", <IconCalendar size={22} />, t`Modifier`, () => setDialog("edit")),
     ];
   }
   return (
     <>
-      <div className="main-acts" style={acts.length === 2 ? { gridTemplateColumns: "1fr 1fr" } : undefined}>
+      <div className="main-acts" style={acts.length === 2 || acts.length === 4 ? { gridTemplateColumns: "1fr 1fr" } : undefined}>
         {acts}
       </div>
       {state === "plat" ? <p className="muted" style={{ fontSize: 15 }}>{t`Les dates, l'annulation et le paiement de cette réservation se gèrent sur ${channelName(b)} : la grille suivra.`}</p> : null}
@@ -512,6 +519,7 @@ function MainActions({ b, state, balance, setDialog }: { b: Booking; state: Book
 function MoreMenu({ b, setDialog }: { b: Booking; setDialog: (d: Dialog) => void }) {
   const { t } = useLingui();
   const voucher = useAction();
+  const contrat = useAction();
   return (
     <div className="more">
       <Menu width="target" position="bottom" shadow="md">
@@ -534,9 +542,12 @@ function MoreMenu({ b, setDialog }: { b: Booking; setDialog: (d: Dialog) => void
           ) : null}
           <Menu.Item
             style={{ minHeight: 44 }}
-            onClick={() => void voucher.run(() => api(`/bookings/${b.id}/resend-voucher`, { method: "POST" }), t`C'est fait. Confirmation renvoyée au client.`)}
+            onClick={() => void voucher.run(() => api(`/bookings/${b.id}/resend-confirmation`, { method: "POST" }), t`C'est fait. Confirmation et contrat renvoyés au client.`)}
           >
             <Trans>Renvoyer la confirmation au client</Trans>
+          </Menu.Item>
+          <Menu.Item style={{ minHeight: 44 }} onClick={() => void contrat.run(() => openAdminPdf(`/bookings/${b.id}/contrat.pdf`), t`Contrat ouvert dans un nouvel onglet.`)}>
+            <Trans>Contrat de location (PDF)</Trans>
           </Menu.Item>
           {!isChannel(b) ? (
             <Menu.Item style={{ minHeight: 44 }} onClick={() => setDialog("edit")}>
@@ -555,6 +566,7 @@ function MoreMenu({ b, setDialog }: { b: Booking; setDialog: (d: Dialog) => void
         </Menu.Dropdown>
       </Menu>
       {voucher.state.status === "error" ? <ErrorLine text={voucher.state.text} /> : null}
+      {contrat.state.status === "error" ? <ErrorLine text={contrat.state.text} /> : null}
     </div>
   );
 }

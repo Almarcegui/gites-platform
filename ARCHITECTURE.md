@@ -354,7 +354,7 @@ Le reste est du CRUD typé : `PropertyRow`, `UnitRow`, `BookingRow`, `PaymentRow
 |---|---|
 | `admin-auth.ts` | Comptes back-office : PBKDF2-SHA256 (30 000 itérations), sessions à jeton (seul le SHA-256 est stocké), mots de passe générés `mot-mot-mot-NN` dictables au téléphone |
 | `settings.ts` | Réglages **globaux** clé/valeur (`app_settings`) — modifiables sans redéploiement |
-| `booking-flow.ts` | Flux partagé public/admin : `quoteFromContext`, `startCheckout`, `handlePaymentSuccess` (idempotent), `sendVoucher` |
+| `booking-flow.ts` | Flux partagé public/admin : `quoteFromContext`, `startCheckout`, `handlePaymentSuccess` (idempotent), `sendConfirmation` (mail + contrat PDF, cf. docs/confirmation-et-contrat.md) |
 | `stripe.ts` | Checkout par API REST, **stub sans clé**, vérification HMAC du webhook |
 | `email.ts` | Construction des emails (voucher, lien de paiement, rappel de solde) + `queueEmail` → `email_log` |
 | `ical.ts` | `buildIcs` (export), `parseIcs` (import), `syncFeed` |
