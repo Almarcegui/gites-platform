@@ -65,9 +65,10 @@ describe("fiche réservation", () => {
     const box = await screen.findByRole("dialog", { name: /Annuler la réservation PM-2026-007/ });
     expect(await within(box).findByText(/Arrhes conservées : 300 €/)).toBeInTheDocument();
     expect(within(box).getByText(/Remboursement : 700 €/)).toBeInTheDocument();
-    await user.click(within(box).getByLabelText("Le propriétaire"));
+    await user.click(within(box).getByLabelText("L'exploitant"));
     expect(await within(box).findByText(/Remboursement : 1 000 €/)).toBeInTheDocument();
-    expect(within(box).getByText(/Indemnité : 300 € à virer à la main/)).toBeInTheDocument();
+    expect(within(box).getByText(/sans autre indemnité/)).toBeInTheDocument();
+    expect(within(box).queryByText(/Indemnité|double des arrhes|virer à la main/)).toBeNull();
     expect(within(box).queryByText(/Arrhes conservées/)).toBeNull();
     await user.type(within(box).getByLabelText(/Motif/), "Travaux");
     await user.click(within(box).getByRole("button", { name: "Annuler la réservation" }));

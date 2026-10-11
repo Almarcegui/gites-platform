@@ -738,7 +738,7 @@ async function openBookingPanel(unitId) {
             <fieldset class="paychoices"><legend class="sr-only">${t("Montant à payer maintenant")}</legend>${payChoices.join("")}</fieldset>
             <div class="cards">${t("Bancontact · Visa · Mastercard — aucun montant n'est débité sans confirmation.")}</div>
           </div>
-          <div class="agree"><label class="small" id="cgvLabel"><input type="checkbox" id="gCgv" aria-describedby="cgvMsg"> ${t('J\'accepte les <a href="#" id="cgvLink">conditions générales et le contrat de location</a> *')}</label>
+          <div class="agree"><label class="small" id="cgvLabel"><input type="checkbox" id="gCgv" aria-describedby="cgvMsg"> ${t('J\'accepte les <a href="#" id="cgvLink">conditions générales</a> *')}</label>
           <div id="cgvMsg" class="field-msg" role="alert"></div>
           <div id="cgvBox" class="cgv-box" style="display:none"></div>
           <label class="small optin"><input type="checkbox" id="gOptin"> ${t('Tenez-moi au courant des disponibilités et offres par email <span class="muted">(facultatif, désinscription à tout moment)</span>')}</label></div>
@@ -797,7 +797,7 @@ async function openBookingPanel(unitId) {
           // L'article 4.1 renvoie au « pourcentage affiché lors de la
           // réservation » : on le lui donne, pour cet hébergement-ci.
           `<p class="cgv-h"><b>${t("Pour {nom}, le pourcentage d'arrhes de l'article 4.1 est de {pct} %.", { nom: esc(SELECTED.name), pct: depositPct })}</b></p>`
-        : `<p>${t("Les conditions générales et le contrat de location complets sont joints à la confirmation de réservation et consultables à tout moment sur votre voucher en ligne.")}</p>`;
+        : `<p>${t("Les conditions générales complètes sont jointes à la confirmation de réservation et consultables à tout moment sur votre voucher en ligne.")}</p>`;
     }
   });
   $("gCgv").addEventListener("change", () => {
@@ -909,7 +909,7 @@ async function submitBooking() {
   // Refus attaché à SA case : message à côté d'elle et focus posé dessus —
   // même comportement sur mobile et sur desktop (issue #41).
   if (!$("gCgv").checked) {
-    $("cgvMsg").textContent = t("Cochez cette case pour continuer : c'est l'acceptation du contrat de location.");
+    $("cgvMsg").textContent = t("Cochez cette case pour continuer : c'est l'acceptation des conditions générales.");
     $("gCgv").setAttribute("aria-invalid", "true");
     $("cgvLabel").classList.add("err");
     $("gCgv").focus({ preventScroll: true });

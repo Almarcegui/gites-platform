@@ -1238,7 +1238,7 @@ msgstr "Verwacht voorschot"
 #. placeholder {0}: eur(plan.keptCents)
 #: src/booking/BookingPanel.tsx
 msgid "Arrhes conservées : {0}"
-msgstr "Voorschot dat de eigenaar houdt: {0}"
+msgstr "Voorschot dat de uitbater houdt: {0}"
 
 #: src/pages/Today.tsx
 msgid "Arrhes pas encore reçues."
@@ -1868,8 +1868,8 @@ msgid "C'est fait. Compte supprimé."
 msgstr "Gedaan. Account verwijderd."
 
 #: src/booking/BookingPanel.tsx
-msgid "C'est fait. Confirmation et contrat renvoyés au client."
-msgstr "Gedaan. Bevestiging en contract opnieuw naar de klant gestuurd."
+msgid "C'est fait. Confirmation et conditions générales renvoyées au client."
+msgstr "Klaar. Bevestiging en algemene voorwaarden opnieuw naar de klant gestuurd."
 
 #: src/booking/Register.tsx
 msgid "C'est fait. Correction enregistrée."
@@ -2656,16 +2656,28 @@ msgid "confirmation de réservation"
 msgstr "reserveringsbevestiging"
 
 #: src/pages/settings/Logs.tsx
-msgid "confirmation et contrat de location"
-msgstr "bevestiging en huurcontract"
-
-#: src/pages/settings/Logs.tsx
-msgid "confirmation et contrat renvoyés"
-msgstr "bevestiging en contract opnieuw verstuurd"
+msgid "confirmation et conditions générales"
+msgstr "bevestiging en algemene voorwaarden"
 
 #: src/booking/BookingPanel.tsx
-msgid "confirmation et contrat renvoyés au client"
-msgstr "bevestiging en contract opnieuw naar de klant gestuurd"
+msgid "Confirmation et conditions générales (PDF)"
+msgstr "Bevestiging en algemene voorwaarden (PDF)"
+
+#: src/pages/settings/Logs.tsx
+msgid "confirmation et conditions générales renvoyées"
+msgstr "bevestiging en algemene voorwaarden opnieuw verstuurd"
+
+#: src/booking/BookingPanel.tsx
+msgid "confirmation et conditions générales renvoyées au client"
+msgstr "bevestiging en algemene voorwaarden opnieuw naar de klant gestuurd"
+
+#: src/booking/BookingPanel.tsx
+msgid "Confirmation ouverte dans un nouvel onglet."
+msgstr "Bevestiging geopend in een nieuw tabblad."
+
+#: src/booking/BookingPanel.tsx
+msgid "Confirmation PDF"
+msgstr "Bevestiging (PDF)"
 
 #: src/booking/BookingPanel.tsx
 msgid "confirmation refusée : dates reprises entre-temps"
@@ -2727,18 +2739,6 @@ msgstr "Doorgaan"
 #: src/ui/kit.tsx
 msgid "Continuer la saisie"
 msgstr "Verder invullen"
-
-#: src/booking/BookingPanel.tsx
-msgid "Contrat de location (PDF)"
-msgstr "Huurcontract (PDF)"
-
-#: src/booking/BookingPanel.tsx
-msgid "Contrat ouvert dans un nouvel onglet."
-msgstr "Contract geopend in een nieuw tabblad."
-
-#: src/booking/BookingPanel.tsx
-msgid "Contrat PDF"
-msgstr "Contract (PDF)"
 
 #: src/pages/settings/Domain.tsx
 msgid "coordonnées"
@@ -3778,11 +3778,6 @@ msgstr "onbekend"
 msgid "inconnus"
 msgstr "onbekend"
 
-#. placeholder {0}: eur(plan.indemnityCents)
-#: src/booking/BookingPanel.tsx
-msgid "Indemnité : {0} à virer à la main (double des arrhes)."
-msgstr "Vergoeding: {0} met de hand over te schrijven (dubbel voorschot)."
-
 #: src/pages/settings/Tarifs.tsx
 msgid "Indiquez le prix d'une nuit en semaine pour chaque bien qui a ses prix de saison."
 msgstr "Geef de prijs van een nacht in de week voor elke woning met seizoensprijzen."
@@ -3942,6 +3937,10 @@ msgstr "De stand van de platformen kon niet gelezen worden."
 #: src/pages/settings/Beds24Property.tsx
 msgid "L'état du compte Beds24 n'a pas pu être lu."
 msgstr "De status van het Beds24-account kon niet gelezen worden."
+
+#: src/booking/BookingPanel.tsx
+msgid "L'exploitant"
+msgstr "De uitbater"
 
 #: src/ui/kit.tsx
 msgid "L'export n'a pas pu être préparé."
@@ -4141,6 +4140,10 @@ msgid "le canal"
 msgstr "het kanaal"
 
 #: src/booking/BookingPanel.tsx
+msgid "Le client"
+msgstr "De klant"
+
+#: src/booking/BookingPanel.tsx
 msgid "Le client en est prévenu par mail."
 msgstr "De klant wordt per mail verwittigd."
 
@@ -4242,10 +4245,6 @@ msgstr "De link kon niet gekopieerd worden: selecteer hem en kopieer hem met de 
 msgid "Le lien ne s'ouvrira plus. Les ménages déjà cochés restent cochés."
 msgstr "De link gaat niet meer open. Al aangevinkte schoonmaakbeurten blijven aangevinkt."
 
-#: src/booking/BookingPanel.tsx
-msgid "Le locataire"
-msgstr "De huurder"
-
 #: src/pages/settings/Help.tsx
 msgid "Le ménage"
 msgstr "De schoonmaak"
@@ -4305,10 +4304,6 @@ msgstr "De prijs wordt in de volgende stap berekend."
 msgid "Le prix se calcule tout seul. Notez le nom, le téléphone et, si possible, le mail."
 msgstr "De prijs wordt vanzelf berekend. Noteer de naam, de telefoon en, als het kan, het mailadres."
 
-#: src/booking/BookingPanel.tsx
-msgid "Le propriétaire"
-msgstr "De eigenaar"
-
 #: src/pages/settings/Help.tsx
 msgid "Le rappel du solde part tout seul au client à l'échéance."
 msgstr "De herinnering voor het saldo gaat op de vervaldag vanzelf naar de klant."
@@ -4330,10 +4325,6 @@ msgstr "De server kon het niet uitvoeren. Er is niets gewijzigd; probeer zo mete
 msgid "Le solde était attendu le {0}."
 msgstr "Het saldo werd verwacht op {0}."
 
-#: src/booking/BookingPanel.tsx
-msgid "Le solde payé est rendu dans les 14 jours."
-msgstr "Het betaalde saldo wordt binnen 14 dagen terugbetaald."
-
 #: src/pages/settings/Import.tsx
 msgid "Le test ne change rien. L'import n'est possible qu'après un test du même texte."
 msgstr "De test verandert niets. Importeren kan pas na een test van dezelfde tekst."
@@ -4354,6 +4345,10 @@ msgstr "Legende"
 #: src/pages/settings/Domain.tsx
 msgid "Légende (facultatif)"
 msgstr "Bijschrift (facultatief)"
+
+#: src/booking/BookingPanel.tsx
+msgid "Les arrhes restent acquises, le solde payé est rendu sous 14 jours sur le moyen de paiement utilisé."
+msgstr "Het voorschot blijft verworven, het betaalde saldo wordt binnen 14 dagen terugbetaald op het gebruikte betaalmiddel."
 
 #: src/pages/Reviews.tsx
 msgid "Les avis Airbnb et Booking relevés par Beds24. On y répond dans Beds24."
@@ -4401,8 +4396,8 @@ msgstr "De Stripe-rekeningen konden niet worden gelezen."
 
 #. placeholder {0}: q ? eur(q.depositCents) : ""
 #: src/sale/SaleFlow.tsx
-msgid "Les dates sont gardées en option. Si le client a un mail, il reçoit un lien vers sa réservation : il y accepte les conditions générales, paie les arrhes ({0}) et reçoit alors sa confirmation avec le contrat."
-msgstr "De data worden in optie bewaard. Heeft de klant een e-mailadres, dan krijgt hij een link naar zijn reservering: hij aanvaardt er de algemene voorwaarden, betaalt het voorschot ({0}) en ontvangt dan zijn bevestiging met het contract."
+msgid "Les dates sont gardées en option. Si le client a un mail, il reçoit un lien vers sa réservation : il y accepte les conditions générales, paie les arrhes ({0}) et reçoit alors sa confirmation avec les conditions générales."
+msgstr "De data worden in optie gehouden. Heeft de klant een e-mailadres, dan krijgt hij een link naar zijn reservering: daar aanvaardt hij de algemene voorwaarden, betaalt hij het voorschot ({0}) en ontvangt hij daarna zijn bevestiging met de algemene voorwaarden."
 
 #. placeholder {0}: channelName(b)
 #: src/booking/BookingPanel.tsx
@@ -7170,6 +7165,10 @@ msgstr "Alles komt hier binnen: berichten van de website, de e-mailbox van de g�
 #: src/pages/Settings.tsx
 msgid "Tout ce qui a été encaissé ou attendu"
 msgstr "Alles wat geïnd of verwacht werd"
+
+#: src/booking/BookingPanel.tsx
+msgid "Tout ce qui a été payé est rendu sous 14 jours sur le moyen de paiement utilisé, sans autre indemnité."
+msgstr "Alles wat betaald werd, wordt binnen 14 dagen terugbetaald op het gebruikte betaalmiddel, zonder andere vergoeding."
 
 #: src/shell/Shell.tsx
 msgid "Tout le menu"

@@ -1,7 +1,9 @@
-// Annulation et argent (CGV v3, articles 4-5 ; décision de Julien du 12/10/2026).
+// Annulation et argent (CGV v3.1, articles 4-5 ; décision de Julien du 12/10/2026 :
+// aucune indemnité de part ni d'autre).
 //
-//  - locataire : arrhes acquises, solde remboursé par Stripe ;
-//  - propriétaire : tout est rendu, plus une indemnité = arrhes, à virer à la main ;
+//  - client (`par: "locataire"`) : arrhes acquises, solde remboursé par Stripe ;
+//  - exploitant (`par: "proprietaire"`) : tout est rendu, arrhes comprises, rien de plus ;
+//  - force majeure : tout est rendu, quelle que soit la partie ;
 //  - option non payée et réservation de canal : aucun mouvement d'argent ;
 //  - jamais plus que l'encaissé, une double annulation ne rembourse pas deux fois ;
 //  - un remboursement échoué ne bloque pas l'annulation et se rejoue.
@@ -98,13 +100,14 @@ const stripePay = (bookingId: number, kind: "deposit" | "balance" | "full", amou
 const refundCalls = () => calls.filter((c) => c.method === "POST" && c.url.endsWith("/refunds"));
 const mails = async () => (await db.prepare("SELECT kind, to_email, subject, body_text FROM email_log WHERE kind = 'cancellation'").all()).results as { subject: string; body_text: string }[];
 
-describe("annulation par le locataire", () => {
+describe("annulation par le client", () => {
   it("arrhes seules payées : tout reste acquis, rien à rembourser", async () => {
     const id = await mkBooking();
     await stripePay(id, "deposit", 30000, "pi_a1");
     const r = await call("POST", `/api/admin/bookings/${id}/cancel`, { reason: "client malade" });
     expect(r.status).toBe(200);
-    expect(r.data.plan).toMatchObject({ mode: "arrhes", par: "locataire", keptCents: 30000, refundCents: 0, stripeRefundCents: 0, indemnityCents: 0 });
+    expect(r.data.plan).toMatchObject({ mode: "arrhes", par: "locataire", keptCents: 30000, refundCents: 0, stripeRefundCents: 0 });
+    expect(r.data.plan).not.toHaveProperty("indemnityCents");
     expect(refundCalls()).toHaveLength(0);
     expect(r.data.note).not.toContain("TODO");
     expect((await getBooking(db, id))!.status).toBe("cancelled");
@@ -163,21 +166,32 @@ describe("annulation par le locataire", () => {
   });
 });
 
-describe("annulation par le propriétaire", () => {
-  it("tout est rendu par Stripe, plus l'indemnité (= arrhes) à virer à la main", async () => {
+describe("annulation par l'exploitant", () => {
+  it("tout est rendu par Stripe, arrhes comprises, sans aucune indemnité", async () => {
     const id = await mkBooking();
     await stripePay(id, "deposit", 30000, "pi_d4");
     await stripePay(id, "balance", 70000, "pi_b4");
     const r = await call("POST", `/api/admin/bookings/${id}/cancel`, { reason: "travaux", par: "proprietaire", confirmer: true });
     expect(r.status).toBe(200);
-    expect(r.data.plan).toMatchObject({ par: "proprietaire", keptCents: 0, refundCents: 100000, stripeRefundCents: 100000, indemnityCents: 30000 });
+    expect(r.data.plan).toMatchObject({ par: "proprietaire", keptCents: 0, refundCents: 100000, stripeRefundCents: 100000, manualRefundCents: 0 });
+    expect(r.data.plan).not.toHaveProperty("indemnityCents");
     const total = refundCalls().reduce((s, c) => s + Number(c.body.get("amount")), 0);
-    expect(total).toBe(100000); // jamais l'indemnité par Stripe
+    expect(total).toBe(100000); // exactement l'encaissé, rien de plus
     expect(refundCalls().map((c) => c.body.get("payment_intent")).sort()).toEqual(["pi_b4", "pi_d4"]);
     expect((await getBooking(db, id))!.paidCents).toBe(0);
-    const manual = await db.prepare("SELECT detail FROM audit_log WHERE action = 'refund.manual_due'").first<{ detail: string }>();
-    expect(JSON.parse(manual!.detail).indemnityCents).toBe(30000);
-    expect(r.data.note).toContain("virer à la main");
+    // rien à virer à la main : ni indemnité, ni double des arrhes
+    expect(await db.prepare("SELECT detail FROM audit_log WHERE action = 'refund.manual_due'").first()).toBeNull();
+    expect(r.data.note).not.toMatch(/virer|double|1590/);
+    expect(r.data.note).toContain("Aucune indemnité");
+  });
+
+  it("« exploitant » et « client » sont acceptés comme synonymes de par", async () => {
+    const id = await mkBooking();
+    await stripePay(id, "deposit", 30000, "pi_d18");
+    const owner = await call("POST", `/api/admin/bookings/${id}/cancel`, { reason: "x", par: "exploitant", simuler: true });
+    expect(owner.data.plan).toMatchObject({ par: "proprietaire", refundCents: 30000, keptCents: 0 });
+    const client = await call("POST", `/api/admin/bookings/${id}/cancel`, { reason: "x", par: "client", simuler: true });
+    expect(client.data.plan).toMatchObject({ par: "locataire", refundCents: 0, keptCents: 30000 });
   });
 
   it("un paiement par virement bancaire est rendu à la main, pas par Stripe", async () => {
@@ -185,21 +199,31 @@ describe("annulation par le propriétaire", () => {
     await stripePay(id, "deposit", 30000, "pi_d5");
     await addPayment(db, { bookingId: id, kind: "balance", method: "transfer", amountCents: 70000, status: "succeeded", receivedAt: "2026-10-02 10:00:00" });
     const r = await call("POST", `/api/admin/bookings/${id}/cancel`, { reason: "x", par: "proprietaire", confirmer: true });
-    expect(r.data.plan).toMatchObject({ stripeRefundCents: 30000, manualRefundCents: 70000, refundCents: 100000, indemnityCents: 30000 });
+    expect(r.data.plan).toMatchObject({ stripeRefundCents: 30000, manualRefundCents: 70000, refundCents: 100000 });
     expect(refundCalls()).toHaveLength(1);
+    const manual = await db.prepare("SELECT detail FROM audit_log WHERE action = 'refund.manual_due'").first<{ detail: string }>();
+    expect(JSON.parse(manual!.detail)).toEqual({ manualRefundCents: 70000 });
   });
 });
 
 describe("exceptions des CGV", () => {
-  it("force majeure du propriétaire : tout est rendu, pas d'indemnité", async () => {
+  it("force majeure invoquée par l'exploitant : tout est rendu, rien de plus", async () => {
     const id = await mkBooking();
     await stripePay(id, "deposit", 30000, "pi_d13");
     const r = await call("POST", `/api/admin/bookings/${id}/cancel`, { reason: "inondation", par: "proprietaire", forceMajeure: true, confirmer: true });
-    expect(r.data.plan).toMatchObject({ refundCents: 30000, indemnityCents: 0 });
-    expect(r.data.note).toContain("force majeure");
+    expect(r.data.plan).toMatchObject({ refundCents: 30000, keptCents: 0, forceMajeure: true });
+    expect(r.data.note).toContain("Force majeure");
   });
 
-  it("séjour entamé : le trop-perçu au-delà du prix du séjour reste dû", async () => {
+  it("force majeure côté client (CGV 5.4) : les arrhes aussi sont rendues", async () => {
+    const id = await mkBooking();
+    await stripePay(id, "deposit", 30000, "pi_d19");
+    await stripePay(id, "balance", 70000, "pi_b19");
+    const r = await call("POST", `/api/admin/bookings/${id}/cancel`, { reason: "route coupée", forceMajeure: true, sejourEntame: true, confirmer: true });
+    expect(r.data.plan).toMatchObject({ par: "locataire", keptCents: 0, refundCents: 100000, forceMajeure: true, sejourEntame: false });
+  });
+
+  it("séjour entamé : le trop-perçu au-delà du prix du séjour est rendu", async () => {
     const id = await mkBooking({ total: 100000, deposit: 30000 });
     await stripePay(id, "deposit", 30000, "pi_d16");
     await stripePay(id, "balance", 80000, "pi_b16"); // 1 100 € payés pour 1 000 €
@@ -212,8 +236,15 @@ describe("exceptions des CGV", () => {
     await stripePay(id, "deposit", 30000, "pi_d14");
     await stripePay(id, "balance", 70000, "pi_b14");
     const r = await call("POST", `/api/admin/bookings/${id}/cancel`, { reason: "no-show", sejourEntame: true });
-    expect(r.data.plan).toMatchObject({ keptCents: 100000, refundCents: 0 });
+    expect(r.data.plan).toMatchObject({ keptCents: 100000, refundCents: 0, sejourEntame: true });
     expect(refundCalls()).toHaveLength(0);
+  });
+
+  it("séjour entamé ne s'applique pas à une annulation par l'exploitant", async () => {
+    const id = await mkBooking();
+    await stripePay(id, "deposit", 30000, "pi_d20");
+    const r = await call("POST", `/api/admin/bookings/${id}/cancel`, { reason: "x", par: "proprietaire", sejourEntame: true, simuler: true });
+    expect(r.data.plan).toMatchObject({ keptCents: 0, refundCents: 30000, sejourEntame: false });
   });
 });
 
@@ -222,7 +253,7 @@ describe("cas sans mouvement d'argent", () => {
     const id = await mkBooking({ status: "pending" });
     const r = await call("POST", `/api/admin/bookings/${id}/cancel`, { reason: "option expirée" });
     expect(r.status).toBe(200);
-    expect(r.data.plan).toMatchObject({ mode: "sans_paiement", refundCents: 0, indemnityCents: 0 });
+    expect(r.data.plan).toMatchObject({ mode: "sans_paiement", refundCents: 0, keptCents: 0 });
     expect(calls).toHaveLength(0);
     expect(await mails()).toHaveLength(0);
   });
@@ -232,7 +263,8 @@ describe("cas sans mouvement d'argent", () => {
     await db.prepare("UPDATE bookings SET channel_label = 'Airbnb' WHERE id = ?1").bind(id).run();
     await addPayment(db, { bookingId: id, kind: "manual", method: "other", amountCents: 50000, status: "succeeded" });
     const r = await call("POST", `/api/admin/bookings/${id}/cancel`, { reason: "annulée sur Airbnb", par: "proprietaire", confirmer: true });
-    expect(r.data.plan).toMatchObject({ mode: "canal", refundCents: 0, indemnityCents: 0, stripeRefundCents: 0 });
+    expect(r.data.plan).toMatchObject({ mode: "canal", refundCents: 0, stripeRefundCents: 0 });
+    expect(r.data.note).not.toMatch(/indemnit/i);
     expect(r.data.note).toContain("Airbnb");
     expect(calls).toHaveLength(0);
     expect(await mails()).toHaveLength(0);
@@ -344,19 +376,32 @@ describe("mail au client", () => {
     const m = await mails();
     expect(m).toHaveLength(1);
     expect(m[0]!.subject).toContain("Annulation de votre réservation");
-    expect(m[0]!.body_text).toContain("restent acquises");
-    expect(m[0]!.body_text).toContain("14 jours");
-    expect(m[0]!.body_text).toContain("700,00");
+    expect(m[0]!.body_text).toContain("restent acquises à l'exploitant");
+    expect(m[0]!.body_text).toContain("Remboursement : 700,00 €, sur le moyen de paiement utilisé, sous 14 jours.");
+    expect(m[0]!.body_text).not.toMatch(/indemnit|double|1590|IBAN|numéro de compte|propriétaire|locataire/i);
   });
 
-  it("en néerlandais pour un client néerlandophone, avec l'indemnité si le propriétaire annule", async () => {
+  it("l'exploitant annule : tout est remboursé, sans promesse d'indemnité ni demande de compte", async () => {
+    const id = await mkBooking();
+    await stripePay(id, "deposit", 30000, "pi_d21");
+    await stripePay(id, "balance", 70000, "pi_b21");
+    await call("POST", `/api/admin/bookings/${id}/cancel`, { reason: "travaux", par: "proprietaire", confirmer: true });
+    const m = await mails();
+    expect(m[0]!.body_text).toContain("Nous sommes au regret d'annuler");
+    expect(m[0]!.body_text).toContain("arrhes comprises");
+    expect(m[0]!.body_text).toContain("Remboursement : 1 000,00 €, sur le moyen de paiement utilisé, sous 14 jours.");
+    expect(m[0]!.body_text).not.toMatch(/indemnit|double|1590|IBAN|numéro de compte|virement|propriétaire|locataire/i);
+  });
+
+  it("en néerlandais pour un client néerlandophone, sans vergoeding ni rekeningnummer si l'exploitant annule", async () => {
     const id = await mkBooking({ lang: "nl" });
     await stripePay(id, "deposit", 30000, "pi_d10");
     await call("POST", `/api/admin/bookings/${id}/cancel`, { reason: "x", par: "proprietaire", confirmer: true });
     const m = await mails();
     expect(m[0]!.subject).toContain("Annulering van uw reservering");
-    expect(m[0]!.body_text).toContain("dubbele");
-    expect(m[0]!.body_text).toContain("vergoeding");
+    expect(m[0]!.body_text).toContain("voorschot inbegrepen");
+    expect(m[0]!.body_text).toContain("op het gebruikte betaalmiddel, binnen 14 dagen");
+    expect(m[0]!.body_text).not.toMatch(/dubbele|vergoeding|rekeningnummer|overschrijving|eigenaar|huurder/i);
   });
 
   it("force majeure : le mail ne promet pas le double des arrhes", async () => {
@@ -365,6 +410,7 @@ describe("mail au client", () => {
     await call("POST", `/api/admin/bookings/${id}/cancel`, { reason: "inondation", par: "proprietaire", forceMajeure: true, confirmer: true });
     const m = await mails();
     expect(m[0]!.body_text).not.toContain("double");
+    expect(m[0]!.body_text).toContain("Force majeure");
     expect(m[0]!.body_text).toContain("300,00");
   });
 });

@@ -54,7 +54,7 @@ async function poll(attempt = 0) {
     if (res.ok && data.booking.status === "confirmed") {
       box.innerHTML = `<div class="big-check">✅</div>
         <h3>${t("Réservation confirmée !")}</h3>
-        <p>${t("Référence <b class=\"mono\">{ref}</b> — un email de confirmation avec les conditions générales et le contrat de location vous est adressé.", { ref: esc(ref) })}</p>
+        <p>${t("Référence <b class=\"mono\">{ref}</b> — un email de confirmation avec les conditions générales vous est adressé.", { ref: esc(ref) })}</p>
         <p style="margin-top:14px"><a class="btn" href="${voucherUrl}">${t("Voir mon voucher")}</a></p>`;
       return;
     }

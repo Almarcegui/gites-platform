@@ -10,7 +10,7 @@
 //   - un destinataire, texte brut UTF-8 en quoted-printable, objet en
 //     encoded-word RFC 2047, Message-ID et Date posés ici ;
 //   - en option une version HTML (multipart/alternative) et des pièces
-//     jointes en base64 (multipart/mixed) : le contrat PDF de la confirmation ;
+//     jointes en base64 (multipart/mixed) : le PDF de la confirmation ;
 //   - délai global (30 s par défaut) : un serveur muet ne bloque jamais la
 //     requête qui envoie.
 // Le mot de passe n'apparaît dans aucun message d'erreur ni journal.

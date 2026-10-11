@@ -110,7 +110,7 @@ export function makeFakeApi(extra: Handler[] = []) {
             mode: "arrhes", par: owner ? "proprietaire" : "locataire", paidCents: 100000, arrhesCents: 30000,
             keptCents: owner ? 0 : 30000, refundCents: owner ? 100000 : 70000,
             stripeRefunds: [], stripeRefundCents: owner ? 100000 : 70000, manualRefundCents: 0,
-            indemnityCents: owner ? 30000 : 0, note: "",
+            forceMajeure: false, sejourEntame: false, note: "",
           },
         },
       };
