@@ -104,7 +104,9 @@ function withoutErrors(item: Record<string, unknown>): string {
     }
   }
   if (notes.length) return notes.join(" ; ");
-  return `réponse sans motif : ${truncate(JSON.stringify(rawForAudit(item)), 600)}`;
+  // Aucun motif lisible : le JSON brut de l'élément, tel que Beds24 l'a envoyé
+  // (non filtré par la liste blanche : c'est justement ce qui manquait).
+  return `réponse sans motif : ${truncate(JSON.stringify(item), 800)}`;
 }
 
 export function truncate(text: string, max: number): string {
@@ -121,23 +123,31 @@ const MOTIF_LISTS = new Set(["errors", "warnings", "info"]);
 /** Un élément de errors[] / warnings[] / info[] : TOUTES ses clés scalaires
  *  (chaîne, nombre, booléen, null), pas seulement la liste blanche. Le 11/10
  *  Beds24 a refusé la liaison des prix par six `warnings` dont le texte, sous
- *  des clés hors liste, avait été réduit à `{}`. */
+ *  des clés hors liste, avait été réduit à `{}`. Copie brute `raw` (JSON de
+ *  l'élément, 600 caractères) : elle rend visible ce que la réduction jette
+ *  quand les clés scalaires manquent (clés imbriquées seulement). */
 function keepMotif(m: unknown): unknown {
   if (!m || typeof m !== "object" || Array.isArray(m)) return keepFields(m, 1);
-  const out: Record<string, unknown> = {};
+  const out: Record<string, unknown> = { raw: truncate(JSON.stringify(m), 600) };
   for (const [k, val] of Object.entries(m as Record<string, unknown>)) {
     if (val === null || ["string", "number", "boolean"].includes(typeof val)) out[k] = typeof val === "string" ? truncate(val, 2000) : val;
   }
   return out;
 }
 
-/** Texte d'un motif (élément de errors/warnings/info), mot pour mot. */
+/** Texte d'un motif (élément de errors/warnings/info), mot pour mot. Sans clé
+ *  scalaire, le JSON brut de l'élément est donné (« {} — brut : … ») ; un
+ *  élément vraiment vide reste « {} (Beds24 n'a rien dit) ». */
 export function motifText(m: unknown): string {
   if (typeof m === "string") return m;
   if (!m || typeof m !== "object") return String(m);
   const o = m as Record<string, unknown>;
-  const entries = Object.entries(o).filter(([, val]) => val === null || ["string", "number", "boolean"].includes(typeof val));
-  if (entries.length === 0) return "{} (Beds24 n'a rien dit)";
+  const entries = Object.entries(o).filter(([k, val]) => k !== "raw" && (val === null || ["string", "number", "boolean"].includes(typeof val)));
+  if (entries.length === 0) {
+    // `raw` déjà posé (élément gardé) ou JSON de l'élément brut (réponse reçue).
+    const brut = typeof o.raw === "string" ? o.raw : truncate(JSON.stringify(o), 600);
+    return brut === "{}" ? "{} (Beds24 n'a rien dit)" : `{} — brut : ${brut}`;
+  }
   const field = typeof o.field === "string" && o.field ? `${o.field} : ` : "";
   if (typeof o.message === "string") {
     const rest = entries.filter(([k]) => k !== "message" && k !== "field");
