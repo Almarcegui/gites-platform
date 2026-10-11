@@ -205,7 +205,7 @@ describe("plan de création (lecture de notre base)", () => {
     expect(plan.email).toBeUndefined();
     expect(plan.description).toContain("1674");
     expect(plan.rooms.map((r) => r.name)).toEqual(["La Maison du Scieur", "La Scierie"]);
-    expect(plan.rooms[0]).toMatchObject({ qty: 1, maxPeople: 10, minStay: 2, rackRate: 180, cleaningFee: 120 });
+    expect(plan.rooms[0]).toMatchObject({ qty: 1, maxPeople: 11, minStay: 2, rackRate: 180, cleaningFee: 120 });
     expect(plan.rooms[1]).toMatchObject({ maxPeople: 8, minStay: 2, rackRate: 120, cleaningFee: 90 });
     expect(plan.rooms[0]!.description).toContain("cuisinière de restaurant");
     expect(plan.rooms[1]!.description).toContain("feu ouvert");
@@ -215,6 +215,7 @@ describe("plan de création (lecture de notre base)", () => {
     expect(plan.rooms[1]!.featureCodes).toEqual(FEATURES_SCIERIE);
     expect(plan.rooms[1]!.maxPeople).toBe(8);
     expect(plan.rooms[0]!.description).toContain("Home cinéma avec projecteur et système son.");
+    expect(plan.rooms[0]!.description).toContain("Matelas d'appoint possible sur demande.");
     expect(plan.rooms[1]!.description).toContain("Home cinéma avec projecteur et système son.");
     // rien de payant compté comme inclus
     for (const r of plan.rooms) expect(r.featureCodes.flat()).not.toContain("SAUNA");
@@ -344,7 +345,7 @@ describe("POST /api/admin/beds24/creer-propriete", () => {
     expect(enrichRooms[1]!.featureCodes).toEqual(FEATURES_SCIERIE);
     expect(enrichRooms[0]!.texts[0]!.roomDescription).toContain("Home cinéma avec projecteur et système son.");
     expect(enrich.featureCodes).toEqual(FEATURES_PROPRIETE);
-    expect(coreRooms.map((x) => x.maxPeople)).toEqual([10, 8]);
+    expect(coreRooms.map((x) => x.maxPeople)).toEqual([11, 8]);
 
     expect(r.propriete).toEqual({ beds24PropertyId: created.id, name: created.name, creee: true });
     expect(r.rooms.every((x) => x.creee)).toBe(true);

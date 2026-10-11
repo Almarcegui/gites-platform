@@ -37,9 +37,10 @@ export const UNIT_CONTENT: Record<string, UnitContent> = {
       "Le domaine n'est pas raccordé au réseau électrique : l'électricité vient de la roue hydraulique alimentée par le ruisseau, et l'eau d'une source voisine.",
       "Équipements : 4 chambres, 2 douches + 1 salle de bain, grand salon, cuisinière de restaurant, salle à manger de 12 places, mezzanine, poêle à bois dans la salle à manger, feu extérieur. Ménage et charges compris dans les frais généraux.",
       "Home cinéma avec projecteur et système son.",
+      "Matelas d'appoint possible sur demande.",
       "Sur le domaine, en supplément : le bain chaud, le sauna, le four à pain et les promenades.",
     ].join("\n\n"),
-    capacite: 10,
+    capacite: 11,
     featureCodes: [
       ["KITCHEN", "DINING_TABLE", "LIVING_ROOM", "HEATING", "FIRE_PIT", "PETS_CONSIDERED", "WIFI", "PARKING_INCLUDED", "SMOKING_NOT_ALLOWED", "DISHES_UTENSILS", "DISHWASHER", "REFRIGERATOR", "TV", "STEREO"],
       [],
