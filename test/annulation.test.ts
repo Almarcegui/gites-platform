@@ -31,8 +31,8 @@ let calls: StripeCall[] = [];
 let refundSeq = 0;
 /** Réponse de POST /refunds : "ok" | "pending" | "http500". */
 let refundMode: "ok" | "pending" | "http500" | "requires_action" = "ok";
-/** Montant déjà remboursé que Stripe annonce sur la charge (relecture avant rejeu). */
-let remoteRefunded = 0;
+/** Ligne de remboursement que Stripe dit avoir DÉJÀ créée (métadonnée refund_row) ; sinon seul un remboursement manuel sans rapport existe. */
+let remoteRefundRow: number | null = null;
 
 beforeAll(async () => {
   t = await createTestDb();
@@ -50,7 +50,9 @@ beforeAll(async () => {
       refundSeq += 1;
       return json({ id: `re_test_${refundSeq}`, status: refundMode === "ok" ? "succeeded" : refundMode });
     }
-    if (method === "GET" && /\/payment_intents\/pi_/.test(url)) return json({ id: "pi", latest_charge: { amount_refunded: remoteRefunded } });
+    if (method === "GET" && /\/refunds\?/.test(url)) {
+      return json({ data: remoteRefundRow == null ? [{ id: "re_manuel", status: "succeeded", metadata: {} }] : [{ id: "re_deja", status: "succeeded", metadata: { refund_row: String(remoteRefundRow) } }], has_more: false });
+    }
     return json({});
   }) as typeof fetch;
 });
@@ -63,7 +65,7 @@ beforeEach(async () => {
   calls = [];
   refundSeq = 0;
   refundMode = "ok";
-  remoteRefunded = 0;
+  remoteRefundRow = null;
 });
 
 async function call(method: string, path: string, body?: unknown) {
@@ -197,6 +199,14 @@ describe("exceptions des CGV", () => {
     expect(r.data.note).toContain("force majeure");
   });
 
+  it("séjour entamé : le trop-perçu au-delà du prix du séjour reste dû", async () => {
+    const id = await mkBooking({ total: 100000, deposit: 30000 });
+    await stripePay(id, "deposit", 30000, "pi_d16");
+    await stripePay(id, "balance", 80000, "pi_b16"); // 1 100 € payés pour 1 000 €
+    const r = await call("POST", `/api/admin/bookings/${id}/cancel`, { reason: "no-show", sejourEntame: true, confirmer: true });
+    expect(r.data.plan).toMatchObject({ keptCents: 100000, refundCents: 10000, stripeRefundCents: 10000 });
+  });
+
   it("séjour entamé (no-show) : rien n'est restitué", async () => {
     const id = await mkBooking();
     await stripePay(id, "deposit", 30000, "pi_d14");
@@ -258,8 +268,8 @@ describe("remboursement Stripe", () => {
     expect(retry.status).toBe(200);
     expect(retry.data.refund.status).toBe("succeeded");
     expect(refundCalls()).toHaveLength(1);
-    // clé stable par tentative : jamais d'horloge, donc un envoi relancé ne double pas
-    expect(refundCalls()[0]!.headers.get("idempotency-key")).toBe(`gp-refund-${failed.id}-t1`);
+    // même clé que le premier envoi : Stripe rend le remboursement déjà créé, au lieu d'en ouvrir un second
+    expect(refundCalls()[0]!.headers.get("idempotency-key")).toBe(`gp-refund-${failed.id}`);
     expect((await getBooking(db, id))!.paidCents).toBe(30000);
     // et un second rejeu est refusé : la ligne n'est plus en échec
     expect((await call("POST", `/api/admin/bookings/${id}/refunds/${failed.id}/retry`)).status).toBe(409);
@@ -272,7 +282,7 @@ describe("remboursement Stripe", () => {
     refundMode = "http500";
     await call("POST", `/api/admin/bookings/${id}/cancel`, { reason: "x", confirmer: true });
     const failed = (await db.prepare("SELECT id FROM payments WHERE kind = 'refund'").first()) as any;
-    remoteRefunded = 70000; // la réponse s'était perdue mais le remboursement est passé
+    remoteRefundRow = failed.id; // la réponse s'était perdue mais le remboursement est passé
     calls = [];
     const retry = await call("POST", `/api/admin/bookings/${id}/refunds/${failed.id}/retry`);
     expect(retry.data.refund.status).toBe("succeeded");
@@ -298,6 +308,20 @@ describe("remboursement Stripe", () => {
     const retry = await call("POST", `/api/admin/bookings/${id}/refunds/${row}/retry`);
     expect(retry.status).toBe(200);
     expect(refundCalls()[0]!.headers.get("idempotency-key")).toBe(`gp-refund-${row}`);
+  });
+
+  it("un remboursement manuel fait dans Stripe ne passe pas pour celui de la ligne", async () => {
+    const id = await mkBooking();
+    await stripePay(id, "deposit", 30000, "pi_d15");
+    await stripePay(id, "balance", 70000, "pi_b15");
+    refundMode = "http500";
+    await call("POST", `/api/admin/bookings/${id}/cancel`, { reason: "x", confirmer: true });
+    const failed = (await db.prepare("SELECT id FROM payments WHERE kind = 'refund'").first()) as any;
+    refundMode = "ok";
+    calls = [];
+    const retry = await call("POST", `/api/admin/bookings/${id}/refunds/${failed.id}/retry`); // Stripe ne connaît que re_manuel
+    expect(retry.data.refund.status).toBe("succeeded");
+    expect(refundCalls()).toHaveLength(1);
   });
 
   it("pending (Bancontact) : la ligne compte comme remboursée", async () => {
@@ -333,6 +357,15 @@ describe("mail au client", () => {
     expect(m[0]!.subject).toContain("Annulering van uw reservering");
     expect(m[0]!.body_text).toContain("dubbele");
     expect(m[0]!.body_text).toContain("vergoeding");
+  });
+
+  it("force majeure : le mail ne promet pas le double des arrhes", async () => {
+    const id = await mkBooking();
+    await stripePay(id, "deposit", 30000, "pi_d17");
+    await call("POST", `/api/admin/bookings/${id}/cancel`, { reason: "inondation", par: "proprietaire", forceMajeure: true, confirmer: true });
+    const m = await mails();
+    expect(m[0]!.body_text).not.toContain("double");
+    expect(m[0]!.body_text).toContain("300,00");
   });
 });
 

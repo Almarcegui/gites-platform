@@ -415,7 +415,7 @@ export function buildCancellationEmail(
       lines.push(`Volgens de algemene voorwaarden (artikel 5.2) blijft het voorschot${plan.keptCents > 0 ? ` (${m(plan.keptCents)})` : ""} verworven door de eigenaar.`);
       lines.push(plan.refundCents > 0 ? `Wat u méér dan het voorschot betaalde, ${m(plan.refundCents)}, wordt binnen 14 dagen aan u terugbetaald.` : `Er is niets terug te betalen.`);
     } else {
-      lines.push(`Conform artikel 5.3 van de algemene voorwaarden (artikel 1590 oud Burgerlijk Wetboek) ontvangt u het dubbele van het voorschot.`);
+      if (plan.indemnityCents > 0) lines.push(`Conform artikel 5.3 van de algemene voorwaarden (artikel 1590 oud Burgerlijk Wetboek) ontvangt u het dubbele van het voorschot.`);
       lines.push(plan.refundCents > 0 ? `Alles wat u betaalde, ${m(plan.refundCents)}, wordt aan u terugbetaald.` : `U had nog niets betaald.`);
       if (plan.indemnityCents > 0) lines.push(`Daarbovenop volgt een vergoeding gelijk aan het voorschot: ${m(plan.indemnityCents)}, per overschrijving. Antwoord op dit bericht met uw rekeningnummer.`);
     }
@@ -435,7 +435,7 @@ export function buildCancellationEmail(
     lines.push(`Selon les conditions générales (article 5.2), les arrhes${plan.keptCents > 0 ? ` (${m(plan.keptCents)})` : ""} restent acquises au propriétaire.`);
     lines.push(plan.refundCents > 0 ? `Ce que vous avez payé au-delà des arrhes, soit ${m(plan.refundCents)}, vous est remboursé dans les 14 jours.` : `Il n'y a rien à vous rembourser.`);
   } else {
-    lines.push(`Conformément à l'article 5.3 des conditions générales (article 1590 de l'ancien Code civil), vous recevez le double des arrhes.`);
+    if (plan.indemnityCents > 0) lines.push(`Conformément à l'article 5.3 des conditions générales (article 1590 de l'ancien Code civil), vous recevez le double des arrhes.`);
     lines.push(plan.refundCents > 0 ? `Tout ce que vous avez payé, soit ${m(plan.refundCents)}, vous est remboursé.` : `Vous n'aviez encore rien payé.`);
     if (plan.indemnityCents > 0) lines.push(`S'y ajoute une indemnité égale aux arrhes : ${m(plan.indemnityCents)}, versée par virement. Répondez à ce message en indiquant votre numéro de compte.`);
   }

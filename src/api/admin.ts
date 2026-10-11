@@ -1897,8 +1897,9 @@ export function registerAdminRoutes(router: Router): void {
     if (plan.stripeRefundCents > 0 && body?.confirmer !== true) {
       return json({ error: "Cette annulation rembourse de l'argent par Stripe : confirmer: true est requis (simuler: true pour voir le plan).", plan }, 400);
     }
-    // Argent : jamais par une clé de service (script, agent) — une session humaine seulement.
-    if (plan.stripeRefundCents > 0 && !isHuman(req)) return apiError(403, "un remboursement se confirme depuis une session humaine (pas par une clé de service)");
+    // Argent en jeu (arrhes gardées, remboursement, indemnité) : jamais par une clé de service
+    // (script, agent) — une session humaine seulement.
+    if (plan.mode === "arrhes" && !isHuman(req)) return apiError(403, "annuler une réservation payée se fait depuis une session humaine (pas par une clé de service)");
     // Les lignes de remboursement existent AVANT l'annulation : une panne entre les deux les laisse reprenables.
     const prepared = await prepareRefunds(env.DB, booking, plan.stripeRefunds);
     const done = await cancelBooking(env.DB, id, String(body?.reason ?? "annulation admin"));
