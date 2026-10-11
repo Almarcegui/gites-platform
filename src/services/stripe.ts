@@ -104,6 +104,11 @@ export function paymentElementEnabled(cfg: StripeConfig): boolean {
  *  invisible depuis le dépôt. Ici, ce qui est proposé au client est lisible
  *  dans le code et couvert par un test. */
 export const PAYMENT_METHOD_TYPES = ["card", "bancontact"] as const;
+/** Depuis la version d'API Stripe 2026-09-30 (constaté le 11/10/2026 sur le compte réel :
+ *  « The `payment_method_types` parameter is no longer supported »), la liste des moyens
+ *  de paiement se règle UNIQUEMENT dans le tableau de bord Stripe (Réglages › Moyens de
+ *  paiement : carte et Bancontact activés). Le PaymentIntent part donc sans ce paramètre ;
+ *  la constante ci-dessus reste la liste attendue, documentée et vérifiée dans docs/paiements-stripe.md. */
 
 export interface CheckoutParams {
   /** Origine publique du site, pour l'URL du simulateur (mode stub). */
@@ -267,7 +272,6 @@ export async function createPaymentIntent(
     "metadata[reference]": p.reference,
     "metadata[kind]": p.kind,
   });
-  PAYMENT_METHOD_TYPES.forEach((type, i) => body.set(`payment_method_types[${i}]`, type));
   // PAS de `receipt_email` (contre-review Gemini 2026-08-30) : ce champ fait
   // envoyer un reçu par Stripe lui-même, hors de tout contrôle de la
   // plateforme — donc en doublon de notre `payment_receipt`, et en contournant

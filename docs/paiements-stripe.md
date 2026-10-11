@@ -100,3 +100,8 @@ L'ancienne adresse `/api/webhooks/stripe` (sans identifiant) ne vérifie plus qu
 - L'API ne les renvoie jamais : seul « posée le … » est affiché (et, pour la clé publiable seulement, ses quatre derniers caractères). Ni le journal d'audit ni les messages d'erreur ne les contiennent.
 - Le script du pilote local (`scripts/pilote-donnees.mjs`) vide la table après chargement d'une sauvegarde : rien ne doit sortir du Mac.
 - Une clé publiable est faite pour être publique ; la clé secrète ne quitte jamais le serveur.
+
+
+## Moyens de paiement (à régler dans Stripe)
+
+Depuis la version d'API 2026-09-30, Stripe refuse le paramètre `payment_method_types` : les moyens de paiement proposés au client se choisissent dans le tableau de bord de chaque compte, Réglages › Moyens de paiement. À activer : **Carte** (porte Apple Pay et Google Pay) et **Bancontact**. Le reste désactivé.
