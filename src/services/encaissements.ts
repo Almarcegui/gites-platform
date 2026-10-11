@@ -133,9 +133,13 @@ export function encaissementsCsv(report: EncaissementsReport): string {
   const lines = [head.join(";")];
   for (const r of report.rows) {
     lines.push(
-      [r.receivedAt, r.bookingReference, r.kind, euros(r.amountCents), euros(r.feeCents), euros(r.netCents), r.status, r.stripeRef ?? ""]
-        .map(csvCell)
-        .join(";"),
+      [
+        csvCell(r.receivedAt), csvCell(r.bookingReference), csvCell(r.kind),
+        // Montants : numériques, un remboursement est négatif (« -12,00 ») et ne doit
+        // surtout pas être préfixé par la neutralisation de formule du texte.
+        euros(r.amountCents), euros(r.feeCents), euros(r.netCents),
+        csvCell(r.status), csvCell(r.stripeRef ?? ""),
+      ].join(";"),
     );
   }
   return "﻿" + lines.join("\r\n") + "\r\n";

@@ -19,6 +19,7 @@ import { registerPublicRoutes } from "../src/api/public";
 import { registerAdminRoutes } from "../src/api/admin";
 import { addDays, todayInZone } from "../src/core/dates";
 import { createServiceKey } from "../src/services/service-keys";
+import { encaissementsCsv } from "../src/services/encaissements";
 
 const router = new Router();
 registerPublicRoutes(router);
@@ -358,5 +359,17 @@ describe("encaissements par propriété", () => {
     expect(fill.data).toMatchObject({ ok: true, updated: 1, stillUnknown: 0 });
     const after = ((await call("GET", "/api/admin/encaissements?property=1")).data.report) as Record<string, any>;
     expect(after.rows[0].feeCents).toBe(90);
+  });
+});
+
+describe("export CSV", () => {
+  it("un remboursement reste un montant négatif, un texte piégé est neutralisé", () => {
+    const csv = encaissementsCsv({
+      propertyId: 1, from: null, to: null, months: [],
+      totals: { count: 1, grossCents: -1200, feeCents: 0, netCents: 0, unknownFees: 1 },
+      rows: [{ paymentId: 1, receivedAt: "2026-10-09 10:00:00", bookingId: 1, bookingReference: "=HYPERLINK(1)", kind: "refund", amountCents: -1200, feeCents: null, netCents: null, status: "succeeded", stripeRef: null }],
+    });
+    expect(csv).toContain(";-12,00;");
+    expect(csv).toContain("'=HYPERLINK(1)");
   });
 });
