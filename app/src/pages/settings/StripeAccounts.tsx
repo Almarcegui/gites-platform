@@ -13,7 +13,7 @@ import { api } from "../../api/client";
 import type { StripeKeyState, StripeProperty, StripeSettings } from "../../api/types2";
 import { ErrorLine, useAction } from "../../lib/action";
 import { useToast } from "../../lib/toasts";
-import { Loading, Page, Section, sqlWhen } from "../../ui/kit";
+import { Confirm, Loading, Page, Section, sqlWhen } from "../../ui/kit";
 
 export function StripeAccountsPage() {
   const { t } = useLingui();
@@ -53,6 +53,8 @@ function PropertyStripe({ p, settings }: { p: StripeProperty; settings: StripeSe
   const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
   const save = useAction();
   const test = useAction();
+  const clear = useAction();
+  const [clearing, setClearing] = useState(false);
   const webhookUrl = `${settings.baseUrl}${p.webhookPath}`;
   const dirty = secret !== "" || publishable !== "" || webhook !== "" || mode !== p.mode || label !== (p.accountLabel ?? "");
   const effective =
@@ -129,6 +131,27 @@ function PropertyStripe({ p, settings }: { p: StripeProperty; settings: StripeSe
           {test.state.status === "busy" ? t`Un instant…` : t`Tester la clé`}
         </button>
       </div>
+      {p.secret.set || p.publishable.set || p.webhook.set ? (
+        <div className="acts" style={{ marginTop: 8 }}>
+          <button type="button" className="btn danger" onClick={() => setClearing(true)}>
+            <Trans>Retirer les clés de cette propriété</Trans>
+          </button>
+        </div>
+      ) : null}
+      <Confirm
+        open={clearing}
+        danger
+        title={t`Retirer les clés de ${p.name} ?`}
+        text={t`Les trois clés sont effacées. La propriété retombe sur les clés de repli de l'environnement, ou sur les paiements simulés s'il n'y en a pas : plus aucun vrai paiement ne sera pris.`}
+        yes={t`Retirer les clés`}
+        no={t`Garder`}
+        busy={clear.state.status === "busy"}
+        onNo={() => setClearing(false)}
+        onYes={async () => {
+          const done = await clear.run(() => api(`/stripe/${p.propertyId}`, { method: "PUT", body: { secretKey: "", publishableKey: "", webhookSecret: "" } }), t`C'est fait. Clés retirées.`);
+          if (done) setClearing(false);
+        }}
+      />
       {result ? <p className={result.ok ? "note" : "note bad"} role="status">{result.text}</p> : null}
 
       <h3 className="sub">{t`Webhook à déclarer chez Stripe`}</h3>

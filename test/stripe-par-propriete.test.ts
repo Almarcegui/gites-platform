@@ -399,3 +399,26 @@ describe("sauvegardes sans secrets, et route historique cloisonnée", () => {
     expect(audit.results).toHaveLength(1);
   });
 });
+
+describe("messages d'erreur", () => {
+  it("une erreur Stripe qui répète la clé ne la laisse pas filer dans l'exception", async () => {
+    await setKeys(1, P1);
+    const before = globalThis.fetch;
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.href : (input as Request).url;
+      if (url.endsWith("/payment_intents")) return new Response(`{"error":{"message":"Invalid API Key provided: ${P1.sk}"}}`, { status: 401 });
+      return before(input as RequestInfo, init);
+    }) as typeof fetch;
+    try {
+      const { createPaymentIntent } = await import("../src/services/stripe");
+      const { resolveStripeConfig } = await import("../src/services/stripe-config");
+      const cfg = await resolveStripeConfig(db, env, 1);
+      const err = await createPaymentIntent(cfg, { paymentId: 1, reference: "PM-X", kind: "deposit", label: "x", amountCents: 1000 }).catch((e: Error) => e);
+      expect(err).toBeInstanceOf(Error);
+      expect((err as Error).message).toContain("Invalid API Key");
+      expect((err as Error).message).not.toContain(P1.sk);
+    } finally {
+      globalThis.fetch = before;
+    }
+  });
+});

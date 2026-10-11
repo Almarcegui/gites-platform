@@ -1804,6 +1804,10 @@ msgstr "Gelukt. Sleutel ingetrokken."
 msgid "C'est fait. Clés enregistrées."
 msgstr "Gelukt. Sleutels opgeslagen."
 
+#: src/pages/settings/StripeAccounts.tsx
+msgid "C'est fait. Clés retirées."
+msgstr "Gelukt. Sleutels verwijderd."
+
 #: src/pages/settings/Channels.tsx
 msgid "C'est fait. Code enregistré ; Beds24 ne répond pas encore, testez la liaison dans un instant."
 msgstr "Gedaan. Code opgeslagen; Beds24 antwoordt nog niet, test de koppeling zo meteen."
@@ -3559,6 +3563,10 @@ msgstr "Frans"
 msgid "garde son prix de base."
 msgstr "behoudt zijn basisprijs."
 
+#: src/pages/settings/StripeAccounts.tsx
+msgid "Garder"
+msgstr "Behouden"
+
 #: src/booking/BookingPanel.tsx
 msgid "Garder la réservation"
 msgstr "De reservering behouden"
@@ -4430,6 +4438,10 @@ msgstr "De teksten die voorgesteld worden wanneer u een klant antwoordt, in Beri
 #: src/pages/Settings.tsx
 msgid "Les textes tout prêts pour répondre aux clients : accès, horaires, solde, après le séjour"
 msgstr "Kant-en-klare teksten om klanten te antwoorden: toegang, uren, saldo, na het verblijf"
+
+#: src/pages/settings/StripeAccounts.tsx
+msgid "Les trois clés sont effacées. La propriété retombe sur les clés de repli de l'environnement, ou sur les paiements simulés s'il n'y en a pas : plus aucun vrai paiement ne sera pris."
+msgstr "De drie sleutels worden gewist. De accommodatie valt terug op de terugvalsleutels van de omgeving, of op gesimuleerde betalingen als die er niet zijn: er worden dan geen echte betalingen meer aangenomen."
 
 #: src/calendar/BlockPanel.tsx
 msgid "Lever le blocage"
@@ -6351,6 +6363,19 @@ msgstr "{0} verwijderen?"
 #: src/pages/settings/Ical.tsx
 msgid "Retirer ce calendrier"
 msgstr "Deze kalender verwijderen"
+
+#: src/pages/settings/StripeAccounts.tsx
+msgid "Retirer les clés"
+msgstr "Sleutels verwijderen"
+
+#. placeholder {0}: p.name
+#: src/pages/settings/StripeAccounts.tsx
+msgid "Retirer les clés de {0} ?"
+msgstr "Sleutels van {0} verwijderen?"
+
+#: src/pages/settings/StripeAccounts.tsx
+msgid "Retirer les clés de cette propriété"
+msgstr "Sleutels van deze accommodatie verwijderen"
 
 #: src/pages/Messages.tsx
 msgid "Retour à la liste"

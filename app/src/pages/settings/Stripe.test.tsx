@@ -64,6 +64,20 @@ describe("Comptes Stripe", () => {
     await waitFor(() => expect((screen.getAllByLabelText(/Clé secrète/)[1] as HTMLInputElement).value).toBe(""));
   });
 
+  it("Retirer les clés demande confirmation, puis envoie trois champs vides", async () => {
+    const user = userEvent.setup();
+    const { calls } = renderApp("/reglages/stripe", [
+      ...handlers,
+      (c) => (c.path === "/stripe/1" && c.method === "PUT" ? { body: { ok: true } } : undefined),
+    ]);
+    await screen.findByRole("heading", { name: "Les Gîtes du Pré Moré" });
+    await user.click(screen.getByRole("button", { name: "Retirer les clés de cette propriété" }));
+    expect(calls.some((c) => c.method === "PUT")).toBe(false);
+    await user.click(await screen.findByRole("button", { name: "Retirer les clés" }));
+    await waitFor(() => expect(calls.some((c) => c.method === "PUT" && c.path === "/stripe/1")).toBe(true));
+    expect(calls.find((c) => c.method === "PUT")!.body).toEqual({ secretKey: "", publishableKey: "", webhookSecret: "" });
+  });
+
   it("Tester la clé dit en clair ce que Stripe répond", async () => {
     const user = userEvent.setup();
     renderApp("/reglages/stripe", [

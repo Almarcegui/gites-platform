@@ -1800,6 +1800,10 @@ msgstr "C'est fait. Clé révoquée."
 msgid "C'est fait. Clés enregistrées."
 msgstr "C'est fait. Clés enregistrées."
 
+#: src/pages/settings/StripeAccounts.tsx
+msgid "C'est fait. Clés retirées."
+msgstr "C'est fait. Clés retirées."
+
 #: src/pages/settings/Channels.tsx
 msgid "C'est fait. Code enregistré ; Beds24 ne répond pas encore, testez la liaison dans un instant."
 msgstr "C'est fait. Code enregistré ; Beds24 ne répond pas encore, testez la liaison dans un instant."
@@ -3555,6 +3559,10 @@ msgstr "français"
 msgid "garde son prix de base."
 msgstr "garde son prix de base."
 
+#: src/pages/settings/StripeAccounts.tsx
+msgid "Garder"
+msgstr "Garder"
+
 #: src/booking/BookingPanel.tsx
 msgid "Garder la réservation"
 msgstr "Garder la réservation"
@@ -4426,6 +4434,10 @@ msgstr "Les textes proposés quand vous répondez à un client, dans Messages et
 #: src/pages/Settings.tsx
 msgid "Les textes tout prêts pour répondre aux clients : accès, horaires, solde, après le séjour"
 msgstr "Les textes tout prêts pour répondre aux clients : accès, horaires, solde, après le séjour"
+
+#: src/pages/settings/StripeAccounts.tsx
+msgid "Les trois clés sont effacées. La propriété retombe sur les clés de repli de l'environnement, ou sur les paiements simulés s'il n'y en a pas : plus aucun vrai paiement ne sera pris."
+msgstr "Les trois clés sont effacées. La propriété retombe sur les clés de repli de l'environnement, ou sur les paiements simulés s'il n'y en a pas : plus aucun vrai paiement ne sera pris."
 
 #: src/calendar/BlockPanel.tsx
 msgid "Lever le blocage"
@@ -6347,6 +6359,19 @@ msgstr "Retirer {0} ?"
 #: src/pages/settings/Ical.tsx
 msgid "Retirer ce calendrier"
 msgstr "Retirer ce calendrier"
+
+#: src/pages/settings/StripeAccounts.tsx
+msgid "Retirer les clés"
+msgstr "Retirer les clés"
+
+#. placeholder {0}: p.name
+#: src/pages/settings/StripeAccounts.tsx
+msgid "Retirer les clés de {0} ?"
+msgstr "Retirer les clés de {0} ?"
+
+#: src/pages/settings/StripeAccounts.tsx
+msgid "Retirer les clés de cette propriété"
+msgstr "Retirer les clés de cette propriété"
 
 #: src/pages/Messages.tsx
 msgid "Retour à la liste"

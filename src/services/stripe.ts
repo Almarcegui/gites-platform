@@ -61,6 +61,14 @@ export function stripeConfigFromEnv(env: Env, propertyId: number | null = null):
 
 const STRIPE_API = "https://api.stripe.com/v1";
 
+/** Corps d'erreur Stripe borné et débarrassé de la clé : ces messages finissent dans
+ *  les journaux et l'audit (src/index.ts), la clé secrète n'a rien à y faire. */
+function stripeErrorText(text: string, cfg: StripeConfig): string {
+  let out = text;
+  for (const secret of [cfg.secretKey, cfg.webhookSecret]) if (secret) out = out.split(secret).join("[clé]");
+  return out.slice(0, 300);
+}
+
 export function stripeEnabled(cfg: StripeConfig): boolean {
   return !!cfg.secretKey && cfg.secretKey.trim() !== "";
 }
@@ -140,7 +148,7 @@ export async function createCheckoutSession(cfg: StripeConfig, p: CheckoutParams
     body: body.toString(),
   });
   if (!res.ok) {
-    throw new Error(`Stripe checkout ${res.status}: ${(await res.text()).slice(0, 300)}`);
+    throw new Error(`Stripe checkout ${res.status}: ${stripeErrorText(await res.text(), cfg)}`);
   }
   const session = (await res.json()) as { id: string; url: string };
   return { id: session.id, url: session.url };
@@ -277,7 +285,7 @@ export async function createPaymentIntent(
     body: body.toString(),
   });
   if (!res.ok) {
-    throw new Error(`Stripe payment_intent ${res.status}: ${(await res.text()).slice(0, 300)}`);
+    throw new Error(`Stripe payment_intent ${res.status}: ${stripeErrorText(await res.text(), cfg)}`);
   }
   const intent = (await res.json()) as { id?: string; client_secret?: string };
   if (!intent.id || !intent.client_secret) throw new Error("Stripe payment_intent : réponse inexploitable");
