@@ -98,3 +98,10 @@ export function mountLangSwitch(container) {
     });
   });
 }
+
+/** Heure lisible : « 18:00 » devient « 18 h » en français (« 18 h 30 » si besoin). */
+export const hour = (h) => {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(String(h ?? ""));
+  if (!m || LANG === "nl") return String(h ?? "");
+  return `${Number(m[1])} h${m[2] === "00" ? "" : " " + m[2]}`;
+};

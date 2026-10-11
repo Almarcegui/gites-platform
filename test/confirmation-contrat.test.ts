@@ -78,7 +78,7 @@ describe("à la confirmation par paiement", () => {
     const conf = log.filter((m) => m.kind === "confirmation");
     expect(conf).toHaveLength(1);
     expect(log.filter((m) => m.kind === "voucher")).toHaveLength(0); // remplacé, pas doublé
-    expect(conf[0]!.subject).toBe(`Confirmation de réservation ${b.reference} — ${(await t.db.prepare("SELECT name FROM properties WHERE id = 1").first<{ name: string }>())!.name}`);
+    expect(conf[0]!.subject).toBe(`[${b.reference}] Votre réservation est confirmée — ${(await t.db.prepare("SELECT name FROM properties WHERE id = 1").first<{ name: string }>())!.name}`);
     const att = JSON.parse(conf[0]!.attachments) as { filename: string; bytes: number }[];
     expect(att).toEqual([{ filename: `Contrat-${b.reference}.pdf`, bytes: expect.any(Number) }]);
     expect(att[0]!.bytes).toBeGreaterThan(3000);
@@ -214,7 +214,7 @@ describe("le mail", () => {
     const b = await bookAndPay();
     const ctx = (await loadContractContext(t.db, b.id))!;
     const mail = buildConfirmationEmail({ booking: ctx.booking, property: ctx.property, settings: ctx.settings, voucherUrl: `http://test.local/book/voucher.html?ref=${b.reference}`, attachmentName: contractFileName(b.reference) });
-    expect(mail.subject).toMatch(/^Confirmation de réservation /);
+    expect(mail.subject).toMatch(/^\[[A-Z]{2}-\d{4}-\d+\] Votre réservation est confirmée/);
     for (const body of [mail.bodyText, mail.bodyHtml]) {
       expect(body).toContain(b.reference);
       expect(body).toContain("Contrat-" + b.reference + ".pdf");
@@ -234,7 +234,7 @@ describe("le mail", () => {
   it("néerlandais : tout le mail est en néerlandais, avec la mention sur les CGV", async () => {
     const b = await bookAndPay({ nl: true });
     const conf = (await mails(b.id)).find((m) => m.kind === "confirmation")!;
-    expect(conf.subject).toMatch(/^Bevestiging van reservering /);
+    expect(conf.subject).toMatch(/^\[[A-Z]{2}-\d{4}-\d+\] Uw reservering is bevestigd/);
     expect(conf.body_text).toContain("Uw reservering is bevestigd");
     expect(conf.body_text).toContain("GOED OM TE WETEN");
     expect(conf.body_text).toContain("De Franse versie is rechtsgeldend");

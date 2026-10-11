@@ -52,7 +52,7 @@ import {
   type PaymentStart,
   type QuoteBody,
 } from "../services/booking-flow";
-import { realContact } from "../services/email";
+import { buildContactAckEmail, queueEmail, realContact, refSubject } from "../services/email";
 import { buildContractPdf, contractFileName, loadContractContext } from "../services/contrat";
 import { publicHealth } from "../services/health";
 import { clearHoldCookie, readHoldReference, setHoldCookie } from "../services/hold-session";
@@ -1168,7 +1168,7 @@ export function registerPublicRoutes(router: Router): void {
   /** Question AVANT réservation (formulaire de la page publique). */
   router.post("/api/public/contact", async (req, env) => {
     const db = env.DB;
-    const body = await readJson<{ property?: string; name?: string; email?: string; message?: string; website?: string }>(req);
+    const body = await readJson<{ property?: string; name?: string; email?: string; message?: string; website?: string; lang?: string }>(req);
     if (!body) return apiError(400, "corps JSON attendu");
     if (String(body.website ?? "").trim() !== "") return json({ ok: true }); // pot de miel anti-bot
     const name = String(body.name ?? "").trim();
@@ -1190,9 +1190,39 @@ export function registerPublicRoutes(router: Router): void {
       bodyText: message,
       guestId: guest?.id ?? null,
     });
-    await audit(db, "public", "message.contact", `message:${id}`, { property: property.slug, from: email });
-    return json({ ok: true }, 201);
+    if (id === null) return apiError(500, "message non enregistré");
+    // Référence de la question, du même gabarit que celle d'une réservation :
+    // elle va dans l'objet, et la relève de la boîte y rattache la réponse.
+    const reference = `QU-${todayInZone().slice(0, 4)}-${String(id).padStart(4, "0")}`;
+    await db.prepare("UPDATE messages SET subject = ?1 WHERE id = ?2").bind(refSubject(reference, `Question de ${name} — ${property.name}`), id).run();
+    await audit(db, "public", "message.contact", `message:${id}`, { property: property.slug, from: email, reference });
+    const ack = await sendContactAck(db, env, { email, reference, property, name, message, lang: body.lang === "nl" ? "nl" : "fr" });
+    return json({ ok: true, reference, ackSent: ack, deliveredTo: publicContact(property.contactEmail) }, 201);
   });
+
+  /** Accusé de réception par e-mail, journalisé comme les autres (`contact_ack`).
+   *  Garde-fou : l'adresse saisie n'est pas vérifiée, le formulaire ne doit pas
+   *  servir à arroser quelqu'un de mails — au-delà de 3 messages par heure et
+   *  par adresse, le message est gardé mais l'accusé ne repart plus. */
+  async function sendContactAck(
+    db: D1Database,
+    env: Env,
+    a: { email: string; reference: string; property: { id: number; name: string }; name: string; message: string; lang: "fr" | "nl"; bookingId?: number | null },
+  ): Promise<boolean> {
+    try {
+      const recent = await db
+        .prepare("SELECT COUNT(*) AS n FROM messages WHERE direction = 'in' AND channel = 'form' AND lower(from_email) = ?1 AND received_at >= datetime('now', '-1 hour')")
+        .bind(a.email.toLowerCase())
+        .first<{ n: number }>();
+      if ((recent?.n ?? 0) > 3) return false;
+      const mail = buildContactAckEmail({ reference: a.reference, propertyName: a.property.name, guestName: a.name, message: a.message, nl: a.lang === "nl" });
+      await queueEmail(db, env, { bookingId: a.bookingId ?? null, to: a.email, subject: mail.subject, bodyText: mail.bodyText, kind: "contact_ack" });
+      return true;
+    } catch (e) {
+      await audit(db, "public", "contact_ack.error", a.reference, { error: e instanceof Error ? e.message : String(e) });
+      return false;
+    }
+  }
 
   /** Charge une résa par référence + email — mutualisé messages/voucher. */
   async function authedBooking(db: D1Database, reference: string, email: string): Promise<BookingRow | null> {
@@ -1317,8 +1347,20 @@ export function registerPublicRoutes(router: Router): void {
       guestId: booking.guestId,
     });
     await audit(db, "public", "message.booking", `booking:${booking.id}`);
+    const property = booking.propertyId != null ? await getProperty(db, booking.propertyId) : null;
+    const ackSent = booking.guestEmail
+      ? await sendContactAck(db, env, {
+          email: booking.guestEmail,
+          reference: booking.reference,
+          property: { id: property?.id ?? booking.propertyId ?? 1, name: property?.name ?? "" },
+          name: booking.guestName ?? "",
+          message,
+          lang: booking.guestLang === "nl" ? "nl" : "fr",
+          bookingId: booking.id,
+        })
+      : false;
     const thread = await getThread(db, { bookingId: booking.id, guestId: booking.guestId });
-    return json({ ok: true, messages: thread.map(publicMessage) }, 201);
+    return json({ ok: true, ackSent, reference: booking.reference, deliveredTo: publicContact(property?.contactEmail), messages: thread.map(publicMessage) }, 201);
   });
 
   // petite aide au front public : date du jour (Bruxelles) + mode démo
