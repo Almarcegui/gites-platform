@@ -26,8 +26,10 @@ import {
   paymentElementEnabled,
   remotePaymentInFlight,
   stripeEnabled,
+  stripePublishableKey,
   voidRemotePayment,
 } from "./stripe";
+import { propertyIdOfBooking, resolveStripeConfig } from "./stripe-config";
 
 export interface QuoteBody {
   unitId: number;
@@ -112,6 +114,12 @@ export class PaymentInFlightError extends Error {
   }
 }
 
+/** Configuration Stripe de la propriété d'une réservation (clés propres, sinon repli env). */
+export async function stripeConfigForBooking(db: D1Database, env: Env, booking: { id: number; propertyId?: number | null }) {
+  const propertyId = booking.propertyId ?? (await propertyIdOfBooking(db, booking.id));
+  return resolveStripeConfig(db, env, propertyId);
+}
+
 export async function voidPendingSessions(
   db: D1Database,
   env: Env,
@@ -119,18 +127,19 @@ export async function voidPendingSessions(
   actor: "public" | "admin",
 ): Promise<void> {
   const pendings = (await listPayments(db, { bookingId })).filter((x) => x.status === "pending");
+  const cfg = await stripeConfigForBooking(db, env, { id: bookingId });
   for (const pay of pendings) {
     if (pay.stripeSessionId) {
       // Garde-fou AVANT toute écriture : une intention déjà en route chez la
       // banque du client ne s'annule pas. Marquer la ligne `failed` et en
       // ouvrir une seconde produirait deux débits (contre-review 2026-08-30).
-      if (await remotePaymentInFlight(env, pay.stripeSessionId)) throw new PaymentInFlightError();
+      if (await remotePaymentInFlight(cfg, pay.stripeSessionId)) throw new PaymentInFlightError();
       // `voidRemotePayment` reconnaît la forme de la référence : session
       // Checkout (`cs_…`), PaymentIntent (`pi_…`) ou simulateur (`stub_…`).
       // Une même réservation peut porter les deux si le mode a changé entre
       // deux tentatives — d'où l'aiguillage plutôt qu'un appel en dur.
-      const closed = await voidRemotePayment(env, pay.stripeSessionId);
-      if (!closed && stripeEnabled(env)) {
+      const closed = await voidRemotePayment(cfg, pay.stripeSessionId);
+      if (!closed && stripeEnabled(cfg)) {
         await audit(db, actor, "payment.expire_failed", `booking:${bookingId}`, {
           payment: pay.id,
           session: pay.stripeSessionId,
@@ -183,6 +192,7 @@ export async function startCheckout(
   actor: "public" | "admin",
 ): Promise<{ url: string; paymentId: number }> {
   await voidPendingSessions(db, env, booking.id, actor);
+  const cfg = await stripeConfigForBooking(db, env, booking);
   const paymentId = await addPayment(db, {
     bookingId: booking.id,
     kind,
@@ -192,7 +202,8 @@ export async function startCheckout(
   });
   const label = paymentLabel(booking, kind);
   const returnUrls = paymentReturnUrls(env, booking, kind);
-  const session = await createCheckoutSession(env, {
+  const session = await createCheckoutSession(cfg, {
+    baseUrl: env.PUBLIC_BASE_URL,
     paymentId,
     reference: booking.reference,
     label,
@@ -222,6 +233,10 @@ export interface PaymentStart {
   returnUrl: string;
   amountCents: number;
   kind: PaymentKind;
+  /** Clé PUBLIABLE du compte Stripe de la propriété (mode `element` seulement) :
+   *  le navigateur doit monter le formulaire avec la clé du compte qui a créé le
+   *  PaymentIntent. Faite pour être publique, contrairement à la clé secrète. */
+  publishableKey: string | null;
 }
 
 /** Point d'entrée unique du paiement côté client (issue #26).
@@ -245,7 +260,8 @@ export async function startPayment(
   actor: "public" | "admin",
 ): Promise<PaymentStart> {
   const returnUrl = paymentReturnUrls(env, booking, kind).successUrl;
-  if (!paymentElementEnabled(env)) {
+  const cfg = await stripeConfigForBooking(db, env, booking);
+  if (!paymentElementEnabled(cfg)) {
     const legacy = await startCheckout(db, env, booking, kind, amountCents, actor);
     return {
       paymentId: legacy.paymentId,
@@ -255,6 +271,7 @@ export async function startPayment(
       returnUrl,
       amountCents,
       kind,
+      publishableKey: null,
     };
   }
 
@@ -268,7 +285,7 @@ export async function startPayment(
     amountCents,
     status: "pending",
   });
-  const intent = await createPaymentIntent(env, {
+  const intent = await createPaymentIntent(cfg, {
     paymentId,
     reference: booking.reference,
     kind,
@@ -290,6 +307,7 @@ export async function startPayment(
     returnUrl,
     amountCents,
     kind,
+    publishableKey: stripePublishableKey(cfg),
   };
 }
 

@@ -1004,13 +1004,16 @@ async function submitBooking() {
  *  en exception : `submitBooking` remet l'étape 3 et affiche le message, le
  *  hold restant récupérable depuis le bandeau de décompte. */
 async function showPaymentElement(payment, amountCents) {
-  const cfg = await paymentConfig();
-  if (!cfg.enabled || !cfg.publishableKey) {
+  // La clé publiable vient du serveur AVEC le paiement : un compte Stripe par
+  // propriété, donc la clé du compte qui a créé ce PaymentIntent. L'ancien point
+  // /payment-config reste le repli (réponses d'un serveur plus ancien).
+  const publishableKey = payment.publishableKey || (await paymentConfig()).publishableKey;
+  if (!publishableKey) {
     throw new Error(t("Le paiement en ligne est momentanément indisponible — nous pouvons finaliser votre réservation avec vous, écrivez-nous."));
   }
   const card = $("payCard");
   await mountPayment(card, {
-    publishableKey: cfg.publishableKey,
+    publishableKey,
     clientSecret: payment.clientSecret,
     returnUrl: payment.returnUrl,
     amountLabel: eur(amountCents ?? payment.amountCents),

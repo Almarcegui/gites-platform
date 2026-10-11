@@ -6,6 +6,8 @@ interface Env {
   EMAILS_ENABLED?: string;
   // Secrets (.dev.vars en local, wrangler secret en prod) — tous optionnels :
   // absents = mode stub (paiement simulé, emails journalisés uniquement).
+  // Clés Stripe de REPLI : un compte Stripe par propriété (table property_stripe,
+  // Réglages > Comptes Stripe). Ces variables ne servent qu'aux propriétés sans clés propres.
   STRIPE_SECRET_KEY?: string;
   /** Clé publique Stripe (pk_test_… / pk_live_…) — confiée au navigateur pour
    *  monter le Payment Element. Absente = repli sur Checkout hébergé. */

@@ -227,10 +227,12 @@ const lineLabel = (l) => (l?.publicLabel && l.unitPriceCents != null
       // l'afficher.
       if (r.ok && d.payment?.mode === "element" && d.payment.clientSecret) {
         try {
-          const cfg = await paymentConfig();
-          if (!cfg.enabled || !cfg.publishableKey) throw new Error(t("paiement indisponible"));
+          // Clé publiable du compte Stripe de la propriété, fournie avec le paiement ;
+          // /payment-config reste le repli d'un serveur plus ancien.
+          const publishableKey = d.payment.publishableKey || (await paymentConfig()).publishableKey;
+          if (!publishableKey) throw new Error(t("paiement indisponible"));
           await mountPayment(document.getElementById("payCard"), {
-            publishableKey: cfg.publishableKey,
+            publishableKey,
             clientSecret: d.payment.clientSecret,
             returnUrl: d.payment.returnUrl,
             amountLabel: eur(d.amountCents),
