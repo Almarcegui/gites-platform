@@ -1051,7 +1051,8 @@ body:has(.savebar) .amel-fab.amel-B { bottom: calc(156px + env(safe-area-inset-b
   .tbl-wrap:has(.mcards) { overflow: visible; }
   .tbl.mcards thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
   .tbl.mcards.bk thead { position: static; width: auto; height: auto; overflow: visible; clip: auto; }
-  .tbl.mcards.bk thead tr { display: flex; gap: 8px 20px; min-height: 0; padding: 0 14px; background: var(--surface-2); border-bottom: 1px solid var(--line); }
+  .tbl.mcards.bk thead { display: block; }
+  .tbl.mcards.bk thead tr { display: flex; width: 100%; gap: 8px 20px; min-height: 0; padding: 0 14px; background: var(--surface-2); border-bottom: 1px solid var(--line); }
   .tbl.mcards.bk thead th { display: block; padding: 0; height: auto; border: 0; position: static; background: none; font-size: 15px; }
   .tbl.mcards.bk thead th.hide-s, .tbl.mcards.bk thead th:first-child { display: none; }
   .tbl.mcards.bk .th-sort { min-height: 44px; }
