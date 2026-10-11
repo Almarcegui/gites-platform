@@ -33,9 +33,9 @@ export function ImprovementsPage() {
   const [filter, setFilter] = useState<ImprovementStatus | "tous">("tous");
   const [sort, setSort] = useState<SortKey>("recent");
   const [open, setOpen] = useState<Improvement | null>(null);
-  const q = useQuery({ queryKey: ["improvements", "all"], queryFn: () => api<ImprovementList>("/improvements") });
+  const q = useQuery({ queryKey: ["improvements", filter], queryFn: () => api<ImprovementList>("/improvements", { query: { status: filter === "tous" ? undefined : filter } }) });
   const rows = useMemo(() => {
-    const list = (q.data?.improvements ?? []).filter((r) => filter === "tous" || r.status === filter);
+    const list = q.data?.improvements ?? [];
     const by: Record<SortKey, (a: Improvement, b: Improvement) => number> = {
       recent: (a, b) => b.id - a.id,
       ancien: (a, b) => a.id - b.id,
@@ -44,7 +44,7 @@ export function ImprovementsPage() {
       statut: (a, b) => STATUSES.indexOf(a.status) - STATUSES.indexOf(b.status) || b.id - a.id,
     };
     return [...list].sort(by[sort]);
-  }, [q.data, filter, sort]);
+  }, [q.data, sort]);
   const counts = q.data?.counts;
   const total = counts ? STATUSES.reduce((n, s) => n + counts[s], 0) : 0;
 

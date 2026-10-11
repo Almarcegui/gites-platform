@@ -57,6 +57,11 @@ describe("remarques d'amélioration", () => {
     expect((await call("POST", "/api/admin/improvements", ADMIN, { text: "une remarque", pagePath: "/" + "a".repeat(300) })).status).toBe(400);
   });
 
+  it("corps trop volumineux : 413 avant lecture", async () => {
+    const res = await router.handle(new Request("http://test.local/api/admin/improvements", { method: "POST", headers: { authorization: `Bearer ${ADMIN}`, "content-type": "application/json", "content-length": "50000" }, body: JSON.stringify({ text: "abc", pagePath: "/" }) }), env);
+    expect(res?.status).toBe(413);
+  });
+
   it("le HTML reste du texte : stocké tel quel, renvoyé tel quel", async () => {
     const r = await call("POST", "/api/admin/improvements", ADMIN, { text: "<img src=x onerror=alert(1)>", pagePath: "/", pageTitle: "<b>x</b>" });
     expect(r.data.improvement.text).toBe("<img src=x onerror=alert(1)>");

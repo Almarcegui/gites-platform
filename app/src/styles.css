@@ -1017,4 +1017,7 @@ fieldset.wd legend { font-weight: 600; margin-bottom: 8px; padding: 0; }
 /* Au téléphone : au-dessus de la barre d'onglets, jamais devant ses boutons. */
 .amel-fab.amel-B { right: 12px; bottom: calc(84px + env(safe-area-inset-bottom)); min-height: 48px; font-size: 14px; }
 .clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; white-space: normal; overflow-wrap: anywhere; }
+/* Une barre « Enregistrer » collée en bas : le bouton se pose au-dessus, jamais devant. */
+body:has(.savebar) .amel-fab.amel-A { bottom: 92px; }
+body:has(.savebar) .amel-fab.amel-B { bottom: calc(156px + env(safe-area-inset-bottom)); }
 @media print { .amel-fab { display: none; } }

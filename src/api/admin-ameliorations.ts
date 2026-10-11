@@ -15,10 +15,13 @@ import { apiError, json, readJson, type Router } from "./router";
 
 // eslint-disable-next-line no-control-regex
 const CONTROL = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g;
+const MAX_BODY_BYTES = 16_384; // 2 000 caractères en UTF-8 : 8 Ko au plus, plus les autres champs
 const clean = (s: string) => s.replace(CONTROL, "").trim();
 
 export function registerImprovementRoutes(router: Router): void {
   router.post("/api/admin/improvements", guard(async (req, env) => {
+    // Corps borné avant lecture : 2 000 caractères de texte + quelques champs tiennent largement.
+    if (Number(req.headers.get("content-length") ?? 0) > MAX_BODY_BYTES) return apiError(413, "la demande est trop volumineuse");
     const body = await readJson<{ text?: unknown; pagePath?: unknown; pageTitle?: unknown; viewportWidth?: unknown }>(req);
     if (!body || typeof body !== "object") return apiError(400, "demande illisible");
     const text = typeof body.text === "string" ? clean(body.text) : "";
