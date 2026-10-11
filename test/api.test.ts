@@ -123,7 +123,7 @@ describe("fiche domaine et disponibilité", () => {
 });
 
 describe("parcours de réservation complet (mode stub)", () => {
-  it("réserve, paie l'acompte, confirme, journalise le voucher, bloque la liaison", async () => {
+  it("réserve, paie l'acompte, confirme, journalise la confirmation, bloque la liaison", async () => {
     // 1. Création → hold + URL de paiement stub
     const created = await call("POST", "/api/public/bookings", bookingBody(2));
     expect(created.status).toBe(201);
@@ -169,7 +169,7 @@ describe("parcours de réservation complet (mode stub)", () => {
     // 5. Voucher journalisé en stub (aucun envoi réel)
     const emails = await call("GET", "/api/admin/email-log");
     const kinds = (emails.data.emails as { kind: string; status: string }[]).map((e) => [e.kind, e.status].join(":"));
-    expect(kinds).toContain("voucher:stub");
+    expect(kinds).toContain("confirmation:stub");
 
     // 6. Doubles réservations rejetées (même unité, puis Domaine via liaison)
     expect((await call("POST", "/api/public/bookings", bookingBody(2, { guest: { ...GUEST, email: "x@y.be" } }))).status).toBe(409);
