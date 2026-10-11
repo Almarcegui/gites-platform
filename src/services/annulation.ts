@@ -17,7 +17,7 @@
 // remboursements Stripe. Les montants sont des cents entiers, jamais d'arrondi.
 
 import { sqlNow } from "../core/dates";
-import { addPayment, audit, listPayments, markPaymentStatus, type BookingRow, type PaymentRow } from "../db/repo";
+import { addPayment, audit, listPayments, markPaymentStatus, recomputePaid, type BookingRow, type PaymentRow } from "../db/repo";
 import { createRefund, paymentIntentRefundedCents, stripeEnabled, type StripeConfig } from "./stripe";
 
 export type AnnulationPar = "locataire" | "proprietaire";
@@ -53,11 +53,19 @@ export interface CancellationPlan {
 const isStripeChannel = (b: BookingRow) => b.source === "ical" || b.source === "import";
 
 /** Calcule le plan d'annulation. N'écrit rien. */
+export interface PlanOptions {
+  /** Propriétaire : force majeure, pas d'indemnité (CGV 5.3) — les paiements sont rendus. */
+  forceMajeure?: boolean;
+  /** Locataire : no-show ou arrivée écourtée, aucune restitution du séjour entamé (CGV 5.2). */
+  sejourEntame?: boolean;
+}
+
 export async function planCancellation(
   db: D1Database,
   cfg: StripeConfig,
   booking: BookingRow,
   par: AnnulationPar,
+  opts: PlanOptions = {},
 ): Promise<CancellationPlan> {
   const base = {
     par, paidCents: 0, arrhesCents: booking.depositCents, keptCents: 0, refundCents: 0,
@@ -80,9 +88,11 @@ export async function planCancellation(
 
   // Les arrhes que le propriétaire a réellement reçues (jamais plus que le payé).
   const arrhesRecues = Math.min(paidNet, Math.max(0, booking.depositCents));
-  const kept = par === "locataire" ? arrhesRecues : 0;
+  // 5.2 : séjour entamé (no-show, arrivée écourtée) → rien n'est restitué.
+  const kept = par === "locataire" ? (opts.sejourEntame ? paidNet : arrhesRecues) : 0;
   const refund = paidNet - kept;
-  const indemnity = par === "proprietaire" ? arrhesRecues : 0;
+  // 5.3 : le double des arrhes, sauf force majeure.
+  const indemnity = par === "proprietaire" && !opts.forceMajeure ? arrhesRecues : 0;
 
   // Déjà rendu par Stripe par PaymentIntent (lignes réussies ET en cours : la
   // ligne en cours réserve sa part, une ligne échouée ne compte pas).
@@ -133,8 +143,9 @@ function intentOf(p: PaymentRow): string | null {
 
 function planNote(par: AnnulationPar, kept: number, refund: number, manual: number, indemnity: number): string {
   const parts: string[] = [];
-  if (par === "locataire") parts.push(`Annulation par le locataire : les arrhes (${eurTxt(kept)}) restent acquises au propriétaire.`);
-  else parts.push("Annulation par le propriétaire : tout ce qui a été payé est rendu, plus une indemnité égale aux arrhes (double des arrhes, art. 5.3 des CGV).");
+  if (par === "locataire") parts.push(`Annulation par le locataire : ${eurTxt(kept)} restent acquis au propriétaire (arrhes, art. 5.2 des CGV).`);
+  else if (indemnity > 0) parts.push("Annulation par le propriétaire : tout ce qui a été payé est rendu, plus une indemnité égale aux arrhes (double des arrhes, art. 5.3 des CGV).");
+  else parts.push("Annulation par le propriétaire en cas de force majeure : tout ce qui a été payé est rendu, sans indemnité (art. 5.3 des CGV).");
   if (refund > 0) parts.push(`Remboursement de ${eurTxt(refund)} dans les 14 jours.`);
   if (manual > 0) parts.push(`Dont ${eurTxt(manual)} à rendre à la main (paiement hors Stripe ou Stripe non disponible).`);
   if (indemnity > 0) parts.push(`Indemnité de ${eurTxt(indemnity)} à virer à la main : Stripe ne rembourse pas plus que l'encaissé.`);
@@ -154,74 +165,105 @@ export interface RefundOutcome {
   error?: string;
 }
 
-/** Exécute les remboursements Stripe du plan. Une ligne `payments` (kind
- *  `refund`, montant NÉGATIF pour que `paid_cents` baisse) est créée `pending`
- *  AVANT l'appel Stripe ; son id fait l'Idempotency-Key. Un échec ne bloque
- *  rien : la ligne passe `failed` et se rejoue (`replayRefund`). */
-export async function executeRefunds(
-  db: D1Database,
-  cfg: StripeConfig,
-  booking: BookingRow,
-  lines: StripeRefundLine[],
-): Promise<RefundOutcome[]> {
-  const out: RefundOutcome[] = [];
+/** Les lignes de remboursement sont créées `pending` AVANT l'annulation (une
+ *  panne entre les deux laisse des lignes reprenables, jamais une annulation
+ *  sans trace). Montant NÉGATIF : `paid_cents` baisse à la réussite. */
+export async function prepareRefunds(db: D1Database, booking: BookingRow, lines: StripeRefundLine[]): Promise<{ rowId: number; line: StripeRefundLine }[]> {
+  const out: { rowId: number; line: StripeRefundLine }[] = [];
   for (const l of lines) {
     const rowId = await addPayment(db, {
       bookingId: booking.id, kind: "refund", method: "stripe", amountCents: -l.amountCents, status: "pending",
       stripePaymentIntent: l.paymentIntent, note: `remboursement du paiement #${l.paymentId}`,
     });
-    out.push(await runRefund(db, cfg, booking.reference, rowId, l.paymentId, l.paymentIntent, l.amountCents, `gp-refund-${rowId}`));
+    out.push({ rowId, line: l });
   }
   return out;
 }
 
+/** L'annulation n'a pas eu lieu (perdue contre une autre) : les lignes jamais
+ *  envoyées à Stripe disparaissent. */
+export async function dropPreparedRefunds(db: D1Database, booking: BookingRow, rowIds: number[]): Promise<void> {
+  for (const id of rowIds) await db.prepare("DELETE FROM payments WHERE id = ?1 AND kind = 'refund' AND status = 'pending'").bind(id).run();
+  await recomputePaid(db, booking.id);
+}
+
+/** Envoie à Stripe les remboursements préparés. Un échec ne bloque rien : la
+ *  ligne passe `failed` et se rejoue (`replayRefund`). */
+export async function executeRefunds(
+  db: D1Database,
+  cfg: StripeConfig,
+  booking: BookingRow,
+  prepared: { rowId: number; line: StripeRefundLine }[],
+): Promise<RefundOutcome[]> {
+  const out: RefundOutcome[] = [];
+  for (const { rowId, line } of prepared) {
+    out.push(await runRefund(db, cfg, booking.reference, rowId, line.paymentId, line.paymentIntent, line.amountCents, 0));
+  }
+  return out;
+}
+
+/** Idempotency-Key de la tentative n de la ligne : stable (jamais d'horloge),
+ *  donc un envoi relancé après un délai d'attente ne rembourse pas deux fois. */
+const keyOf = (rowId: number, attempt: number) => (attempt === 0 ? `gp-refund-${rowId}` : `gp-refund-${rowId}-t${attempt}`);
+const tag = (attempt: number) => (attempt > 0 ? ` [t${attempt}]` : "");
+const attemptOf = (note: string | null) => Number(/\[t(\d+)\]/.exec(note ?? "")?.[1] ?? 0);
+
 async function runRefund(
   db: D1Database, cfg: StripeConfig, reference: string, rowId: number, paymentId: number,
-  intent: string, amountCents: number, idempotencyKey: string,
+  intent: string, amountCents: number, attempt: number,
 ): Promise<RefundOutcome> {
   try {
-    const r = await createRefund(cfg, { paymentIntent: intent, amountCents, idempotencyKey, reference });
-    // Stripe accepte aussi `pending` (Bancontact) : l'argent est en route, la ligne compte.
-    const failed = r.status === "failed" || r.status === "canceled";
-    await markPaymentStatus(db, rowId, failed ? "failed" : "succeeded", {
-      receivedAt: sqlNow(), note: `remboursement du paiement #${paymentId} — Stripe ${r.id} (${r.status})`,
+    const r = await createRefund(cfg, { paymentIntent: intent, amountCents, idempotencyKey: keyOf(rowId, attempt), reference });
+    // Seuls `succeeded` et `pending` (Bancontact : l'argent est en route) comptent.
+    const ok = r.status === "succeeded" || r.status === "pending";
+    await markPaymentStatus(db, rowId, ok ? "succeeded" : "failed", {
+      receivedAt: sqlNow(), note: `remboursement du paiement #${paymentId} — Stripe ${r.id} (${r.status})${tag(attempt)}`,
     });
-    return { refundPaymentId: rowId, paymentId, amountCents, status: failed ? "failed" : "succeeded", stripeRefundId: r.id, ...(failed ? { error: `Stripe : ${r.status}` } : {}) };
+    return { refundPaymentId: rowId, paymentId, amountCents, status: ok ? "succeeded" : "failed", stripeRefundId: r.id, ...(ok ? {} : { error: `Stripe : statut ${r.status}` }) };
   } catch (e) {
     const error = e instanceof Error ? e.message.slice(0, 300) : String(e).slice(0, 300);
-    await markPaymentStatus(db, rowId, "failed", { note: `remboursement du paiement #${paymentId} — échec : ${error}` });
+    await markPaymentStatus(db, rowId, "failed", { note: `remboursement du paiement #${paymentId} — échec : ${error}${tag(attempt)}` });
     return { refundPaymentId: rowId, paymentId, amountCents, status: "failed", error };
   }
 }
 
-/** Rejoue un remboursement `failed`. Avant de renvoyer l'ordre, on demande à
- *  Stripe ce qui est déjà remboursé : une réponse perdue (délai d'attente) peut
- *  cacher un remboursement en fait passé, et le rejouer avec une autre clé
- *  rembourserait deux fois — en mangeant les arrhes. En cas de doute (Stripe
- *  injoignable), on ne rejoue pas. */
+/** Rejoue un remboursement `failed` (ou resté `pending` après une panne).
+ *  Avant de renvoyer l'ordre, on demande à Stripe ce qui est déjà remboursé :
+ *  une réponse perdue peut cacher un remboursement en fait passé, et le rejouer
+ *  rembourserait deux fois. En cas de doute
+ *  (Stripe injoignable), on ne rejoue pas. La ligne est « réservée » par un
+ *  UPDATE conditionnel : deux rejeux simultanés ne partent jamais ensemble. */
 export async function replayRefund(
   db: D1Database, cfg: StripeConfig, booking: BookingRow, refundPaymentId: number,
 ): Promise<RefundOutcome> {
   const rows = await listPayments(db, { bookingId: booking.id });
   const row = rows.find((r) => r.id === refundPaymentId && r.kind === "refund");
-  if (!row || row.status !== "failed" || !row.stripePaymentIntent) throw new Error("remboursement introuvable ou pas en échec");
+  if (!row || (row.status !== "failed" && row.status !== "pending") || !row.stripePaymentIntent) {
+    throw new Error("remboursement introuvable ou déjà réglé");
+  }
   const amount = Math.abs(row.amountCents);
   const intent = row.stripePaymentIntent;
+  const paymentId = Number(/#(\d+)/.exec(row.note ?? "")?.[1] ?? 0);
   const remote = await paymentIntentRefundedCents(cfg, intent);
   if (remote === null) throw new Error("Stripe injoignable : impossible de vérifier ce qui est déjà remboursé, on ne rejoue pas");
   const others = rows
     .filter((r) => r.kind === "refund" && r.id !== row.id && r.stripePaymentIntent === intent && (r.status === "succeeded" || r.status === "pending"))
     .reduce((s, r) => s + Math.abs(r.amountCents), 0);
-  const paymentId = Number(/#(\d+)/.exec(row.note ?? "")?.[1] ?? 0);
   if (remote >= others + amount) {
     // Déjà passé chez Stripe malgré l'échec constaté ici : on aligne la ligne.
-    await markPaymentStatus(db, row.id, "succeeded", { receivedAt: sqlNow(), note: `remboursement du paiement #${paymentId} — déjà remboursé chez Stripe (vérifié au rejeu)` });
+    await markPaymentStatus(db, row.id, "succeeded", { receivedAt: sqlNow(), note: `remboursement du paiement #${paymentId} — déjà remboursé chez Stripe (vérifié au rejeu)${tag(attemptOf(row.note))}` });
     await audit(db, "admin", "refund.replay_already_done", `booking:${booking.id}`, { refundPayment: row.id });
     return { refundPaymentId: row.id, paymentId, amountCents: amount, status: "succeeded" };
   }
-  await markPaymentStatus(db, row.id, "pending", { note: `remboursement du paiement #${paymentId} — rejeu` });
-  const attempt = Date.now().toString(36);
-  const outcome = await runRefund(db, cfg, booking.reference, row.id, paymentId, intent, amount, `gp-refund-${row.id}-r${attempt}`);
+  // Une ligne `failed` change de tentative (nouvelle clé, stable) ; une ligne
+  // `pending` reprend la sienne (Stripe dédoublonne). Réservation atomique.
+  const attempt = row.status === "failed" ? attemptOf(row.note) + 1 : attemptOf(row.note);
+  const claim = await db
+    .prepare("UPDATE payments SET status = 'pending', note = ?3 WHERE id = ?1 AND status = ?2 AND kind = 'refund'")
+    .bind(row.id, row.status, `remboursement du paiement #${paymentId} — rejeu${tag(attempt)}`)
+    .run();
+  if (claim.meta.changes !== 1) throw new Error("un rejeu de ce remboursement est déjà en cours");
+  const outcome = await runRefund(db, cfg, booking.reference, row.id, paymentId, intent, amount, attempt);
   await audit(db, "admin", "refund.replay", `booking:${booking.id}`, outcome);
   return outcome;
 }

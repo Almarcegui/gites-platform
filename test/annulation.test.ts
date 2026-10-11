@@ -30,7 +30,7 @@ interface StripeCall { url: string; method: string; body: URLSearchParams; heade
 let calls: StripeCall[] = [];
 let refundSeq = 0;
 /** Réponse de POST /refunds : "ok" | "pending" | "http500". */
-let refundMode: "ok" | "pending" | "http500" = "ok";
+let refundMode: "ok" | "pending" | "http500" | "requires_action" = "ok";
 /** Montant déjà remboursé que Stripe annonce sur la charge (relecture avant rejeu). */
 let remoteRefunded = 0;
 
@@ -48,7 +48,7 @@ beforeAll(async () => {
     if (method === "POST" && url.endsWith("/refunds")) {
       if (refundMode === "http500") return json({ error: { message: "boom" } }, 500);
       refundSeq += 1;
-      return json({ id: `re_test_${refundSeq}`, status: refundMode === "pending" ? "pending" : "succeeded" });
+      return json({ id: `re_test_${refundSeq}`, status: refundMode === "ok" ? "succeeded" : refundMode });
     }
     if (method === "GET" && /\/payment_intents\/pi_/.test(url)) return json({ id: "pi", latest_charge: { amount_refunded: remoteRefunded } });
     return json({});
@@ -188,6 +188,25 @@ describe("annulation par le propriétaire", () => {
   });
 });
 
+describe("exceptions des CGV", () => {
+  it("force majeure du propriétaire : tout est rendu, pas d'indemnité", async () => {
+    const id = await mkBooking();
+    await stripePay(id, "deposit", 30000, "pi_d13");
+    const r = await call("POST", `/api/admin/bookings/${id}/cancel`, { reason: "inondation", par: "proprietaire", forceMajeure: true, confirmer: true });
+    expect(r.data.plan).toMatchObject({ refundCents: 30000, indemnityCents: 0 });
+    expect(r.data.note).toContain("force majeure");
+  });
+
+  it("séjour entamé (no-show) : rien n'est restitué", async () => {
+    const id = await mkBooking();
+    await stripePay(id, "deposit", 30000, "pi_d14");
+    await stripePay(id, "balance", 70000, "pi_b14");
+    const r = await call("POST", `/api/admin/bookings/${id}/cancel`, { reason: "no-show", sejourEntame: true });
+    expect(r.data.plan).toMatchObject({ keptCents: 100000, refundCents: 0 });
+    expect(refundCalls()).toHaveLength(0);
+  });
+});
+
 describe("cas sans mouvement d'argent", () => {
   it("option non payée : rien à rembourser, pas de mail", async () => {
     const id = await mkBooking({ status: "pending" });
@@ -239,6 +258,8 @@ describe("remboursement Stripe", () => {
     expect(retry.status).toBe(200);
     expect(retry.data.refund.status).toBe("succeeded");
     expect(refundCalls()).toHaveLength(1);
+    // clé stable par tentative : jamais d'horloge, donc un envoi relancé ne double pas
+    expect(refundCalls()[0]!.headers.get("idempotency-key")).toBe(`gp-refund-${failed.id}-t1`);
     expect((await getBooking(db, id))!.paidCents).toBe(30000);
     // et un second rejeu est refusé : la ligne n'est plus en échec
     expect((await call("POST", `/api/admin/bookings/${id}/refunds/${failed.id}/retry`)).status).toBe(409);
@@ -256,6 +277,27 @@ describe("remboursement Stripe", () => {
     const retry = await call("POST", `/api/admin/bookings/${id}/refunds/${failed.id}/retry`);
     expect(retry.data.refund.status).toBe("succeeded");
     expect(refundCalls()).toHaveLength(0);
+  });
+
+  it("un statut Stripe inconnu n'est pas compté comme remboursé", async () => {
+    const id = await mkBooking();
+    await stripePay(id, "deposit", 30000, "pi_d11");
+    await stripePay(id, "balance", 70000, "pi_b11");
+    refundMode = "requires_action";
+    const r = await call("POST", `/api/admin/bookings/${id}/cancel`, { reason: "x", confirmer: true });
+    expect(r.data.refunds[0].status).toBe("failed");
+    expect((await getBooking(db, id))!.paidCents).toBe(100000);
+  });
+
+  it("une panne après la préparation laisse une ligne pending, reprise par le rejeu avec la même clé", async () => {
+    const id = await mkBooking();
+    await stripePay(id, "deposit", 30000, "pi_d12");
+    await stripePay(id, "balance", 70000, "pi_b12");
+    const row = await addPayment(db, { bookingId: id, kind: "refund", method: "stripe", amountCents: -70000, status: "pending", stripePaymentIntent: "pi_b12", note: "remboursement du paiement #2" });
+    await db.prepare("UPDATE bookings SET status = 'cancelled', cancel_reason = 'x', cancelled_at = datetime('now') WHERE id = ?1").bind(id).run();
+    const retry = await call("POST", `/api/admin/bookings/${id}/refunds/${row}/retry`);
+    expect(retry.status).toBe(200);
+    expect(refundCalls()[0]!.headers.get("idempotency-key")).toBe(`gp-refund-${row}`);
   });
 
   it("pending (Bancontact) : la ligne compte comme remboursée", async () => {
