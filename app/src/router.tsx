@@ -38,6 +38,7 @@ import { TemplatesPage } from "./pages/settings/Templates";
 import { MyAccountPage } from "./pages/settings/MyAccount";
 import { DevicePage } from "./pages/settings/Device";
 import { ReviewsPage } from "./pages/Reviews";
+import { ImprovementsPage } from "./pages/settings/Improvements";
 
 export interface RootSearch {
   resa?: number;
@@ -97,6 +98,7 @@ const settingsRoutes = [
   sub("journaux", LogsPage),
   sub("modeles", TemplatesPage),
   sub("mon-compte", MyAccountPage),
+  sub("ameliorations", ImprovementsPage),
   sub("aide", HelpPage),
   sub("appareil", DevicePage),
 ];
