@@ -6,6 +6,8 @@ interface Env {
   EMAILS_ENABLED?: string;
   // Secrets (.dev.vars en local, wrangler secret en prod) — tous optionnels :
   // absents = mode stub (paiement simulé, emails journalisés uniquement).
+  // Clés Stripe de REPLI : un compte Stripe par propriété (table property_stripe,
+  // Réglages > Comptes Stripe). Ces variables ne servent qu'aux propriétés sans clés propres.
   STRIPE_SECRET_KEY?: string;
   /** Clé publique Stripe (pk_test_… / pk_live_…) — confiée au navigateur pour
    *  monter le Payment Element. Absente = repli sur Checkout hébergé. */
@@ -42,7 +44,15 @@ interface Env {
   MAIL_FROM?: string;
   /** Transport SMTP injecté par node/server.mjs (node:net/node:tls, absent sur
    *  Workers, dont le runtime n'ouvre pas de socket SMTP sortante). */
-  SMTP_SEND?: (mail: { to: string; subject: string; text: string; inReplyTo?: string | null; references?: string | null }) => Promise<{ id: string }>;
+  SMTP_SEND?: (mail: {
+    to: string;
+    subject: string;
+    text: string;
+    html?: string;
+    inReplyTo?: string | null;
+    references?: string | null;
+    attachments?: { filename: string; contentType: string; content: Uint8Array }[];
+  }) => Promise<{ id: string }>;
   /** Relève de la boîte de contact (IMAP, Gmail « mot de passe d'application ») : actif quand
    *  IMAP_USER et un mot de passe (IMAP_PASSWORD, sinon SMTP_PASSWORD) sont posés et que
    *  node/server.mjs a fourni IMAP_FETCH. Sur Workers : relève désactivée (pas de socket). */

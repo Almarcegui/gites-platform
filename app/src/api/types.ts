@@ -177,6 +177,8 @@ export interface EmailLog {
   toEmail?: string | null;
   status: string;
   errorDetail?: string | null;
+  /** Pièces jointes parties avec le mail (le contrat PDF de la confirmation). */
+  attachments?: { filename: string; bytes: number }[];
   createdAt: string;
 }
 

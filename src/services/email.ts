@@ -13,12 +13,12 @@ import type { Quote, QuoteLine } from "../core/pricing";
 import { nlText } from "../core/public-i18n";
 
 /** Le client écrit en néerlandais (guests.lang = 'nl', choisi dans le tunnel). */
-function isNl(b: BookingRow): boolean {
+export function isNl(b: BookingRow): boolean {
   return b.guestLang === "nl";
 }
 
 /** Montant à la belge : « 1 234,56 € » en français, « € 1.234,56 » en néerlandais. */
-function money(cents: number, nl: boolean): string {
+export function money(cents: number, nl: boolean): string {
   if (!nl) return formatEur(cents);
   const sign = cents < 0 ? "-" : "";
   const abs = Math.abs(cents);
@@ -26,7 +26,22 @@ function money(cents: number, nl: boolean): string {
 }
 
 /** Les conditions générales n'existent qu'en français (décision du lot 3). */
-const CGV_NL_NOTE = "De algemene voorwaarden en het huurcontract bestaan alleen in het Frans. De Franse versie is rechtsgeldend.";
+export const CGV_NL_NOTE = "De algemene voorwaarden en het huurcontract bestaan alleen in het Frans. De Franse versie is rechtsgeldend.";
+
+/** Coordonnée réelle d'un domaine : les « TODO_… » de la graine ne sortent jamais
+ *  (issue #4), ni sur le site, ni dans un mail ou un contrat. null = à taire. */
+export function realContact(value: string | null | undefined): string | null {
+  const v = (value ?? "").trim();
+  return v === "" || /^TODO_/i.test(v) ? null : v;
+}
+
+/** Adresse postale d'un domaine sur une ligne, sans répéter la commune si l'adresse la contient déjà. */
+export function postalAddress(p: { address: string | null; commune: string | null }): string {
+  const address = (p.address ?? "").replace(/\s+/g, " ").trim();
+  const commune = (p.commune ?? "").replace(/\s+/g, " ").trim();
+  if (!commune || address.toLowerCase().includes(commune.toLowerCase())) return address || commune;
+  return address ? `${address}, ${commune}` : commune;
+}
 
 export function formatEur(cents: number): string {
   const sign = cents < 0 ? "-" : "";
@@ -47,10 +62,33 @@ export interface EmailToQueue {
   to: string;
   subject: string;
   bodyText: string;
-  kind: string; // 'voucher' | 'payment_link' | 'balance_reminder' | …
+  kind: string; // 'confirmation' | 'payment_link' | 'balance_reminder' | …
   /** Réponse à un mail : garde le fil chez le destinataire (Gmail, Outlook). */
   inReplyTo?: string | null;
   references?: string | null;
+  /** Version HTML du message (multipart/alternative) ; le texte reste la référence du journal. */
+  bodyHtml?: string;
+  /** Pièces jointes (le contrat PDF de la confirmation). */
+  attachments?: EmailAttachment[];
+}
+
+export interface EmailAttachment {
+  filename: string;
+  contentType: string;
+  content: Uint8Array;
+}
+
+/** Base64 d'un tableau d'octets, par tranches (Workers comme Node, sans Buffer). */
+export function toBase64(bytes: Uint8Array): string {
+  let bin = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
+
+/** Pièces jointes telles que le journal les garde : nom et taille, jamais le contenu. */
+function attachmentsLog(list: EmailAttachment[] | undefined): string | null {
+  if (!list || list.length === 0) return null;
+  return JSON.stringify(list.map((a) => ({ filename: a.filename, bytes: a.content.length })));
 }
 
 /** Le transport réellement employé si l'envoi est actif, ou null (stub). */
@@ -81,7 +119,7 @@ export async function queueEmailDetailed(
 
   if (transport === "smtp" && env.SMTP_SEND) {
     try {
-      providerId = (await env.SMTP_SEND({ to: e.to, subject: e.subject, text: e.bodyText, inReplyTo: e.inReplyTo, references: e.references })).id;
+      providerId = (await env.SMTP_SEND({ to: e.to, subject: e.subject, text: e.bodyText, html: e.bodyHtml, attachments: e.attachments, inReplyTo: e.inReplyTo, references: e.references })).id;
       status = "sent";
     } catch (err) {
       status = "failed";
@@ -101,6 +139,10 @@ export async function queueEmailDetailed(
           subject: e.subject,
           text: e.bodyText,
           ...(e.inReplyTo ? { headers: { "In-Reply-To": e.inReplyTo, References: e.references || e.inReplyTo } } : {}),
+          ...(e.bodyHtml ? { html: e.bodyHtml } : {}),
+          ...(e.attachments?.length
+            ? { attachments: e.attachments.map((a) => ({ filename: a.filename, content: toBase64(a.content) })) }
+            : {}),
         }),
       });
       if (res.ok) {
@@ -118,86 +160,15 @@ export async function queueEmailDetailed(
 
   await db
     .prepare(
-      "INSERT INTO email_log (booking_id, to_email, subject, body_text, kind, status, provider_id, error_detail) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+      "INSERT INTO email_log (booking_id, to_email, subject, body_text, kind, status, provider_id, error_detail, attachments) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
     )
-    .bind(e.bookingId ?? null, e.to, e.subject, e.bodyText, e.kind, status, providerId, errorDetail)
+    .bind(e.bookingId ?? null, e.to, e.subject, e.bodyText, e.kind, status, providerId, errorDetail, attachmentsLog(e.attachments))
     .run();
   return { status, providerId };
 }
 
 function quoteLinesText(lines: QuoteLine[], nl = false): string {
   return lines.map((l) => `  ${(nl ? nlText(l.label) : l.label).padEnd(52)} ${money(l.amountCents, nl).padStart(12)}`).join("\n");
-}
-
-export interface VoucherContext {
-  booking: BookingRow;
-  property: PropertyRow;
-  settings: PropertySettings;
-  voucherUrl: string;
-}
-
-/** Voucher de confirmation (après paiement de l'acompte ou du total). */
-export function buildVoucherEmail(ctx: VoucherContext): { subject: string; bodyText: string } {
-  if (isNl(ctx.booking)) return buildVoucherEmailNl(ctx);
-  const { booking: b, property, settings } = ctx;
-  // Parse défensif : c'est le seul des 4 sites de lecture du devis qui vit sur
-  // le chemin du webhook Stripe. Une exception ici faisait échouer le webhook
-  // APRÈS confirmation ; au retry, Stripe voyait un paiement déjà 'succeeded'
-  // et sortait sans jamais renvoyer le voucher (audit ECC 2026-07-30).
-  let quote: Quote | null = null;
-  if (b.quoteJson) {
-    try {
-      quote = JSON.parse(b.quoteJson) as Quote;
-    } catch {
-      quote = null; // le voucher part sans le détail des lignes, mais il part
-    }
-  }
-  const persons = b.adults + b.children;
-  const balance = b.totalCents - b.paidCents;
-
-  const parts: string[] = [
-    `Bonjour,`,
-    ``,
-    `Votre réservation est confirmée — merci !`,
-    ``,
-    `Référence : ${b.reference}`,
-    `Hébergement : ${b.unitName ?? ""} — ${property.name}`,
-    `Séjour : du ${formatDateFr(b.checkin)} (arrivée dès ${settings.checkinTime}) au ${formatDateFr(b.checkout)} (départ avant ${settings.checkoutTime})`,
-    `Voyageurs : ${persons} personne${persons > 1 ? "s" : ""}${b.children > 0 ? ` (dont ${b.children} enfant${b.children > 1 ? "s" : ""})` : ""}`,
-  ];
-  if (quote) {
-    parts.push(``, `Détail du séjour :`, quoteLinesText(quote.lines), `  ${"TOTAL".padEnd(52)} ${formatEur(quote.totalCents).padStart(12)}`);
-  } else {
-    parts.push(``, `Total : ${formatEur(b.totalCents)}`);
-  }
-  parts.push(``, `Déjà payé : ${formatEur(b.paidCents)}`);
-  if (balance > 0) {
-    parts.push(
-      `Solde restant : ${formatEur(balance)}${b.balanceDueDate ? ` — à régler pour le ${formatDateFr(b.balanceDueDate)}` : ""}`,
-    );
-  } else {
-    parts.push(`Votre séjour est intégralement réglé.`);
-  }
-  if (settings.cautionCents > 0) {
-    parts.push(``, `Caution : ${formatEur(settings.cautionCents)} (empreinte ou dépôt demandé avant l'arrivée, restitué après l'état des lieux).`);
-  }
-  parts.push(
-    ``,
-    `Retrouvez votre réservation à tout moment : ${ctx.voucherUrl}`,
-    ``,
-    `À très bientôt,`,
-    `${property.name}`,
-    property.contactEmail ? `${property.contactEmail}` : ``,
-    ``,
-    `------------------------------------------------------------`,
-    `CONDITIONS GÉNÉRALES ET CONTRAT DE LOCATION`,
-    settings.cgvText || "(CGV à compléter)",
-  );
-
-  return {
-    subject: `Confirmation de réservation ${b.reference} — ${property.name}`,
-    bodyText: parts.join("\n"),
-  };
 }
 
 /** Lien de paiement (solde ou autre) à envoyer au client. */
@@ -207,8 +178,9 @@ export function buildPaymentLinkEmail(
   label: string,
   amountCents: number,
   payUrl: string,
+  opts: { holdUntil?: string | null } = {},
 ): { subject: string; bodyText: string } {
-  if (isNl(b)) return buildPaymentLinkEmailNl(b, property, label, amountCents, payUrl);
+  if (isNl(b)) return buildPaymentLinkEmailNl(b, property, label, amountCents, payUrl, opts);
   return {
     subject: `${label} — réservation ${b.reference} (${property.name})`,
     bodyText: [
@@ -219,7 +191,8 @@ export function buildPaymentLinkEmail(
       `${label} : ${formatEur(amountCents)}`,
       payUrl,
       ``,
-      `Le paiement s'effectue via Stripe (carte bancaire).`,
+      `Ce lien ouvre la page de votre réservation : vous y acceptez les conditions générales, réglez les arrhes en ligne (carte bancaire, via Stripe), puis recevez votre confirmation avec votre contrat de location.`,
+      ...(opts.holdUntil ? [`Vos dates sont gardées jusqu'au ${formatDateFr(opts.holdUntil.slice(0, 10))}.`] : []),
       ``,
       `À bientôt,`,
       `${property.name}`,
@@ -330,7 +303,7 @@ export function buildBalanceReminderEmail(
 // structure sont ceux du français ; les conditions générales restent en
 // français, précédées de la mention que la version française fait foi.
 
-function parseQuote(b: BookingRow): Quote | null {
+export function parseQuote(b: BookingRow): Quote | null {
   if (!b.quoteJson) return null;
   try {
     return JSON.parse(b.quoteJson) as Quote;
@@ -341,53 +314,7 @@ function parseQuote(b: BookingRow): Quote | null {
 
 const personen = (n: number) => `${n} ${n > 1 ? "personen" : "persoon"}`;
 
-function buildVoucherEmailNl(ctx: VoucherContext): { subject: string; bodyText: string } {
-  const { booking: b, property, settings } = ctx;
-  const quote = parseQuote(b);
-  const persons = b.adults + b.children;
-  const balance = b.totalCents - b.paidCents;
-  const parts: string[] = [
-    `Beste,`,
-    ``,
-    `Uw reservering is bevestigd — dank u wel!`,
-    ``,
-    `Referentie: ${b.reference}`,
-    `Accommodatie: ${b.unitName ?? ""} — ${property.name}`,
-    `Verblijf: van ${formatDateFr(b.checkin)} (aankomst vanaf ${settings.checkinTime}) tot ${formatDateFr(b.checkout)} (vertrek voor ${settings.checkoutTime})`,
-    `Gasten: ${personen(persons)}${b.children > 0 ? ` (waarvan ${b.children} ${b.children > 1 ? "kinderen" : "kind"})` : ""}`,
-  ];
-  if (quote) {
-    parts.push(``, `Detail van het verblijf:`, quoteLinesText(quote.lines, true), `  ${"TOTAAL".padEnd(52)} ${money(quote.totalCents, true).padStart(12)}`);
-  } else {
-    parts.push(``, `Totaal: ${money(b.totalCents, true)}`);
-  }
-  parts.push(``, `Al betaald: ${money(b.paidCents, true)}`);
-  if (balance > 0) {
-    parts.push(`Resterend saldo: ${money(balance, true)}${b.balanceDueDate ? ` — te betalen tegen ${formatDateFr(b.balanceDueDate)}` : ""}`);
-  } else {
-    parts.push(`Uw verblijf is volledig betaald.`);
-  }
-  if (settings.cautionCents > 0) {
-    parts.push(``, `Waarborg: ${money(settings.cautionCents, true)} (kaartafdruk of storting gevraagd voor aankomst, terugbetaald na de plaatsbeschrijving).`);
-  }
-  parts.push(
-    ``,
-    `Uw reservering kunt u altijd terugvinden: ${ctx.voucherUrl}`,
-    ``,
-    `Tot binnenkort,`,
-    `${property.name}`,
-    property.contactEmail ? `${property.contactEmail}` : ``,
-    ``,
-    `------------------------------------------------------------`,
-    `ALGEMENE VOORWAARDEN EN HUURCONTRACT (in het Frans)`,
-    CGV_NL_NOTE,
-    ``,
-    settings.cgvText || "(CGV à compléter)",
-  );
-  return { subject: `Bevestiging van reservering ${b.reference} — ${property.name}`, bodyText: parts.join("\n") };
-}
-
-function buildPaymentLinkEmailNl(b: BookingRow, property: PropertyRow, label: string, amountCents: number, payUrl: string): { subject: string; bodyText: string } {
+function buildPaymentLinkEmailNl(b: BookingRow, property: PropertyRow, label: string, amountCents: number, payUrl: string, opts: { holdUntil?: string | null }): { subject: string; bodyText: string } {
   const l = nlText(label);
   return {
     subject: `${l} — reservering ${b.reference} (${property.name})`,
@@ -399,7 +326,8 @@ function buildPaymentLinkEmailNl(b: BookingRow, property: PropertyRow, label: st
       `${l}: ${money(amountCents, true)}`,
       payUrl,
       ``,
-      `De betaling verloopt via Stripe (bankkaart).`,
+      `Deze link opent de pagina van uw reservering: u aanvaardt er de algemene voorwaarden, betaalt het voorschot online (bankkaart, via Stripe) en ontvangt daarna uw bevestiging met uw huurcontract.`,
+      ...(opts.holdUntil ? [`Uw data worden bewaard tot ${formatDateFr(opts.holdUntil.slice(0, 10))}.`] : []),
       ``,
       `Tot binnenkort,`,
       `${property.name}`,

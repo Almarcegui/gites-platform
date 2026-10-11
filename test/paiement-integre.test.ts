@@ -256,7 +256,7 @@ describe("webhook payment_intent — la notification serveur fait foi", () => {
     expect(twice.paidCents).toBe(amountDue);
 
     const emails = (await call("GET", "/api/admin/email-log")).data.emails as { kind: string }[];
-    expect(emails.filter((e) => e.kind === "voucher")).toHaveLength(1);
+    expect(emails.filter((e) => e.kind === "confirmation")).toHaveLength(1);
     expect(emails.filter((e) => e.kind === "payment_receipt")).toHaveLength(1);
   });
 
