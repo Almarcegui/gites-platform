@@ -2555,10 +2555,6 @@ msgstr "confirmée"
 msgid "Confirmée et payée"
 msgstr "Confirmée et payée"
 
-#: src/sale/SaleFlow.tsx
-msgid "Confirmée sans attendre les arrhes"
-msgstr "Confirmée sans attendre les arrhes"
-
 #: src/pages/Bookings.tsx
 msgid "Confirmées"
 msgstr "Confirmées"
@@ -3852,16 +3848,6 @@ msgid "La réponse part sur {0}, dans la conversation du voyageur (par Beds24)."
 msgstr "La réponse part sur {0}, dans la conversation du voyageur (par Beds24)."
 
 #. placeholder {0}: errorText(e)
-#: src/sale/SaleFlow.tsx
-msgid "La réservation est enregistrée, mais le lien de paiement n'a pas pu être créé : {0} Créez-le depuis la fiche."
-msgstr "La réservation est enregistrée, mais le lien de paiement n'a pas pu être créé : {0} Créez-le depuis la fiche."
-
-#. placeholder {0}: errorText(e)
-#: src/sale/SaleFlow.tsx
-msgid "La réservation est enregistrée, mais le paiement n'a pas été noté : {0} Notez-le dans la fiche."
-msgstr "La réservation est enregistrée, mais le paiement n'a pas été noté : {0} Notez-le dans la fiche."
-
-#. placeholder {0}: errorText(e)
 #: src/pages/settings/Tarifs.tsx
 msgid "La saison a été créée mais ses prix n'ont pas tous été enregistrés ({0}). Ouvrez-la pour vérifier."
 msgstr "La saison a été créée mais ses prix n'ont pas tous été enregistrés ({0}). Ouvrez-la pour vérifier."
@@ -3918,11 +3904,6 @@ msgstr "Le calendrier ne sera plus lu. Les réservations déjà reprises restent
 #: src/canaux/canal.ts
 msgid "le canal"
 msgstr "le canal"
-
-#. placeholder {0}: q ? eur(q.totalCents) : ""
-#: src/sale/SaleFlow.tsx
-msgid "Le client a déjà payé le total ({0}) : le noter comme reçu"
-msgstr "Le client a déjà payé le total ({0}) : le noter comme reçu"
 
 #. placeholder {0}: eur(amount)
 #: src/booking/BookingPanel.tsx
@@ -4155,6 +4136,11 @@ msgstr "Les clés n'ont pas pu être lues."
 msgid "Les comptes n'ont pas pu être lus."
 msgstr "Les comptes n'ont pas pu être lus."
 
+#. placeholder {0}: q ? eur(q.depositCents) : ""
+#: src/sale/SaleFlow.tsx
+msgid "Les dates sont gardées en option. Si le client a un mail, il reçoit un lien vers sa réservation : il y accepte les conditions générales, paie les arrhes ({0}) et reçoit alors sa confirmation avec le contrat."
+msgstr "Les dates sont gardées en option. Si le client a un mail, il reçoit un lien vers sa réservation : il y accepte les conditions générales, paie les arrhes ({0}) et reçoit alors sa confirmation avec le contrat."
+
 #. placeholder {0}: channelName(b)
 #: src/booking/BookingPanel.tsx
 msgid "Les dates, l'annulation et le paiement de cette réservation se gèrent sur {0} : la grille suivra."
@@ -4371,10 +4357,6 @@ msgstr "Lien copié."
 msgid "Lien de paiement"
 msgstr "Lien de paiement"
 
-#: src/sale/SaleFlow.tsx
-msgid "Lien de paiement à transmettre au client :"
-msgstr "Lien de paiement à transmettre au client :"
-
 #: src/booking/BookingPanel.tsx
 msgid "Lien de paiement des arrhes"
 msgstr "Lien de paiement des arrhes"
@@ -4394,6 +4376,10 @@ msgstr "Lien pour la personne du ménage"
 #: src/pages/settings/Payments.tsx
 msgid "lien remplacé par un autre"
 msgstr "lien remplacé par un autre"
+
+#: src/sale/SaleFlow.tsx
+msgid "Lien vers la réservation du client :"
+msgstr "Lien vers la réservation du client :"
 
 #: src/pages/settings/Import.tsx
 msgid "Ligne"
@@ -5008,11 +4994,6 @@ msgstr "option"
 msgid "Option"
 msgstr "Option"
 
-#. placeholder {0}: q ? eur(q.depositCents) : ""
-#: src/sale/SaleFlow.tsx
-msgid "Option : les dates sont gardées en attendant les arrhes ({0})"
-msgstr "Option : les dates sont gardées en attendant les arrhes ({0})"
-
 #: src/pages/settings/Logs.tsx
 msgid "option créée"
 msgstr "option créée"
@@ -5118,7 +5099,6 @@ msgstr "Ouvrir le calendrier"
 #: src/booking/BookingPanel.tsx
 #: src/pages/settings/Domain.tsx
 #: src/pages/settings/Payments.tsx
-#: src/sale/SaleFlow.tsx
 msgid "Paiement"
 msgstr "Paiement"
 
@@ -5346,10 +5326,6 @@ msgstr "Passent à l'étape"
 msgid "Payé"
 msgstr "Payé"
 
-#: src/sale/SaleFlow.tsx
-msgid "payé avant l'enregistrement"
-msgstr "payé avant l'enregistrement"
-
 #: src/pages/Bookings.tsx
 msgid "Payée"
 msgstr "Payée"
@@ -5531,10 +5507,6 @@ msgstr "préparé (envoi coupé)"
 #: src/pages/settings/Logs.tsx
 msgid "préparé, envoi coupé"
 msgstr "préparé, envoi coupé"
-
-#: src/sale/SaleFlow.tsx
-msgid "Préparer un lien de paiement par carte"
-msgstr "Préparer un lien de paiement par carte"
 
 #: src/pages/settings/Import.tsx
 msgid "prête"
@@ -6463,10 +6435,6 @@ msgstr "Sinon, le prix de base du bien."
 #: src/pages/settings/Tarifs.tsx
 msgid "Sinon, le prix de la saison qui couvre ce jour. Si deux saisons se chevauchent, la plus courte l'emporte."
 msgstr "Sinon, le prix de la saison qui couvre ce jour. Si deux saisons se chevauchent, la plus courte l'emporte."
-
-#: src/sale/SaleFlow.tsx
-msgid "Sinon, le solde reste à encaisser dans la fiche."
-msgstr "Sinon, le solde reste à encaisser dans la fiche."
 
 #: src/pages/Bookings.tsx
 msgid "site"

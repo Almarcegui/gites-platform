@@ -149,7 +149,7 @@ import {
   voucherUrl,
   type QuoteBody,
 } from "../services/booking-flow";
-import { buildBalanceReminderEmail, queueEmail } from "../services/email";
+import { buildBalanceReminderEmail, buildPaymentLinkEmail, queueEmail } from "../services/email";
 import { buildContractPdf, contractFileName, loadContractContext } from "../services/contrat";
 import { importElloha } from "../services/elloha-import";
 import { importAgendaGoogle, MAX_AGENDA_EVENTS } from "../services/agenda-import";
@@ -1775,13 +1775,12 @@ export function registerAdminRoutes(router: Router): void {
     const db = env.DB;
     const body = await readJson<
       QuoteBody & {
-        guest?: { firstName?: string; lastName?: string; email?: string; phone?: string; address?: string; country?: string };
+        guest?: { firstName?: string; lastName?: string; email?: string; phone?: string; address?: string; country?: string; lang?: string };
         internalNotes?: string;
-        confirmNow?: boolean;          // true = confirmée d'office (paiement hors ligne)
+        confirmNow?: boolean;          // ignoré depuis le 11/10/2026 : une vente du back-office crée toujours une option
         generatePaymentLink?: boolean; // true = créer un lien Stripe à transmettre
         paymentMode?: "deposit" | "full";
         holdMinutes?: number;          // si non confirmée : durée de l'option (défaut 72 h)
-        sendConfirmation?: boolean;    // false = ne pas envoyer le mail de confirmation (vente confirmée + email client)
       }
     >(req);
     if (!body) return apiError(400, "corps JSON attendu");
@@ -1810,11 +1809,15 @@ export function registerAdminRoutes(router: Router): void {
       phone: String(body.guest?.phone ?? "").trim() || null,
       address: String(body.guest?.address ?? "").trim() || null,
       country: String(body.guest?.country ?? "").trim() || null,
+      lang: body.guest?.lang === "nl" ? "nl" : undefined,
     });
 
     const full = body.paymentMode === "full" || quote.balanceDueDate === null;
     const amountDue = full ? quote.totalCents : quote.depositCents;
-    const confirmNow = body.confirmNow !== false; // défaut : confirmée (vente téléphone)
+    // Décision de Julien (11/10/2026) : pas de vente « confirmée » au back-office.
+    // La vente crée une OPTION ; le client reçoit un lien vers la page de sa
+    // réservation, y accepte les CGV, paie les arrhes, puis reçoit la
+    // confirmation avec le contrat (handlePaymentSuccess). `confirmNow` est ignoré.
 
     const created = await createBookingAtomic(db, {
       unitId: ctx.unit.id,
@@ -1822,7 +1825,7 @@ export function registerAdminRoutes(router: Router): void {
       checkout: String(body.checkout),
       adults,
       children,
-      status: confirmNow ? "confirmed" : "pending",
+      status: "pending",
       holdMinutes: intParam(String(body.holdMinutes ?? ""), 72 * 60),
       source: "manual",
       guestId,
@@ -1835,7 +1838,7 @@ export function registerAdminRoutes(router: Router): void {
       internalNotes: String(body.internalNotes ?? "").trim() || null,
     });
     if (!created.ok) return apiError(409, "créneau indisponible (conflit avec une autre réservation)");
-    await audit(db, "admin", "booking.create_manual", `booking:${created.id}`, { reference: created.reference, confirmNow });
+    await audit(db, "admin", "booking.create_manual", `booking:${created.id}`, { reference: created.reference });
     triggerBeds24Push(db, env, execCtx, ctx.unit.propertyId);
 
     let paymentUrl: string | null = null;
@@ -1844,19 +1847,29 @@ export function registerAdminRoutes(router: Router): void {
       const res = await startCheckout(db, env, booking, full ? "full" : "deposit", amountDue, "admin");
       paymentUrl = res.url;
     }
-    // Vente confirmée avec une adresse e-mail : le client reçoit sa confirmation et
-    // son contrat de location, comme après un paiement en ligne. Une erreur ici
-    // ne défait pas la vente (bouton « Renvoyer la confirmation » sur la fiche).
-    let confirmationQueued = false;
-    if (confirmNow && email && body.sendConfirmation !== false) {
-      try {
-        confirmationQueued = await sendConfirmation(db, env, created.id);
-      } catch (e) {
-        await audit(db, "admin", "confirmation.error", `booking:${created.id}`, { error: e instanceof Error ? e.message : String(e) });
+    // L'option part vers le client : mail `payment_link` (le gabarit existant) dont
+    // le lien est la page de SA réservation (voucher), où il accepte les CGV et
+    // paie les arrhes. Une erreur d'envoi ne défait pas la vente : le lien reste
+    // dans la réponse, à transmettre à la main.
+    let optionUrl: string | null = null;
+    let optionMailQueued = false;
+    const booking = await getBooking(db, created.id);
+    if (booking) {
+      optionUrl = voucherUrl(env, booking);
+      if (email) {
+        try {
+          const property = booking.propertyId != null ? await getProperty(db, booking.propertyId) : null;
+          if (property) {
+            const mail = buildPaymentLinkEmail(booking, property, full ? "Paiement intégral" : "Arrhes", amountDue, optionUrl, { holdUntil: booking.holdExpiresAt });
+            await queueEmail(db, env, { bookingId: booking.id, to: email, subject: mail.subject, bodyText: mail.bodyText, kind: "payment_link" });
+            optionMailQueued = true;
+          }
+        } catch (e) {
+          await audit(db, "admin", "option_mail.error", `booking:${created.id}`, { error: e instanceof Error ? e.message : String(e) });
+        }
       }
     }
-    const booking = await getBooking(db, created.id);
-    return json({ booking, paymentUrl, confirmationQueued }, 201);
+    return json({ booking, paymentUrl, optionUrl, optionMailQueued }, 201);
   }));
 
   router.post("/api/admin/bookings/:id/cancel", guard(async (req, env, p, _url, execCtx) => {
@@ -2012,7 +2025,7 @@ export function registerAdminRoutes(router: Router): void {
     const id = intParam(p.id, 0);
     const body = await readJson<{
       internalNotes?: string;
-      guest?: { firstName?: string; lastName?: string; email?: string; phone?: string; address?: string; country?: string };
+      guest?: { firstName?: string; lastName?: string; email?: string; phone?: string; address?: string; country?: string; lang?: string };
       unitId?: number;
       checkin?: string;
       checkout?: string;

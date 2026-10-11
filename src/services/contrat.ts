@@ -17,15 +17,12 @@ import { PdfDocument } from "../core/pdf";
 import { nlText } from "../core/public-i18n";
 import { CGV_NL_NOTE, formatDateFr, isNl, money, parseQuote, postalAddress, realContact } from "./email";
 
-/** Lieu de signature du contrat. */
-export const LIEU_SIGNATURE = "Redu";
-
 export interface ContractContext {
   booking: BookingRow;
   property: PropertyRow;
   settings: PropertySettings;
   guest: GuestRow | null;
-  acceptance: { version: string | null; acceptedAt: string | null };
+  acceptance: { version: string | null; acceptedAt: string | null; ip: string | null };
   /** Date d'émission du document (maintenant par défaut ; injectable pour les tests). */
   issuedAt?: Date;
 }
@@ -135,14 +132,11 @@ interface Words {
   caution: (amount: string) => string;
   cautionTitle: string;
   cgv: string;
-  cgvAccepted: (version: string | null, when: string) => string;
-  cgvNotRecorded: (version: string | null) => string;
   cgvNl: string | null;
-  signatures: string;
-  signedAt: (place: string, date: string) => string;
-  signatureValue: string;
-  landlordSig: string;
-  tenantSig: string;
+  cgvPart: (version: string | null) => string;
+  concluded: string;
+  acceptedOn: (when: string, version: string | null, ip: string | null) => string;
+  privacy: string;
   annex: string;
   footer: (ref: string, property: string) => string;
   pageLabel: string;
@@ -182,15 +176,12 @@ const FR: Words = {
   paymentRules: "Rappel des dispositions des conditions générales sur le paiement et l'annulation (texte intégral en annexe) :",
   cautionTitle: "Caution",
   caution: (a) => `Une caution de ${a} est demandée avant l'arrivée (empreinte de carte ou dépôt) et restituée après l'état des lieux.`,
-  cgv: "6. Conditions générales",
-  cgvAccepted: (v, w) => `Le locataire a accepté en ligne les conditions générales de location${v ? ` (version ${v})` : ""} le ${w}. Elles font partie intégrante du présent contrat et sont reproduites en annexe.`,
-  cgvNotRecorded: (v) => `Les conditions générales de location${v ? ` (version ${v})` : ""} font partie intégrante du présent contrat et sont reproduites en annexe. Aucune acceptation en ligne n'est enregistrée pour cette réservation (prise par le propriétaire) : le locataire confirme son accord en retournant le contrat signé ou par écrit.`,
+  cgv: "6. Conditions générales et conclusion du contrat",
   cgvNl: null,
-  signatures: "7. Signatures",
-  signedAt: (p, d) => `Fait à ${p}, le ${d}.`,
-  signatureValue: "L'acceptation en ligne des conditions générales et le paiement des arrhes valent signature du présent contrat.",
-  landlordSig: "Le bailleur",
-  tenantSig: "Le locataire",
+  cgvPart: (v) => `Les conditions générales de location${v ? ` (version ${v})` : ""} font partie intégrante du présent contrat et sont reproduites en annexe.`,
+  concluded: "Le présent contrat est conclu par l'acceptation en ligne des conditions générales et le paiement des arrhes. Il ne se signe pas.",
+  acceptedOn: (w, v, ip) => `Acceptation enregistrée le ${w}${v ? `, conditions générales version ${v}` : ""}${ip ? `, adresse IP ${ip}` : ""}.`,
+  privacy: "Les données du locataire sont utilisées uniquement pour l'exécution du contrat de location.",
   annex: "ANNEXE — CONDITIONS GÉNÉRALES DE LOCATION",
   footer: (r, p) => `Contrat de location ${r} — ${p}`,
   pageLabel: "Page",
@@ -230,15 +221,12 @@ const NL: Words = {
   paymentRules: "Herinnering aan de bepalingen van de algemene voorwaarden over betaling en annulering (volledige tekst in bijlage, in het Frans):",
   cautionTitle: "Waarborg",
   caution: (a) => `Een waarborg van ${a} wordt gevraagd voor de aankomst (kaartafdruk of storting) en na de plaatsbeschrijving terugbetaald.`,
-  cgv: "6. Algemene voorwaarden",
-  cgvAccepted: (v, w) => `De huurder heeft de algemene verhuurvoorwaarden${v ? ` (versie ${v})` : ""} online aanvaard op ${w}. Ze maken integraal deel uit van dit contract en zijn als bijlage opgenomen.`,
-  cgvNotRecorded: (v) => `De algemene verhuurvoorwaarden${v ? ` (versie ${v})` : ""} maken integraal deel uit van dit contract en zijn als bijlage opgenomen. Voor deze reservering (genomen door de eigenaar) is geen online aanvaarding geregistreerd: de huurder bevestigt zijn akkoord door het ondertekende contract terug te sturen of schriftelijk.`,
+  cgv: "6. Algemene voorwaarden en totstandkoming van het contract",
   cgvNl: CGV_NL_NOTE,
-  signatures: "7. Handtekeningen",
-  signedAt: (p, d) => `Opgemaakt te ${p}, op ${d}.`,
-  signatureValue: "De online aanvaarding van de algemene voorwaarden en de betaling van het voorschot gelden als handtekening van dit contract.",
-  landlordSig: "De verhuurder",
-  tenantSig: "De huurder",
+  cgvPart: (v) => `De algemene verhuurvoorwaarden${v ? ` (versie ${v})` : ""} maken integraal deel uit van dit contract en zijn als bijlage opgenomen.`,
+  concluded: "Dit contract komt tot stand door de online aanvaarding van de algemene voorwaarden en de betaling van het voorschot. Het wordt niet ondertekend.",
+  acceptedOn: (w, v, ip) => `Aanvaarding geregistreerd op ${w}${v ? `, algemene voorwaarden versie ${v}` : ""}${ip ? `, IP-adres ${ip}` : ""}.`,
+  privacy: "De gegevens van de huurder worden uitsluitend gebruikt voor de uitvoering van het huurcontract.",
   annex: "BIJLAGE — ALGEMENE VERHUURVOORWAARDEN (FRANS)",
   footer: (r, p) => `Huurcontract ${r} — ${p}`,
   pageLabel: "Pagina",
@@ -359,27 +347,16 @@ export function buildContractPdf(ctx: ContractContext): Uint8Array {
     }
   }
 
-  // 6. CGV
+  // 6. CGV et conclusion du contrat : acceptation en ligne + arrhes, pas de signature
   doc.heading(w.cgv);
   const version = cgvVersionLabel(cgv);
-  doc.paragraph(
-    ctx.acceptance.acceptedAt
-      ? w.cgvAccepted(version, acceptanceStamp(ctx.acceptance.acceptedAt, nl))
-      : w.cgvNotRecorded(version),
-    { after: 3 },
-  );
+  doc.paragraph(w.cgvPart(version), { after: 3 });
   if (w.cgvNl) doc.paragraph(w.cgvNl, { size: 9, bold: true, after: 3 });
-
-  // 7. Signatures
-  doc.heading(w.signatures);
-  doc.paragraph(w.signedAt(LIEU_SIGNATURE, formatDateFr(bookedIso)), { after: 2 });
-  doc.paragraph(w.signatureValue, { size: 9, after: 6 });
-  doc.ensure(110);
-  doc.table([[`${propertyName}\n\n\n\n`, `${guestName}\n\n\n\n`]], {
-    header: [w.landlordSig, w.tenantSig],
-    columns: [{ width: 50 }, { width: 50 }],
-    size: 9.5,
-  });
+  doc.paragraph(w.concluded, { after: 3 });
+  if (ctx.acceptance.acceptedAt) {
+    doc.paragraph(w.acceptedOn(acceptanceStamp(ctx.acceptance.acceptedAt, nl), version, clean(ctx.acceptance.ip)), { after: 3 });
+  }
+  doc.paragraph(w.privacy, { after: 3 });
 
   // Annexe : CGV intégrales
   doc.newPage();

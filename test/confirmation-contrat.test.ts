@@ -125,39 +125,87 @@ describe("à la confirmation par paiement", () => {
   });
 });
 
-describe("vente du back-office", () => {
-  const sale = (extra: Record<string, unknown> = {}, email = "mertens@example.com") =>
-    callJson("POST", "/api/admin/bookings", { unitId: 2, checkin: CHECKIN, checkout: CHECKOUT, adults: 4, guest: { lastName: "Mertens", email }, ...extra });
+describe("vente du back-office : une option, puis le client confirme en payant", () => {
+  const sale = (extra: Record<string, unknown> = {}, email = "mertens@example.com", guest: Record<string, unknown> = {}) =>
+    callJson("POST", "/api/admin/bookings", { unitId: 2, checkin: CHECKIN, checkout: CHECKOUT, adults: 4, guest: { lastName: "Mertens", email, ...guest }, ...extra });
 
-  it("une vente confirmée avec e-mail envoie la confirmation et le contrat", async () => {
-    const res = await sale();
+  it("la vente crée une option (confirmNow est ignoré) et envoie le lien vers la réservation, pas la confirmation", async () => {
+    const res = await sale({ confirmNow: true });
     expect(res.status).toBe(201);
-    expect(res.data.confirmationQueued).toBe(true);
-    const id = (res.data.booking as { id: number }).id;
-    expect((await mails(id)).filter((m) => m.kind === "confirmation")).toHaveLength(1);
+    const booking = res.data.booking as { id: number; status: string; reference: string };
+    expect(booking.status).toBe("pending");
+    expect(res.data.optionMailQueued).toBe(true);
+    expect(res.data.optionUrl).toMatch(/\/book\/voucher\.html\?ref=.*&email=mertens%40example\.com/);
+    const log = await mails(booking.id);
+    expect(log.map((m) => m.kind)).toEqual(["payment_link"]);
+    expect(log[0]!.body_text).toContain(res.data.optionUrl as string);
+    expect(log[0]!.body_text).toContain("acceptez les conditions générales");
+    expect(log[0]!.body_text).toMatch(/Vos dates sont gardées jusqu'au \d\d\/\d\d\/\d{4}/);
   });
 
-  it("sendConfirmation:false, option non confirmée ou sans e-mail : rien ne part", async () => {
-    const a = await sale({ sendConfirmation: false });
-    expect(a.data.confirmationQueued).toBe(false);
-    const b = await sale({ confirmNow: false, checkin: addDays(CHECKIN, 30), checkout: addDays(CHECKIN, 37) });
-    expect(b.status).toBe(201);
-    expect(b.data.confirmationQueued).toBe(false);
-    const c = await sale({ checkin: addDays(CHECKIN, 60), checkout: addDays(CHECKIN, 67) }, "");
-    expect(c.data.confirmationQueued).toBe(false);
-    const total = await t.db.prepare("SELECT COUNT(*) AS n FROM email_log WHERE kind = 'confirmation'").first<{ n: number }>();
-    expect(total!.n).toBe(0);
+  it("client néerlandophone : le lien part en néerlandais", async () => {
+    const res = await sale({}, "pieter@example.be", { lang: "nl" });
+    const log = await mails((res.data.booking as { id: number }).id);
+    expect(log[0]!.subject).toMatch(/Voorschot/);
+    expect(log[0]!.body_text).toContain("aanvaardt er de algemene voorwaarden");
+    expect(log[0]!.body_text).toMatch(/&lang=nl/);
+  });
+
+  it("sans e-mail : pas de mail, mais le lien reste dans la réponse", async () => {
+    const res = await sale({}, "");
+    expect(res.data.optionMailQueued).toBe(false);
+    expect(res.data.optionUrl).toContain("/book/voucher.html?ref=");
+    expect((await t.db.prepare("SELECT COUNT(*) AS n FROM email_log").first<{ n: number }>())!.n).toBe(0);
+  });
+
+  it("le client ouvre le lien, accepte les CGV, paie les arrhes : confirmation + contrat, avec l'acceptation du client", async () => {
+    const res = await sale();
+    const b = res.data.booking as { id: number; reference: string };
+    const view = async () => (await callJson("GET", `/api/public/bookings/${b.reference}?email=mertens%40example.com`)).data;
+    expect((await view()).cgvAccepted).toBe(false);
+    const pay = (body: Record<string, unknown>, headers: Record<string, string> = {}) =>
+      callJson("POST", `/api/public/bookings/${b.reference}/pay`, { email: "mertens@example.com", ...body }, headers);
+    // sans acceptation : refus, rien d'enregistré
+    const refused = await pay({});
+    expect(refused.status).toBe(400);
+    expect(refused.data.code).toBe("cgv_required");
+    expect((await pay({ cgvAccepted: "oui" })).status).toBe(400);
+    expect((await view()).cgvAccepted).toBe(false);
+    // avec acceptation : version, heure, IP enregistrées et paiement lancé
+    const ok = await pay({ cgvAccepted: true }, { "cf-connecting-ip": "203.0.113.7" });
+    expect(ok.status).toBe(200);
+    expect((await view()).cgvAccepted).toBe(true);
+    const row = await t.db.prepare("SELECT cgv_version, cgv_accepted_at, cgv_ip FROM bookings WHERE id = ?1").bind(b.id).first<Record<string, string>>();
+    expect(row!.cgv_version).toMatch(/^sha256:/);
+    expect(row!.cgv_accepted_at).toMatch(/^\d{4}-/);
+    expect(row!.cgv_ip).toBe("203.0.113.7");
+    // un second paiement n'a plus besoin de l'acceptation
+    expect((await pay({})).status).toBe(200);
+    // paiement des arrhes → confirmation envoyée une fois, avec le contrat
+    const session = new URL(ok.data.checkoutUrl as string).searchParams.get("session")!;
+    expect((await callJson("POST", "/api/public/dev-pay/confirm", { session })).status).toBe(200);
+    const conf = (await mails(b.id)).filter((m) => m.kind === "confirmation");
+    expect(conf).toHaveLength(1);
+    expect(JSON.parse(conf[0]!.attachments)[0].filename).toBe(`Contrat-${b.reference}.pdf`);
+    const text = pdfText(buildContractPdf((await loadContractContext(t.db, b.id))!));
+    expect(text).toContain("conclu par l'acceptation en ligne des conditions générales et le paiement des arrhes");
+    expect(text).toContain("adresse IP 203.0.113.7");
+    expect(text).toContain("Acceptation enregistrée le");
+  });
+
+  it("une réservation en ligne (tunnel) n'est pas redemandée : le paiement part sans case à cocher", async () => {
+    const b = await bookAndPay(); // le tunnel a déjà enregistré l'acceptation
+    expect((await callJson("GET", `/api/public/bookings/${b.reference}?email=${encodeURIComponent(b.email)}`)).data.cgvAccepted).toBe(true);
   });
 
   it("« renvoyer la confirmation » : nouvelle route et ancien nom, journalisés", async () => {
-    const res = await sale();
-    const id = (res.data.booking as { id: number }).id;
-    expect((await call("POST", `/api/admin/bookings/${id}/resend-confirmation`)).status).toBe(200);
-    expect((await call("POST", `/api/admin/bookings/${id}/resend-voucher`)).status).toBe(200);
-    expect((await mails(id)).filter((m) => m.kind === "confirmation")).toHaveLength(3);
-    const fiche = await callJson("GET", `/api/admin/bookings/${id}`);
+    const b = await bookAndPay();
+    expect((await call("POST", `/api/admin/bookings/${b.id}/resend-confirmation`)).status).toBe(200);
+    expect((await call("POST", `/api/admin/bookings/${b.id}/resend-voucher`)).status).toBe(200);
+    expect((await mails(b.id)).filter((m) => m.kind === "confirmation")).toHaveLength(3);
+    const fiche = await callJson("GET", `/api/admin/bookings/${b.id}`);
     const emails = fiche.data.emails as { kind: string; attachments: { filename: string }[] }[];
-    expect(emails.every((e) => e.kind === "confirmation" && e.attachments[0]!.filename.startsWith("Contrat-"))).toBe(true);
+    expect(emails.filter((e) => e.kind === "confirmation").every((e) => e.attachments[0]!.filename.startsWith("Contrat-"))).toBe(true);
   });
 });
 
@@ -229,10 +277,13 @@ describe("le contrat PDF", () => {
     expect(pdfPageCount(pdf)).toBeGreaterThanOrEqual(3); // contrat + annexe
     const text = pdfText(pdf);
     expect(text).not.toContain("TODO_");
+    // ni signature, ni lieu de signature, ni retour signé, ni sous-traitants
+    expect(text.split("ANNEXE —")[0]).not.toMatch(/Fait à|Signatures|signé|accord écrit|sous-traitant|valent signature/);
     for (const needle of [
       "CONTRAT DE LOCATION SAISONNIÈRE", b.reference, "Claire Dubois", "claire@example.be", "1. Les parties", "3. Le séjour",
       "4. Le prix", "Prix total du séjour", "5. Paiement", "Arrhes versées à la réservation", "exigible au plus tard le",
-      "6. Conditions générales", "accepté en ligne", "7. Signatures", `Fait à Redu, le `, "valent signature",
+      "6. Conditions générales et conclusion du contrat", "Acceptation enregistrée le", "version 3.0", "ne se signe pas",
+      "utilisées uniquement pour l'exécution du contrat de location",
       "ANNEXE — CONDITIONS GÉNÉRALES DE LOCATION", "Article 13 — Droit applicable et litiges",
     ]) expect(text, needle).toContain(needle);
     // articles 4 et 5 reproduits mot pour mot depuis les CGV en base
@@ -254,19 +305,21 @@ describe("le contrat PDF", () => {
     const pdf = buildContractPdf(ctx);
     expect(pdfStructureProblems(pdf)).toEqual([]);
     const text = pdfText(pdf);
-    for (const needle of ["HUURCONTRACT VOOR VAKANTIEVERBLIJF", "1. De partijen", "3. Het verblijf", "Totale prijs van het verblijf", "voorschot", "Opgemaakt te Redu", "BIJLAGE", "De Franse versie is rechtsgeldend", "Article 4 — Arrhes"]) {
+    for (const needle of ["HUURCONTRACT VOOR VAKANTIEVERBLIJF", "1. De partijen", "3. Het verblijf", "Totale prijs van het verblijf", "voorschot", "wordt niet ondertekend", "uitsluitend gebruikt voor de uitvoering van het huurcontract", "BIJLAGE", "De Franse versie is rechtsgeldend", "Article 4 — Arrhes"]) {
       expect(text, needle).toContain(needle);
     }
     expect(text).not.toContain("CONTRAT DE LOCATION");
+    expect(text).not.toMatch(/Opgemaakt te|Handtekeningen|ondertekend door|onderhandse/);
   });
 
-  it("une vente sans acceptation en ligne le dit au lieu d'inventer une date ; la caution n'apparaît que si elle est demandée", async () => {
-    const sale = await callJson("POST", "/api/admin/bookings", { unitId: 2, checkin: CHECKIN, checkout: CHECKOUT, adults: 2, guest: { lastName: "Mertens", email: "mertens@example.com" } });
-    const id = (sale.data.booking as { id: number }).id;
+  it("sans acceptation enregistrée (réservation d'avant), le contrat n'invente ni date ni demande de signature ; la caution n'apparaît que si elle est demandée", async () => {
+    const res = await callJson("POST", "/api/admin/bookings", { unitId: 2, checkin: CHECKIN, checkout: CHECKOUT, adults: 2, guest: { lastName: "Mertens", email: "mertens@example.com" } });
+    const id = (res.data.booking as { id: number }).id;
     let ctx = (await loadContractContext(t.db, id))!;
     expect(ctx.acceptance.acceptedAt).toBeNull();
     let text = pdfText(buildContractPdf(ctx));
-    expect(text).toContain("Aucune acceptation en ligne n'est enregistrée");
+    expect(text).not.toContain("Acceptation enregistrée");
+    expect(text.split("ANNEXE —")[0]).not.toMatch(/signé|accord écrit|Fait à/);
     expect(text).not.toContain("Une caution de");
     ctx = { ...ctx, settings: { ...ctx.settings, cautionCents: 30000 } };
     text = pdfText(buildContractPdf(ctx));

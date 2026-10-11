@@ -2,8 +2,22 @@
 
 Décision de Julien du 11/10/2026 : un client qui réserve en direct reçoit **un beau
 mail de confirmation** avec, **en pièce jointe, son contrat de location en PDF**.
-Airbnb et Booking envoient le leur ; ceci vaut pour les réservations directes
-(source `direct`) et pour les ventes confirmées du back-office (téléphone).
+Airbnb et Booking envoient le leur ; ceci vaut pour les réservations directes.
+Il n'y a pas de vente « confirmée » au back-office (décision du 11/10/2026) : le
+contrat est conclu par l'acceptation en ligne des CGV et le paiement des arrhes,
+il ne se signe pas.
+
+## Vente du back-office : une option, puis le client confirme
+
+`POST /api/admin/bookings` crée toujours une **option** (`pending`, 72 h par défaut) ;
+`confirmNow` est ignoré. Si le client a un e-mail, le mail `payment_link`
+(`buildPaymentLinkEmail`) lui envoie le lien vers la page de SA réservation
+(`voucherUrl`), avec la date jusqu'à laquelle ses dates sont gardées ; sans e-mail,
+le lien est dans la réponse (`optionUrl`). Sur cette page le client coche
+l'acceptation des CGV (`POST /api/public/bookings/:ref/pay` avec `cgvAccepted: true`,
+exigée tant qu'aucune acceptation n'est enregistrée ; version, heure et IP sont
+alors posées comme dans le tunnel), paie les arrhes, et reçoit la confirmation avec
+le contrat. `guest.lang: "nl"` envoie le lien en néerlandais.
 
 ## Ce qui part, et quand
 
@@ -15,7 +29,6 @@ reste la consultation en ligne de la réservation). Les anciennes lignes
 | Déclencheur | Où dans le code |
 |---|---|
 | Paiement des arrhes (ou du total) : webhook Stripe, simulateur de dev | `handlePaymentSuccess` (`src/services/booking-flow.ts`), au passage `pending` → `confirmed` |
-| Vente du back-office confirmée d'office, avec une adresse e-mail | `POST /api/admin/bookings` (`src/api/admin.ts`) ; `"sendConfirmation": false` pour ne pas l'envoyer |
 | Confirmation manuelle d'une option | `POST /api/admin/bookings/:id/confirm` avec `{"sendConfirmation": true}` (ancien nom `sendVoucher` accepté) |
 | « Renvoyer la confirmation » (fiche réservation, écran `app/`) | `POST /api/admin/bookings/:id/resend-confirmation` (ancien nom `resend-voucher` accepté) |
 
@@ -64,12 +77,11 @@ tableaux, pagination, pied de page « Page n / N »). Contenu :
 5. le paiement : arrhes (avec leur pourcentage) et solde avec son échéance, montant
    réglé à la date d'émission, caution seulement si elle est > 0, puis **les
    articles 4 et 5 des CGV reproduits mot pour mot** ;
-6. les conditions générales : version, date et heure (Bruxelles) d'acceptation en
-   ligne. Sans acceptation enregistrée (vente prise par le propriétaire), le contrat
-   le dit au lieu d'inventer une date ;
-7. signatures : « Fait à Redu, le … » et la mention que l'acceptation en ligne et le
-   paiement des arrhes valent signature ;
-8. en annexe, le texte complet des CGV en base (`settings.cgv_text`).
+6. les conditions générales et la conclusion du contrat : acceptation en ligne et
+   paiement des arrhes (pas de signature) ; date, heure (Bruxelles), version des CGV
+   et adresse IP de l'acceptation quand elles sont enregistrées ; données du
+   locataire utilisées uniquement pour l'exécution du contrat ;
+7. en annexe, le texte complet des CGV en base (`settings.cgv_text`).
 
 **Le contrat ne crée aucune règle.** Les chiffres viennent de la réservation ; les
 règles (arrhes, solde à 30 jours, annulation) sont celles des CGV en base. Changer
@@ -78,9 +90,8 @@ la 0019) : le contrat suit sans toucher au code.
 
 ### Où modifier le texte du contrat
 
-- **Libellés du contrat** (titres, phrases d'acceptation, signatures) : les deux
-  dictionnaires `FR` et `NL` de `src/services/contrat.ts`. Le lieu de signature est
-  la constante `LIEU_SIGNATURE` (« Redu »).
+- **Libellés du contrat** (titres, clause de conclusion, confidentialité) : les deux
+  dictionnaires `FR` et `NL` de `src/services/contrat.ts`. 
 - **Mise en page** (marges, polices, tableaux) : `src/core/pdf.ts`.
 - **Règles de paiement et d'annulation, identité de l'exploitant** : les CGV en base.
 - Après modification : `npx vitest run test/confirmation-contrat.test.ts`. Pour voir

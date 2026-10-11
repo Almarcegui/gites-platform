@@ -2565,12 +2565,12 @@ export async function hasEmailOfKinds(db: D1Database, bookingId: number, kinds: 
 export async function getCgvAcceptance(
   db: D1Database,
   bookingId: number,
-): Promise<{ version: string | null; acceptedAt: string | null }> {
+): Promise<{ version: string | null; acceptedAt: string | null; ip: string | null }> {
   const row = (await db
-    .prepare("SELECT cgv_version, cgv_accepted_at FROM bookings WHERE id = ?1")
+    .prepare("SELECT cgv_version, cgv_accepted_at, cgv_ip FROM bookings WHERE id = ?1")
     .bind(bookingId)
     .first()) as Raw | null;
-  return { version: strOrNull(row?.cgv_version), acceptedAt: strOrNull(row?.cgv_accepted_at) };
+  return { version: strOrNull(row?.cgv_version), acceptedAt: strOrNull(row?.cgv_accepted_at), ip: strOrNull(row?.cgv_ip) };
 }
 
 export interface AuditRow {

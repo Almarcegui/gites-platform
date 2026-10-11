@@ -190,7 +190,7 @@ describe("parcours de réservation complet (mode stub)", () => {
 });
 
 describe("admin", () => {
-  it("vente manuelle confirmée + lien de paiement stub + annulation → libération", async () => {
+  it("vente du back-office = option (jamais confirmée d'office) + lien de paiement stub + annulation → libération", async () => {
     const sale = await call("POST", "/api/admin/bookings", {
       unitId: 1,
       checkin: CHECKIN,
@@ -202,8 +202,9 @@ describe("admin", () => {
     });
     expect(sale.status).toBe(201);
     const booking = sale.data.booking as Record<string, unknown>;
-    expect(booking.status).toBe("confirmed");
+    expect(booking.status).toBe("pending"); // décision du 11/10/2026 : le client confirme en payant les arrhes
     expect(sale.data.paymentUrl as string).toContain("dev-pay.html");
+    expect(sale.data.optionUrl as string).toContain("/book/voucher.html?ref=");
 
     // le Domaine est bloqué par liaison
     const avail = await call("GET", `/api/public/availability?property=pre-more&checkin=${CHECKIN}&checkout=${CHECKOUT}&adults=4`);
@@ -241,10 +242,12 @@ describe("admin", () => {
 
   it("stats et overview répondent avec une forme cohérente", async () => {
     const year = Number(CHECKIN.slice(0, 4));
-    await call("POST", "/api/admin/bookings", {
+    const wedding = await call("POST", "/api/admin/bookings", {
       unitId: 3, checkin: CHECKIN, checkout: CHECKOUT, adults: 15,
       guest: { lastName: "Mariage Dubois" },
     });
+    // le back-office crée une option : la confirmation se fait à part
+    expect((await call("POST", `/api/admin/bookings/${(wedding.data.booking as { id: number }).id}/confirm`)).status).toBe(200);
     const stats = await call("GET", `/api/admin/stats?property=1&year=${year}`);
     expect(stats.status).toBe(200);
     const current = stats.data.current as { soldNights: number; occupancyPct: number; perUnit: { nights: number }[] };
@@ -278,6 +281,7 @@ describe("admin", () => {
     });
     expect(sale.status).toBe(201);
     const booking = sale.data.booking as { id: number; reference: string };
+    expect((await call("POST", `/api/admin/bookings/${booking.id}/confirm`)).status).toBe(200);
 
     // Option en cours sur une autre unité et d'autres dates → alerte « option ».
     const hold = await call(

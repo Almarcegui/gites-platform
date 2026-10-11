@@ -165,8 +165,9 @@ export function buildPaymentLinkEmail(
   label: string,
   amountCents: number,
   payUrl: string,
+  opts: { holdUntil?: string | null } = {},
 ): { subject: string; bodyText: string } {
-  if (isNl(b)) return buildPaymentLinkEmailNl(b, property, label, amountCents, payUrl);
+  if (isNl(b)) return buildPaymentLinkEmailNl(b, property, label, amountCents, payUrl, opts);
   return {
     subject: `${label} — réservation ${b.reference} (${property.name})`,
     bodyText: [
@@ -177,7 +178,8 @@ export function buildPaymentLinkEmail(
       `${label} : ${formatEur(amountCents)}`,
       payUrl,
       ``,
-      `Le paiement s'effectue via Stripe (carte bancaire).`,
+      `Ce lien ouvre la page de votre réservation : vous y acceptez les conditions générales, réglez les arrhes en ligne (carte bancaire, via Stripe), puis recevez votre confirmation avec votre contrat de location.`,
+      ...(opts.holdUntil ? [`Vos dates sont gardées jusqu'au ${formatDateFr(opts.holdUntil.slice(0, 10))}.`] : []),
       ``,
       `À bientôt,`,
       `${property.name}`,
@@ -299,7 +301,7 @@ export function parseQuote(b: BookingRow): Quote | null {
 
 const personen = (n: number) => `${n} ${n > 1 ? "personen" : "persoon"}`;
 
-function buildPaymentLinkEmailNl(b: BookingRow, property: PropertyRow, label: string, amountCents: number, payUrl: string): { subject: string; bodyText: string } {
+function buildPaymentLinkEmailNl(b: BookingRow, property: PropertyRow, label: string, amountCents: number, payUrl: string, opts: { holdUntil?: string | null }): { subject: string; bodyText: string } {
   const l = nlText(label);
   return {
     subject: `${l} — reservering ${b.reference} (${property.name})`,
@@ -311,7 +313,8 @@ function buildPaymentLinkEmailNl(b: BookingRow, property: PropertyRow, label: st
       `${l}: ${money(amountCents, true)}`,
       payUrl,
       ``,
-      `De betaling verloopt via Stripe (bankkaart).`,
+      `Deze link opent de pagina van uw reservering: u aanvaardt er de algemene voorwaarden, betaalt het voorschot online (bankkaart, via Stripe) en ontvangt daarna uw bevestiging met uw huurcontract.`,
+      ...(opts.holdUntil ? [`Uw data worden bewaard tot ${formatDateFr(opts.holdUntil.slice(0, 10))}.`] : []),
       ``,
       `Tot binnenkort,`,
       `${property.name}`,

@@ -37,6 +37,7 @@ import {
   manualBlocksInWindow,
   markPaymentStatus,
   recordCgvAcceptance,
+  getCgvAcceptance,
   upsertGuest,
   type BookingRow,
   type UnitPhotoRow,
@@ -965,6 +966,9 @@ export function registerPublicRoutes(router: Router): void {
     }
     const property = booking.propertyId != null ? await getProperty(db, booking.propertyId) : null;
     const settings = booking.propertyId != null ? await getSettings(db, booking.propertyId) : null;
+    // Option ouverte par le back-office : les CGV ne sont pas encore acceptées,
+    // la page voucher demande l'acceptation avant le paiement des arrhes.
+    const cgvAccepted = (await getCgvAcceptance(db, booking.id)).acceptedAt != null;
     let quoteLines: unknown = null;
     // Pourcentage d'arrhes CONTRACTUEL : celui figé dans le devis au moment de
     // la réservation (issue #75), pas la valeur courante de l'hébergement — le
@@ -1009,6 +1013,7 @@ export function registerPublicRoutes(router: Router): void {
         cautionCents: settings?.cautionCents ?? 0,
       },
       cgvText: settings?.cgvText ?? "",
+      cgvAccepted,
       // Adresse du gîte : elle n'était nulle part sur le voucher, alors que
       // c'est l'information qu'on cherche la veille du départ (issue #47-7).
       contact: {
@@ -1232,7 +1237,7 @@ export function registerPublicRoutes(router: Router): void {
    *  ouvrir une nouvelle. */
   router.post("/api/public/bookings/:reference/pay", async (req, env, p) => {
     const db = env.DB;
-    const body = await readJson<{ email?: string }>(req);
+    const body = await readJson<{ email?: string; cgvAccepted?: boolean }>(req);
     const booking = await authedBooking(db, p.reference ?? "", String(body?.email ?? "").trim());
     if (!booking) return apiError(404, "réservation introuvable");
 
@@ -1249,6 +1254,20 @@ export function registerPublicRoutes(router: Router): void {
     if (booking.status !== "pending") return apiError(400, "cette réservation n'est plus active");
     if (!booking.holdExpiresAt || booking.holdExpiresAt <= sqlNow()) {
       return apiError(410, "l'option a expiré — le créneau est de nouveau ouvert, relancez une réservation");
+    }
+    // Option ouverte par le back-office : le client n'a pas encore accepté les
+    // CGV (le tunnel public le fait à la création). Le contrat est conclu par
+    // cette acceptation et le paiement des arrhes : version, heure et IP sont
+    // enregistrées ici, comme dans le tunnel, et la case seule ne suffit pas.
+    if ((await getCgvAcceptance(db, booking.id)).acceptedAt == null) {
+      if (body?.cgvAccepted !== true) {
+        return apiError(400, "acceptation des conditions générales requise", { code: "cgv_required" });
+      }
+      const settings = booking.propertyId != null ? await getSettings(db, booking.propertyId) : null;
+      await recordCgvAcceptance(db, booking.id, {
+        version: await cgvVersion(settings?.cgvText ?? ""),
+        ip: req.headers.get("cf-connecting-ip"),
+      });
     }
     const kind = booking.balanceDueDate == null ? "full" : "deposit";
     const start = await startPayment(db, env, booking, kind, booking.depositCents, "public");
