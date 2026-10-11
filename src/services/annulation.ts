@@ -35,7 +35,7 @@ export interface CancellationPlan {
   mode: "canal" | "sans_paiement" | "arrhes";
   /** Net déjà payé (paiements réussis moins remboursements déjà faits). */
   paidCents: number;
-  /** Arrhes de la réservation (bookings.deposit_cents). */
+  /** Arrhes de la réservation, au pourcentage figé dans le devis (voir contractualArrhes). */
   arrhesCents: number;
   /** Somme conservée par l'exploitant (arrhes, ou prix du séjour entamé). */
   keptCents: number;
@@ -74,7 +74,7 @@ export async function planCancellation(
   // Le séjour entamé ne concerne que le client, et cède devant la force majeure.
   const sejourEntame = par === "locataire" && !forceMajeure && opts.sejourEntame === true;
   const base = {
-    par, paidCents: 0, arrhesCents: booking.depositCents, keptCents: 0, refundCents: 0,
+    par, paidCents: 0, arrhesCents: contractualArrhes(booking), keptCents: 0, refundCents: 0,
     stripeRefunds: [] as StripeRefundLine[], stripeRefundCents: 0, manualRefundCents: 0, forceMajeure, sejourEntame,
   };
   if (isStripeChannel(booking)) {
@@ -93,7 +93,7 @@ export async function planCancellation(
   }
 
   // Les arrhes que l'exploitant a réellement reçues (jamais plus que le payé).
-  const arrhesRecues = Math.min(paidNet, Math.max(0, booking.depositCents));
+  const arrhesRecues = Math.min(paidNet, base.arrhesCents);
   // 5.2 : le client annule, les arrhes restent acquises. 5.5 : séjour entamé
   // (non-présentation, arrivée écourtée), le prix du séjour n'est pas rendu
   // (jamais plus que ce prix : un trop-perçu est rendu). 5.3 et 5.4 : rien n'est gardé.
@@ -140,6 +140,26 @@ export async function planCancellation(
     stripeRefunds: stripeLines, stripeRefundCents: stripeSum, manualRefundCents: manual,
     note: planNote(par, kept, refund, manual, forceMajeure, sejourEntame),
   };
+}
+
+/** Arrhes au sens des CGV (4.1, 4.3) : le pourcentage figé dans le devis de la
+ *  réservation, appliqué à son prix total. `bookings.deposit_cents` est le
+ *  montant DEMANDÉ à la réservation : il vaut le prix total quand l'arrivée est
+ *  à moins de 30 jours ou que le client a choisi de tout payer, et ne peut donc
+ *  pas servir seul (sinon une annulation garderait tout au lieu des arrhes).
+ *  Jamais plus que ce montant demandé ; sans devis lisible, repli sur lui. */
+export function contractualArrhes(booking: BookingRow): number {
+  const demanded = Math.max(0, booking.depositCents);
+  let pct: number | null = null;
+  try {
+    const q = booking.quoteJson ? (JSON.parse(booking.quoteJson) as { depositPct?: unknown }) : null;
+    pct = typeof q?.depositPct === "number" && Number.isFinite(q.depositPct) ? q.depositPct : null;
+  } catch {
+    pct = null;
+  }
+  if (pct == null) return demanded;
+  if (pct >= 100) return Math.min(demanded, Math.max(0, booking.totalCents));
+  return Math.min(demanded, Math.max(0, Math.round((booking.totalCents * Math.max(0, pct)) / 100)));
 }
 
 /** PaymentIntent d'un paiement : la colonne dédiée, sinon la référence `pi_…` de session. */

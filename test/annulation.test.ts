@@ -81,7 +81,7 @@ async function call(method: string, path: string, body?: unknown) {
   return { status: res.status, data: (await res.json()) as Record<string, any> };
 }
 
-async function mkBooking(o: { status?: string; source?: string; lang?: string; total?: number; deposit?: number } = {}): Promise<number> {
+async function mkBooking(o: { status?: string; source?: string; lang?: string; total?: number; deposit?: number; depositPct?: number } = {}): Promise<number> {
   const g = await db
     .prepare("INSERT INTO guests (email, first_name, last_name, lang) VALUES ('client@example.com', 'Camille', 'Testeur', ?1)")
     .bind(o.lang ?? "fr")
@@ -93,6 +93,9 @@ async function mkBooking(o: { status?: string; source?: string; lang?: string; t
     )
     .bind(CHECKIN, CHECKOUT, o.status ?? "confirmed", o.source ?? "direct", `AN-${Math.random().toString(36).slice(2, 8).toUpperCase()}`, o.total ?? 100000, o.deposit ?? 30000, g.meta.last_row_id)
     .run();
+  if (o.depositPct != null) {
+    await db.prepare("UPDATE bookings SET quote_json = ?2 WHERE id = ?1").bind(res.meta.last_row_id, JSON.stringify({ depositPct: o.depositPct, totalCents: o.total ?? 100000 })).run();
+  }
   return res.meta.last_row_id;
 }
 const stripePay = (bookingId: number, kind: "deposit" | "balance" | "full", amountCents: number, pi: string) =>
@@ -142,6 +145,24 @@ describe("annulation par le client", () => {
     expect((await getBooking(db, id))!.paidCents).toBe(30000); // les arrhes restent encaissées
     const actions = (await db.prepare("SELECT action FROM audit_log").all()).results.map((x: any) => x.action);
     expect(actions).toEqual(expect.arrayContaining(["booking.cancel", "refund.done"]));
+  });
+
+  it("prix total payé d'avance (arrivée à moins de 30 jours ou choix du client) : seules les arrhes au pourcentage du devis restent acquises (CGV 4.3)", async () => {
+    // deposit_cents = montant demandé = prix total ; le devis fige 50 % d'arrhes.
+    const id = await mkBooking({ total: 100000, deposit: 100000, depositPct: 50 });
+    await stripePay(id, "full", 100000, "pi_f1");
+    const r = await call("POST", `/api/admin/bookings/${id}/cancel`, { reason: "x", confirmer: true });
+    expect(r.data.plan).toMatchObject({ arrhesCents: 50000, keptCents: 50000, refundCents: 50000, stripeRefundCents: 50000 });
+    expect(refundCalls().map((c) => [c.body.get("payment_intent"), c.body.get("amount")])).toEqual([["pi_f1", "50000"]]);
+  });
+
+  it("devis à 100 % d'arrhes : tout reste acquis ; sans devis lisible, repli sur le montant demandé", async () => {
+    const full = await mkBooking({ total: 100000, deposit: 100000, depositPct: 100 });
+    await stripePay(full, "full", 100000, "pi_f2");
+    expect((await call("POST", `/api/admin/bookings/${full}/cancel`, { reason: "x", simuler: true })).data.plan).toMatchObject({ keptCents: 100000, refundCents: 0 });
+    const sansDevis = await mkBooking({ total: 100000, deposit: 30000 });
+    await stripePay(sansDevis, "deposit", 30000, "pi_f3");
+    expect((await call("POST", `/api/admin/bookings/${sansDevis}/cancel`, { reason: "x", simuler: true })).data.plan).toMatchObject({ arrhesCents: 30000, keptCents: 30000 });
   });
 
   it("une seconde annulation ne rembourse pas une seconde fois", async () => {
