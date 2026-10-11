@@ -298,6 +298,18 @@ export function isOurRule(rule: LiveRule, _roomId: number): boolean {
   return rule.name != null && OUR_NAME.test(rule.name);
 }
 
+/** Ligne vide : Beds24 crée d'office les lignes 1 à 16 sur chaque chambre,
+ *  sans nom, sans lien, sans canal (constaté le 11/10/2026 sur #741844 : le
+ *  premier essai refusait la ligne 2 « déjà utilisée » alors qu'elle était
+ *  vierge). Une ligne vide est libre : on peut la prendre. */
+export function isEmptyRule(rule: LiveRule): boolean {
+  if (rule.name != null && rule.name.trim() !== "") return false;
+  if (rule.link) return false;
+  if (Object.values(rule.channels).some(Boolean)) return false;
+  if (rule.bookingPage && (rule.bookingPage.direct || rule.bookingPage.agent)) return false;
+  return true;
+}
+
 export function derivedRuleName(l: DerivedLine): string {
   return `${l.label} (prix direct x ${String(l.multiplier).replace(".", ",")})`;
 }
@@ -312,7 +324,7 @@ export function priceRulesFor(lines: readonly DerivedLine[], enabled: boolean, r
     if (!base) return { ok: false, message: `chambre Beds24 #${roomId} : pas de ligne de prix 1 chez Beds24 — rien n'est envoyé` };
     for (const l of lines) {
       const existing = byId.get(l.priceId);
-      if (existing && !isOurRule(existing, roomId)) {
+      if (existing && !isOurRule(existing, roomId) && !isEmptyRule(existing)) {
         return { ok: false, message: `chambre Beds24 #${roomId} : la ligne de prix ${l.priceId} est déjà utilisée (« ${existing.name ?? "sans nom"} ») — rien n'est envoyé, libérer cette ligne dans Beds24 d'abord` };
       }
     }
