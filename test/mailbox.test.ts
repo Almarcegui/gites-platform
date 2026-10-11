@@ -201,6 +201,26 @@ describe("pullMailbox : import, curseur, idempotence", () => {
     await pullMailbox(envWith(slow.fetch), new Date(later.getTime() + 10 * 60_000));
     expect((await getMailboxState(db)).lastUid).toBe(2);
   });
+
+  it("une relève lente ne libère pas le bail qu'une autre a repris", async () => {
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((r) => (release = r));
+    const box = fakeMailbox([]);
+    const slow: Env["IMAP_FETCH"] = async (q) => {
+      await gate;
+      return box.fetch(q);
+    };
+    const first = pullMailbox(envWith(slow), NOW);
+    await new Promise((r) => setTimeout(r, 20));
+    // 10 minutes plus tard, une autre instance reprend le bail périmé
+    const later = new Date(NOW.getTime() + 10 * 60_000);
+    const second = pullMailbox(envWith(slow), later);
+    await new Promise((r) => setTimeout(r, 20));
+    release();
+    await Promise.all([first, second]);
+    // les deux ont fini : le bail est libre pour le passage suivant
+    expect((await pullMailbox(envWith(box.fetch), new Date(later.getTime() + 1000))).ran).toBe(true);
+  });
 });
 
 describe("pullMailbox : rattachement", () => {

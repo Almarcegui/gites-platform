@@ -187,8 +187,10 @@ function continuedParam(headerValue: string, param: string): string | null {
     segs.set(index, { encoded: m[2] === "*", value: m[3] !== undefined ? m[3].replace(/\\(.)/g, "$1") : (m[4] ?? "") });
   }
   if (!segs.size) return null;
-  const ordered = [...segs.entries()].sort((a, b) => a[0] - b[0]);
-  if (ordered[0]![0] !== 0) return null;
+  // segments contigus depuis 0 : au premier trou, la suite est ignorée (jamais un nom recollé de travers)
+  const ordered: [number, { encoded: boolean; value: string }][] = [];
+  for (let i = 0; segs.has(i); i++) ordered.push([i, segs.get(i)!]);
+  if (!ordered.length) return null;
   // le charset n'est annoncé que dans le premier segment encodé
   const first = ordered[0]![1];
   const head = first.encoded ? /^([^']*'[^']*')/.exec(first.value)?.[1] ?? "" : "";

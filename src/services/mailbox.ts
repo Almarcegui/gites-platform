@@ -225,8 +225,10 @@ export async function ingestMail(
 export const MAILBOX_LEASE_KEY = "mailbox_imap_lease";
 const LEASE_MINUTES = 5;
 
-async function acquireLease(db: D1Database, now: Date): Promise<boolean> {
-  const until = new Date(now.getTime() + LEASE_MINUTES * 60_000).toISOString();
+/** Prend le bail ; rend sa valeur (échéance|jeton) si on l'a, null sinon. Seul son propriétaire le libère. */
+async function acquireLease(db: D1Database, now: Date): Promise<string | null> {
+  const token = Array.from(crypto.getRandomValues(new Uint8Array(8)), (b) => b.toString(16).padStart(2, "0")).join("");
+  const until = `${new Date(now.getTime() + LEASE_MINUTES * 60_000).toISOString()}|${token}`;
   const res = await db
     .prepare(
       `INSERT INTO app_settings (key, value, updated_at) VALUES (?1, ?2, datetime('now'))
@@ -235,11 +237,16 @@ async function acquireLease(db: D1Database, now: Date): Promise<boolean> {
     )
     .bind(MAILBOX_LEASE_KEY, until, now.toISOString())
     .run();
-  return res.meta.changes === 1;
+  return res.meta.changes === 1 ? until : null;
 }
 
-async function releaseLease(db: D1Database): Promise<void> {
-  await db.prepare("UPDATE app_settings SET value = '' WHERE key = ?1").bind(MAILBOX_LEASE_KEY).run().catch(() => undefined);
+async function releaseLease(db: D1Database, lease: string): Promise<void> {
+  // seulement si le bail est encore le nôtre : une relève lente ne libère pas celui d'une autre
+  await db
+    .prepare("UPDATE app_settings SET value = '' WHERE key = ?1 AND value = ?2")
+    .bind(MAILBOX_LEASE_KEY, lease)
+    .run()
+    .catch(() => undefined);
 }
 
 /** Écrit l'état en gardant le curseur monotone : à UIDVALIDITY égale, lastUid ne recule jamais. */
@@ -269,7 +276,8 @@ export async function pullMailbox(env: Env, now: Date = new Date()): Promise<Mai
     }
     return result;
   }
-  if (!(await acquireLease(db, now))) {
+  const lease = await acquireLease(db, now);
+  if (!lease) {
     result.reason = "Une relève est déjà en cours.";
     return result;
   }
@@ -321,7 +329,7 @@ export async function pullMailbox(env: Env, now: Date = new Date()): Promise<Mai
     }
     await saveState(db, { ...state, error: message, at: now.toISOString() }).catch(() => undefined);
   } finally {
-    await releaseLease(db);
+    await releaseLease(db, lease);
   }
   return result;
 }

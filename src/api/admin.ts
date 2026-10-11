@@ -2862,7 +2862,8 @@ export function registerAdminRoutes(router: Router): void {
       body: text,
       thread,
     });
-    await markMessage(env.DB, id, "traité");
+    // un envoi échoué ne retire pas la conversation de « À répondre » : rien n'est parti
+    if (result.delivery !== "failed") await markMessage(env.DB, id, "traité");
     return json({ ok: true, ...result });
   }));
 

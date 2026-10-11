@@ -103,6 +103,20 @@ describe("réponse à un mail depuis Messages", () => {
     expect(row?.booking_id).toBe(bookingId);
   });
 
+  it("envoi SMTP en échec : le message reste « à répondre », l'échec est visible", async () => {
+    const id = (await inbound())!;
+    const failing = { ...env, SMTP_SEND: async () => { throw new Error("SMTP 421 indisponible"); } } as Env;
+    const req = new Request(`http://test.local/api/admin/messages/${id}/reply`, {
+      method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${ADMIN}` }, body: JSON.stringify({ body: "Réponse qui ne part pas" }),
+    });
+    const data = (await (await router.handle(req, failing))!.json()) as { delivery: string };
+    expect(data.delivery).toBe("failed");
+    expect(((await call("GET", "/api/admin/messages?status=nouveau")).data.messages as unknown[])).toHaveLength(1);
+    const log = await t.db.prepare("SELECT status, error_detail FROM email_log").first<{ status: string; error_detail: string }>();
+    expect(log).toMatchObject({ status: "failed" });
+    expect(log?.error_detail).toContain("421");
+  });
+
   it("jamais de réponse à l'adresse des gîtes ni à un expéditeur qui s'en réclame sans preuve", async () => {
     const own = (await inbound({ messageId: "<own@x>", fromEmail: "lesgitesdupremore@gmail.com" }))!;
     const r1 = await call("POST", `/api/admin/messages/${own}/reply`, { body: "test" });

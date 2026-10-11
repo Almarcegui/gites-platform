@@ -292,6 +292,12 @@ describe("parseRawEmail : structure MIME", () => {
     expect(parseRawEmail(m).attachments![0]!.name).toBe("Le contrat de location été.pdf");
   });
 
+  it("segments RFC 2231 non contigus : la suite après le trou est ignorée", () => {
+    const m = ["From: a@b.c", "Subject: x", 'Content-Type: multipart/mixed; boundary="Z"', "", "--Z", "Content-Type: application/pdf",
+      "Content-Disposition: attachment; filename*0=\"debut\"; filename*2=\"fin.pdf\"", "", "x", "--Z--", ""].join("\r\n");
+    expect(parseRawEmail(m).attachments![0]!.name).toBe("debut");
+  });
+
   it("profondeur MIME bornée : un multipart qui s'emboîte à l'infini ne boucle pas", () => {
     let body = "Content-Type: text/plain\r\n\r\nfond";
     for (let i = 0; i < 40; i++) body = `Content-Type: multipart/mixed; boundary="b${i}"\r\n\r\n--b${i}\r\n${body}\r\n--b${i}--`;
