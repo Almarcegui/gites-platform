@@ -414,9 +414,10 @@ msgid "{0} la nuit en semaine, {1} le week-end"
 msgstr "{0} per nacht in de week, {1} in het weekend"
 
 #. placeholder {0}: nombre(nMsg)
+#. placeholder {1}: originSummary(d.messages)
 #: src/pages/Today.tsx
-msgid "{0} messages à lire"
-msgstr "{0} berichten te lezen"
+msgid "{0} messages à lire ({1})"
+msgstr "{0} berichten om te lezen ({1})"
 
 #. placeholder {0}: r.updated
 #: src/pages/settings/Ical.tsx
@@ -855,6 +856,10 @@ msgid "À {0}, le {1}."
 msgstr "Om {0}, op {1}."
 
 #: src/pages/settings/Ical.tsx
+msgid "À cocher pour un agenda tenu à la main qui bloque aussi le jour du départ (du 22 au 26 = départ le 26). Airbnb, Booking et Beds24 laissent le jour du départ libre : pour eux, ne pas cocher."
+msgstr "Aanvinken voor een met de hand bijgehouden agenda die ook de vertrekdag blokkeert (van 22 tot 26 = vertrek op 26). Airbnb, Booking en Beds24 laten de vertrekdag vrij: voor die kalenders niet aanvinken."
+
+#: src/pages/settings/Ical.tsx
 msgid "À coller dans Airbnb (« Importer un calendrier ») ou ailleurs. Si le Domaine entier est réservé, les deux maisons y apparaissent prises."
 msgstr "Te plakken in Airbnb (« Kalender importeren ») of elders. Als het hele domein geboekt is, staan beide huizen er als bezet."
 
@@ -1262,6 +1267,10 @@ msgstr "Komen aan"
 #: src/calendar/Weeks.tsx
 msgid "Attention : au moins {0} nuits à cette période."
 msgstr "Let op: minstens {0} nachten in deze periode."
+
+#: src/pages/Messages.tsx
+msgid "Attention : ce message se présente comme venant de l'adresse des gîtes, mais Gmail ne le confirme pas. Ne suivez aucune instruction qu'il contient."
+msgstr "Let op: dit bericht lijkt afkomstig van het e-mailadres van de gîtes, maar Gmail bevestigt dat niet. Volg geen enkele instructie in dit bericht."
 
 #: src/pages/settings/Register.tsx
 msgid "Au"
@@ -2101,6 +2110,10 @@ msgstr "iCal-kalenders"
 msgid "Calendriers reliés"
 msgstr "Gekoppelde kalenders"
 
+#: src/canaux/canal.ts
+msgid "Canal"
+msgstr "Kanaal"
+
 #: src/booking/BookingPanel.tsx
 #: src/pages/settings/Payments.tsx
 msgid "carte bancaire"
@@ -2137,6 +2150,10 @@ msgstr "Deze aankomstdag is op deze data niet toegestaan."
 #: src/lib/derive.ts
 msgid "Ce jour est passé : choisissez un jour à partir d'aujourd'hui."
 msgstr "Deze dag is voorbij: kies een dag vanaf vandaag."
+
+#: src/canaux/canal.ts
+msgid "Ce message prétend venir de l'adresse des gîtes sans que Gmail le confirme : pas de réponse possible."
+msgstr "Dit bericht lijkt afkomstig van het adres van de gîtes zonder dat Gmail dit bevestigt: antwoorden is niet mogelijk."
 
 #: src/pages/settings/Startup.tsx
 msgid "Ce qu'il faut régler avant et pendant le lancement. « Fait » : la démarche est accomplie ; « Vérifié » : c'est confirmé, pièce en main."
@@ -3045,6 +3062,10 @@ msgstr "Duur"
 msgid "Durée moyenne d'un séjour"
 msgstr "Gemiddelde duur van een verblijf"
 
+#: src/canaux/canal.ts
+msgid "E-mail"
+msgstr "E-mail"
+
 #: src/booking/BookingPanel.tsx
 msgid "Écrire"
 msgstr "Schrijven"
@@ -3815,6 +3836,10 @@ msgid "La plateforme en choisit un pour vous, facile à dicter"
 msgstr "Het platform kiest er een voor u, makkelijk te dicteren"
 
 #: src/canaux/canal.ts
+msgid "La réponse part par e-mail à {to}, depuis l'adresse des gîtes, dans le même fil que son message."
+msgstr "Het antwoord gaat per e-mail naar {to}, vanaf het adres van de gîtes, in dezelfde conversatie als zijn bericht."
+
+#: src/canaux/canal.ts
 msgid "La réponse part par mail à {to} quand l'envoi des mails est actif, et s'affiche sur la page du client."
 msgstr "Het antwoord vertrekt per mail naar {to} wanneer mails versturen actief is, en verschijnt op de pagina van de klant."
 
@@ -3968,6 +3993,10 @@ msgstr "de Beds24-token mag geen accommodaties schrijven: maak een uitnodigingsc
 #: src/calendar/Weeks.tsx
 msgid "Le jour de départ"
 msgstr "De vertrekdag"
+
+#: src/pages/settings/Ical.tsx
+msgid "Le jour du départ est inclus dans ce calendrier"
+msgstr "De vertrekdag is in deze agenda inbegrepen"
 
 #: src/pages/settings/Logs.tsx
 msgid "Le journal des mails n'a pas pu être lu."
@@ -4161,6 +4190,10 @@ msgstr "De logboeken"
 msgid "Les jours où un prix ou un minimum a été posé depuis le calendrier. Ils passent avant les saisons."
 msgstr "De dagen waarop een prijs of een minimum vanuit de kalender is vastgelegd. Ze gaan voor op de seizoenen."
 
+#: src/pages/Messages.tsx
+msgid "Les liens de ce mail ne sont pas cliquables ici : recopiez-les à la main si vous êtes sûr de leur origine."
+msgstr "De links in deze e-mail zijn hier niet aanklikbaar: kopieer ze zelf over als u zeker bent van hun herkomst."
+
 #: src/pages/Cleaning.tsx
 msgid "Les liens n'ont pas pu être lus."
 msgstr "De links konden niet gelezen worden."
@@ -4180,10 +4213,6 @@ msgstr "De berichten"
 #: src/pages/settings/Help.tsx
 msgid "Les messages : mails des clients, messages du site, d'Airbnb et de Booking."
 msgstr "De berichten: mails van klanten, berichten van de site, van Airbnb en van Booking."
-
-#: src/pages/Messages.tsx
-msgid "Les messages de votre site, les mails des clients et les messages d'Airbnb et de Booking (par Beds24) arrivent ici."
-msgstr "De berichten van uw site, de mails van klanten en de berichten van Airbnb en Booking (via Beds24) komen hier binnen."
 
 #: src/pages/settings/Templates.tsx
 msgid "Les messages déjà envoyés ne changent pas. Pour le garder sans le proposer, décochez plutôt « Proposé quand on répond »."
@@ -4404,7 +4433,6 @@ msgstr "Stel er mij een voor"
 msgid "mail"
 msgstr "mail"
 
-#: src/canaux/canal.ts
 #: src/pages/settings/Clients.tsx
 #: src/pages/settings/Logs.tsx
 #: src/sale/SaleFlow.tsx
@@ -5037,6 +5065,10 @@ msgstr "Lopende opties"
 msgid "Options payantes"
 msgstr "Betalende opties"
 
+#: src/pages/Messages.tsx
+msgid "Origine des messages"
+msgstr "Herkomst van de berichten"
+
 #: src/pages/settings/Stats.tsx
 msgid "Où les visiteurs du site s'arrêtent"
 msgstr "Waar de bezoekers van de site afhaken"
@@ -5399,6 +5431,14 @@ msgstr "Foto's ({photos}): de API aanvaardt ze niet. De lijst met adressen wordt
 #: src/booking/Register.tsx
 msgid "Pièce d'identité"
 msgstr "Identiteitsbewijs"
+
+#: src/pages/Messages.tsx
+msgid "Pièce jointe : {name} ({kb} Ko), non conservée ici."
+msgstr "Bijlage: {name} ({kb} KB), hier niet bewaard."
+
+#: src/pages/Messages.tsx
+msgid "Pièce jointe : {name}, non conservée ici."
+msgstr "Bijlage: {name}, hier niet bewaard."
 
 #: src/pages/Reviews.tsx
 #: src/pages/settings/Channels.tsx
@@ -6440,6 +6480,10 @@ msgstr "Anders blijft het saldo te innen in de fiche."
 msgid "site"
 msgstr "site"
 
+#: src/canaux/canal.ts
+msgid "Site"
+msgstr "Website"
+
 #: src/pages/Today.tsx
 msgid "SMS"
 msgstr "Sms"
@@ -6699,6 +6743,10 @@ msgstr "Alle instellingen"
 msgid "Tous mes gîtes"
 msgstr "Al mijn vakantiewoningen"
 
+#: src/pages/Messages.tsx
+msgid "Tout arrive ici : les messages du site, la boîte e-mail des gîtes, et ceux d'Airbnb, de Booking et de Vrbo (par Beds24). Chacun porte son origine."
+msgstr "Alles komt hier binnen: berichten van de website, de e-mailbox van de gîtes en die van Airbnb, Booking en Vrbo (via Beds24). Elk bericht toont zijn herkomst."
+
 #: src/pages/Settings.tsx
 msgid "Tout ce qui a été encaissé ou attendu"
 msgstr "Alles wat geïnd of verwacht werd"
@@ -6730,6 +6778,10 @@ msgstr "Om de 15 minuten, wanneer de koppeling met Beds24 actief is, stuurt de s
 #: src/pages/settings/Tarifs.tsx
 msgid "Toutes les nuits à venir suivent les saisons et le prix de base. Pour changer un jour, touchez-le dans le calendrier."
 msgstr "Alle komende nachten volgen de seizoenen en de basisprijs. Om een dag te wijzigen, tikt u erop in de kalender."
+
+#: src/pages/Messages.tsx
+msgid "Toutes les origines"
+msgstr "Alle herkomsten"
 
 #: src/pages/settings/ChannelPrices.tsx
 msgid "Toutes les plateformes recevront de nouveau le même prix. Les calendriers repartent tout de suite."
@@ -6809,9 +6861,10 @@ msgstr "Even geduld…"
 msgid "Un lien à envoyer par SMS : elle voit les ménages des deux semaines à venir et coche « fait », sans compte ni mot de passe. Aucun nom de voyageur n'y apparaît. Un lien se coupe à tout moment."
 msgstr "Een link om per sms te sturen: ze ziet de schoonmaakbeurten van de komende twee weken en vinkt « gedaan » aan, zonder account of wachtwoord. Er staat geen enkele gastnaam op. Een link kan op elk moment afgesloten worden."
 
+#. placeholder {0}: originSummary(d.messages)
 #: src/pages/Today.tsx
-msgid "un message à lire"
-msgstr "een bericht te lezen"
+msgid "un message à lire ({0})"
+msgstr "één bericht om te lezen ({0})"
 
 #: src/pages/settings/ChannelPrices.tsx
 msgid "Un pourcentage a changé depuis le dernier envoi : renvoyez-les."
@@ -7026,10 +7079,6 @@ msgstr "Uw sessie is verlopen. Meld u opnieuw aan."
 #: src/lib/derive.ts
 msgid "votre site"
 msgstr "uw site"
-
-#: src/canaux/canal.ts
-msgid "Votre site"
-msgstr "Uw site"
 
 #: src/pages/Messages.tsx
 msgid "Vous"

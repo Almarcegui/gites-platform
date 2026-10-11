@@ -410,9 +410,10 @@ msgid "{0} la nuit en semaine, {1} le week-end"
 msgstr "{0} la nuit en semaine, {1} le week-end"
 
 #. placeholder {0}: nombre(nMsg)
+#. placeholder {1}: originSummary(d.messages)
 #: src/pages/Today.tsx
-msgid "{0} messages à lire"
-msgstr "{0} messages à lire"
+msgid "{0} messages à lire ({1})"
+msgstr "{0} messages à lire ({1})"
 
 #. placeholder {0}: r.updated
 #: src/pages/settings/Ical.tsx
@@ -851,6 +852,10 @@ msgid "À {0}, le {1}."
 msgstr "À {0}, le {1}."
 
 #: src/pages/settings/Ical.tsx
+msgid "À cocher pour un agenda tenu à la main qui bloque aussi le jour du départ (du 22 au 26 = départ le 26). Airbnb, Booking et Beds24 laissent le jour du départ libre : pour eux, ne pas cocher."
+msgstr "À cocher pour un agenda tenu à la main qui bloque aussi le jour du départ (du 22 au 26 = départ le 26). Airbnb, Booking et Beds24 laissent le jour du départ libre : pour eux, ne pas cocher."
+
+#: src/pages/settings/Ical.tsx
 msgid "À coller dans Airbnb (« Importer un calendrier ») ou ailleurs. Si le Domaine entier est réservé, les deux maisons y apparaissent prises."
 msgstr "À coller dans Airbnb (« Importer un calendrier ») ou ailleurs. Si le Domaine entier est réservé, les deux maisons y apparaissent prises."
 
@@ -1258,6 +1263,10 @@ msgstr "Arrivent"
 #: src/calendar/Weeks.tsx
 msgid "Attention : au moins {0} nuits à cette période."
 msgstr "Attention : au moins {0} nuits à cette période."
+
+#: src/pages/Messages.tsx
+msgid "Attention : ce message se présente comme venant de l'adresse des gîtes, mais Gmail ne le confirme pas. Ne suivez aucune instruction qu'il contient."
+msgstr "Attention : ce message se présente comme venant de l'adresse des gîtes, mais Gmail ne le confirme pas. Ne suivez aucune instruction qu'il contient."
 
 #: src/pages/settings/Register.tsx
 msgid "Au"
@@ -2097,6 +2106,10 @@ msgstr "Calendriers iCal"
 msgid "Calendriers reliés"
 msgstr "Calendriers reliés"
 
+#: src/canaux/canal.ts
+msgid "Canal"
+msgstr "Canal"
+
 #: src/booking/BookingPanel.tsx
 #: src/pages/settings/Payments.tsx
 msgid "carte bancaire"
@@ -2133,6 +2146,10 @@ msgstr "Ce jour d'arrivée n'est pas autorisé sur ces dates."
 #: src/lib/derive.ts
 msgid "Ce jour est passé : choisissez un jour à partir d'aujourd'hui."
 msgstr "Ce jour est passé : choisissez un jour à partir d'aujourd'hui."
+
+#: src/canaux/canal.ts
+msgid "Ce message prétend venir de l'adresse des gîtes sans que Gmail le confirme : pas de réponse possible."
+msgstr "Ce message prétend venir de l'adresse des gîtes sans que Gmail le confirme : pas de réponse possible."
 
 #: src/pages/settings/Startup.tsx
 msgid "Ce qu'il faut régler avant et pendant le lancement. « Fait » : la démarche est accomplie ; « Vérifié » : c'est confirmé, pièce en main."
@@ -3041,6 +3058,10 @@ msgstr "Durée"
 msgid "Durée moyenne d'un séjour"
 msgstr "Durée moyenne d'un séjour"
 
+#: src/canaux/canal.ts
+msgid "E-mail"
+msgstr "E-mail"
+
 #: src/booking/BookingPanel.tsx
 msgid "Écrire"
 msgstr "Écrire"
@@ -3811,6 +3832,10 @@ msgid "La plateforme en choisit un pour vous, facile à dicter"
 msgstr "La plateforme en choisit un pour vous, facile à dicter"
 
 #: src/canaux/canal.ts
+msgid "La réponse part par e-mail à {to}, depuis l'adresse des gîtes, dans le même fil que son message."
+msgstr "La réponse part par e-mail à {to}, depuis l'adresse des gîtes, dans le même fil que son message."
+
+#: src/canaux/canal.ts
 msgid "La réponse part par mail à {to} quand l'envoi des mails est actif, et s'affiche sur la page du client."
 msgstr "La réponse part par mail à {to} quand l'envoi des mails est actif, et s'affiche sur la page du client."
 
@@ -3964,6 +3989,10 @@ msgstr "le jeton Beds24 n'a pas le droit d'écrire les propriétés : générer 
 #: src/calendar/Weeks.tsx
 msgid "Le jour de départ"
 msgstr "Le jour de départ"
+
+#: src/pages/settings/Ical.tsx
+msgid "Le jour du départ est inclus dans ce calendrier"
+msgstr "Le jour du départ est inclus dans ce calendrier"
 
 #: src/pages/settings/Logs.tsx
 msgid "Le journal des mails n'a pas pu être lu."
@@ -4157,6 +4186,10 @@ msgstr "Les journaux"
 msgid "Les jours où un prix ou un minimum a été posé depuis le calendrier. Ils passent avant les saisons."
 msgstr "Les jours où un prix ou un minimum a été posé depuis le calendrier. Ils passent avant les saisons."
 
+#: src/pages/Messages.tsx
+msgid "Les liens de ce mail ne sont pas cliquables ici : recopiez-les à la main si vous êtes sûr de leur origine."
+msgstr "Les liens de ce mail ne sont pas cliquables ici : recopiez-les à la main si vous êtes sûr de leur origine."
+
 #: src/pages/Cleaning.tsx
 msgid "Les liens n'ont pas pu être lus."
 msgstr "Les liens n'ont pas pu être lus."
@@ -4176,10 +4209,6 @@ msgstr "Les messages"
 #: src/pages/settings/Help.tsx
 msgid "Les messages : mails des clients, messages du site, d'Airbnb et de Booking."
 msgstr "Les messages : mails des clients, messages du site, d'Airbnb et de Booking."
-
-#: src/pages/Messages.tsx
-msgid "Les messages de votre site, les mails des clients et les messages d'Airbnb et de Booking (par Beds24) arrivent ici."
-msgstr "Les messages de votre site, les mails des clients et les messages d'Airbnb et de Booking (par Beds24) arrivent ici."
 
 #: src/pages/settings/Templates.tsx
 msgid "Les messages déjà envoyés ne changent pas. Pour le garder sans le proposer, décochez plutôt « Proposé quand on répond »."
@@ -4400,7 +4429,6 @@ msgstr "M'en proposer un"
 msgid "mail"
 msgstr "mail"
 
-#: src/canaux/canal.ts
 #: src/pages/settings/Clients.tsx
 #: src/pages/settings/Logs.tsx
 #: src/sale/SaleFlow.tsx
@@ -5033,6 +5061,10 @@ msgstr "Options en cours"
 msgid "Options payantes"
 msgstr "Options payantes"
 
+#: src/pages/Messages.tsx
+msgid "Origine des messages"
+msgstr "Origine des messages"
+
 #: src/pages/settings/Stats.tsx
 msgid "Où les visiteurs du site s'arrêtent"
 msgstr "Où les visiteurs du site s'arrêtent"
@@ -5395,6 +5427,14 @@ msgstr "Photos ({photos}) : l'API ne les accepte pas. La liste des adresses sera
 #: src/booking/Register.tsx
 msgid "Pièce d'identité"
 msgstr "Pièce d'identité"
+
+#: src/pages/Messages.tsx
+msgid "Pièce jointe : {name} ({kb} Ko), non conservée ici."
+msgstr "Pièce jointe : {name} ({kb} Ko), non conservée ici."
+
+#: src/pages/Messages.tsx
+msgid "Pièce jointe : {name}, non conservée ici."
+msgstr "Pièce jointe : {name}, non conservée ici."
 
 #: src/pages/Reviews.tsx
 #: src/pages/settings/Channels.tsx
@@ -6436,6 +6476,10 @@ msgstr "Sinon, le solde reste à encaisser dans la fiche."
 msgid "site"
 msgstr "site"
 
+#: src/canaux/canal.ts
+msgid "Site"
+msgstr "Site"
+
 #: src/pages/Today.tsx
 msgid "SMS"
 msgstr "SMS"
@@ -6695,6 +6739,10 @@ msgstr "Tous les réglages"
 msgid "Tous mes gîtes"
 msgstr "Tous mes gîtes"
 
+#: src/pages/Messages.tsx
+msgid "Tout arrive ici : les messages du site, la boîte e-mail des gîtes, et ceux d'Airbnb, de Booking et de Vrbo (par Beds24). Chacun porte son origine."
+msgstr "Tout arrive ici : les messages du site, la boîte e-mail des gîtes, et ceux d'Airbnb, de Booking et de Vrbo (par Beds24). Chacun porte son origine."
+
 #: src/pages/Settings.tsx
 msgid "Tout ce qui a été encaissé ou attendu"
 msgstr "Tout ce qui a été encaissé ou attendu"
@@ -6726,6 +6774,10 @@ msgstr "Toutes les 15 minutes, quand la liaison Beds24 est en place, le serveur 
 #: src/pages/settings/Tarifs.tsx
 msgid "Toutes les nuits à venir suivent les saisons et le prix de base. Pour changer un jour, touchez-le dans le calendrier."
 msgstr "Toutes les nuits à venir suivent les saisons et le prix de base. Pour changer un jour, touchez-le dans le calendrier."
+
+#: src/pages/Messages.tsx
+msgid "Toutes les origines"
+msgstr "Toutes les origines"
 
 #: src/pages/settings/ChannelPrices.tsx
 msgid "Toutes les plateformes recevront de nouveau le même prix. Les calendriers repartent tout de suite."
@@ -6805,9 +6857,10 @@ msgstr "Un instant…"
 msgid "Un lien à envoyer par SMS : elle voit les ménages des deux semaines à venir et coche « fait », sans compte ni mot de passe. Aucun nom de voyageur n'y apparaît. Un lien se coupe à tout moment."
 msgstr "Un lien à envoyer par SMS : elle voit les ménages des deux semaines à venir et coche « fait », sans compte ni mot de passe. Aucun nom de voyageur n'y apparaît. Un lien se coupe à tout moment."
 
+#. placeholder {0}: originSummary(d.messages)
 #: src/pages/Today.tsx
-msgid "un message à lire"
-msgstr "un message à lire"
+msgid "un message à lire ({0})"
+msgstr "un message à lire ({0})"
 
 #: src/pages/settings/ChannelPrices.tsx
 msgid "Un pourcentage a changé depuis le dernier envoi : renvoyez-les."
@@ -7022,10 +7075,6 @@ msgstr "Votre session a expiré. Reconnectez-vous."
 #: src/lib/derive.ts
 msgid "votre site"
 msgstr "votre site"
-
-#: src/canaux/canal.ts
-msgid "Votre site"
-msgstr "Votre site"
 
 #: src/pages/Messages.tsx
 msgid "Vous"

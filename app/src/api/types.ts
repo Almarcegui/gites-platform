@@ -249,6 +249,10 @@ export interface Message {
   guestId: number | null;
   status: "nouveau" | "traité";
   receivedAt: string;
+  /** Pièces jointes d'un mail, listées à la relève (jamais stockées) ; taille null = message coupé. */
+  attachments?: { name: string; size: number | null }[];
+  /** Mail qui se réclame de l'adresse des gîtes sans que Gmail l'atteste : à ne pas croire. */
+  spoofed?: boolean;
 }
 
 export interface GuestRegisterInfo {

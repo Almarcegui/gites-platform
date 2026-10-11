@@ -48,6 +48,9 @@ export interface EmailToQueue {
   subject: string;
   bodyText: string;
   kind: string; // 'voucher' | 'payment_link' | 'balance_reminder' | …
+  /** Réponse à un mail : garde le fil chez le destinataire (Gmail, Outlook). */
+  inReplyTo?: string | null;
+  references?: string | null;
 }
 
 /** Le transport réellement employé si l'envoi est actif, ou null (stub). */
@@ -60,6 +63,15 @@ export function emailTransport(env: Env): "smtp" | "resend" | null {
 }
 
 export async function queueEmail(db: D1Database, env: Env, e: EmailToQueue): Promise<"stub" | "sent" | "failed"> {
+  return (await queueEmailDetailed(db, env, e)).status;
+}
+
+/** Comme queueEmail, avec l'identifiant du fournisseur (le Message-ID SMTP, en <…>). */
+export async function queueEmailDetailed(
+  db: D1Database,
+  env: Env,
+  e: EmailToQueue,
+): Promise<{ status: "stub" | "sent" | "failed"; providerId: string | null }> {
   let status: "stub" | "sent" | "failed" = "stub";
   let providerId: string | null = null;
   // Sans le détail de l'échec, un voucher jamais parti était indiscernable
@@ -69,7 +81,7 @@ export async function queueEmail(db: D1Database, env: Env, e: EmailToQueue): Pro
 
   if (transport === "smtp" && env.SMTP_SEND) {
     try {
-      providerId = (await env.SMTP_SEND({ to: e.to, subject: e.subject, text: e.bodyText })).id;
+      providerId = (await env.SMTP_SEND({ to: e.to, subject: e.subject, text: e.bodyText, inReplyTo: e.inReplyTo, references: e.references })).id;
       status = "sent";
     } catch (err) {
       status = "failed";
@@ -88,6 +100,7 @@ export async function queueEmail(db: D1Database, env: Env, e: EmailToQueue): Pro
           to: [e.to],
           subject: e.subject,
           text: e.bodyText,
+          ...(e.inReplyTo ? { headers: { "In-Reply-To": e.inReplyTo, References: e.references || e.inReplyTo } } : {}),
         }),
       });
       if (res.ok) {
@@ -109,7 +122,7 @@ export async function queueEmail(db: D1Database, env: Env, e: EmailToQueue): Pro
     )
     .bind(e.bookingId ?? null, e.to, e.subject, e.bodyText, e.kind, status, providerId, errorDetail)
     .run();
-  return status;
+  return { status, providerId };
 }
 
 function quoteLinesText(lines: QuoteLine[], nl = false): string {

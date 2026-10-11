@@ -109,14 +109,29 @@ export function quotedPrintable(text) {
   return lines.join("\r\n");
 }
 
+/** Identifiants de fil (In-Reply-To, References) : des <identifiants> et rien d'autre,
+ *  repliés à la ligne tous les trois identifiants. null si la valeur est vide. */
+function threadHeader(label, value) {
+  if (value == null || String(value).trim() === "") return null;
+  const ids = String(value).trim().split(/\s+/);
+  if (!ids.every((id) => /^<[^<>\s]{1,300}>$/.test(id))) throw new Error(`SMTP : ${label} invalide`);
+  const lines = [];
+  for (let i = 0; i < ids.length; i += 3) lines.push(ids.slice(i, i + 3).join(" "));
+  return lines.join("\r\n ");
+}
+
 /** Message RFC 5322 complet, prêt pour DATA (sans le point final). */
-export function buildMessage({ from, to, subject, text, messageId, date = new Date() }) {
+export function buildMessage({ from, to, subject, text, messageId, inReplyTo, references, date = new Date() }) {
+  const inReplyToValue = threadHeader("In-Reply-To", inReplyTo);
+  const referencesValue = threadHeader("References", references || inReplyTo);
   const headers = [
     `From: ${encodeFromHeader(from)}`,
     `To: ${to}`,
     `Subject: ${encodeHeaderWord(subject)}`,
     `Date: ${date.toUTCString().replace("GMT", "+0000")}`,
     `Message-ID: ${messageId}`,
+    ...(inReplyToValue ? [`In-Reply-To: ${inReplyToValue}`] : []),
+    ...(referencesValue ? [`References: ${referencesValue}`] : []),
     "MIME-Version: 1.0",
     "Content-Type: text/plain; charset=UTF-8",
     "Content-Transfer-Encoding: quoted-printable",
@@ -188,6 +203,9 @@ export async function sendSmtp(config, mail, options = {}) {
   checkHeaderValue("le destinataire", to);
   checkHeaderValue("l'expéditeur", from);
   checkHeaderValue("l'objet", mail.subject);
+  // refus avant toute connexion : un identifiant de fil qui n'est pas un <identifiant> ne part pas
+  threadHeader("In-Reply-To", mail.inReplyTo);
+  threadHeader("References", mail.references);
   if (!/^[^\s@<>]+@[^\s@<>]+$/.test(to)) throw new Error("SMTP : adresse du destinataire invalide");
   const timeoutMs = options.timeoutMs ?? 30_000;
   // SNI : un nom d'hôte seulement (Node refuse une adresse IP comme servername)
@@ -273,7 +291,7 @@ export async function sendSmtp(config, mail, options = {}) {
     await expect([250, 251], "RCPT TO");
     send("DATA");
     await expect([354], "DATA");
-    socket.write(`${buildMessage({ from, to, subject: mail.subject, text: mail.text, messageId })}\r\n.\r\n`);
+    socket.write(`${buildMessage({ from, to, subject: mail.subject, text: mail.text, messageId, inReplyTo: mail.inReplyTo, references: mail.references })}\r\n.\r\n`);
     await expect([250], "fin du message");
     send("QUIT");
     // la réponse à QUIT n'a pas d'importance : le mail est accepté

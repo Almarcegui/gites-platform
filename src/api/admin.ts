@@ -149,7 +149,7 @@ import {
   voucherUrl,
   type QuoteBody,
 } from "../services/booking-flow";
-import { buildBalanceReminderEmail, queueEmail } from "../services/email";
+import { buildBalanceReminderEmail, queueEmail, queueEmailDetailed } from "../services/email";
 import { importElloha } from "../services/elloha-import";
 import { importAgendaGoogle, MAX_AGENDA_EVENTS } from "../services/agenda-import";
 import { replyOnChannel } from "../services/beds24-messages";
@@ -158,7 +158,8 @@ import { tarStream } from "../core/tar";
 import {
   createServiceKey, listServiceKeys, resolveServiceKey, revokeServiceKey, validServiceKeyName,
 } from "../services/service-keys";
-import { processInboundEmail, type ParsedEmail } from "../services/inbound-email";
+import { extractMessageIds, processInboundEmail, type ParsedEmail } from "../services/inbound-email";
+import { getMailboxState, mailboxConfigured, ownAddresses, pullMailbox, NO_SOCKET_MESSAGE } from "../services/mailbox";
 import { syncFeed } from "../services/ical";
 import { countDirectBookings, countSearchStages, listSearchLog } from "../services/search-log";
 import { registerLot2AdminRoutes } from "./admin-lot2";
@@ -2774,21 +2775,31 @@ export function registerAdminRoutes(router: Router): void {
    *  du client) ; doublée par email si l'envoi réel est activé (sinon stub). */
   async function sendTeamReply(
     env: Env,
-    opts: { propertyId: number; bookingId: number | null; guestId: number | null; toEmail: string | null; subject: string; body: string },
+    opts: {
+      propertyId: number; bookingId: number | null; guestId: number | null; toEmail: string | null; subject: string; body: string;
+      /** Réponse à un mail de la boîte de contact : fil Gmail conservé (In-Reply-To / References). */
+      thread?: { inReplyTo: string | null; references: string | null };
+    },
   ): Promise<{ id: number; delivery: string }> {
     const db = env.DB;
     const property = await getProperty(db, opts.propertyId);
     let delivery = "aucune";
+    let sentMessageId: string | null = null;
     if (opts.toEmail && /@/.test(opts.toEmail)) {
       // Le statut réel de l'envoi (SMTP ou Resend), et non plus une déduction
       // des variables : un échec d'envoi se voit comme tel dans le fil.
-      delivery = await queueEmail(db, env, {
+      const sent = await queueEmailDetailed(db, env, {
         bookingId: opts.bookingId,
         to: opts.toEmail,
         subject: opts.subject,
         bodyText: opts.body,
         kind: "reply",
+        inReplyTo: opts.thread?.inReplyTo ?? null,
+        references: opts.thread?.references ?? null,
       });
+      delivery = sent.status;
+      // le Message-ID SMTP (<…>) : la réponse du client, In-Reply-To, retrouvera ce fil
+      sentMessageId = sent.providerId && /^<[^<>\s]+>$/.test(sent.providerId) ? sent.providerId : null;
     }
     const id = await insertOutboundMessage(db, {
       propertyId: opts.propertyId,
@@ -2799,6 +2810,10 @@ export function registerAdminRoutes(router: Router): void {
       bookingId: opts.bookingId,
       guestId: opts.guestId,
       delivery,
+      channel: opts.thread ? "email" : "form",
+      messageId: sentMessageId,
+      inReplyTo: opts.thread?.inReplyTo ?? null,
+      references: opts.thread?.references ?? null,
     });
     await audit(db, "admin", "message.reply", `message:${id}`, { bookingId: opts.bookingId, delivery });
     return { id, delivery };
@@ -2826,16 +2841,44 @@ export function registerAdminRoutes(router: Router): void {
         throw e;
       }
     }
+    const toEmail = original.direction === "in" ? original.fromEmail : original.toEmail;
+    // Mail de la boîte de contact : on ne répond jamais à l'adresse des gîtes (boucle) ni à un
+    // expéditeur qui s'en réclame sans preuve.
+    let thread: { inReplyTo: string | null; references: string | null } | undefined;
+    if (original.channel === "email") {
+      if (original.spoofed || (toEmail && (await ownAddresses(env.DB, env)).has(toEmail.toLowerCase()))) {
+        return apiError(400, "Ce message vient de l'adresse des gîtes elle-même (ou s'en réclame sans preuve) : pas de réponse, cela écrirait aux gîtes.");
+      }
+      const parent = original.direction === "in" ? extractMessageIds(original.messageId)[0] ?? null : null;
+      const chain = [...extractMessageIds(original.refs), ...(parent ? [parent] : [])].filter((x, i, a) => a.indexOf(x) === i).slice(-20);
+      thread = { inReplyTo: parent, references: chain.length ? chain.join(" ") : null };
+    }
     const result = await sendTeamReply(env, {
       propertyId: original.propertyId ?? 1,
       bookingId: original.bookingId,
       guestId: original.guestId,
-      toEmail: original.direction === "in" ? original.fromEmail : original.toEmail,
+      toEmail,
       subject: original.subject.startsWith("Re:") ? original.subject : `Re: ${original.subject}`,
       body: text,
+      thread,
     });
     await markMessage(env.DB, id, "traité");
     return json({ ok: true, ...result });
+  }));
+
+  // Boîte de contact (IMAP) : état de la relève, et relève à la demande.
+  router.get("/api/admin/mailbox", guard(async (_req, env) => {
+    return json({
+      configured: mailboxConfigured(env),
+      supported: typeof env.IMAP_FETCH === "function",
+      note: mailboxConfigured(env) && !env.IMAP_FETCH ? NO_SOCKET_MESSAGE : null,
+      state: await getMailboxState(env.DB),
+    });
+  }));
+
+  router.post("/api/admin/mailbox/poll", guard(async (_req, env) => {
+    const result = await pullMailbox(env);
+    return json({ ok: !result.error, result });
   }));
 
   // Nouveau message à un client depuis sa réservation (fiche résa → Messages).
