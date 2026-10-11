@@ -10,6 +10,7 @@ import {
   findPaymentBySession,
   getBooking,
   getProperty,
+  hasEmailOfKinds,
   getSettings,
   incrementPromoUse,
   listPayments,
@@ -19,7 +20,9 @@ import {
   type BookingRow,
   type QuoteContext,
 } from "../db/repo";
-import { buildPaymentReceiptEmail, buildVoucherEmail, queueEmail } from "./email";
+import { buildPaymentReceiptEmail, queueEmail } from "./email";
+import { buildConfirmationEmail } from "./confirmation";
+import { buildContractPdf, contractFileName, loadContractContext } from "./contrat";
 import {
   createCheckoutSession,
   createPaymentIntent,
@@ -331,14 +334,14 @@ export async function handlePaymentSuccess(
         await incrementPromoUse(db, booking.propertyId, booking.promoCode);
       }
       await audit(db, "stripe", "booking.confirmed", `booking:${booking.id}`, { sessionId, kind: payment.kind });
-      // Un voucher qui casse ne doit jamais faire échouer le webhook : au retry,
+      // Une confirmation qui casse ne doit jamais faire échouer le webhook : au retry,
       // Stripe retomberait sur un paiement déjà 'succeeded' et sortirait sans
       // jamais réessayer l'envoi. On journalise et on laisse la résa confirmée
-      // (bouton « Renvoyer le voucher » disponible au back-office).
+      // (bouton « Renvoyer la confirmation » disponible au back-office).
       try {
-        await sendVoucher(db, env, booking.id);
+        await sendConfirmation(db, env, booking.id);
       } catch (e) {
-        await audit(db, "stripe", "voucher.error", `booking:${booking.id}`, {
+        await audit(db, "stripe", "confirmation.error", `booking:${booking.id}`, {
           sessionId,
           error: e instanceof Error ? e.message : String(e),
         });
@@ -444,20 +447,42 @@ async function sendPaymentReceipt(
   }
 }
 
-/** Génère et journalise (ou envoie, si activé) le voucher de confirmation. */
-export async function sendVoucher(db: D1Database, env: Env, bookingId: number): Promise<boolean> {
-  const booking = await getBooking(db, bookingId);
-  if (!booking || !booking.guestEmail || booking.propertyId == null) return false;
-  const property = await getProperty(db, booking.propertyId);
-  if (!property) return false;
-  const settings = await getSettings(db, booking.propertyId);
-  const email = buildVoucherEmail({ booking, property, settings, voucherUrl: voucherUrl(env, booking) });
+/** Mail de confirmation de réservation, avec le contrat de location en PDF.
+ *
+ *  C'est LE mail de confirmation : il remplace l'ancien voucher par mail
+ *  (décision du 11/10/2026), qui ne part donc plus en plus de lui. Il part
+ *  - à la confirmation par paiement (webhook Stripe, simulateur dev),
+ *  - à la vente confirmée du back-office et à la confirmation manuelle,
+ *  - sur demande, via « Renvoyer la confirmation » (`force`).
+ *  Sans `force`, il ne part qu'UNE fois par réservation : si un envoi non
+ *  échoué existe déjà au journal (kind 'confirmation', ou 'voucher' pour les
+ *  réservations d'avant), on ne renvoie rien. Rend true si un mail a été
+ *  journalisé (envoyé, ou stub), false sinon. */
+export async function sendConfirmation(
+  db: D1Database,
+  env: Env,
+  bookingId: number,
+  opts: { force?: boolean } = {},
+): Promise<boolean> {
+  const ctx = await loadContractContext(db, bookingId);
+  if (!ctx || !ctx.booking.guestEmail) return false;
+  if (!opts.force && (await hasEmailOfKinds(db, bookingId, ["confirmation", "voucher"]))) return false;
+  const filename = contractFileName(ctx.booking.reference);
+  const email = buildConfirmationEmail({
+    booking: ctx.booking,
+    property: ctx.property,
+    settings: ctx.settings,
+    voucherUrl: voucherUrl(env, ctx.booking),
+    attachmentName: filename,
+  });
   await queueEmail(db, env, {
-    bookingId: booking.id,
-    to: booking.guestEmail,
+    bookingId,
+    to: ctx.booking.guestEmail,
     subject: email.subject,
     bodyText: email.bodyText,
-    kind: "voucher",
+    bodyHtml: email.bodyHtml,
+    attachments: [{ filename, contentType: "application/pdf", content: buildContractPdf(ctx) }],
+    kind: "confirmation",
   });
   return true;
 }

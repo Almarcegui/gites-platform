@@ -54,6 +54,8 @@ import {
   type PaymentStart,
   type QuoteBody,
 } from "../services/booking-flow";
+import { realContact } from "../services/email";
+import { buildContractPdf, contractFileName, loadContractContext } from "../services/contrat";
 import { publicHealth } from "../services/health";
 import { clearHoldCookie, readHoldReference, setHoldCookie } from "../services/hold-session";
 import { buildIcs, exportSpansForUnit } from "../services/ical";
@@ -219,8 +221,7 @@ async function ownPendingHold(
  *  tunnel, ni sur le voucher, ni sur les pages légales (issue #9), qui affichent
  *  alors leur repli (« via le formulaire de contact du site »). */
 export function publicContact(value: string | null | undefined): string | null {
-  const v = (value ?? "").trim();
-  return v === "" || /^TODO_/i.test(v) ? null : v;
+  return realContact(value);
 }
 
 /** Galerie publique d'un hébergement (issue #32).
@@ -1257,6 +1258,24 @@ export function registerPublicRoutes(router: Router): void {
       kind,
       holdExpiresAt: booking.holdExpiresAt,
       now: sqlNow(),
+    });
+  });
+
+  /** Contrat de location en PDF, pour le client : même contrôle que sa page de
+   *  réservation (référence + email), et seulement une fois la réservation
+   *  confirmée (avant, ni le prix ni les parties ne sont définitifs). */
+  router.get("/api/public/bookings/:reference/contrat.pdf", async (_req, env, p, url) => {
+    const email = (url.searchParams.get("email") ?? "").trim();
+    const booking = await authedBooking(env.DB, p.reference ?? "", email);
+    if (!booking || booking.status !== "confirmed") return apiError(404, "contrat introuvable");
+    const ctx = await loadContractContext(env.DB, booking.id);
+    if (!ctx) return apiError(404, "contrat introuvable");
+    return new Response(buildContractPdf(ctx), {
+      headers: {
+        "content-type": "application/pdf",
+        "content-disposition": `inline; filename="${contractFileName(booking.reference)}"`,
+        "cache-control": "private, no-store",
+      },
     });
   });
 

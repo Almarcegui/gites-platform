@@ -107,7 +107,7 @@ describe("réservation en néerlandais", () => {
     const session = new URL(created.data.checkoutUrl as string).searchParams.get("session")!;
     expect((await call("POST", "/api/public/dev-pay/confirm", { session })).status).toBe(200);
     const mails = (await t.db.prepare("SELECT subject, body_text, kind FROM email_log WHERE to_email = 'pieter@example.be'").all<{ subject: string; body_text: string; kind: string }>()).results;
-    const voucher = mails.find((m) => m.kind === "voucher")!;
+    const voucher = mails.find((m) => m.kind === "confirmation")!;
     expect(voucher.subject).toMatch(/^Bevestiging van reservering /);
     expect(voucher.body_text).toMatch(/Uw reservering is bevestigd/);
     expect(voucher.body_text).toMatch(/De Franse versie is rechtsgeldend/);
@@ -124,7 +124,7 @@ describe("réservation en néerlandais", () => {
     expect(created.status).toBe(201);
     const session = new URL(created.data.checkoutUrl as string).searchParams.get("session")!;
     await call("POST", "/api/public/dev-pay/confirm", { session });
-    const voucher = await t.db.prepare("SELECT subject, body_text FROM email_log WHERE to_email = 'claire@example.be' AND kind = 'voucher'").first<{ subject: string; body_text: string }>();
+    const voucher = await t.db.prepare("SELECT subject, body_text FROM email_log WHERE to_email = 'claire@example.be' AND kind = 'confirmation'").first<{ subject: string; body_text: string }>();
     expect(voucher!.subject).toMatch(/^Confirmation de réservation /);
     expect(voucher!.body_text).not.toMatch(/lang=nl/);
   });

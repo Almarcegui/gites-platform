@@ -346,7 +346,7 @@ describe("admin", () => {
     const emails = fiche.data.emails as {
       kind: string; toEmail: string; status: string; createdAt: string; errorDetail: string | null;
     }[];
-    const voucher = emails.find((e) => e.kind === "voucher");
+    const voucher = emails.find((e) => e.kind === "confirmation");
     expect(voucher).toBeDefined();
     expect(voucher!.toEmail).toBe("mertens@example.com");
     // EMAILS_ENABLED=false : journalisé, donc RIEN n'est parti — la fiche doit

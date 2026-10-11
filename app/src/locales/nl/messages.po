@@ -855,6 +855,10 @@ msgid "À {0}, le {1}."
 msgstr "Om {0}, op {1}."
 
 #: src/pages/settings/Ical.tsx
+msgid "À cocher pour un agenda tenu à la main qui bloque aussi le jour du départ (du 22 au 26 = départ le 26). Airbnb, Booking et Beds24 laissent le jour du départ libre : pour eux, ne pas cocher."
+msgstr ""
+
+#: src/pages/settings/Ical.tsx
 msgid "À coller dans Airbnb (« Importer un calendrier ») ou ailleurs. Si le Domaine entier est réservé, les deux maisons y apparaissent prises."
 msgstr "Te plakken in Airbnb (« Kalender importeren ») of elders. Als het hele domein geboekt is, staan beide huizen er als bezet."
 
@@ -1775,8 +1779,8 @@ msgid "C'est fait. Compte supprimé."
 msgstr "Gedaan. Account verwijderd."
 
 #: src/booking/BookingPanel.tsx
-msgid "C'est fait. Confirmation renvoyée au client."
-msgstr "Gedaan. Bevestiging opnieuw naar de klant gestuurd."
+msgid "C'est fait. Confirmation et contrat renvoyés au client."
+msgstr "Gedaan. Bevestiging en contract opnieuw naar de klant gestuurd."
 
 #: src/booking/Register.tsx
 msgid "C'est fait. Correction enregistrée."
@@ -2521,6 +2525,18 @@ msgstr "Huurvoorwaarden"
 msgid "confirmation de réservation"
 msgstr "reserveringsbevestiging"
 
+#: src/pages/settings/Logs.tsx
+msgid "confirmation et contrat de location"
+msgstr "bevestiging en huurcontract"
+
+#: src/pages/settings/Logs.tsx
+msgid "confirmation et contrat renvoyés"
+msgstr "bevestiging en contract opnieuw verstuurd"
+
+#: src/booking/BookingPanel.tsx
+msgid "confirmation et contrat renvoyés au client"
+msgstr "bevestiging en contract opnieuw naar de klant gestuurd"
+
 #: src/booking/BookingPanel.tsx
 msgid "confirmation refusée : dates reprises entre-temps"
 msgstr "bevestiging geweigerd: data intussen ingenomen"
@@ -2585,6 +2601,18 @@ msgstr "Doorgaan"
 #: src/ui/kit.tsx
 msgid "Continuer la saisie"
 msgstr "Verder invullen"
+
+#: src/booking/BookingPanel.tsx
+msgid "Contrat de location (PDF)"
+msgstr "Huurcontract (PDF)"
+
+#: src/booking/BookingPanel.tsx
+msgid "Contrat ouvert dans un nouvel onglet."
+msgstr "Contract geopend in een nieuw tabblad."
+
+#: src/booking/BookingPanel.tsx
+msgid "Contrat PDF"
+msgstr "Contract (PDF)"
 
 #: src/pages/settings/Domain.tsx
 msgid "coordonnées"
@@ -3968,6 +3996,10 @@ msgstr "de Beds24-token mag geen accommodaties schrijven: maak een uitnodigingsc
 #: src/calendar/Weeks.tsx
 msgid "Le jour de départ"
 msgstr "De vertrekdag"
+
+#: src/pages/settings/Ical.tsx
+msgid "Le jour du départ est inclus dans ce calendrier"
+msgstr ""
 
 #: src/pages/settings/Logs.tsx
 msgid "Le journal des mails n'a pas pu être lu."
@@ -5399,6 +5431,10 @@ msgstr "Foto's ({photos}): de API aanvaardt ze niet. De lijst met adressen wordt
 #: src/booking/Register.tsx
 msgid "Pièce d'identité"
 msgstr "Identiteitsbewijs"
+
+#: src/booking/BookingPanel.tsx
+msgid "Pièce jointe :"
+msgstr "Bijlage:"
 
 #: src/pages/Reviews.tsx
 #: src/pages/settings/Channels.tsx

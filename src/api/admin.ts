@@ -144,12 +144,13 @@ import { beds24Liaison, buildPropertyPlan, createBeds24Property, CreationRefusee
 import {
   MIN_CHECKOUT_CENTS,
   quoteFromContext,
-  sendVoucher,
+  sendConfirmation,
   startCheckout,
   voucherUrl,
   type QuoteBody,
 } from "../services/booking-flow";
 import { buildBalanceReminderEmail, queueEmail } from "../services/email";
+import { buildContractPdf, contractFileName, loadContractContext } from "../services/contrat";
 import { importElloha } from "../services/elloha-import";
 import { importAgendaGoogle, MAX_AGENDA_EVENTS } from "../services/agenda-import";
 import { replyOnChannel } from "../services/beds24-messages";
@@ -1780,6 +1781,7 @@ export function registerAdminRoutes(router: Router): void {
         generatePaymentLink?: boolean; // true = créer un lien Stripe à transmettre
         paymentMode?: "deposit" | "full";
         holdMinutes?: number;          // si non confirmée : durée de l'option (défaut 72 h)
+        sendConfirmation?: boolean;    // false = ne pas envoyer le mail de confirmation (vente confirmée + email client)
       }
     >(req);
     if (!body) return apiError(400, "corps JSON attendu");
@@ -1842,8 +1844,19 @@ export function registerAdminRoutes(router: Router): void {
       const res = await startCheckout(db, env, booking, full ? "full" : "deposit", amountDue, "admin");
       paymentUrl = res.url;
     }
+    // Vente confirmée avec une adresse e-mail : le client reçoit sa confirmation et
+    // son contrat de location, comme après un paiement en ligne. Une erreur ici
+    // ne défait pas la vente (bouton « Renvoyer la confirmation » sur la fiche).
+    let confirmationQueued = false;
+    if (confirmNow && email && body.sendConfirmation !== false) {
+      try {
+        confirmationQueued = await sendConfirmation(db, env, created.id);
+      } catch (e) {
+        await audit(db, "admin", "confirmation.error", `booking:${created.id}`, { error: e instanceof Error ? e.message : String(e) });
+      }
+    }
     const booking = await getBooking(db, created.id);
-    return json({ booking, paymentUrl }, 201);
+    return json({ booking, paymentUrl, confirmationQueued }, 201);
   }));
 
   router.post("/api/admin/bookings/:id/cancel", guard(async (req, env, p, _url, execCtx) => {
@@ -1860,7 +1873,7 @@ export function registerAdminRoutes(router: Router): void {
 
   router.post("/api/admin/bookings/:id/confirm", guard(async (req, env, p) => {
     const id = intParam(p.id, 0);
-    const body = await readJson<{ sendVoucher?: boolean }>(req);
+    const body = await readJson<{ sendVoucher?: boolean; sendConfirmation?: boolean }>(req);
     const outcome = await confirmBookingAtomic(env.DB, id);
     if (outcome === "conflict") {
       await audit(env.DB, "admin", "booking.confirm_conflict", `booking:${id}`);
@@ -1868,9 +1881,10 @@ export function registerAdminRoutes(router: Router): void {
     }
     if (outcome !== "confirmed") return apiError(409, "cette réservation n'est pas en attente");
     await audit(env.DB, "admin", "booking.confirm_manual", `booking:${id}`);
+    // `sendVoucher` : ancien nom du drapeau, gardé pour les scripts existants.
     let voucherQueued = false;
-    if (body?.sendVoucher) voucherQueued = await sendVoucher(env.DB, env, id);
-    return json({ ok: true, voucherQueued });
+    if (body?.sendVoucher || body?.sendConfirmation) voucherQueued = await sendConfirmation(env.DB, env, id);
+    return json({ ok: true, voucherQueued, confirmationQueued: voucherQueued });
   }));
 
   router.post("/api/admin/bookings/:id/payments", guard(async (req, env, p) => {
@@ -1949,12 +1963,31 @@ export function registerAdminRoutes(router: Router): void {
     return json({ ok: true, balanceCents: balance, payUrl });
   }));
 
-  router.post("/api/admin/bookings/:id/resend-voucher", guard(async (_req, env, p) => {
+  /** Renvoie la confirmation (mail soigné + contrat PDF en pièce jointe). L'URL
+   *  `resend-voucher` est l'ancien nom, gardé pour les scripts et le back-office
+   *  d'avant. */
+  const resendConfirmation = guard(async (req, env, p) => {
     const id = intParam(p.id, 0);
-    const queued = await sendVoucher(env.DB, env, id);
+    const queued = await sendConfirmation(env.DB, env, id, { force: true });
     if (!queued) return apiError(400, "pas d'email client sur cette réservation");
-    await audit(env.DB, "admin", "email.voucher_resent", `booking:${id}`);
+    await audit(env.DB, "admin", "email.confirmation_resent", `booking:${id}`, { par: currentUser(req) });
     return json({ ok: true });
+  });
+  router.post("/api/admin/bookings/:id/resend-confirmation", resendConfirmation);
+  router.post("/api/admin/bookings/:id/resend-voucher", resendConfirmation);
+
+  /** Contrat de location en PDF (toute réservation, y compris pour le relire avant envoi). */
+  router.get("/api/admin/bookings/:id/contrat.pdf", guard(async (_req, env, p) => {
+    const id = intParam(p.id, 0);
+    const ctx = await loadContractContext(env.DB, id);
+    if (!ctx) return apiError(404, "réservation inconnue");
+    return new Response(buildContractPdf(ctx), {
+      headers: {
+        "content-type": "application/pdf",
+        "content-disposition": `inline; filename="${contractFileName(ctx.booking.reference)}"`,
+        "cache-control": "private, no-store",
+      },
+    });
   }));
 
   /** Modifier une réservation SANS annuler-recréer (issue #73).
