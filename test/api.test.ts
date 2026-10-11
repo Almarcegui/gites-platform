@@ -395,7 +395,7 @@ describe("admin", () => {
     const nu: Env = { ...env, ADMIN_TOKEN: undefined };
     expect((await call("POST", "/api/admin/login", { user: "secours", password: "x" }, {}, nu)).status).toBe(401);
     // et le compte initial de 0027 ouvre avec son mot de passe provisoire
-    expect((await call("POST", "/api/admin/login", { user: "julien", password: "gites-2026" }, {}, nu)).status).toBe(200);
+    expect((await call("POST", "/api/admin/login", { user: "julien", password: "premore-2026" }, {}, nu)).status).toBe(200) // migration 0033;
   });
 
   it("comptes en base : création → login avec session → reset/désactivation coupent tout", async () => {
