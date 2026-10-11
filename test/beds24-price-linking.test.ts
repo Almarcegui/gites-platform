@@ -145,7 +145,8 @@ describe("prix dérivés contre le faux Beds24", () => {
     expect(r.status).toBe(502);
     expect(r.data.error).toContain("price linking not allowed on this room");
     expect(r.data.error).not.toContain('"échec"');
-    expect(r.data.beds24).toEqual([{ success: false, modified: { id: PROP }, warnings: [{ action: "modify", field: "priceRules", message: "price linking not allowed on this room" }] }]);
+    const brutMotif = JSON.stringify({ action: "modify", field: "priceRules", message: "price linking not allowed on this room" });
+    expect(r.data.beds24).toEqual([{ success: false, modified: { id: PROP }, warnings: [{ action: "modify", field: "priceRules", message: "price linking not allowed on this room", raw: brutMotif }] }]);
     expect(r.data.journal.find((j: { etape: string }) => j.etape === "envoi").envoi[0].id).toBe(PROP);
     faux.refuser = () => ({ success: false });
     const bare = await api("POST", "/api/admin/channels/price-linking", { enabled: true });
@@ -160,11 +161,21 @@ describe("prix dérivés contre le faux Beds24", () => {
     const r = await api("POST", "/api/admin/channels/price-linking", { enabled: true });
     expect(r.data.error).toContain("priceRules : texte exact de Beds24");
     expect(r.data.error).toContain("type=x");
-    expect(r.data.beds24[0].warnings[0]).toEqual({ type: "x", field: "priceRules", message: "texte exact de Beds24", priceId: 1 });
+    expect(r.data.beds24[0].warnings[0]).toEqual({ type: "x", field: "priceRules", message: "texte exact de Beds24", priceId: 1, raw: JSON.stringify({ type: "x", field: "priceRules", message: "texte exact de Beds24", priceId: 1, nested: { a: 1 } }) });
     faux.refuser = () => ({ success: false, modified: {}, warnings: [{ reason: "linked rate unsupported", code2: 42 }, {}] });
     const autre = await api("POST", "/api/admin/channels/price-linking", { enabled: true });
     expect(autre.data.error).toContain("reason=linked rate unsupported, code2=42");
     expect(autre.data.error).toContain("{} (Beds24 n'a rien dit)");
+  });
+
+  it("avertissement aux seules clés imbriquées : le JSON brut remonte ; {} reste « n'a rien dit »", async () => {
+    faux.refuser = () => ({ success: false, modified: {}, warnings: [{ detail: { field: "priceRules", message: "x" } }] });
+    const r = await api("POST", "/api/admin/channels/price-linking", { enabled: true });
+    expect(r.data.error).toContain('{} — brut : {"detail":{"field":"priceRules","message":"x"}}');
+    expect(r.data.error).not.toContain("n'a rien dit");
+    faux.refuser = () => ({ success: false, modified: {}, warnings: [{}] });
+    const vide = await api("POST", "/api/admin/channels/price-linking", { enabled: true });
+    expect(vide.data.error).toContain("{} (Beds24 n'a rien dit)");
   });
 
   it("refus de forme (schéma) : le champ et le message de Beds24 remontent", async () => {
