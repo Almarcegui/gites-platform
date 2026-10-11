@@ -261,7 +261,10 @@ describe("les clés ne ressortent jamais", () => {
     expect(res.status).toBe(200);
     for (const secret of [P1.sk, P1.pk, P1.wh]) expect(res.text).not.toContain(secret);
     const p1 = (res.data.properties as Record<string, any>[]).find((p) => p.propertyId === 1)!;
-    expect(p1.secret).toMatchObject({ set: true, hint: "…0001" });
+    expect(p1.secret).toMatchObject({ set: true, hint: null });
+    expect(p1.webhook.hint).toBeNull();
+    // Aucune portion des secrets (seule la clé publiable, publique, montre ses 4 derniers caractères).
+    expect(res.text).not.toMatch(/sk_|whsec_/);
     expect(p1.webhookPath).toBe("/api/webhooks/stripe/1");
     expect(p1.effective).toBe("property");
     expect(res.data.baseUrl).toBe("http://test.local");
@@ -371,5 +374,28 @@ describe("export CSV", () => {
     });
     expect(csv).toContain(";-12,00;");
     expect(csv).toContain("'=HYPERLINK(1)");
+  });
+});
+
+describe("sauvegardes sans secrets, et route historique cloisonnée", () => {
+  it("export.sql ne contient ni la clé secrète ni le secret du webhook", async () => {
+    await setKeys(1, P1);
+    const res = await call("GET", "/api/admin/export.sql");
+    expect(res.status).toBe(200);
+    const sql = String(res.data.raw ?? res.text);
+    expect(sql).toContain("property_stripe");
+    expect(sql).not.toContain(P1.sk);
+    expect(sql).not.toContain(P1.wh);
+  });
+
+  it("la route historique (secret d'environnement) ne confirme pas le paiement d'une propriété qui a ses clés", async () => {
+    await setKeys(1, P1);
+    const withEnv = { ...env, STRIPE_SECRET_KEY: ENV_KEYS.sk, STRIPE_PUBLISHABLE_KEY: ENV_KEYS.pk, STRIPE_WEBHOOK_SECRET: ENV_KEYS.wh } as Env;
+    const a = await book(2, { env: withEnv }); // propriété 1 : ses propres clés
+    expect(await webhook("/api/webhooks/stripe", succeeded("pi_prop_1"), ENV_KEYS.wh, { env: withEnv })).toBe(200);
+    const row = (await call("GET", `/api/public/bookings/${String(a.data.reference)}?email=${encodeURIComponent(GUEST.email)}`)).data.booking as Record<string, unknown>;
+    expect(row.status).toBe("pending");
+    const audit = await db.prepare("SELECT action FROM audit_log WHERE action = 'webhook.property_mismatch'").all();
+    expect(audit.results).toHaveLength(1);
   });
 });

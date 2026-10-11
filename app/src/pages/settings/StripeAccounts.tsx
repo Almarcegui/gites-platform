@@ -37,7 +37,7 @@ function StateLine({ label, k }: { label: string; k: StripeKeyState }) {
   return (
     <li>
       <b>{label}</b>{" : "}
-      {k.set ? t`posée le ${sqlWhen(k.setAt)} (${k.hint ?? ""})` : t`pas posée`}
+      {k.set ? (k.hint ? t`posée le ${sqlWhen(k.setAt)} (${k.hint})` : t`posée le ${sqlWhen(k.setAt)}`) : t`pas posée`}
     </li>
   );
 }

@@ -14,7 +14,7 @@ const STRIPE = {
   events: ["checkout.session.completed", "payment_intent.succeeded"],
   envFallback: { secret: false, publishable: false, webhook: false, mode: null },
   properties: [
-    { propertyId: 1, name: "Les Gîtes du Pré Moré", slug: "pre-more", mode: "test", accountLabel: null, secret: { set: true, setAt: "2026-10-11 09:00:00", hint: "…0001" }, publishable: KEY, webhook: KEY, effective: "property", webhookPath: "/api/webhooks/stripe/1", updatedBy: "julien", updatedAt: "2026-10-11 09:00:00" },
+    { propertyId: 1, name: "Les Gîtes du Pré Moré", slug: "pre-more", mode: "test", accountLabel: null, secret: { set: true, setAt: "2026-10-11 09:00:00", hint: null }, publishable: KEY, webhook: KEY, effective: "property", webhookPath: "/api/webhooks/stripe/1", updatedBy: "julien", updatedAt: "2026-10-11 09:00:00" },
     { propertyId: 2, name: "Le Moulin de Braives", slug: "moulin-braives", mode: "test", accountLabel: null, secret: KEY, publishable: KEY, webhook: KEY, effective: "none", webhookPath: "/api/webhooks/stripe/2", updatedBy: null, updatedAt: null },
   ],
 };
@@ -38,8 +38,8 @@ describe("Comptes Stripe", () => {
     expect(screen.getByRole("heading", { name: "Le Moulin de Braives" })).toBeInTheDocument();
     expect(screen.getByTestId("webhook-url-1")).toHaveTextContent("https://reservations.example/api/webhooks/stripe/1");
     expect(screen.getByTestId("webhook-url-2")).toHaveTextContent("https://reservations.example/api/webhooks/stripe/2");
-    // La clé posée n'est reconnaissable que par ses quatre derniers caractères.
-    expect(screen.getByText(/\(…0001\)/)).toBeInTheDocument();
+    // La clé posée ne se reconnaît qu'à sa date : aucun caractère de la clé n'est montré.
+    expect(screen.getByText(/posée le 11\/10\/2026/)).toBeInTheDocument();
     expect(screen.getAllByText("checkout.session.completed").length).toBe(2);
     expect(document.body.textContent).not.toMatch(/sk_(test|live)_[A-Za-z0-9]{6,}/);
   });

@@ -10,7 +10,9 @@
 //
 // Stockage : EN CLAIR (aucun mécanisme de chiffrement au repos dans le projet,
 // cf. migration 0030). Les clés ne sortent jamais par l'API : `propertyStripeView`
-// ne rend que des indicateurs (posée ou non, date, quatre derniers caractères).
+// ne rend que des indicateurs (posée ou non, date) ; seule la clé publiable, publique
+// par nature, montre ses quatre derniers caractères. Les sauvegardes (export SQL et
+// SQLite) en omettent les secrets.
 
 import { modeOfSecretKey, stripeConfigFromEnv, type StripeConfig } from "./stripe";
 
@@ -214,9 +216,10 @@ export function propertyStripeView(propertyId: number, row: PropertyStripeRow | 
     propertyId,
     mode: row?.mode ?? "test",
     accountLabel: row?.accountLabel ?? null,
-    secret: { set: !!row?.secretKey, setAt: row?.secretSetAt ?? null, hint: hint(row?.secretKey ?? null) },
+    // Clé secrète et secret de webhook : présence et date seulement, aucun caractère.
+    secret: { set: !!row?.secretKey, setAt: row?.secretSetAt ?? null, hint: null },
     publishable: { set: !!row?.publishableKey, setAt: row?.publishableSetAt ?? null, hint: hint(row?.publishableKey ?? null) },
-    webhook: { set: !!row?.webhookSecret, setAt: row?.webhookSetAt ?? null, hint: hint(row?.webhookSecret ?? null) },
+    webhook: { set: !!row?.webhookSecret, setAt: row?.webhookSetAt ?? null, hint: null },
     effective,
     webhookPath: `/api/webhooks/stripe/${propertyId}`,
     updatedBy: row?.updatedBy ?? null,

@@ -13,13 +13,14 @@
 // `webhook.property_mismatch` et ignoré).
 //
 // L'ancienne route `/api/webhooks/stripe` (sans identifiant) est conservée pour
-// le repli sur les variables d'environnement : elle vérifie STRIPE_WEBHOOK_SECRET.
+// le repli sur les variables d'environnement : elle vérifie STRIPE_WEBHOOK_SECRET
+// et ne s'applique qu'aux paiements d'une propriété SANS clés propres.
 
 import { audit, EXPIRED_SESSION_NOTE, findPaymentBySession, markPaymentStatus } from "../db/repo";
 import { handlePaymentFailure, handlePaymentSuccess } from "./booking-flow";
 import { setPaymentFees } from "./encaissements";
 import { fetchPaymentFees, type StripeConfig } from "./stripe";
-import { propertyIdOfPayment } from "./stripe-config";
+import { propertyIdOfPayment, resolveStripeConfig } from "./stripe-config";
 
 type StripeEvent = { type?: string; data?: { object?: Record<string, unknown> } };
 
@@ -58,13 +59,19 @@ export async function processStripeEvent(
 
   // Le paiement visé appartient-il à la propriété de la route ?
   const belongs = async (ref: string): Promise<boolean> => {
-    if (routePropertyId == null) return true; // route historique (repli env)
     const payment = await findPaymentBySession(db, ref);
     if (!payment) return true; // inconnu : traité plus bas comme « unmatched »
     const owner = await propertyIdOfPayment(db, payment.id);
-    if (owner === routePropertyId) return true;
+    if (routePropertyId == null) {
+      // Route historique, signée avec le secret d'ENVIRONNEMENT : elle ne vaut que
+      // pour une propriété qui encaisse avec le repli. Une propriété qui a ses
+      // propres clés a sa propre route ; le secret d'environnement ne la concerne pas.
+      if ((await resolveStripeConfig(db, env, owner)).source !== "property") return true;
+    } else if (owner === routePropertyId) {
+      return true;
+    }
     await audit(db, "stripe", "webhook.property_mismatch", `payment:${payment.id}`, {
-      route: routePropertyId, owner, type: event.type ?? null,
+      route: routePropertyId ?? "env", owner, type: event.type ?? null,
     });
     return false;
   };

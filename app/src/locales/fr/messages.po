@@ -5578,7 +5578,12 @@ msgid "Plus"
 msgstr "Plus"
 
 #. placeholder {0}: sqlWhen(k.setAt)
-#. placeholder {1}: k.hint ?? ""
+#: src/pages/settings/StripeAccounts.tsx
+msgid "posée le {0}"
+msgstr "posée le {0}"
+
+#. placeholder {0}: sqlWhen(k.setAt)
+#. placeholder {1}: k.hint
 #: src/pages/settings/StripeAccounts.tsx
 msgid "posée le {0} ({1})"
 msgstr "posée le {0} ({1})"
