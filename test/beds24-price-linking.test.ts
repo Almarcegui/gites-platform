@@ -171,7 +171,7 @@ describe("prix dérivés contre le faux Beds24", () => {
   });
 
   it("les lignes vierges que Beds24 crée d'office (2 à 16, sans nom ni lien ni canal) sont libres", async () => {
-    faux.seed(PROP, [SCIEUR, SCIERIE], [DEFAULT_RULE_1, { id: 2, name: "" }, { id: 3 }, { id: 4, name: "", channels: { booking: { enabled: false } } }]);
+    faux.seed(PROP, [SCIEUR, SCIERIE], [DEFAULT_RULE_1, { id: 2, name: "" }, { id: 3 }, { id: 4, name: " ", channels: { booking: { enabled: false } }, bookingPage: { direct: true } }]);
     const r = await api("POST", "/api/admin/channels/price-linking", { enabled: true });
     expect(r.status).toBe(200);
     expect(faux.rules(SCIEUR).filter((x) => x.priceLinking).map((x) => x.id)).toEqual([2, 3, 4]);
