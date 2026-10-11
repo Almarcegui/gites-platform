@@ -144,12 +144,13 @@ import { beds24Liaison, buildPropertyPlan, createBeds24Property, CreationRefusee
 import {
   MIN_CHECKOUT_CENTS,
   quoteFromContext,
-  sendVoucher,
+  sendConfirmation,
   startCheckout,
   voucherUrl,
   type QuoteBody,
 } from "../services/booking-flow";
-import { buildBalanceReminderEmail, queueEmail } from "../services/email";
+import { buildBalanceReminderEmail, buildPaymentLinkEmail, queueEmail } from "../services/email";
+import { buildContractPdf, contractFileName, loadContractContext } from "../services/contrat";
 import { importElloha } from "../services/elloha-import";
 import { importAgendaGoogle, MAX_AGENDA_EVENTS } from "../services/agenda-import";
 import { replyOnChannel } from "../services/beds24-messages";
@@ -163,6 +164,7 @@ import { syncFeed } from "../services/ical";
 import { countDirectBookings, countSearchStages, listSearchLog } from "../services/search-log";
 import { registerLot2AdminRoutes } from "./admin-lot2";
 import { PriceLinkingError, registerLot3AdminRoutes, sendPriceLinking } from "./admin-lot3";
+import { registerStripeAdminRoutes } from "./admin-stripe";
 
 // --- garde d'authentification -------------------------------------------------
 
@@ -580,6 +582,7 @@ export function registerAdminRoutes(router: Router): void {
   registerLot2AdminRoutes(router);
   // Lot 3 : promotions Airbnb, prix dérivés par canal, avis (src/api/admin-lot3.ts).
   registerLot3AdminRoutes(router);
+  registerStripeAdminRoutes(router);
 
   // --- connexion --------------------------------------------------------------
   // SEULE route /api/admin/* volontairement HORS guard : elle sert à obtenir
@@ -1774,9 +1777,9 @@ export function registerAdminRoutes(router: Router): void {
     const db = env.DB;
     const body = await readJson<
       QuoteBody & {
-        guest?: { firstName?: string; lastName?: string; email?: string; phone?: string; address?: string; country?: string };
+        guest?: { firstName?: string; lastName?: string; email?: string; phone?: string; address?: string; country?: string; lang?: string };
         internalNotes?: string;
-        confirmNow?: boolean;          // true = confirmée d'office (paiement hors ligne)
+        confirmNow?: boolean;          // ignoré depuis le 11/10/2026 : une vente du back-office crée toujours une option
         generatePaymentLink?: boolean; // true = créer un lien Stripe à transmettre
         paymentMode?: "deposit" | "full";
         holdMinutes?: number;          // si non confirmée : durée de l'option (défaut 72 h)
@@ -1808,11 +1811,15 @@ export function registerAdminRoutes(router: Router): void {
       phone: String(body.guest?.phone ?? "").trim() || null,
       address: String(body.guest?.address ?? "").trim() || null,
       country: String(body.guest?.country ?? "").trim() || null,
+      lang: body.guest?.lang === "nl" ? "nl" : undefined,
     });
 
     const full = body.paymentMode === "full" || quote.balanceDueDate === null;
     const amountDue = full ? quote.totalCents : quote.depositCents;
-    const confirmNow = body.confirmNow !== false; // défaut : confirmée (vente téléphone)
+    // Décision de Julien (11/10/2026) : pas de vente « confirmée » au back-office.
+    // La vente crée une OPTION ; le client reçoit un lien vers la page de sa
+    // réservation, y accepte les CGV, paie les arrhes, puis reçoit la
+    // confirmation avec le contrat (handlePaymentSuccess). `confirmNow` est ignoré.
 
     const created = await createBookingAtomic(db, {
       unitId: ctx.unit.id,
@@ -1820,7 +1827,7 @@ export function registerAdminRoutes(router: Router): void {
       checkout: String(body.checkout),
       adults,
       children,
-      status: confirmNow ? "confirmed" : "pending",
+      status: "pending",
       holdMinutes: intParam(String(body.holdMinutes ?? ""), 72 * 60),
       source: "manual",
       guestId,
@@ -1833,7 +1840,7 @@ export function registerAdminRoutes(router: Router): void {
       internalNotes: String(body.internalNotes ?? "").trim() || null,
     });
     if (!created.ok) return apiError(409, "créneau indisponible (conflit avec une autre réservation)");
-    await audit(db, "admin", "booking.create_manual", `booking:${created.id}`, { reference: created.reference, confirmNow });
+    await audit(db, "admin", "booking.create_manual", `booking:${created.id}`, { reference: created.reference });
     triggerBeds24Push(db, env, execCtx, ctx.unit.propertyId);
 
     let paymentUrl: string | null = null;
@@ -1842,8 +1849,29 @@ export function registerAdminRoutes(router: Router): void {
       const res = await startCheckout(db, env, booking, full ? "full" : "deposit", amountDue, "admin");
       paymentUrl = res.url;
     }
+    // L'option part vers le client : mail `payment_link` (le gabarit existant) dont
+    // le lien est la page de SA réservation (voucher), où il accepte les CGV et
+    // paie les arrhes. Une erreur d'envoi ne défait pas la vente : le lien reste
+    // dans la réponse, à transmettre à la main.
+    let optionUrl: string | null = null;
+    let optionMailQueued = false;
     const booking = await getBooking(db, created.id);
-    return json({ booking, paymentUrl }, 201);
+    if (booking) {
+      optionUrl = voucherUrl(env, booking);
+      if (email) {
+        try {
+          const property = booking.propertyId != null ? await getProperty(db, booking.propertyId) : null;
+          if (property) {
+            const mail = buildPaymentLinkEmail(booking, property, full ? "Paiement intégral" : "Arrhes", amountDue, optionUrl, { holdUntil: booking.holdExpiresAt });
+            await queueEmail(db, env, { bookingId: booking.id, to: email, subject: mail.subject, bodyText: mail.bodyText, kind: "payment_link" });
+            optionMailQueued = true;
+          }
+        } catch (e) {
+          await audit(db, "admin", "option_mail.error", `booking:${created.id}`, { error: e instanceof Error ? e.message : String(e) });
+        }
+      }
+    }
+    return json({ booking, paymentUrl, optionUrl, optionMailQueued }, 201);
   }));
 
   router.post("/api/admin/bookings/:id/cancel", guard(async (req, env, p, _url, execCtx) => {
@@ -1860,7 +1888,7 @@ export function registerAdminRoutes(router: Router): void {
 
   router.post("/api/admin/bookings/:id/confirm", guard(async (req, env, p) => {
     const id = intParam(p.id, 0);
-    const body = await readJson<{ sendVoucher?: boolean }>(req);
+    const body = await readJson<{ sendVoucher?: boolean; sendConfirmation?: boolean }>(req);
     const outcome = await confirmBookingAtomic(env.DB, id);
     if (outcome === "conflict") {
       await audit(env.DB, "admin", "booking.confirm_conflict", `booking:${id}`);
@@ -1868,9 +1896,10 @@ export function registerAdminRoutes(router: Router): void {
     }
     if (outcome !== "confirmed") return apiError(409, "cette réservation n'est pas en attente");
     await audit(env.DB, "admin", "booking.confirm_manual", `booking:${id}`);
+    // `sendVoucher` : ancien nom du drapeau, gardé pour les scripts existants.
     let voucherQueued = false;
-    if (body?.sendVoucher) voucherQueued = await sendVoucher(env.DB, env, id);
-    return json({ ok: true, voucherQueued });
+    if (body?.sendVoucher || body?.sendConfirmation) voucherQueued = await sendConfirmation(env.DB, env, id);
+    return json({ ok: true, voucherQueued, confirmationQueued: voucherQueued });
   }));
 
   router.post("/api/admin/bookings/:id/payments", guard(async (req, env, p) => {
@@ -1949,12 +1978,31 @@ export function registerAdminRoutes(router: Router): void {
     return json({ ok: true, balanceCents: balance, payUrl });
   }));
 
-  router.post("/api/admin/bookings/:id/resend-voucher", guard(async (_req, env, p) => {
+  /** Renvoie la confirmation (mail soigné + contrat PDF en pièce jointe). L'URL
+   *  `resend-voucher` est l'ancien nom, gardé pour les scripts et le back-office
+   *  d'avant. */
+  const resendConfirmation = guard(async (req, env, p) => {
     const id = intParam(p.id, 0);
-    const queued = await sendVoucher(env.DB, env, id);
+    const queued = await sendConfirmation(env.DB, env, id, { force: true });
     if (!queued) return apiError(400, "pas d'email client sur cette réservation");
-    await audit(env.DB, "admin", "email.voucher_resent", `booking:${id}`);
+    await audit(env.DB, "admin", "email.confirmation_resent", `booking:${id}`, { par: currentUser(req) });
     return json({ ok: true });
+  });
+  router.post("/api/admin/bookings/:id/resend-confirmation", resendConfirmation);
+  router.post("/api/admin/bookings/:id/resend-voucher", resendConfirmation);
+
+  /** Contrat de location en PDF (toute réservation, y compris pour le relire avant envoi). */
+  router.get("/api/admin/bookings/:id/contrat.pdf", guard(async (_req, env, p) => {
+    const id = intParam(p.id, 0);
+    const ctx = await loadContractContext(env.DB, id);
+    if (!ctx) return apiError(404, "réservation inconnue");
+    return new Response(buildContractPdf(ctx), {
+      headers: {
+        "content-type": "application/pdf",
+        "content-disposition": `inline; filename="${contractFileName(ctx.booking.reference)}"`,
+        "cache-control": "private, no-store",
+      },
+    });
   }));
 
   /** Modifier une réservation SANS annuler-recréer (issue #73).
@@ -1979,7 +2027,7 @@ export function registerAdminRoutes(router: Router): void {
     const id = intParam(p.id, 0);
     const body = await readJson<{
       internalNotes?: string;
-      guest?: { firstName?: string; lastName?: string; email?: string; phone?: string; address?: string; country?: string };
+      guest?: { firstName?: string; lastName?: string; email?: string; phone?: string; address?: string; country?: string; lang?: string };
       unitId?: number;
       checkin?: string;
       checkout?: string;

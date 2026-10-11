@@ -6,6 +6,8 @@ interface Env {
   EMAILS_ENABLED?: string;
   // Secrets (.dev.vars en local, wrangler secret en prod) — tous optionnels :
   // absents = mode stub (paiement simulé, emails journalisés uniquement).
+  // Clés Stripe de REPLI : un compte Stripe par propriété (table property_stripe,
+  // Réglages > Comptes Stripe). Ces variables ne servent qu'aux propriétés sans clés propres.
   STRIPE_SECRET_KEY?: string;
   /** Clé publique Stripe (pk_test_… / pk_live_…) — confiée au navigateur pour
    *  monter le Payment Element. Absente = repli sur Checkout hébergé. */
@@ -42,7 +44,13 @@ interface Env {
   MAIL_FROM?: string;
   /** Transport SMTP injecté par node/server.mjs (node:net/node:tls, absent sur
    *  Workers, dont le runtime n'ouvre pas de socket SMTP sortante). */
-  SMTP_SEND?: (mail: { to: string; subject: string; text: string }) => Promise<{ id: string }>;
+  SMTP_SEND?: (mail: {
+    to: string;
+    subject: string;
+    text: string;
+    html?: string;
+    attachments?: { filename: string; contentType: string; content: Uint8Array }[];
+  }) => Promise<{ id: string }>;
   /** Instantané complet de la base SQLite (VACUUM INTO), injecté par
    *  node/server.mjs ; absent sur Workers (export SQL à la place). */
   SQLITE_SNAPSHOT?: () => Promise<Uint8Array>;

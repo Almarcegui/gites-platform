@@ -851,6 +851,10 @@ msgid "À {0}, le {1}."
 msgstr "À {0}, le {1}."
 
 #: src/pages/settings/Ical.tsx
+msgid "À cocher pour un agenda tenu à la main qui bloque aussi le jour du départ (du 22 au 26 = départ le 26). Airbnb, Booking et Beds24 laissent le jour du départ libre : pour eux, ne pas cocher."
+msgstr "À cocher pour un agenda tenu à la main qui bloque aussi le jour du départ (du 22 au 26 = départ le 26). Airbnb, Booking et Beds24 laissent le jour du départ libre : pour eux, ne pas cocher."
+
+#: src/pages/settings/Ical.tsx
 msgid "À coller dans Airbnb (« Importer un calendrier ») ou ailleurs. Si le Domaine entier est réservé, les deux maisons y apparaissent prises."
 msgstr "À coller dans Airbnb (« Importer un calendrier ») ou ailleurs. Si le Domaine entier est réservé, les deux maisons y apparaissent prises."
 
@@ -1771,8 +1775,8 @@ msgid "C'est fait. Compte supprimé."
 msgstr "C'est fait. Compte supprimé."
 
 #: src/booking/BookingPanel.tsx
-msgid "C'est fait. Confirmation renvoyée au client."
-msgstr "C'est fait. Confirmation renvoyée au client."
+msgid "C'est fait. Confirmation et contrat renvoyés au client."
+msgstr "C'est fait. Confirmation et contrat renvoyés au client."
 
 #: src/booking/Register.tsx
 msgid "C'est fait. Correction enregistrée."
@@ -2517,6 +2521,18 @@ msgstr "Conditions de location"
 msgid "confirmation de réservation"
 msgstr "confirmation de réservation"
 
+#: src/pages/settings/Logs.tsx
+msgid "confirmation et contrat de location"
+msgstr "confirmation et contrat de location"
+
+#: src/pages/settings/Logs.tsx
+msgid "confirmation et contrat renvoyés"
+msgstr "confirmation et contrat renvoyés"
+
+#: src/booking/BookingPanel.tsx
+msgid "confirmation et contrat renvoyés au client"
+msgstr "confirmation et contrat renvoyés au client"
+
 #: src/booking/BookingPanel.tsx
 msgid "confirmation refusée : dates reprises entre-temps"
 msgstr "confirmation refusée : dates reprises entre-temps"
@@ -2538,10 +2554,6 @@ msgstr "confirmée"
 #: src/lib/derive.ts
 msgid "Confirmée et payée"
 msgstr "Confirmée et payée"
-
-#: src/sale/SaleFlow.tsx
-msgid "Confirmée sans attendre les arrhes"
-msgstr "Confirmée sans attendre les arrhes"
 
 #: src/pages/Bookings.tsx
 msgid "Confirmées"
@@ -2581,6 +2593,18 @@ msgstr "Continuer"
 #: src/ui/kit.tsx
 msgid "Continuer la saisie"
 msgstr "Continuer la saisie"
+
+#: src/booking/BookingPanel.tsx
+msgid "Contrat de location (PDF)"
+msgstr "Contrat de location (PDF)"
+
+#: src/booking/BookingPanel.tsx
+msgid "Contrat ouvert dans un nouvel onglet."
+msgstr "Contrat ouvert dans un nouvel onglet."
+
+#: src/booking/BookingPanel.tsx
+msgid "Contrat PDF"
+msgstr "Contrat PDF"
 
 #: src/pages/settings/Domain.tsx
 msgid "coordonnées"
@@ -3824,16 +3848,6 @@ msgid "La réponse part sur {0}, dans la conversation du voyageur (par Beds24)."
 msgstr "La réponse part sur {0}, dans la conversation du voyageur (par Beds24)."
 
 #. placeholder {0}: errorText(e)
-#: src/sale/SaleFlow.tsx
-msgid "La réservation est enregistrée, mais le lien de paiement n'a pas pu être créé : {0} Créez-le depuis la fiche."
-msgstr "La réservation est enregistrée, mais le lien de paiement n'a pas pu être créé : {0} Créez-le depuis la fiche."
-
-#. placeholder {0}: errorText(e)
-#: src/sale/SaleFlow.tsx
-msgid "La réservation est enregistrée, mais le paiement n'a pas été noté : {0} Notez-le dans la fiche."
-msgstr "La réservation est enregistrée, mais le paiement n'a pas été noté : {0} Notez-le dans la fiche."
-
-#. placeholder {0}: errorText(e)
 #: src/pages/settings/Tarifs.tsx
 msgid "La saison a été créée mais ses prix n'ont pas tous été enregistrés ({0}). Ouvrez-la pour vérifier."
 msgstr "La saison a été créée mais ses prix n'ont pas tous été enregistrés ({0}). Ouvrez-la pour vérifier."
@@ -3890,11 +3904,6 @@ msgstr "Le calendrier ne sera plus lu. Les réservations déjà reprises restent
 #: src/canaux/canal.ts
 msgid "le canal"
 msgstr "le canal"
-
-#. placeholder {0}: q ? eur(q.totalCents) : ""
-#: src/sale/SaleFlow.tsx
-msgid "Le client a déjà payé le total ({0}) : le noter comme reçu"
-msgstr "Le client a déjà payé le total ({0}) : le noter comme reçu"
 
 #. placeholder {0}: eur(amount)
 #: src/booking/BookingPanel.tsx
@@ -3964,6 +3973,10 @@ msgstr "le jeton Beds24 n'a pas le droit d'écrire les propriétés : générer 
 #: src/calendar/Weeks.tsx
 msgid "Le jour de départ"
 msgstr "Le jour de départ"
+
+#: src/pages/settings/Ical.tsx
+msgid "Le jour du départ est inclus dans ce calendrier"
+msgstr "Le jour du départ est inclus dans ce calendrier"
 
 #: src/pages/settings/Logs.tsx
 msgid "Le journal des mails n'a pas pu être lu."
@@ -4122,6 +4135,11 @@ msgstr "Les clés n'ont pas pu être lues."
 #: src/pages/settings/Accounts.tsx
 msgid "Les comptes n'ont pas pu être lus."
 msgstr "Les comptes n'ont pas pu être lus."
+
+#. placeholder {0}: q ? eur(q.depositCents) : ""
+#: src/sale/SaleFlow.tsx
+msgid "Les dates sont gardées en option. Si le client a un mail, il reçoit un lien vers sa réservation : il y accepte les conditions générales, paie les arrhes ({0}) et reçoit alors sa confirmation avec le contrat."
+msgstr "Les dates sont gardées en option. Si le client a un mail, il reçoit un lien vers sa réservation : il y accepte les conditions générales, paie les arrhes ({0}) et reçoit alors sa confirmation avec le contrat."
 
 #. placeholder {0}: channelName(b)
 #: src/booking/BookingPanel.tsx
@@ -4339,10 +4357,6 @@ msgstr "Lien copié."
 msgid "Lien de paiement"
 msgstr "Lien de paiement"
 
-#: src/sale/SaleFlow.tsx
-msgid "Lien de paiement à transmettre au client :"
-msgstr "Lien de paiement à transmettre au client :"
-
 #: src/booking/BookingPanel.tsx
 msgid "Lien de paiement des arrhes"
 msgstr "Lien de paiement des arrhes"
@@ -4362,6 +4376,10 @@ msgstr "Lien pour la personne du ménage"
 #: src/pages/settings/Payments.tsx
 msgid "lien remplacé par un autre"
 msgstr "lien remplacé par un autre"
+
+#: src/sale/SaleFlow.tsx
+msgid "Lien vers la réservation du client :"
+msgstr "Lien vers la réservation du client :"
 
 #: src/pages/settings/Import.tsx
 msgid "Ligne"
@@ -4976,11 +4994,6 @@ msgstr "option"
 msgid "Option"
 msgstr "Option"
 
-#. placeholder {0}: q ? eur(q.depositCents) : ""
-#: src/sale/SaleFlow.tsx
-msgid "Option : les dates sont gardées en attendant les arrhes ({0})"
-msgstr "Option : les dates sont gardées en attendant les arrhes ({0})"
-
 #: src/pages/settings/Logs.tsx
 msgid "option créée"
 msgstr "option créée"
@@ -5086,7 +5099,6 @@ msgstr "Ouvrir le calendrier"
 #: src/booking/BookingPanel.tsx
 #: src/pages/settings/Domain.tsx
 #: src/pages/settings/Payments.tsx
-#: src/sale/SaleFlow.tsx
 msgid "Paiement"
 msgstr "Paiement"
 
@@ -5314,10 +5326,6 @@ msgstr "Passent à l'étape"
 msgid "Payé"
 msgstr "Payé"
 
-#: src/sale/SaleFlow.tsx
-msgid "payé avant l'enregistrement"
-msgstr "payé avant l'enregistrement"
-
 #: src/pages/Bookings.tsx
 msgid "Payée"
 msgstr "Payée"
@@ -5395,6 +5403,10 @@ msgstr "Photos ({photos}) : l'API ne les accepte pas. La liste des adresses sera
 #: src/booking/Register.tsx
 msgid "Pièce d'identité"
 msgstr "Pièce d'identité"
+
+#: src/booking/BookingPanel.tsx
+msgid "Pièce jointe :"
+msgstr "Pièce jointe :"
 
 #: src/pages/Reviews.tsx
 #: src/pages/settings/Channels.tsx
@@ -5495,10 +5507,6 @@ msgstr "préparé (envoi coupé)"
 #: src/pages/settings/Logs.tsx
 msgid "préparé, envoi coupé"
 msgstr "préparé, envoi coupé"
-
-#: src/sale/SaleFlow.tsx
-msgid "Préparer un lien de paiement par carte"
-msgstr "Préparer un lien de paiement par carte"
 
 #: src/pages/settings/Import.tsx
 msgid "prête"
@@ -6428,10 +6436,6 @@ msgstr "Sinon, le prix de base du bien."
 msgid "Sinon, le prix de la saison qui couvre ce jour. Si deux saisons se chevauchent, la plus courte l'emporte."
 msgstr "Sinon, le prix de la saison qui couvre ce jour. Si deux saisons se chevauchent, la plus courte l'emporte."
 
-#: src/sale/SaleFlow.tsx
-msgid "Sinon, le solde reste à encaisser dans la fiche."
-msgstr "Sinon, le solde reste à encaisser dans la fiche."
-
 #: src/pages/Bookings.tsx
 msgid "site"
 msgstr "site"
@@ -7065,3 +7069,270 @@ msgstr "voyageurs inscrits au registre"
 #: src/pages/settings/Channels.tsx
 msgid "Vu la première fois"
 msgstr "Vu la première fois"
+
+#. placeholder {0}: eur(r.totals.grossCents)
+#. placeholder {1}: eur(r.totals.feeCents)
+#. placeholder {2}: eur(r.totals.netCents)
+#. placeholder {3}: r.totals.count
+#: src/pages/settings/Encaissements.tsx
+msgid "{0} encaissés, {1} de frais, {2} nets ({3} paiements)."
+msgstr "{0} encaissés, {1} de frais, {2} nets ({3} paiements)."
+
+#: src/pages/settings/Encaissements.tsx
+msgid "Aucun encaissement Stripe pour cette propriété"
+msgstr "Aucun encaissement Stripe pour cette propriété"
+
+#: src/pages/settings/StripeAccounts.tsx
+msgid "Aucune clé : les paiements sont simulés (aucun argent réel ne bouge)."
+msgstr "Aucune clé : les paiements sont simulés (aucun argent réel ne bouge)."
+
+#: src/pages/settings/StripeAccounts.tsx
+msgid "Aucune clé propre : le serveur utilise les clés de repli de son environnement."
+msgstr "Aucune clé propre : le serveur utilise les clés de repli de son environnement."
+
+#: src/pages/settings/Encaissements.tsx
+msgid "Brut"
+msgstr "Brut"
+
+#. placeholder {0}: (x as { updated: number }).updated
+#: src/pages/settings/Encaissements.tsx
+msgid "C'est fait. {0} frais relevés chez Stripe."
+msgstr "C'est fait. {0} frais relevés chez Stripe."
+
+#: src/pages/settings/StripeAccounts.tsx
+msgid "C'est fait. Adresse copiée."
+msgstr "C'est fait. Adresse copiée."
+
+#: src/pages/settings/StripeAccounts.tsx
+msgid "C'est fait. Clés enregistrées."
+msgstr "C'est fait. Clés enregistrées."
+
+#: src/pages/settings/StripeAccounts.tsx
+msgid "C'est fait. Clés retirées."
+msgstr "C'est fait. Clés retirées."
+
+#: src/booking/BookingPanel.tsx
+msgid "C'est fait. Confirmation renvoyée au client."
+msgstr "C'est fait. Confirmation renvoyée au client."
+
+#: src/pages/Settings.tsx
+msgid "Ce qui est arrivé sur chaque compte Stripe : frais, net, total par mois, export"
+msgstr "Ce qui est arrivé sur chaque compte Stripe : frais, net, total par mois, export"
+
+#: src/pages/settings/StripeAccounts.tsx
+msgid "Chaque propriété encaisse sur son propre compte Stripe, donc sur son propre compte bancaire. Les clés se collent ici ; elles ne sont plus jamais réaffichées après l'enregistrement."
+msgstr "Chaque propriété encaisse sur son propre compte Stripe, donc sur son propre compte bancaire. Les clés se collent ici ; elles ne sont plus jamais réaffichées après l'enregistrement."
+
+#: src/pages/settings/StripeAccounts.tsx
+msgid "Clé publiable"
+msgstr "Clé publiable"
+
+#: src/pages/settings/StripeAccounts.tsx
+msgid "Clé publiable (pk_test_… ou pk_live_…)"
+msgstr "Clé publiable (pk_test_… ou pk_live_…)"
+
+#: src/pages/settings/StripeAccounts.tsx
+msgid "Clé secrète"
+msgstr "Clé secrète"
+
+#: src/pages/settings/StripeAccounts.tsx
+msgid "Clé secrète (sk_test_… ou sk_live_…)"
+msgstr "Clé secrète (sk_test_… ou sk_live_…)"
+
+#: src/pages/Settings.tsx
+#: src/pages/settings/StripeAccounts.tsx
+msgid "Comptes Stripe"
+msgstr "Comptes Stripe"
+
+#: src/sale/SaleFlow.tsx
+msgid "Confirmée sans attendre les arrhes"
+msgstr "Confirmée sans attendre les arrhes"
+
+#: src/pages/settings/StripeAccounts.tsx
+msgid "Copier l'adresse"
+msgstr "Copier l'adresse"
+
+#: src/pages/settings/Encaissements.tsx
+msgid "Encaissements"
+msgstr "Encaissements"
+
+#: src/pages/Settings.tsx
+#: src/pages/settings/Encaissements.tsx
+msgid "Encaissements Stripe"
+msgstr "Encaissements Stripe"
+
+#: src/pages/settings/Encaissements.tsx
+msgid "Exporter en CSV"
+msgstr "Exporter en CSV"
+
+#: src/pages/settings/Encaissements.tsx
+msgid "Frais"
+msgstr "Frais"
+
+#: src/pages/settings/Encaissements.tsx
+msgid "Frais Stripe"
+msgstr "Frais Stripe"
+
+#: src/pages/settings/StripeAccounts.tsx
+msgid "Garder"
+msgstr "Garder"
+
+#: src/pages/settings/Encaissements.tsx
+msgid "inconnus"
+msgstr "inconnus"
+
+#: src/pages/settings/StripeAccounts.tsx
+msgid "La clé a été refusée."
+msgstr "La clé a été refusée."
+
+#: src/pages/settings/StripeAccounts.tsx
+msgid "La clé fonctionne (compte de test)."
+msgstr "La clé fonctionne (compte de test)."
+
+#: src/pages/settings/StripeAccounts.tsx
+msgid "La clé fonctionne (compte réel)."
+msgstr "La clé fonctionne (compte réel)."
+
+#. placeholder {0}: errorText(e)
+#: src/sale/SaleFlow.tsx
+msgid "La réservation est enregistrée, mais le lien de paiement n'a pas pu être créé : {0} Créez-le depuis la fiche."
+msgstr "La réservation est enregistrée, mais le lien de paiement n'a pas pu être créé : {0} Créez-le depuis la fiche."
+
+#. placeholder {0}: errorText(e)
+#: src/sale/SaleFlow.tsx
+msgid "La réservation est enregistrée, mais le paiement n'a pas été noté : {0} Notez-le dans la fiche."
+msgstr "La réservation est enregistrée, mais le paiement n'a pas été noté : {0} Notez-le dans la fiche."
+
+#: src/pages/settings/StripeAccounts.tsx
+msgid "Laissez vide pour garder la clé actuelle."
+msgstr "Laissez vide pour garder la clé actuelle."
+
+#: src/pages/settings/StripeAccounts.tsx
+msgid "Laissez vide pour garder le secret actuel."
+msgstr "Laissez vide pour garder le secret actuel."
+
+#. placeholder {0}: q ? eur(q.totalCents) : ""
+#: src/sale/SaleFlow.tsx
+msgid "Le client a déjà payé le total ({0}) : le noter comme reçu"
+msgstr "Le client a déjà payé le total ({0}) : le noter comme reçu"
+
+#: src/pages/settings/StripeAccounts.tsx
+msgid "Les clés de cette propriété sont utilisées."
+msgstr "Les clés de cette propriété sont utilisées."
+
+#: src/pages/Settings.tsx
+msgid "Les clés de chaque propriété, test ou réel, l'adresse du webhook"
+msgstr "Les clés de chaque propriété, test ou réel, l'adresse du webhook"
+
+#: src/pages/settings/StripeAccounts.tsx
+msgid "Les comptes Stripe n'ont pas pu être lus."
+msgstr "Les comptes Stripe n'ont pas pu être lus."
+
+#: src/pages/settings/Encaissements.tsx
+msgid "Les encaissements n'ont pas pu être lus."
+msgstr "Les encaissements n'ont pas pu être lus."
+
+#: src/pages/settings/StripeAccounts.tsx
+msgid "Les trois clés sont effacées. La propriété retombe sur les clés de repli de l'environnement, ou sur les paiements simulés s'il n'y en a pas : plus aucun vrai paiement ne sera pris."
+msgstr "Les trois clés sont effacées. La propriété retombe sur les clés de repli de l'environnement, ou sur les paiements simulés s'il n'y en a pas : plus aucun vrai paiement ne sera pris."
+
+#: src/sale/SaleFlow.tsx
+msgid "Lien de paiement à transmettre au client :"
+msgstr "Lien de paiement à transmettre au client :"
+
+#: src/pages/settings/StripeAccounts.tsx
+msgid "Mode du compte Stripe"
+msgstr "Mode du compte Stripe"
+
+#: src/pages/settings/Encaissements.tsx
+msgid "Net"
+msgstr "Net"
+
+#: src/pages/settings/StripeAccounts.tsx
+msgid "Nom du compte (pour vous y retrouver)"
+msgstr "Nom du compte (pour vous y retrouver)"
+
+#. placeholder {0}: q ? eur(q.depositCents) : ""
+#: src/sale/SaleFlow.tsx
+msgid "Option : les dates sont gardées en attendant les arrhes ({0})"
+msgstr "Option : les dates sont gardées en attendant les arrhes ({0})"
+
+#: src/pages/settings/StripeAccounts.tsx
+msgid "pas posée"
+msgstr "pas posée"
+
+#: src/sale/SaleFlow.tsx
+msgid "payé avant l'enregistrement"
+msgstr "payé avant l'enregistrement"
+
+#. placeholder {0}: sqlWhen(k.setAt)
+#: src/pages/settings/StripeAccounts.tsx
+msgid "posée le {0}"
+msgstr "posée le {0}"
+
+#. placeholder {0}: sqlWhen(k.setAt)
+#. placeholder {1}: k.hint
+#: src/pages/settings/StripeAccounts.tsx
+msgid "posée le {0} ({1})"
+msgstr "posée le {0} ({1})"
+
+#: src/sale/SaleFlow.tsx
+msgid "Préparer un lien de paiement par carte"
+msgstr "Préparer un lien de paiement par carte"
+
+#: src/pages/settings/StripeAccounts.tsx
+msgid "Réel (vrais paiements)"
+msgstr "Réel (vrais paiements)"
+
+#: src/pages/settings/Encaissements.tsx
+msgid "Relever les frais manquants ({unknown})"
+msgstr "Relever les frais manquants ({unknown})"
+
+#: src/pages/settings/StripeAccounts.tsx
+msgid "Retirer les clés"
+msgstr "Retirer les clés"
+
+#. placeholder {0}: p.name
+#: src/pages/settings/StripeAccounts.tsx
+msgid "Retirer les clés de {0} ?"
+msgstr "Retirer les clés de {0} ?"
+
+#: src/pages/settings/StripeAccounts.tsx
+msgid "Retirer les clés de cette propriété"
+msgstr "Retirer les clés de cette propriété"
+
+#: src/pages/settings/StripeAccounts.tsx
+msgid "Secret du webhook"
+msgstr "Secret du webhook"
+
+#: src/pages/settings/StripeAccounts.tsx
+msgid "Secret du webhook (whsec_…)"
+msgstr "Secret du webhook (whsec_…)"
+
+#: src/sale/SaleFlow.tsx
+msgid "Sinon, le solde reste à encaisser dans la fiche."
+msgstr "Sinon, le solde reste à encaisser dans la fiche."
+
+#: src/pages/settings/StripeAccounts.tsx
+msgid "Tableau de bord Stripe, Développeurs, Webhooks, Ajouter un point de terminaison. Collez cette adresse, cochez ces événements, puis copiez le « secret de signature » (whsec_…) dans le champ ci-dessus."
+msgstr "Tableau de bord Stripe, Développeurs, Webhooks, Ajouter un point de terminaison. Collez cette adresse, cochez ces événements, puis copiez le « secret de signature » (whsec_…) dans le champ ci-dessus."
+
+#: src/pages/settings/StripeAccounts.tsx
+msgid "Test (aucun argent réel)"
+msgstr "Test (aucun argent réel)"
+
+#: src/pages/settings/StripeAccounts.tsx
+msgid "Test terminé."
+msgstr "Test terminé."
+
+#: src/pages/settings/StripeAccounts.tsx
+msgid "Tester la clé"
+msgstr "Tester la clé"
+
+#: src/pages/settings/Encaissements.tsx
+msgid "Total par mois"
+msgstr "Total par mois"
+
+#: src/pages/settings/StripeAccounts.tsx
+msgid "Webhook à déclarer chez Stripe"
+msgstr "Webhook à déclarer chez Stripe"
