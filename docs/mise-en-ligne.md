@@ -9,6 +9,11 @@ Nous n'avons pas d'accès SSH : tout passe par HTTPS, GitHub et le Manager.
 (`/api/public/health` → `ok: true`), mais **le traitement planifié n'a jamais
 tourné** (`lastCronAt: null`) — le Planificateur n'est pas posé.
 
+> **Décision du 11/10/2026 : la production quitte Infomaniak pour un serveur Hetzner**
+> administré par Claude, avec déploiement automatique au merge. La marche à suivre vit dans
+> [`hebergement-hetzner.md`](hebergement-hetzner.md) ; les sections 1 (Manager Infomaniak) et
+> 3 (domaine) ci-dessous ne valent que tant que dev1 reste la production.
+
 Chaque case se coche à la main ; les gestes marqués **Julien** ou **Matthieu**
 ne peuvent pas être faits depuis le dépôt.
 
