@@ -57,6 +57,14 @@ export function formatDateFr(iso: string): string {
   return `${d}/${m}/${y}`;
 }
 
+/** Objet d'un mail lié à une réservation : la référence EN TÊTE, entre crochets,
+ *  jamais le nom du client (décision de Julien, 12/10/2026). Le client la
+ *  retrouve d'un coup d'œil, et la relève de la boîte rattache sa réponse à la
+ *  bonne réservation (inbound-email.ts lit la référence dans l'objet). */
+export function refSubject(reference: string, text: string): string {
+  return `[${reference}] ${text}`.replace(/[\r\n]+/g, " ");
+}
+
 export interface EmailToQueue {
   bookingId?: number | null;
   to: string;
@@ -182,7 +190,7 @@ export function buildPaymentLinkEmail(
 ): { subject: string; bodyText: string } {
   if (isNl(b)) return buildPaymentLinkEmailNl(b, property, label, amountCents, payUrl, opts);
   return {
-    subject: `${label} — réservation ${b.reference} (${property.name})`,
+    subject: refSubject(b.reference, `${label} : lien de paiement — ${property.name}`),
     bodyText: [
       `Bonjour,`,
       ``,
@@ -259,7 +267,7 @@ export function buildPaymentReceiptEmail(
   parts.push(``, `À bientôt,`, `${property.name}`, property.contactEmail ? `${property.contactEmail}` : ``);
 
   return {
-    subject: `Reçu de paiement ${formatEur(payment.amountCents)} — réservation ${b.reference} (${property.name})`,
+    subject: refSubject(b.reference, `Reçu de paiement ${formatEur(payment.amountCents)} — ${property.name}`),
     bodyText: parts.join("\n"),
   };
 }
@@ -282,7 +290,7 @@ export function buildBalanceReminderEmail(
     ? [`Vous pouvez le régler en ligne, en quelques clics :`, ``, payUrl]
     : [`Nous pouvons vous renvoyer un lien de paiement sur simple demande.`];
   return {
-    subject: `Rappel — solde de votre séjour ${b.reference} (${property.name})`,
+    subject: refSubject(b.reference, `Rappel : solde de votre séjour — ${property.name}`),
     bodyText: [
       `Bonjour,`,
       ``,
@@ -317,7 +325,7 @@ const personen = (n: number) => `${n} ${n > 1 ? "personen" : "persoon"}`;
 function buildPaymentLinkEmailNl(b: BookingRow, property: PropertyRow, label: string, amountCents: number, payUrl: string, opts: { holdUntil?: string | null }): { subject: string; bodyText: string } {
   const l = nlText(label);
   return {
-    subject: `${l} — reservering ${b.reference} (${property.name})`,
+    subject: refSubject(b.reference, `${l}: betaallink — ${property.name}`),
     bodyText: [
       `Beste,`,
       ``,
@@ -363,14 +371,14 @@ function buildPaymentReceiptEmailNl(b: BookingRow, property: PropertyRow, paymen
     parts.push(`Resterend saldo: geen — uw verblijf is volledig betaald.`);
   }
   parts.push(``, `Tot binnenkort,`, `${property.name}`, property.contactEmail ? `${property.contactEmail}` : ``);
-  return { subject: `Betalingsbewijs ${money(payment.amountCents, true)} — reservering ${b.reference} (${property.name})`, bodyText: parts.join("\n") };
+  return { subject: refSubject(b.reference, `Betalingsbewijs ${money(payment.amountCents, true)} — ${property.name}`), bodyText: parts.join("\n") };
 }
 
 function buildBalanceReminderEmailNl(b: BookingRow, property: PropertyRow, payUrl?: string | null): { subject: string; bodyText: string } {
   const balance = b.totalCents - b.paidCents;
   const closing = payUrl ? [`U kunt het in enkele klikken online betalen:`, ``, payUrl] : [`Op eenvoudig verzoek sturen wij u opnieuw een betaallink.`];
   return {
-    subject: `Herinnering — saldo van uw verblijf ${b.reference} (${property.name})`,
+    subject: refSubject(b.reference, `Herinnering: saldo van uw verblijf — ${property.name}`),
     bodyText: [
       `Beste,`,
       ``,
@@ -420,7 +428,7 @@ export function buildCancellationEmail(
       if (plan.indemnityCents > 0) lines.push(`Daarbovenop volgt een vergoeding gelijk aan het voorschot: ${m(plan.indemnityCents)}, per overschrijving. Antwoord op dit bericht met uw rekeningnummer.`);
     }
     lines.push(``, `Tot ziens,`, `${property.name}`, ...contact);
-    return { subject: `Annulering van uw reservering ${b.reference} (${property.name})`, bodyText: lines.join("\n") };
+    return { subject: refSubject(b.reference, `Annulering van uw reservering — ${property.name}`), bodyText: lines.join("\n") };
   }
   const lines = [
     `Bonjour,`,
@@ -440,5 +448,58 @@ export function buildCancellationEmail(
     if (plan.indemnityCents > 0) lines.push(`S'y ajoute une indemnité égale aux arrhes : ${m(plan.indemnityCents)}, versée par virement. Répondez à ce message en indiquant votre numéro de compte.`);
   }
   lines.push(``, `Cordialement,`, `${property.name}`, ...contact);
-  return { subject: `Annulation de votre réservation ${b.reference} (${property.name})`, bodyText: lines.join("\n") };
+  return { subject: refSubject(b.reference, `Annulation de votre réservation — ${property.name}`), bodyText: lines.join("\n") };
+}
+
+/** Accusé de réception d'un message envoyé par le formulaire de contact (site
+ *  ou page de réservation, ou fil du voucher). Texte seul, sans HTML : le
+ *  message du client y est repris tel quel, un texte brut ne peut rien exécuter.
+ *  `reference` est celle de la réservation, ou « QU-AAAA-NNNN » pour une
+ *  question posée avant de réserver. */
+export function buildContactAckEmail(opts: {
+  reference: string;
+  propertyName: string;
+  guestName: string | null;
+  message: string;
+  nl?: boolean;
+  receivedAt?: string;
+}): { subject: string; bodyText: string } {
+  const name = (opts.guestName ?? "").replace(/[\r\n]+/g, " ").trim();
+  const quoted = opts.message.trim().split(/\r?\n/).map((l) => `> ${l}`).join("\n");
+  if (opts.nl) {
+    return {
+      subject: refSubject(opts.reference, `Wij hebben uw bericht ontvangen — ${opts.propertyName}`),
+      bodyText: [
+        name ? `Beste ${name},` : `Beste,`,
+        ``,
+        `Wij hebben uw bericht goed ontvangen. Het ligt bij het team van ${opts.propertyName}; u krijgt het antwoord per e-mail, op dit adres.`,
+        `Uw referentie: ${opts.reference}`,
+        ``,
+        `Uw bericht:`,
+        quoted,
+        ``,
+        `Wilt u iets toevoegen? Antwoord gewoon op dit bericht.`,
+        ``,
+        `Tot binnenkort,`,
+        opts.propertyName,
+      ].join("\n"),
+    };
+  }
+  return {
+    subject: refSubject(opts.reference, `Nous avons bien reçu votre message — ${opts.propertyName}`),
+    bodyText: [
+      name ? `Bonjour ${name},` : `Bonjour,`,
+      ``,
+      `Votre message nous est bien parvenu. Il est entre les mains de l'équipe de ${opts.propertyName} ; la réponse vous arrivera par e-mail, à cette adresse.`,
+      `Votre référence : ${opts.reference}`,
+      ``,
+      `Votre message :`,
+      quoted,
+      ``,
+      `Quelque chose à ajouter ? Répondez simplement à cet e-mail.`,
+      ``,
+      `À bientôt,`,
+      opts.propertyName,
+    ].join("\n"),
+  };
 }

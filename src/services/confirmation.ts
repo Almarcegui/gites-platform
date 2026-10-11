@@ -107,14 +107,14 @@ const FR: Words = {
   kArrival: (t, d) => `Arrivée le ${d}, à partir de ${t}.`,
   kDeparture: (t, d) => `Départ le ${d}, avant ${t}.`,
   kAddress: "Adresse",
-  kContact: "Une question ? Contactez-nous",
+  kContact: "Une question ? Répondez simplement à ce message, ou contactez-nous",
   kBalance: (a, d) => `Le solde de ${a} est à régler${d ? ` au plus tard le ${d}` : ""}, en ligne depuis la page de votre réservation.`,
   kCaution: (a) => `Caution de ${a} : empreinte ou dépôt demandé avant l'arrivée, restitué après l'état des lieux.`,
   kContract: (f) => `Votre contrat de location est joint à ce message (${f}). Il est conclu par l'acceptation des conditions générales et le paiement des arrhes : il ne se signe pas.`,
   kCancel: "Conditions d'annulation : article 5 des conditions générales, reproduites en annexe du contrat.",
   kLanguage: null,
   closing: "À très bientôt,",
-  subject: (r, p) => `Confirmation de réservation ${r} — ${p}`,
+  subject: (r, p) => `[${r}] Votre réservation est confirmée — ${p}`,
 };
 
 const NL: Words = {
@@ -145,14 +145,14 @@ const NL: Words = {
   kArrival: (t, d) => `Aankomst op ${d}, vanaf ${t}.`,
   kDeparture: (t, d) => `Vertrek op ${d}, voor ${t}.`,
   kAddress: "Adres",
-  kContact: "Een vraag? Neem contact met ons op",
+  kContact: "Een vraag? Antwoord gewoon op dit bericht, of neem contact met ons op",
   kBalance: (a, d) => `Het saldo van ${a} moet betaald worden${d ? ` uiterlijk op ${d}` : ""}, online via de pagina van uw reservering.`,
   kCaution: (a) => `Waarborg van ${a}: kaartafdruk of storting gevraagd voor aankomst, terugbetaald na de plaatsbeschrijving.`,
   kContract: (f) => `Uw huurcontract zit als bijlage bij dit bericht (${f}). Het komt tot stand door de aanvaarding van de algemene voorwaarden en de betaling van het voorschot: het wordt niet ondertekend.`,
   kCancel: "Annuleringsvoorwaarden: artikel 5 van de algemene voorwaarden, als bijlage bij het contract.",
   kLanguage: CGV_NL_NOTE,
   closing: "Tot binnenkort,",
-  subject: (r, p) => `Bevestiging van reservering ${r} — ${p}`,
+  subject: (r, p) => `[${r}] Uw reservering is bevestigd — ${p}`,
 };
 
 /** Rangée d'un tableau de la version HTML. */
