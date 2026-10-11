@@ -22,6 +22,7 @@ import { getBooking, getCgvAcceptance, getGuest, getProperty, getSettings } from
 import { PdfDocument, type TableOptions } from "../core/pdf";
 import { nlText } from "../core/public-i18n";
 import { CGV_NL_NOTE, formatDateFr, isNl, money, parseQuote, postalAddress, realContact } from "./email";
+import { contractualArrhes } from "./annulation";
 
 export interface ConfirmationPdfContext {
   booking: BookingRow;
@@ -132,6 +133,7 @@ interface Words {
   total: string;
   payment: string;
   fullAtBooking: (amount: string) => string;
+  arrhesPart: (amount: string, pct: number | null) => string;
   deposit: (amount: string, pct: number | null) => string;
   balance: (amount: string, date: string) => string;
   paid: (amount: string, date: string) => string;
@@ -170,6 +172,7 @@ const FR: Words = {
   total: "Prix total du séjour",
   payment: "5. Paiement",
   fullAtBooking: (a) => `La totalité du prix, soit ${a}, est payable à la réservation.`,
+  arrhesPart: (a, p) => `Dont arrhes : ${a}${p != null ? ` (${p} % du prix total)` : ""}, au sens des articles 4 et 5 des conditions générales.`,
   deposit: (a, p) => `Arrhes payées à la réservation : ${a}${p != null ? ` (${p} % du prix total)` : ""}.`,
   balance: (a, d) => `Solde : ${a}, à payer au plus tard le ${d}.`,
   paid: (a, d) => `Montant réglé au ${d} : ${a}.`,
@@ -208,6 +211,7 @@ const NL: Words = {
   total: "Totale prijs van het verblijf",
   payment: "5. Betaling",
   fullAtBooking: (a) => `De volledige prijs, namelijk ${a}, is betaalbaar bij de reservering.`,
+  arrhesPart: (a, p) => `Waarvan voorschot: ${a}${p != null ? ` (${p} % van de totale prijs)` : ""}, in de zin van de artikelen 4 en 5 van de algemene voorwaarden.`,
   deposit: (a, p) => `Bij de reservering betaald voorschot: ${a}${p != null ? ` (${p} % van de totale prijs)` : ""}.`,
   balance: (a, d) => `Saldo: ${a}, te betalen uiterlijk op ${d}.`,
   paid: (a, d) => `Betaald bedrag op ${d}: ${a}.`,
@@ -306,6 +310,10 @@ export function buildConfirmationPdf(ctx: ConfirmationPdfContext): Uint8Array {
   doc.heading(w.payment);
   if (b.balanceDueDate == null) {
     doc.paragraph(w.fullAtBooking(m(b.totalCents)), { after: 2 });
+    // Prix payé d'avance : la part d'arrhes reste celle du devis (CGV 4.3), c'est
+    // elle qui reste acquise si le client annule. Le même calcul que l'annulation.
+    const arrhes = contractualArrhes(b);
+    if (quote && arrhes > 0 && arrhes < b.totalCents) doc.paragraph(w.arrhesPart(m(arrhes), quote.depositPct), { after: 2 });
   } else {
     const pct = quote ? quote.depositPct : b.totalCents > 0 ? Math.round((b.depositCents / b.totalCents) * 100) : null;
     doc.paragraph(w.deposit(m(b.depositCents), pct), { after: 2 });

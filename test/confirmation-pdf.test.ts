@@ -333,6 +333,15 @@ describe("le PDF « Confirmation de réservation et conditions générales »", 
     expect(text).toMatch(/Une caution de 300,00 € est demandée/);
   });
 
+  it("prix payé d'avance : le PDF garde la part d'arrhes du devis (CGV 4.3)", async () => {
+    const b = await bookAndPay();
+    const ctx = (await loadConfirmationPdfContext(t.db, b.id))!;
+    const total = ctx.booking.totalCents;
+    const text = pdfText(buildConfirmationPdf({ ...ctx, booking: { ...ctx.booking, balanceDueDate: null, depositCents: total } })).replace(/\s+/g, " ");
+    expect(text).toContain("La totalité du prix");
+    expect(text).toMatch(/Dont arrhes : [\d ]+,\d\d € \(50 % du prix total\), au sens des articles 4 et 5 des conditions générales\./);
+  });
+
   it("sans CGV en base, le PDF part quand même et le signale", async () => {
     const b = await bookAndPay();
     const ctx = (await loadConfirmationPdfContext(t.db, b.id))!;
