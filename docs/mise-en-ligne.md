@@ -132,10 +132,11 @@ et les anciennes adresses d'écran (`#/dash`, `#/cal`, `#/resa`, `#/canaux`,
 
 ## 6. Stripe
 
-- [ ] **Julien** — le compte Stripe de l'exploitant (décision du 18/07), clés
-      live `STRIPE_SECRET_KEY`, `STRIPE_PUBLISHABLE_KEY` dans le Manager.
-- [ ] Endpoint de webhook Stripe vers `https://<domaine>/api/webhooks/stripe`,
-      secret `STRIPE_WEBHOOK_SECRET`.
+- [ ] **Julien** — un compte Stripe par entité qui encaisse (décision du 11/10), clés
+      collées dans Réglages > Comptes Stripe (`docs/paiements-stripe.md`) ;
+      `STRIPE_SECRET_KEY` et `STRIPE_PUBLISHABLE_KEY` d'environnement ne sont qu'un repli.
+- [ ] Un endpoint de webhook Stripe PAR PROPRIÉTÉ, `https://<domaine>/api/webhooks/stripe/<id de la propriété>` (adresse affichée dans Réglages > Comptes Stripe ; voir `docs/paiements-stripe.md`),
+      son secret `whsec_…` se colle dans le même écran.
 - [ ] Turnstile (anti-robot) : `TURNSTILE_SITE_KEY` et `TURNSTILE_SECRET_KEY`
       pour le domaine définitif (le serveur Node les transmet depuis le 10/10).
 
