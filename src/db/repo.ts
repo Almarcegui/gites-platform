@@ -2346,6 +2346,27 @@ export interface MessageRow {
   forwarded: boolean;
   delivery: string | null;
   receivedAt: string;
+  /** Message-ID auquel ce mail répond (relève IMAP). */
+  inReplyTo: string | null;
+  /** En-tête References (fil), identifiants <…> séparés par une espace. */
+  refs: string | null;
+  /** Pièces jointes listées à la relève (jamais stockées). */
+  attachments: { name: string; size: number | null }[];
+  /** Le mail prétend venir de l'adresse des gîtes sans que le serveur de réception l'atteste. */
+  spoofed: boolean;
+}
+
+function parseAttachments(raw: unknown): { name: string; size: number | null }[] {
+  if (typeof raw !== "string" || raw === "") return [];
+  try {
+    const list = JSON.parse(raw) as unknown;
+    if (!Array.isArray(list)) return [];
+    return list
+      .filter((a): a is { name: unknown; size?: unknown } => !!a && typeof a === "object")
+      .map((a) => ({ name: String(a.name ?? "").slice(0, 200), size: typeof a.size === "number" ? a.size : null }));
+  } catch {
+    return [];
+  }
 }
 
 function mapMessage(r: Raw): MessageRow {
@@ -2362,6 +2383,10 @@ function mapMessage(r: Raw): MessageRow {
     autoReplied: num(r.auto_replied) === 1, forwarded: num(r.forwarded) === 1,
     delivery: strOrNull(r.delivery),
     receivedAt: str(r.received_at),
+    inReplyTo: strOrNull(r.in_reply_to),
+    refs: strOrNull(r.refs),
+    attachments: parseAttachments(r.attachments),
+    spoofed: num(r.spoofed) === 1,
   };
 }
 
@@ -2429,6 +2454,12 @@ export interface InboundMessageInput {
   bookingId?: number | null;
   guestId?: number | null;
   receivedAt?: string;
+  /** Relève IMAP : fil, UID, pièces listées, expéditeur douteux. */
+  inReplyTo?: string | null;
+  references?: string | null;
+  imapUid?: number | null;
+  attachments?: { name: string; size: number | null }[];
+  spoofed?: boolean;
 }
 
 /** Insère un message entrant. Retourne null si doublon (Message-ID). */
@@ -2437,13 +2468,18 @@ export async function insertInboundMessage(db: D1Database, m: InboundMessageInpu
     const res = await db
       .prepare(
         `INSERT INTO messages (property_id, message_id, direction, channel, from_email, from_name,
-                               to_email, subject, body_text, booking_id, guest_id, received_at)
-         VALUES (?1, ?2, 'in', ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, COALESCE(?11, datetime('now')))`,
+                               to_email, subject, body_text, booking_id, guest_id, received_at,
+                               in_reply_to, refs, imap_uid, attachments, spoofed)
+         VALUES (?1, ?2, 'in', ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, COALESCE(?11, datetime('now')),
+                 ?12, ?13, ?14, ?15, ?16)`,
       )
       .bind(
         m.propertyId, m.messageId ?? null, m.channel, m.fromEmail, m.fromName ?? null,
         m.toEmail ?? null, m.subject, m.bodyText, m.bookingId ?? null, m.guestId ?? null,
         m.receivedAt ?? null,
+        m.inReplyTo ?? null, m.references ?? null, m.imapUid ?? null,
+        m.attachments && m.attachments.length ? JSON.stringify(m.attachments) : null,
+        m.spoofed ? 1 : 0,
       )
       .run();
     return res.meta.last_row_id;
@@ -2465,17 +2501,24 @@ export async function insertOutboundMessage(
     bookingId?: number | null;
     guestId?: number | null;
     delivery: string; // 'aucune' | 'stub' | 'sent' | 'failed'
+    /** 'email' : réponse à un mail (reste dans le fil de la boîte de contact), sinon 'form'. */
+    channel?: "email" | "form";
+    /** Message-ID SMTP du mail parti : la réponse du client (In-Reply-To) le retrouve. */
+    messageId?: string | null;
+    inReplyTo?: string | null;
+    references?: string | null;
   },
 ): Promise<number> {
   const res = await db
     .prepare(
-      `INSERT INTO messages (property_id, direction, channel, from_email, to_email, subject,
-                             body_text, booking_id, guest_id, status, delivery)
-       VALUES (?1, 'out', 'form', ?2, ?3, ?4, ?5, ?6, ?7, 'traité', ?8)`,
+      `INSERT INTO messages (property_id, message_id, direction, channel, from_email, to_email, subject,
+                             body_text, booking_id, guest_id, status, delivery, in_reply_to, refs)
+       VALUES (?1, ?9, 'out', ?10, ?2, ?3, ?4, ?5, ?6, ?7, 'traité', ?8, ?11, ?12)`,
     )
     .bind(
       m.propertyId, m.fromEmail ?? "équipe", m.toEmail, m.subject, m.bodyText,
       m.bookingId ?? null, m.guestId ?? null, m.delivery,
+      m.messageId ?? null, m.channel ?? "form", m.inReplyTo ?? null, m.references ?? null,
     )
     .run();
   return res.meta.last_row_id;

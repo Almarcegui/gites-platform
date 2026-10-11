@@ -10,6 +10,7 @@ import { api } from "../api/client";
 import { useBooking, useDomains, useGuest, useMessages, useOverviews, useTasks, type DomainData } from "../api/hooks";
 import type { Message, OverviewBalance, PlanningBooking } from "../api/types";
 import { CalendarView } from "../calendar/CalendarView";
+import { originSummary, sourceLabel } from "../canaux/canal";
 import { ActionButton, ErrorLine } from "../lib/action";
 import { toCleaningItem, type CleaningItem } from "../lib/tasks";
 import { TaskTick } from "./Cleaning";
@@ -116,7 +117,7 @@ function TodayA() {
       icon: <IconMessage size={22} />,
       title: t`Messages`,
       count: String(d.messages.length),
-      lines: d.messages.length ? list(d.messages.map((m) => ({ main: m.fromName || m.fromEmail, sub: m.subject }))) : [{ main: t`Aucun en attente.` }],
+      lines: d.messages.length ? list(d.messages.map((m) => ({ main: m.fromName || m.fromEmail, sub: `${sourceLabel(m).text} · ${m.subject}` }))) : [{ main: t`Aucun en attente.` }],
       onClick: () => void navigate({ to: "/messages" }),
     },
   ];
@@ -262,7 +263,7 @@ function TodayB() {
   const nPay = d.toCollect.length;
   const tail = [
     nPay ? (nPay > 1 ? t`${nombre(nPay)} soldes à encaisser` : t`un solde à encaisser`) : "",
-    nMsg ? (nMsg > 1 ? t`${nombre(nMsg)} messages à lire` : t`un message à lire`) : "",
+    nMsg ? (nMsg > 1 ? t`${nombre(nMsg)} messages à lire (${originSummary(d.messages)})` : t`un message à lire (${originSummary(d.messages)})`) : "",
   ].filter(Boolean);
   const tailRaw = tail.length ? tail.join(", ") + "." : "";
   const tailText = tailRaw.charAt(0).toUpperCase() + tailRaw.slice(1);
@@ -365,7 +366,10 @@ function TodayB() {
                 <IconMessage size={22} />
                 {t`Message à lire`}
               </span>
-              <h3>{m.fromName || m.fromEmail}</h3>
+              <h3>
+                <span className={`src ${sourceLabel(m).cls}`}>{sourceLabel(m).text}</span>
+                {m.fromName || m.fromEmail}
+              </h3>
               <p className="quote">{m.bodyText.slice(0, 160)}</p>
               <div className="row-b">
                 <button type="button" className="btn pri" onClick={() => void navigate({ to: "/messages", search: { msg: m.id } })}>
