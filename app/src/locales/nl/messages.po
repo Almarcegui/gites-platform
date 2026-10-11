@@ -362,6 +362,14 @@ msgstr "{0} vertrekken ({1}), dus {2} schoonmaakbeurten"
 msgid "{0} doit être prête pour {1}."
 msgstr "{0} moet klaar zijn om {1}."
 
+#. placeholder {0}: eur(r.totals.grossCents)
+#. placeholder {1}: eur(r.totals.feeCents)
+#. placeholder {2}: eur(r.totals.netCents)
+#. placeholder {3}: r.totals.count
+#: src/pages/settings/Encaissements.tsx
+msgid "{0} encaissés, {1} de frais, {2} nets ({3} paiements)."
+msgstr "{0} ontvangen, {1} aan kosten, {2} netto ({3} betalingen)."
+
 #. placeholder {0}: u.username
 #: src/pages/settings/Accounts.tsx
 msgid "{0} est déconnecté tout de suite et ne peut plus entrer. Vous pourrez lui rendre l'accès plus tard."
@@ -855,6 +863,10 @@ msgid "À {0}, le {1}."
 msgstr "Om {0}, op {1}."
 
 #: src/pages/settings/Ical.tsx
+msgid "À cocher pour un agenda tenu à la main qui bloque aussi le jour du départ (du 22 au 26 = départ le 26). Airbnb, Booking et Beds24 laissent le jour du départ libre : pour eux, ne pas cocher."
+msgstr "Aanvinken voor een met de hand bijgehouden agenda die ook de vertrekdag blokkeert (van 22 tot 26 = vertrek op 26). Airbnb, Booking en Beds24 laten de vertrekdag vrij: voor hen niet aanvinken."
+
+#: src/pages/settings/Ical.tsx
 msgid "À coller dans Airbnb (« Importer un calendrier ») ou ailleurs. Si le Domaine entier est réservé, les deux maisons y apparaissent prises."
 msgstr "Te plakken in Airbnb (« Kalender importeren ») of elders. Als het hele domein geboekt is, staan beide huizen er als bezet."
 
@@ -1183,6 +1195,7 @@ msgstr "na {0}"
 msgid "arrhes"
 msgstr "voorschot"
 
+#: src/pages/settings/Encaissements.tsx
 #: src/pages/settings/Payments.tsx
 msgid "Arrhes"
 msgstr "Voorschot"
@@ -1340,6 +1353,10 @@ msgstr "Geen onenigheid: alles wat de platformen melden, staat hier."
 msgid "Aucun en attente."
 msgstr "Niets in afwachting."
 
+#: src/pages/settings/Encaissements.tsx
+msgid "Aucun encaissement Stripe pour cette propriété"
+msgstr "Geen Stripe-ontvangsten voor deze accommodatie"
+
 #: src/pages/settings/Logs.tsx
 msgid "Aucun mail envoyé"
 msgstr "Geen mail verstuurd"
@@ -1404,9 +1421,17 @@ msgstr "geen"
 msgid "Aucune annonce n'est reliée à Beds24 pour l'instant."
 msgstr "Er is voorlopig geen enkele advertentie aan Beds24 gekoppeld."
 
+#: src/pages/settings/StripeAccounts.tsx
+msgid "Aucune clé : les paiements sont simulés (aucun argent réel ne bouge)."
+msgstr "Geen sleutel: de betalingen worden gesimuleerd (er beweegt geen echt geld)."
+
 #: src/pages/settings/ServiceKeys.tsx
 msgid "Aucune clé pour l'instant."
 msgstr "Nog geen sleutels."
+
+#: src/pages/settings/StripeAccounts.tsx
+msgid "Aucune clé propre : le serveur utilise les clés de repli de son environnement."
+msgstr "Geen eigen sleutel: de server gebruikt de terugvalsleutels van zijn omgeving."
 
 #: src/pages/Cleaning.tsx
 msgid "aucune de prévue"
@@ -1651,6 +1676,10 @@ msgstr "Beste {prenom},\n"
 "Tot binnenkort,\n"
 "{signature}"
 
+#: src/pages/settings/Encaissements.tsx
+msgid "Brut"
+msgstr "Bruto"
+
 #: src/booking/BookingPanel.tsx
 #: src/lib/action.tsx
 msgid "C'est fait"
@@ -1660,6 +1689,11 @@ msgstr "Gedaan"
 #: src/booking/BookingPanel.tsx
 msgid "C'est fait. {0} encaissés."
 msgstr "Gedaan. {0} geïnd."
+
+#. placeholder {0}: (x as { updated: number }).updated
+#: src/pages/settings/Encaissements.tsx
+msgid "C'est fait. {0} frais relevés chez Stripe."
+msgstr "Gelukt. {0} kosten opgehaald bij Stripe."
 
 #. placeholder {0}: x.imported
 #. placeholder {1}: x.updated
@@ -1704,6 +1738,10 @@ msgstr "Gedaan. Toegang afgesloten."
 #: src/pages/settings/Accounts.tsx
 msgid "C'est fait. Accès rendu."
 msgstr "Gedaan. Toegang teruggegeven."
+
+#: src/pages/settings/StripeAccounts.tsx
+msgid "C'est fait. Adresse copiée."
+msgstr "Gelukt. Adres gekopieerd."
 
 #: src/pages/settings/ChannelPrices.tsx
 msgid "C'est fait. Airbnb a reçu les promotions."
@@ -1761,6 +1799,10 @@ msgstr "Gelukt. Sleutel aangemaakt."
 #: src/pages/settings/ServiceKeys.tsx
 msgid "C'est fait. Clé révoquée."
 msgstr "Gelukt. Sleutel ingetrokken."
+
+#: src/pages/settings/StripeAccounts.tsx
+msgid "C'est fait. Clés enregistrées."
+msgstr "Gelukt. Sleutels opgeslagen."
 
 #: src/pages/settings/Channels.tsx
 msgid "C'est fait. Code enregistré ; Beds24 ne répond pas encore, testez la liaison dans un instant."
@@ -2174,6 +2216,10 @@ msgstr "Wat er gedaan is"
 msgid "Ce qui arrive après aujourd'hui."
 msgstr "Wat er na vandaag komt."
 
+#: src/pages/Settings.tsx
+msgid "Ce qui est arrivé sur chaque compte Stripe : frais, net, total par mois, export"
+msgstr "Wat er op elke Stripe-rekening is binnengekomen: kosten, netto, totaal per maand, export"
+
 #: src/pages/settings/ServiceKeys.tsx
 msgid "Ce qui l'utilise cessera de fonctionner immédiatement."
 msgstr "Wat hem gebruikt, werkt meteen niet meer."
@@ -2309,6 +2355,10 @@ msgstr "Elke persoon heeft een eigen gebruikersnaam. Een toegang afsluiten gebeu
 msgid "Chaque photo doit avoir un texte d'au moins 3 lettres."
 msgstr "Elke foto moet een tekst van minstens 3 letters hebben."
 
+#: src/pages/settings/StripeAccounts.tsx
+msgid "Chaque propriété encaisse sur son propre compte Stripe, donc sur son propre compte bancaire. Les clés se collent ici ; elles ne sont plus jamais réaffichées après l'enregistrement."
+msgstr "Elke accommodatie int op haar eigen Stripe-rekening, dus op haar eigen bankrekening. De sleutels plakt u hier; na het opslaan worden ze nooit meer getoond."
+
 #. placeholder {0}: d.lastPull ? sqlWhen(d.lastPull) : t`jamais`
 #: src/pages/settings/Channels.tsx
 msgid "Chaque réservation, annulation ou changement de prix part tout de suite vers les plateformes. Dernier rapatriement : {0}."
@@ -2401,6 +2451,22 @@ msgstr "Sleutel « {name} », slechts één keer getoond. Te plakken in ~/.confi
 #: src/pages/settings/ServiceKeys.tsx
 msgid "Clé créée"
 msgstr "Sleutel aangemaakt"
+
+#: src/pages/settings/StripeAccounts.tsx
+msgid "Clé publiable"
+msgstr "Publiceerbare sleutel"
+
+#: src/pages/settings/StripeAccounts.tsx
+msgid "Clé publiable (pk_test_… ou pk_live_…)"
+msgstr "Publiceerbare sleutel (pk_test_… of pk_live_…)"
+
+#: src/pages/settings/StripeAccounts.tsx
+msgid "Clé secrète"
+msgstr "Geheime sleutel"
+
+#: src/pages/settings/StripeAccounts.tsx
+msgid "Clé secrète (sk_test_… ou sk_live_…)"
+msgstr "Geheime sleutel (sk_test_… of sk_live_…)"
 
 #: src/pages/settings/ServiceKeys.tsx
 msgid "Clés de service, {active} active(s)"
@@ -2512,6 +2578,11 @@ msgstr "account verwijderd"
 #: src/shell/nav.tsx
 msgid "Comptes"
 msgstr "Accounts"
+
+#: src/pages/Settings.tsx
+#: src/pages/settings/StripeAccounts.tsx
+msgid "Comptes Stripe"
+msgstr "Stripe-rekeningen"
 
 #: src/pages/settings/Domain.tsx
 msgid "Conditions de location"
@@ -2625,6 +2696,10 @@ msgstr "Kopiëren onmogelijk: neem het met de hand over."
 #: src/pages/settings/ServiceKeys.tsx
 msgid "Copier"
 msgstr "Kopiëren"
+
+#: src/pages/settings/StripeAccounts.tsx
+msgid "Copier l'adresse"
+msgstr "Adres kopiëren"
 
 #: src/pages/Cleaning.tsx
 #: src/sale/SaleFlow.tsx
@@ -2753,6 +2828,7 @@ msgid "Créez un « invite code » avec lecture et écriture (réservations, dis
 msgstr "Maak een « invite code » aan met lezen en schrijven (reserveringen, beschikbaarheden, accommodaties, kanalen), zonder lijst van IP-adressen."
 
 #: src/booking/BookingPanel.tsx
+#: src/pages/settings/Encaissements.tsx
 #: src/pages/settings/Payments.tsx
 msgid "Date"
 msgstr "Datum"
@@ -3123,6 +3199,15 @@ msgstr "{0} dagen te laat."
 msgid "encaissé par {0}"
 msgstr "geïnd door {0}"
 
+#: src/pages/settings/Encaissements.tsx
+msgid "Encaissements"
+msgstr "Ontvangsten"
+
+#: src/pages/Settings.tsx
+#: src/pages/settings/Encaissements.tsx
+msgid "Encaissements Stripe"
+msgstr "Stripe-ontvangsten"
+
 #. placeholder {0}: eur(b.balanceCents)
 #: src/pages/Today.tsx
 msgid "Encaisser {0}"
@@ -3176,6 +3261,7 @@ msgstr "Opslaan"
 #: src/pages/settings/Options.tsx
 #: src/pages/settings/Promotions.tsx
 #: src/pages/settings/Startup.tsx
+#: src/pages/settings/StripeAccounts.tsx
 #: src/pages/settings/Tarifs.tsx
 #: src/pages/settings/Templates.tsx
 #: src/ui/kit.tsx
@@ -3331,6 +3417,10 @@ msgstr "Voorbeeld"
 msgid "Exporter"
 msgstr "Exporteren"
 
+#: src/pages/settings/Encaissements.tsx
+msgid "Exporter en CSV"
+msgstr "Exporteren als CSV"
+
 #: src/pages/settings/Register.tsx
 msgid "Exporter le registre"
 msgstr "Het register exporteren"
@@ -3449,9 +3539,17 @@ msgstr "iCal-feed"
 msgid "Fois"
 msgstr "Keer"
 
+#: src/pages/settings/Encaissements.tsx
+msgid "Frais"
+msgstr "Kosten"
+
 #: src/pages/settings/Domain.tsx
 msgid "Frais de ménage (€)"
 msgstr "Schoonmaakkosten (€)"
+
+#: src/pages/settings/Encaissements.tsx
+msgid "Frais Stripe"
+msgstr "Stripe-kosten"
 
 #: src/pages/settings/Templates.tsx
 msgid "français"
@@ -3559,6 +3657,10 @@ msgstr "Definitief importeren"
 
 #: src/pages/settings/Beds24Property.tsx
 msgid "inconnu"
+msgstr "onbekend"
+
+#: src/pages/settings/Encaissements.tsx
+msgid "inconnus"
 msgstr "onbekend"
 
 #: src/pages/settings/Tarifs.tsx
@@ -3741,6 +3843,18 @@ msgstr "De volgorde van de lijst is de volgorde op de site; de eerste getoonde f
 msgid "La base est sauvegardée chaque nuit, photos comprises."
 msgstr "De database wordt elke nacht bewaard, foto's inbegrepen."
 
+#: src/pages/settings/StripeAccounts.tsx
+msgid "La clé a été refusée."
+msgstr "De sleutel is geweigerd."
+
+#: src/pages/settings/StripeAccounts.tsx
+msgid "La clé fonctionne (compte de test)."
+msgstr "De sleutel werkt (testrekening)."
+
+#: src/pages/settings/StripeAccounts.tsx
+msgid "La clé fonctionne (compte réel)."
+msgstr "De sleutel werkt (echte rekening)."
+
 #: src/pages/settings/Tarifs.tsx
 msgid "La dernière nuit doit venir après la première."
 msgstr "De laatste nacht moet na de eerste komen."
@@ -3855,6 +3969,14 @@ msgstr "De som van de huizen die het groepeert"
 msgid "La vente en trois étapes : dates et maison, voyageurs et prix, client et paiement."
 msgstr "De verkoop in drie stappen: data en huis, gasten en prijs, klant en betaling."
 
+#: src/pages/settings/StripeAccounts.tsx
+msgid "Laissez vide pour garder la clé actuelle."
+msgstr "Laat leeg om de huidige sleutel te behouden."
+
+#: src/pages/settings/StripeAccounts.tsx
+msgid "Laissez vide pour garder le secret actuel."
+msgstr "Laat leeg om het huidige geheim te behouden."
+
 #: src/pages/settings/Device.tsx
 #: src/pages/settings/Templates.tsx
 msgid "Langue"
@@ -3968,6 +4090,10 @@ msgstr "de Beds24-token mag geen accommodaties schrijven: maak een uitnodigingsc
 #: src/calendar/Weeks.tsx
 msgid "Le jour de départ"
 msgstr "De vertrekdag"
+
+#: src/pages/settings/Ical.tsx
+msgid "Le jour du départ est inclus dans ce calendrier"
+msgstr "De vertrekdag is in deze agenda inbegrepen"
 
 #: src/pages/settings/Logs.tsx
 msgid "Le journal des mails n'a pas pu être lu."
@@ -4119,6 +4245,14 @@ msgstr "De kalenders konden niet gelezen worden."
 msgid "Les chiffres n'ont pas pu être lus."
 msgstr "De cijfers konden niet gelezen worden."
 
+#: src/pages/settings/StripeAccounts.tsx
+msgid "Les clés de cette propriété sont utilisées."
+msgstr "De sleutels van deze accommodatie worden gebruikt."
+
+#: src/pages/Settings.tsx
+msgid "Les clés de chaque propriété, test ou réel, l'adresse du webhook"
+msgstr "De sleutels van elke accommodatie, test of echt, het webhook-adres"
+
 #: src/pages/settings/ServiceKeys.tsx
 msgid "Les clés n'ont pas pu être lues."
 msgstr "De sleutels konden niet gelezen worden."
@@ -4126,6 +4260,10 @@ msgstr "De sleutels konden niet gelezen worden."
 #: src/pages/settings/Accounts.tsx
 msgid "Les comptes n'ont pas pu être lus."
 msgstr "De accounts konden niet gelezen worden."
+
+#: src/pages/settings/StripeAccounts.tsx
+msgid "Les comptes Stripe n'ont pas pu être lus."
+msgstr "De Stripe-rekeningen konden niet worden gelezen."
 
 #. placeholder {0}: channelName(b)
 #: src/booking/BookingPanel.tsx
@@ -4148,6 +4286,10 @@ msgstr "De twee huizen, na het domein"
 #: src/pages/settings/MyAccount.tsx
 msgid "Les deux ne sont pas pareils."
 msgstr "De twee zijn niet gelijk."
+
+#: src/pages/settings/Encaissements.tsx
+msgid "Les encaissements n'ont pas pu être lus."
+msgstr "De ontvangsten konden niet worden gelezen."
 
 #: src/pages/settings/Domain.tsx
 msgid "Les enfants paient aussi la taxe"
@@ -4552,6 +4694,10 @@ msgstr "Opstart"
 msgid "mise en route mise à jour"
 msgstr "opstart bijgewerkt"
 
+#: src/pages/settings/StripeAccounts.tsx
+msgid "Mode du compte Stripe"
+msgstr "Modus van de Stripe-rekening"
+
 #: src/pages/settings/Templates.tsx
 msgid "Modèle de réponse"
 msgstr "Antwoordsjabloon"
@@ -4591,6 +4737,7 @@ msgstr "minder dan een uur"
 msgid "moins de {0}"
 msgstr "minder dan {0}"
 
+#: src/pages/settings/Encaissements.tsx
 #: src/pages/settings/Stats.tsx
 msgid "Mois"
 msgstr "Maand"
@@ -4710,6 +4857,10 @@ msgstr "geboren op {0}, {1}, {2} {3}"
 msgid "néerlandais"
 msgstr "Nederlands"
 
+#: src/pages/settings/Encaissements.tsx
+msgid "Net"
+msgstr "Netto"
+
 #: src/lib/derive.ts
 msgid "Ni arrivée ni départ aujourd'hui."
 msgstr "Vandaag geen aankomst of vertrek."
@@ -4740,6 +4891,10 @@ msgstr "Naam van de sleutel"
 #: src/lib/templates.ts
 msgid "nom du bien"
 msgstr "naam van de woning"
+
+#: src/pages/settings/StripeAccounts.tsx
+msgid "Nom du compte (pour vous y retrouver)"
+msgstr "Naam van de rekening (om ze terug te vinden)"
 
 #: src/pages/settings/Templates.tsx
 msgid "Nom du modèle"
@@ -5111,11 +5266,13 @@ msgstr "manuele betaling"
 msgid "paiement noté à la main"
 msgstr "betaling met de hand genoteerd"
 
+#: src/pages/settings/Encaissements.tsx
 #: src/pages/settings/Payments.tsx
 msgid "Paiement noté à la main"
 msgstr "Betaling met de hand genoteerd"
 
 #: src/booking/BookingPanel.tsx
+#: src/pages/settings/Encaissements.tsx
 #: src/pages/settings/Payments.tsx
 #: src/shell/nav.tsx
 msgid "Paiements"
@@ -5306,6 +5463,10 @@ msgstr "Niet verstuurd. {0} Uw tekst is bewaard."
 msgid "pas parti"
 msgstr "niet vertrokken"
 
+#: src/pages/settings/StripeAccounts.tsx
+msgid "pas posée"
+msgstr "niet ingesteld"
+
 #: src/pages/Bookings.tsx
 msgid "Passées"
 msgstr "Voorbij"
@@ -5419,6 +5580,12 @@ msgstr "Platformen"
 #: src/ui/kit.tsx
 msgid "Plus"
 msgstr "Meer"
+
+#. placeholder {0}: sqlWhen(k.setAt)
+#. placeholder {1}: k.hint ?? ""
+#: src/pages/settings/StripeAccounts.tsx
+msgid "posée le {0} ({1})"
+msgstr "ingesteld op {0} ({1})"
 
 #: src/pages/Cleaning.tsx
 msgid "Pour"
@@ -5805,6 +5972,10 @@ msgstr "Ontvangen door"
 msgid "Reçus"
 msgstr "Ontvangen"
 
+#: src/pages/settings/StripeAccounts.tsx
+msgid "Réel (vrais paiements)"
+msgstr "Echt (echte betalingen)"
+
 #: src/pages/Bookings.tsx
 #: src/pages/settings/Channels.tsx
 msgid "Réf."
@@ -5854,6 +6025,10 @@ msgstr "De promoties en de prijs per platform instellen"
 msgid "réglés"
 msgstr "betaald"
 
+#: src/pages/settings/Encaissements.tsx
+msgid "Relever les frais manquants ({unknown})"
+msgstr "Ontbrekende kosten ophalen ({unknown})"
+
 #. placeholder {0}: u.beds24RoomId
 #: src/pages/settings/Channels.tsx
 msgid "relié (chambre n° {0})"
@@ -5872,6 +6047,7 @@ msgstr "Opnieuw gelezen, behalve: {0} (zie hun fiche)."
 msgid "remboursement"
 msgstr "terugbetaling"
 
+#: src/pages/settings/Encaissements.tsx
 #: src/pages/settings/Payments.tsx
 msgid "Remboursement"
 msgstr "Terugbetaling"
@@ -6004,6 +6180,7 @@ msgstr "Beantwoord"
 msgid "Reprendre des réservations d'un fichier"
 msgstr "Reserveringen overnemen uit een bestand"
 
+#: src/pages/settings/Encaissements.tsx
 #: src/pages/settings/Payments.tsx
 msgid "Réservation"
 msgstr "Reservering"
@@ -6353,6 +6530,14 @@ msgstr "Afmelden"
 msgid "Se déconnecter ({0})"
 msgstr "Afmelden ({0})"
 
+#: src/pages/settings/StripeAccounts.tsx
+msgid "Secret du webhook"
+msgstr "Webhook-geheim"
+
+#: src/pages/settings/StripeAccounts.tsx
+msgid "Secret du webhook (whsec_…)"
+msgstr "Webhook-geheim (whsec_…)"
+
 #: src/pages/Bookings.tsx
 #: src/pages/settings/Channels.tsx
 msgid "Séjour"
@@ -6362,6 +6547,7 @@ msgstr "Verblijf"
 msgid "Séjour cherché"
 msgstr "Gezocht verblijf"
 
+#: src/pages/settings/Encaissements.tsx
 #: src/pages/settings/Payments.tsx
 msgid "Séjour entier"
 msgstr "Volledig verblijf"
@@ -6453,6 +6639,7 @@ msgid "solde"
 msgstr "saldo"
 
 #: src/booking/BookingPanel.tsx
+#: src/pages/settings/Encaissements.tsx
 #: src/pages/settings/Payments.tsx
 msgid "Solde"
 msgstr "Saldo"
@@ -6557,6 +6744,10 @@ msgstr "Op"
 msgid "sur {0}"
 msgstr "op {0}"
 
+#: src/pages/settings/StripeAccounts.tsx
+msgid "Tableau de bord Stripe, Développeurs, Webhooks, Ajouter un point de terminaison. Collez cette adresse, cochez ces événements, puis copiez le « secret de signature » (whsec_…) dans le champ ci-dessus."
+msgstr "Stripe-dashboard, Ontwikkelaars, Webhooks, Eindpunt toevoegen. Plak dit adres, vink deze gebeurtenissen aan en kopieer dan het \"ondertekeningsgeheim\" (whsec_…) in het veld hierboven."
+
 #: src/pages/settings/Domain.tsx
 msgid "Taxe de séjour"
 msgstr "Verblijfsbelasting"
@@ -6575,6 +6766,10 @@ msgstr "Telefoon"
 msgid "Terminer l'envoi des textes sur Beds24"
 msgstr "Teksten naar Beds24 afwerken"
 
+#: src/pages/settings/StripeAccounts.tsx
+msgid "Test (aucun argent réel)"
+msgstr "Test (geen echt geld)"
+
 #. placeholder {0}: x.imported
 #. placeholder {1}: x.conflicts
 #. placeholder {2}: x.skipped
@@ -6583,9 +6778,17 @@ msgstr "Teksten naar Beds24 afwerken"
 msgid "Test terminé : {0} prête(s), {1} en conflit, {2} déjà là, {3} erreur(s). Rien n'a été écrit."
 msgstr "Test klaar: {0} klaar, {1} in conflict, {2} al aanwezig, {3} fout(en). Er is niets geschreven."
 
+#: src/pages/settings/StripeAccounts.tsx
+msgid "Test terminé."
+msgstr "Test afgerond."
+
 #: src/pages/settings/Import.tsx
 msgid "Tester"
 msgstr "Testen"
+
+#: src/pages/settings/StripeAccounts.tsx
+msgid "Tester la clé"
+msgstr "Sleutel testen"
 
 #: src/pages/settings/Channels.tsx
 msgid "Tester la liaison"
@@ -6629,6 +6832,10 @@ msgstr "Totaal van de verblijven"
 #: src/booking/BookingPanel.tsx
 msgid "Total du séjour"
 msgstr "Totaal van het verblijf"
+
+#: src/pages/settings/Encaissements.tsx
+msgid "Total par mois"
+msgstr "Totaal per maand"
 
 #. placeholder {0}: cur.bookingsCount
 #: src/pages/settings/Stats.tsx
@@ -6744,6 +6951,7 @@ msgid "Trois lectures pour régler l'ouverture des calendriers et les prix."
 msgstr "Drie cijfers om de opening van de kalenders en de prijzen in te stellen."
 
 #: src/booking/BookingPanel.tsx
+#: src/pages/settings/Encaissements.tsx
 #: src/pages/settings/Payments.tsx
 msgid "Type"
 msgstr "Type"
@@ -6798,6 +7006,7 @@ msgstr "Een rekenbladbestand met de personen van wie het verblijf deze data krui
 #: src/pages/settings/Promotions.tsx
 #: src/pages/settings/ServiceKeys.tsx
 #: src/pages/settings/Startup.tsx
+#: src/pages/settings/StripeAccounts.tsx
 #: src/pages/settings/Tarifs.tsx
 #: src/pages/settings/Templates.tsx
 #: src/sale/SaleFlow.tsx
@@ -7069,3 +7278,7 @@ msgstr "gasten ingeschreven in het register"
 #: src/pages/settings/Channels.tsx
 msgid "Vu la première fois"
 msgstr "Voor het eerst gezien"
+
+#: src/pages/settings/StripeAccounts.tsx
+msgid "Webhook à déclarer chez Stripe"
+msgstr "Webhook om bij Stripe aan te geven"
