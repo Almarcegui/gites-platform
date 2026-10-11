@@ -1,10 +1,15 @@
 // Intégration Stripe — par API REST directe (fetch), sans SDK.
 //
-// ⚠️ MODE TEST UNIQUEMENT (clé sk_test_…) tant que l'entité juridique qui
-// encaisse n'est pas tranchée (question ouverte n° 1 du plan v1).
+// UN COMPTE STRIPE PAR ENTITÉ QUI ENCAISSE (décision de Julien, 11/10/2026) :
+// chaque propriété a ses clés (table `property_stripe`, services/stripe-config.ts)
+// et ses encaissements arrivent sur son propre compte bancaire. Les fonctions de
+// ce fichier ne lisent donc plus l'environnement : elles reçoivent une
+// `StripeConfig` déjà résolue pour la propriété concernée. Les variables
+// d'environnement STRIPE_* ne servent plus que de REPLI, pour une propriété qui
+// n'a pas encore ses propres clés.
 //
-// Trois modes, décidés par les seules variables d'environnement — le code du
-// tunnel est le même dans les trois cas :
+// Trois modes, décidés par la seule configuration — le code du tunnel est le
+// même dans les trois cas :
 //
 //  1. AUCUNE clé            → MODE STUB : `createCheckoutSession` renvoie une
 //     URL locale /book/dev-pay.html qui simule le paiement (la page appelle
@@ -17,32 +22,77 @@
 //     email depuis le back-office (un email a besoin d'une URL, pas d'un
 //     `client_secret`).
 
+/** Configuration Stripe EFFECTIVE d'une propriété (clés déjà résolues).
+ *  Ne sort jamais du serveur : seule `publishableKey` est faite pour le
+ *  navigateur. */
+export interface StripeConfig {
+  secretKey: string | null;
+  publishableKey: string | null;
+  webhookSecret: string | null;
+  mode: "test" | "live" | null;
+  /** `checkout` force le repli sur la page hébergée (variable STRIPE_UI, globale). */
+  ui: "element" | "checkout";
+  /** D'où viennent les clés : la propriété elle-même, l'environnement (repli), ou nulle part. */
+  source: "property" | "env" | "none";
+  propertyId: number | null;
+}
+
+/** Mode déduit du préfixe d'une clé secrète (sk_test_ / rk_test_ / sk_live_ …). */
+export function modeOfSecretKey(key: string | null | undefined): "test" | "live" | null {
+  const k = (key ?? "").trim();
+  if (/^(sk|rk)_test_/.test(k)) return "test";
+  if (/^(sk|rk)_live_/.test(k)) return "live";
+  return null;
+}
+
+/** Configuration de REPLI : les variables d'environnement historiques. */
+export function stripeConfigFromEnv(env: Env, propertyId: number | null = null): StripeConfig {
+  const secretKey = (env.STRIPE_SECRET_KEY ?? "").trim() || null;
+  return {
+    secretKey,
+    publishableKey: (env.STRIPE_PUBLISHABLE_KEY ?? "").trim() || null,
+    webhookSecret: (env.STRIPE_WEBHOOK_SECRET ?? "").trim() || null,
+    mode: modeOfSecretKey(secretKey),
+    ui: (env.STRIPE_UI ?? "").trim().toLowerCase() === "checkout" ? "checkout" : "element",
+    source: secretKey ? "env" : "none",
+    propertyId,
+  };
+}
+
 const STRIPE_API = "https://api.stripe.com/v1";
 
-export function stripeEnabled(env: Env): boolean {
-  return !!env.STRIPE_SECRET_KEY && env.STRIPE_SECRET_KEY.trim() !== "";
+/** Corps d'erreur Stripe borné et débarrassé de la clé : ces messages finissent dans
+ *  les journaux et l'audit (src/index.ts), la clé secrète n'a rien à y faire. */
+function stripeErrorText(text: string, cfg: StripeConfig): string {
+  let out = text;
+  for (const secret of [cfg.secretKey, cfg.webhookSecret]) if (secret) out = out.split(secret).join("[clé]");
+  return out.slice(0, 300);
+}
+
+export function stripeEnabled(cfg: StripeConfig): boolean {
+  return !!cfg.secretKey && cfg.secretKey.trim() !== "";
 }
 
 /** Clé publique à confier au navigateur, ou `null` si le paiement intégré ne
  *  peut pas fonctionner. Les deux clés vont ensemble : une clé publique sans
  *  clé secrète monterait un formulaire qu'aucun PaymentIntent n'alimente. */
-export function stripePublishableKey(env: Env): string | null {
-  const key = (env.STRIPE_PUBLISHABLE_KEY ?? "").trim();
-  return stripeEnabled(env) && key !== "" ? key : null;
+export function stripePublishableKey(cfg: StripeConfig): string | null {
+  const key = (cfg.publishableKey ?? "").trim();
+  return stripeEnabled(cfg) && key !== "" ? key : null;
 }
 
 /** Interface de paiement retenue. `element` par défaut ; `STRIPE_UI=checkout`
  *  force le repli sur la page hébergée, sans redéploiement de code. */
-export function stripeUiMode(env: Env): "element" | "checkout" {
-  return (env.STRIPE_UI ?? "").trim().toLowerCase() === "checkout" ? "checkout" : "element";
+export function stripeUiMode(cfg: StripeConfig): "element" | "checkout" {
+  return cfg.ui;
 }
 
 /** Vrai quand le Payment Element est réellement montable : clé secrète (pour
  *  créer le PaymentIntent), clé publique (pour le monter), et mode `element`.
  *  Toute réponse négative renvoie au flux Checkout / stub — jamais à une page
  *  de paiement vide. */
-export function paymentElementEnabled(env: Env): boolean {
-  return stripePublishableKey(env) !== null && stripeUiMode(env) === "element";
+export function paymentElementEnabled(cfg: StripeConfig): boolean {
+  return stripePublishableKey(cfg) !== null && stripeUiMode(cfg) === "element";
 }
 
 /** Moyens de paiement déclarés explicitement (décision propriétaire
@@ -56,6 +106,8 @@ export function paymentElementEnabled(env: Env): boolean {
 export const PAYMENT_METHOD_TYPES = ["card", "bancontact"] as const;
 
 export interface CheckoutParams {
+  /** Origine publique du site, pour l'URL du simulateur (mode stub). */
+  baseUrl: string;
   paymentId: number;      // notre payments.id — la clé de réconciliation du webhook
   reference: string;      // PM-2026-001
   label: string;          // « Acompte réservation PM-2026-001 — La Scierie »
@@ -65,10 +117,10 @@ export interface CheckoutParams {
   cancelUrl: string;
 }
 
-export async function createCheckoutSession(env: Env, p: CheckoutParams): Promise<{ id: string; url: string }> {
-  if (!stripeEnabled(env)) {
+export async function createCheckoutSession(cfg: StripeConfig, p: CheckoutParams): Promise<{ id: string; url: string }> {
+  if (!stripeEnabled(cfg)) {
     const id = `stub_${p.paymentId}`;
-    const url = `${env.PUBLIC_BASE_URL}/book/dev-pay.html?session=${encodeURIComponent(id)}&ref=${encodeURIComponent(p.reference)}&amount=${p.amountCents}&label=${encodeURIComponent(p.label)}`;
+    const url = `${p.baseUrl}/book/dev-pay.html?session=${encodeURIComponent(id)}&ref=${encodeURIComponent(p.reference)}&amount=${p.amountCents}&label=${encodeURIComponent(p.label)}`;
     return { id, url };
   }
   const body = new URLSearchParams({
@@ -90,13 +142,13 @@ export async function createCheckoutSession(env: Env, p: CheckoutParams): Promis
   const res = await fetch(`${STRIPE_API}/checkout/sessions`, {
     method: "POST",
     headers: {
-      authorization: `Bearer ${env.STRIPE_SECRET_KEY}`,
+      authorization: `Bearer ${cfg.secretKey}`,
       "content-type": "application/x-www-form-urlencoded",
     },
     body: body.toString(),
   });
   if (!res.ok) {
-    throw new Error(`Stripe checkout ${res.status}: ${(await res.text()).slice(0, 300)}`);
+    throw new Error(`Stripe checkout ${res.status}: ${stripeErrorText(await res.text(), cfg)}`);
   }
   const session = (await res.json()) as { id: string; url: string };
   return { id: session.id, url: session.url };
@@ -156,12 +208,12 @@ function timingSafeEqualHex(a: string, b: string): boolean {
  *  décide quoi faire de l'échec (ici : une ligne d'audit).
  *
  *  No-op en mode stub : il n'existe aucune session distante à fermer. */
-export async function expireCheckoutSession(env: Env, sessionId: string): Promise<boolean> {
-  if (!stripeEnabled(env) || !sessionId || sessionId.startsWith("stub_")) return false;
+export async function expireCheckoutSession(cfg: StripeConfig, sessionId: string): Promise<boolean> {
+  if (!stripeEnabled(cfg) || !sessionId || sessionId.startsWith("stub_")) return false;
   try {
     const res = await fetch(`${STRIPE_API}/checkout/sessions/${encodeURIComponent(sessionId)}/expire`, {
       method: "POST",
-      headers: { authorization: `Bearer ${env.STRIPE_SECRET_KEY}` },
+      headers: { authorization: `Bearer ${cfg.secretKey}` },
     });
     return res.ok;
   } catch {
@@ -203,10 +255,10 @@ export function paymentIntentIdempotencyKey(p: PaymentIntentParams): string {
  *  Le `client_secret` est fait pour vivre dans le navigateur : il ne permet que
  *  de confirmer CE paiement, pour CE montant, qui est fixé ici, côté serveur. */
 export async function createPaymentIntent(
-  env: Env,
+  cfg: StripeConfig,
   p: PaymentIntentParams,
 ): Promise<{ id: string; clientSecret: string }> {
-  if (!stripeEnabled(env)) throw new Error("Stripe non configuré");
+  if (!stripeEnabled(cfg)) throw new Error("Stripe non configuré");
   const body = new URLSearchParams({
     amount: String(p.amountCents),
     currency: "eur",
@@ -226,14 +278,14 @@ export async function createPaymentIntent(
   const res = await fetch(`${STRIPE_API}/payment_intents`, {
     method: "POST",
     headers: {
-      authorization: `Bearer ${env.STRIPE_SECRET_KEY}`,
+      authorization: `Bearer ${cfg.secretKey}`,
       "content-type": "application/x-www-form-urlencoded",
       "idempotency-key": paymentIntentIdempotencyKey(p),
     },
     body: body.toString(),
   });
   if (!res.ok) {
-    throw new Error(`Stripe payment_intent ${res.status}: ${(await res.text()).slice(0, 300)}`);
+    throw new Error(`Stripe payment_intent ${res.status}: ${stripeErrorText(await res.text(), cfg)}`);
   }
   const intent = (await res.json()) as { id?: string; client_secret?: string };
   if (!intent.id || !intent.client_secret) throw new Error("Stripe payment_intent : réponse inexploitable");
@@ -246,13 +298,13 @@ export async function createPaymentIntent(
  *  Ne lève jamais : une intention déjà payée, déjà annulée ou en cours de
  *  traitement (Bancontact parti chez la banque) rend `false`. Le filet de
  *  dernier recours reste le contrôle de trop-perçu de `handlePaymentSuccess`. */
-export async function cancelPaymentIntent(env: Env, intentId: string): Promise<boolean> {
-  if (!stripeEnabled(env) || !intentId.startsWith("pi_")) return false;
+export async function cancelPaymentIntent(cfg: StripeConfig, intentId: string): Promise<boolean> {
+  if (!stripeEnabled(cfg) || !intentId.startsWith("pi_")) return false;
   try {
     const res = await fetch(`${STRIPE_API}/payment_intents/${encodeURIComponent(intentId)}/cancel`, {
       method: "POST",
       headers: {
-        authorization: `Bearer ${env.STRIPE_SECRET_KEY}`,
+        authorization: `Bearer ${cfg.secretKey}`,
         "content-type": "application/x-www-form-urlencoded",
       },
       body: "cancellation_reason=abandoned",
@@ -270,11 +322,11 @@ const UNCANCELLABLE_INTENT_STATUSES = new Set(["processing", "succeeded", "requi
 
 /** Statut courant d'un PaymentIntent, ou `null` si Stripe est injoignable ou
  *  ne connaît pas cette intention. */
-export async function paymentIntentStatus(env: Env, intentId: string): Promise<string | null> {
-  if (!stripeEnabled(env) || !intentId.startsWith("pi_")) return null;
+export async function paymentIntentStatus(cfg: StripeConfig, intentId: string): Promise<string | null> {
+  if (!stripeEnabled(cfg) || !intentId.startsWith("pi_")) return null;
   try {
     const res = await fetch(`${STRIPE_API}/payment_intents/${encodeURIComponent(intentId)}`, {
-      headers: { authorization: `Bearer ${env.STRIPE_SECRET_KEY}` },
+      headers: { authorization: `Bearer ${cfg.secretKey}` },
     });
     if (!res.ok) return null;
     const intent = (await res.json()) as { status?: string };
@@ -296,9 +348,9 @@ export async function paymentIntentStatus(env: Env, intentId: string): Promise<s
  *  Stripe injoignable rend `null` → `false` : on ne bloque pas un client sur un
  *  incident réseau, on retombe sur le comportement d'avant (annulation tentée,
  *  échec journalisé, alerte de trop-perçu en dernier recours). */
-export async function remotePaymentInFlight(env: Env, ref: string): Promise<boolean> {
-  if (!stripeEnabled(env) || !ref.startsWith("pi_")) return false;
-  const status = await paymentIntentStatus(env, ref);
+export async function remotePaymentInFlight(cfg: StripeConfig, ref: string): Promise<boolean> {
+  if (!stripeEnabled(cfg) || !ref.startsWith("pi_")) return false;
+  const status = await paymentIntentStatus(cfg, ref);
   return status !== null && UNCANCELLABLE_INTENT_STATUSES.has(status);
 }
 
@@ -308,7 +360,67 @@ export async function remotePaymentInFlight(env: Env, ref: string): Promise<bool
  *  `voidPendingSessions`, qui n'a pas à connaître le mode en cours — une
  *  réservation peut très bien porter les deux, si le mode a changé entre deux
  *  tentatives. */
-export async function voidRemotePayment(env: Env, ref: string): Promise<boolean> {
-  if (!stripeEnabled(env) || !ref || ref.startsWith("stub_")) return false;
-  return ref.startsWith("pi_") ? cancelPaymentIntent(env, ref) : expireCheckoutSession(env, ref);
+export async function voidRemotePayment(cfg: StripeConfig, ref: string): Promise<boolean> {
+  if (!stripeEnabled(cfg) || !ref || ref.startsWith("stub_")) return false;
+  return ref.startsWith("pi_") ? cancelPaymentIntent(cfg, ref) : expireCheckoutSession(cfg, ref);
+}
+
+// ---------------------------------------------------------------------------
+// Contrôle d'une clé et frais réels (compte Stripe par propriété)
+// ---------------------------------------------------------------------------
+
+export interface KeyTestResult {
+  ok: boolean;
+  /** Mode annoncé par Stripe (`livemode` de la réponse), pas celui du préfixe. */
+  livemode?: boolean;
+  /** Message lisible, jamais la clé. */
+  error?: string;
+}
+
+/** Teste une clé secrète avec l'appel le plus léger de l'API : `GET /v1/balance`
+ *  (lecture seule, aucun effet). Ne lève jamais ; l'erreur Stripe est rendue en
+ *  clair (« Invalid API Key provided … »), sans jamais répéter la clé. */
+export async function testStripeSecretKey(secretKey: string): Promise<KeyTestResult> {
+  try {
+    const res = await fetch(`${STRIPE_API}/balance`, { headers: { authorization: `Bearer ${secretKey}` } });
+    const text = await res.text();
+    let data: { livemode?: boolean; error?: { message?: string } } = {};
+    try {
+      data = JSON.parse(text) as typeof data;
+    } catch {
+      /* corps non JSON */
+    }
+    if (!res.ok) {
+      const msg = (data.error?.message ?? `Stripe a répondu ${res.status}`).split(secretKey).join("[clé]");
+      return { ok: false, error: msg.slice(0, 300) };
+    }
+    return { ok: true, livemode: data.livemode === true };
+  } catch (e) {
+    return { ok: false, error: `Stripe injoignable : ${e instanceof Error ? e.message : String(e)}`.slice(0, 300) };
+  }
+}
+
+/** Frais Stripe et net d'un PaymentIntent payé, lus sur la transaction de solde
+ *  de sa charge. `null` si Stripe ne les donne pas (encore) : ils sont alors
+ *  affichés « inconnus » plutôt qu'inventés. Ne lève jamais. */
+export async function fetchPaymentFees(
+  cfg: StripeConfig,
+  intentId: string,
+): Promise<{ feeCents: number; netCents: number } | null> {
+  if (!stripeEnabled(cfg) || !intentId.startsWith("pi_")) return null;
+  try {
+    const url = `${STRIPE_API}/payment_intents/${encodeURIComponent(intentId)}?expand[]=latest_charge.balance_transaction`;
+    const res = await fetch(url, { headers: { authorization: `Bearer ${cfg.secretKey}` } });
+    if (!res.ok) return null;
+    const intent = (await res.json()) as {
+      latest_charge?: { balance_transaction?: { fee?: unknown; net?: unknown } | string | null } | string | null;
+    };
+    const charge = intent.latest_charge;
+    const bt = charge && typeof charge === "object" ? charge.balance_transaction : null;
+    if (!bt || typeof bt !== "object") return null;
+    if (typeof bt.fee !== "number" || typeof bt.net !== "number") return null;
+    return { feeCents: bt.fee, netCents: bt.net };
+  } catch {
+    return null;
+  }
 }

@@ -27,6 +27,8 @@ import { ImportPage } from "./pages/settings/Import";
 import { LogsPage } from "./pages/settings/Logs";
 import { OptionsPage } from "./pages/settings/Options";
 import { PaymentsPage } from "./pages/settings/Payments";
+import { StripeAccountsPage } from "./pages/settings/StripeAccounts";
+import { EncaissementsPage } from "./pages/settings/Encaissements";
 import { PromotionsPage } from "./pages/settings/Promotions";
 import { RegisterPage } from "./pages/settings/Register";
 import { StartupPage } from "./pages/settings/Startup";
@@ -81,6 +83,8 @@ const settingsRoutes = [
   sub("options", OptionsPage),
   sub("clients", ClientsPage),
   sub("paiements", PaymentsPage),
+  sub("stripe", StripeAccountsPage),
+  sub("encaissements", EncaissementsPage),
   sub("chiffres", StatsPage),
   sub("plateformes", ChannelsPage),
   sub("plateformes/prix", ChannelPricesPage),

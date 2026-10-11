@@ -7069,3 +7069,270 @@ msgstr "voyageurs inscrits au registre"
 #: src/pages/settings/Channels.tsx
 msgid "Vu la première fois"
 msgstr "Vu la première fois"
+
+#. placeholder {0}: eur(r.totals.grossCents)
+#. placeholder {1}: eur(r.totals.feeCents)
+#. placeholder {2}: eur(r.totals.netCents)
+#. placeholder {3}: r.totals.count
+#: src/pages/settings/Encaissements.tsx
+msgid "{0} encaissés, {1} de frais, {2} nets ({3} paiements)."
+msgstr "{0} encaissés, {1} de frais, {2} nets ({3} paiements)."
+
+#: src/pages/settings/Encaissements.tsx
+msgid "Aucun encaissement Stripe pour cette propriété"
+msgstr "Aucun encaissement Stripe pour cette propriété"
+
+#: src/pages/settings/StripeAccounts.tsx
+msgid "Aucune clé : les paiements sont simulés (aucun argent réel ne bouge)."
+msgstr "Aucune clé : les paiements sont simulés (aucun argent réel ne bouge)."
+
+#: src/pages/settings/StripeAccounts.tsx
+msgid "Aucune clé propre : le serveur utilise les clés de repli de son environnement."
+msgstr "Aucune clé propre : le serveur utilise les clés de repli de son environnement."
+
+#: src/pages/settings/Encaissements.tsx
+msgid "Brut"
+msgstr "Brut"
+
+#. placeholder {0}: (x as { updated: number }).updated
+#: src/pages/settings/Encaissements.tsx
+msgid "C'est fait. {0} frais relevés chez Stripe."
+msgstr "C'est fait. {0} frais relevés chez Stripe."
+
+#: src/pages/settings/StripeAccounts.tsx
+msgid "C'est fait. Adresse copiée."
+msgstr "C'est fait. Adresse copiée."
+
+#: src/pages/settings/StripeAccounts.tsx
+msgid "C'est fait. Clés enregistrées."
+msgstr "C'est fait. Clés enregistrées."
+
+#: src/pages/settings/StripeAccounts.tsx
+msgid "C'est fait. Clés retirées."
+msgstr "C'est fait. Clés retirées."
+
+#: src/booking/BookingPanel.tsx
+msgid "C'est fait. Confirmation renvoyée au client."
+msgstr "C'est fait. Confirmation renvoyée au client."
+
+#: src/pages/Settings.tsx
+msgid "Ce qui est arrivé sur chaque compte Stripe : frais, net, total par mois, export"
+msgstr "Ce qui est arrivé sur chaque compte Stripe : frais, net, total par mois, export"
+
+#: src/pages/settings/StripeAccounts.tsx
+msgid "Chaque propriété encaisse sur son propre compte Stripe, donc sur son propre compte bancaire. Les clés se collent ici ; elles ne sont plus jamais réaffichées après l'enregistrement."
+msgstr "Chaque propriété encaisse sur son propre compte Stripe, donc sur son propre compte bancaire. Les clés se collent ici ; elles ne sont plus jamais réaffichées après l'enregistrement."
+
+#: src/pages/settings/StripeAccounts.tsx
+msgid "Clé publiable"
+msgstr "Clé publiable"
+
+#: src/pages/settings/StripeAccounts.tsx
+msgid "Clé publiable (pk_test_… ou pk_live_…)"
+msgstr "Clé publiable (pk_test_… ou pk_live_…)"
+
+#: src/pages/settings/StripeAccounts.tsx
+msgid "Clé secrète"
+msgstr "Clé secrète"
+
+#: src/pages/settings/StripeAccounts.tsx
+msgid "Clé secrète (sk_test_… ou sk_live_…)"
+msgstr "Clé secrète (sk_test_… ou sk_live_…)"
+
+#: src/pages/Settings.tsx
+#: src/pages/settings/StripeAccounts.tsx
+msgid "Comptes Stripe"
+msgstr "Comptes Stripe"
+
+#: src/sale/SaleFlow.tsx
+msgid "Confirmée sans attendre les arrhes"
+msgstr "Confirmée sans attendre les arrhes"
+
+#: src/pages/settings/StripeAccounts.tsx
+msgid "Copier l'adresse"
+msgstr "Copier l'adresse"
+
+#: src/pages/settings/Encaissements.tsx
+msgid "Encaissements"
+msgstr "Encaissements"
+
+#: src/pages/Settings.tsx
+#: src/pages/settings/Encaissements.tsx
+msgid "Encaissements Stripe"
+msgstr "Encaissements Stripe"
+
+#: src/pages/settings/Encaissements.tsx
+msgid "Exporter en CSV"
+msgstr "Exporter en CSV"
+
+#: src/pages/settings/Encaissements.tsx
+msgid "Frais"
+msgstr "Frais"
+
+#: src/pages/settings/Encaissements.tsx
+msgid "Frais Stripe"
+msgstr "Frais Stripe"
+
+#: src/pages/settings/StripeAccounts.tsx
+msgid "Garder"
+msgstr "Garder"
+
+#: src/pages/settings/Encaissements.tsx
+msgid "inconnus"
+msgstr "inconnus"
+
+#: src/pages/settings/StripeAccounts.tsx
+msgid "La clé a été refusée."
+msgstr "La clé a été refusée."
+
+#: src/pages/settings/StripeAccounts.tsx
+msgid "La clé fonctionne (compte de test)."
+msgstr "La clé fonctionne (compte de test)."
+
+#: src/pages/settings/StripeAccounts.tsx
+msgid "La clé fonctionne (compte réel)."
+msgstr "La clé fonctionne (compte réel)."
+
+#. placeholder {0}: errorText(e)
+#: src/sale/SaleFlow.tsx
+msgid "La réservation est enregistrée, mais le lien de paiement n'a pas pu être créé : {0} Créez-le depuis la fiche."
+msgstr "La réservation est enregistrée, mais le lien de paiement n'a pas pu être créé : {0} Créez-le depuis la fiche."
+
+#. placeholder {0}: errorText(e)
+#: src/sale/SaleFlow.tsx
+msgid "La réservation est enregistrée, mais le paiement n'a pas été noté : {0} Notez-le dans la fiche."
+msgstr "La réservation est enregistrée, mais le paiement n'a pas été noté : {0} Notez-le dans la fiche."
+
+#: src/pages/settings/StripeAccounts.tsx
+msgid "Laissez vide pour garder la clé actuelle."
+msgstr "Laissez vide pour garder la clé actuelle."
+
+#: src/pages/settings/StripeAccounts.tsx
+msgid "Laissez vide pour garder le secret actuel."
+msgstr "Laissez vide pour garder le secret actuel."
+
+#. placeholder {0}: q ? eur(q.totalCents) : ""
+#: src/sale/SaleFlow.tsx
+msgid "Le client a déjà payé le total ({0}) : le noter comme reçu"
+msgstr "Le client a déjà payé le total ({0}) : le noter comme reçu"
+
+#: src/pages/settings/StripeAccounts.tsx
+msgid "Les clés de cette propriété sont utilisées."
+msgstr "Les clés de cette propriété sont utilisées."
+
+#: src/pages/Settings.tsx
+msgid "Les clés de chaque propriété, test ou réel, l'adresse du webhook"
+msgstr "Les clés de chaque propriété, test ou réel, l'adresse du webhook"
+
+#: src/pages/settings/StripeAccounts.tsx
+msgid "Les comptes Stripe n'ont pas pu être lus."
+msgstr "Les comptes Stripe n'ont pas pu être lus."
+
+#: src/pages/settings/Encaissements.tsx
+msgid "Les encaissements n'ont pas pu être lus."
+msgstr "Les encaissements n'ont pas pu être lus."
+
+#: src/pages/settings/StripeAccounts.tsx
+msgid "Les trois clés sont effacées. La propriété retombe sur les clés de repli de l'environnement, ou sur les paiements simulés s'il n'y en a pas : plus aucun vrai paiement ne sera pris."
+msgstr "Les trois clés sont effacées. La propriété retombe sur les clés de repli de l'environnement, ou sur les paiements simulés s'il n'y en a pas : plus aucun vrai paiement ne sera pris."
+
+#: src/sale/SaleFlow.tsx
+msgid "Lien de paiement à transmettre au client :"
+msgstr "Lien de paiement à transmettre au client :"
+
+#: src/pages/settings/StripeAccounts.tsx
+msgid "Mode du compte Stripe"
+msgstr "Mode du compte Stripe"
+
+#: src/pages/settings/Encaissements.tsx
+msgid "Net"
+msgstr "Net"
+
+#: src/pages/settings/StripeAccounts.tsx
+msgid "Nom du compte (pour vous y retrouver)"
+msgstr "Nom du compte (pour vous y retrouver)"
+
+#. placeholder {0}: q ? eur(q.depositCents) : ""
+#: src/sale/SaleFlow.tsx
+msgid "Option : les dates sont gardées en attendant les arrhes ({0})"
+msgstr "Option : les dates sont gardées en attendant les arrhes ({0})"
+
+#: src/pages/settings/StripeAccounts.tsx
+msgid "pas posée"
+msgstr "pas posée"
+
+#: src/sale/SaleFlow.tsx
+msgid "payé avant l'enregistrement"
+msgstr "payé avant l'enregistrement"
+
+#. placeholder {0}: sqlWhen(k.setAt)
+#: src/pages/settings/StripeAccounts.tsx
+msgid "posée le {0}"
+msgstr "posée le {0}"
+
+#. placeholder {0}: sqlWhen(k.setAt)
+#. placeholder {1}: k.hint
+#: src/pages/settings/StripeAccounts.tsx
+msgid "posée le {0} ({1})"
+msgstr "posée le {0} ({1})"
+
+#: src/sale/SaleFlow.tsx
+msgid "Préparer un lien de paiement par carte"
+msgstr "Préparer un lien de paiement par carte"
+
+#: src/pages/settings/StripeAccounts.tsx
+msgid "Réel (vrais paiements)"
+msgstr "Réel (vrais paiements)"
+
+#: src/pages/settings/Encaissements.tsx
+msgid "Relever les frais manquants ({unknown})"
+msgstr "Relever les frais manquants ({unknown})"
+
+#: src/pages/settings/StripeAccounts.tsx
+msgid "Retirer les clés"
+msgstr "Retirer les clés"
+
+#. placeholder {0}: p.name
+#: src/pages/settings/StripeAccounts.tsx
+msgid "Retirer les clés de {0} ?"
+msgstr "Retirer les clés de {0} ?"
+
+#: src/pages/settings/StripeAccounts.tsx
+msgid "Retirer les clés de cette propriété"
+msgstr "Retirer les clés de cette propriété"
+
+#: src/pages/settings/StripeAccounts.tsx
+msgid "Secret du webhook"
+msgstr "Secret du webhook"
+
+#: src/pages/settings/StripeAccounts.tsx
+msgid "Secret du webhook (whsec_…)"
+msgstr "Secret du webhook (whsec_…)"
+
+#: src/sale/SaleFlow.tsx
+msgid "Sinon, le solde reste à encaisser dans la fiche."
+msgstr "Sinon, le solde reste à encaisser dans la fiche."
+
+#: src/pages/settings/StripeAccounts.tsx
+msgid "Tableau de bord Stripe, Développeurs, Webhooks, Ajouter un point de terminaison. Collez cette adresse, cochez ces événements, puis copiez le « secret de signature » (whsec_…) dans le champ ci-dessus."
+msgstr "Tableau de bord Stripe, Développeurs, Webhooks, Ajouter un point de terminaison. Collez cette adresse, cochez ces événements, puis copiez le « secret de signature » (whsec_…) dans le champ ci-dessus."
+
+#: src/pages/settings/StripeAccounts.tsx
+msgid "Test (aucun argent réel)"
+msgstr "Test (aucun argent réel)"
+
+#: src/pages/settings/StripeAccounts.tsx
+msgid "Test terminé."
+msgstr "Test terminé."
+
+#: src/pages/settings/StripeAccounts.tsx
+msgid "Tester la clé"
+msgstr "Tester la clé"
+
+#: src/pages/settings/Encaissements.tsx
+msgid "Total par mois"
+msgstr "Total par mois"
+
+#: src/pages/settings/StripeAccounts.tsx
+msgid "Webhook à déclarer chez Stripe"
+msgstr "Webhook à déclarer chez Stripe"
