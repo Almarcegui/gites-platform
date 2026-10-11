@@ -100,9 +100,7 @@ function withoutErrors(item: Record<string, unknown>): string {
     const list = item[key];
     if (!Array.isArray(list)) continue;
     for (const m of list) {
-      const o = (m && typeof m === "object" ? m : {}) as Record<string, unknown>;
-      const field = typeof o.field === "string" && o.field ? `${o.field} : ` : "";
-      notes.push(`${key === "warnings" ? "avertissement" : "info"} ${field}${typeof o.message === "string" ? o.message : JSON.stringify(rawForAudit(m))}`);
+      notes.push(`${key === "warnings" ? "avertissement" : "info"} ${motifText(m)}`);
     }
   }
   if (notes.length) return notes.join(" ; ");
@@ -118,12 +116,46 @@ export function truncate(text: string, max: number): string {
  *  l'audit ni dans le 502. Les motifs, eux, sont gardés en entier. */
 const KEPT_FIELDS = ["success", "id", "roomId", "propertyId", "new", "modified", "errors", "warnings", "info", "action", "field", "subField", "error", "message", "code", "type"] as const;
 
+const MOTIF_LISTS = new Set(["errors", "warnings", "info"]);
+
+/** Un élément de errors[] / warnings[] / info[] : TOUTES ses clés scalaires
+ *  (chaîne, nombre, booléen, null), pas seulement la liste blanche. Le 11/10
+ *  Beds24 a refusé la liaison des prix par six `warnings` dont le texte, sous
+ *  des clés hors liste, avait été réduit à `{}`. */
+function keepMotif(m: unknown): unknown {
+  if (!m || typeof m !== "object" || Array.isArray(m)) return keepFields(m, 1);
+  const out: Record<string, unknown> = {};
+  for (const [k, val] of Object.entries(m as Record<string, unknown>)) {
+    if (val === null || ["string", "number", "boolean"].includes(typeof val)) out[k] = typeof val === "string" ? truncate(val, 2000) : val;
+  }
+  return out;
+}
+
+/** Texte d'un motif (élément de errors/warnings/info), mot pour mot. */
+export function motifText(m: unknown): string {
+  if (typeof m === "string") return m;
+  if (!m || typeof m !== "object") return String(m);
+  const o = m as Record<string, unknown>;
+  const entries = Object.entries(o).filter(([, val]) => val === null || ["string", "number", "boolean"].includes(typeof val));
+  if (entries.length === 0) return "{} (Beds24 n'a rien dit)";
+  const field = typeof o.field === "string" && o.field ? `${o.field} : ` : "";
+  if (typeof o.message === "string") {
+    const rest = entries.filter(([k]) => k !== "message" && k !== "field");
+    return `${field}${o.message}${rest.length ? ` [${rest.map(([k, val]) => `${k}=${String(val)}`).join(", ")}]` : ""}`;
+  }
+  return entries.map(([k, val]) => `${k}=${String(val)}`).join(", ");
+}
+
 function keepFields(v: unknown, depth = 0): unknown {
   if (Array.isArray(v)) return v.slice(0, 50).map((x) => keepFields(x, depth));
   if (!v || typeof v !== "object") return typeof v === "string" ? truncate(v, 2000) : v;
   if (depth > 4) return "…";
   const out: Record<string, unknown> = {};
-  for (const k of KEPT_FIELDS) if (k in (v as Record<string, unknown>)) out[k] = keepFields((v as Record<string, unknown>)[k], depth + 1);
+  for (const k of KEPT_FIELDS) {
+    if (!(k in (v as Record<string, unknown>))) continue;
+    const val = (v as Record<string, unknown>)[k];
+    out[k] = MOTIF_LISTS.has(k) && Array.isArray(val) ? val.slice(0, 50).map(keepMotif) : keepFields(val, depth + 1);
+  }
   return out;
 }
 
@@ -146,12 +178,7 @@ function collectFailures(data: unknown): string[] {
     const text = Array.isArray(errs)
       ? errs
           .map((e) => {
-            if (e && typeof e === "object") {
-              const o = e as Record<string, unknown>;
-              const field = typeof o.field === "string" && o.field ? `${o.field} : ` : "";
-              return `${field}${typeof o.message === "string" ? o.message : JSON.stringify(rawForAudit(o))}`;
-            }
-            return String(e);
+            return motifText(e);
           })
           .join(" ; ")
       : typeof errs === "string"

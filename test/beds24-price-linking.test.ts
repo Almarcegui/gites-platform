@@ -155,6 +155,18 @@ describe("prix dérivés contre le faux Beds24", () => {
     expect(await etats()).toEqual([`${SCIEUR}:direct`, `${SCIERIE}:direct`]);
   });
 
+  it("avertissements à clés inconnues : toutes les clés scalaires remontent mot pour mot ; {} est dit explicitement", async () => {
+    faux.refuser = () => ({ success: false, modified: {}, warnings: [{ type: "x", field: "priceRules", message: "texte exact de Beds24", priceId: 1, nested: { a: 1 } }] });
+    const r = await api("POST", "/api/admin/channels/price-linking", { enabled: true });
+    expect(r.data.error).toContain("priceRules : texte exact de Beds24");
+    expect(r.data.error).toContain("type=x");
+    expect(r.data.beds24[0].warnings[0]).toEqual({ type: "x", field: "priceRules", message: "texte exact de Beds24", priceId: 1 });
+    faux.refuser = () => ({ success: false, modified: {}, warnings: [{ reason: "linked rate unsupported", code2: 42 }, {}] });
+    const autre = await api("POST", "/api/admin/channels/price-linking", { enabled: true });
+    expect(autre.data.error).toContain("reason=linked rate unsupported, code2=42");
+    expect(autre.data.error).toContain("{} (Beds24 n'a rien dit)");
+  });
+
   it("refus de forme (schéma) : le champ et le message de Beds24 remontent", async () => {
     faux.seed(PROP, [SCIEUR, SCIERIE], [{ ...DEFAULT_RULE_1, minimumStay: 31 }]); // recopié sur les lignes créées : hors borne
     const r = await api("POST", "/api/admin/channels/price-linking", { enabled: true });

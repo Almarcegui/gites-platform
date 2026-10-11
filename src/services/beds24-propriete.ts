@@ -53,6 +53,7 @@ import { resolvePushMarkup } from "./beds24-sync";
 import {
   Beds24Error,
   beds24Fetch,
+  motifText,
   beds24ListProperties,
   beds24Status,
   beds24WritesAllowed,
@@ -480,7 +481,7 @@ function responseMessages(data: unknown): string[] {
       if (!Array.isArray(list)) continue;
       for (const m of list) {
         const o = (m && typeof m === "object" ? m : {}) as Record<string, unknown>;
-        const text = typeof o.message === "string" ? o.message : JSON.stringify(m);
+        const text = motifText(m);
         const label = key === "errors" ? "erreur" : key === "warnings" ? "avertissement" : "info";
         out.push(`${label} Beds24${typeof o.field === "string" && o.field ? ` (${o.field})` : ""} : ${text}`);
       }
