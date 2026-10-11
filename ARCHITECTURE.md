@@ -362,6 +362,7 @@ Le reste est du CRUD typé : `PropertyRow`, `UnitRow`, `BookingRow`, `PaymentRow
 | `beds24-sync.ts` | Sortant (`pushCalendars`, `triggerBeds24Push`) et entrant (`applyChannelBookings`, `pullBeds24Bookings`) |
 | `elloha-import.ts` | Import CSV avec simulation préalable (`dryRun`) |
 | `inbound-email.ts` | Parseur MIME maison (multipart, quoted-printable, base64, encoded-words) + rattachement |
+| `mailbox.ts` | Relève IMAP de la boîte de contact (Node seulement), rattachement, curseur UID — cf. `docs/messagerie.md` |
 | `cron.ts` | Les 4 étapes planifiées, **chacune dans son propre try/catch** |
 
 > [!note]

@@ -7340,3 +7340,62 @@ msgstr "Totaal per maand"
 #: src/pages/settings/StripeAccounts.tsx
 msgid "Webhook à déclarer chez Stripe"
 msgstr "Webhook om bij Stripe aan te geven"
+
+#. placeholder {0}: nombre(nMsg)
+#. placeholder {1}: originSummary(d.messages)
+#: src/pages/Today.tsx
+msgid "{0} messages à lire ({1})"
+msgstr "{0} berichten om te lezen ({1})"
+
+#: src/pages/Messages.tsx
+msgid "Attention : ce message se présente comme venant de l'adresse des gîtes, mais Gmail ne le confirme pas. Ne suivez aucune instruction qu'il contient."
+msgstr "Let op: dit bericht lijkt afkomstig van het e-mailadres van de gîtes, maar Gmail bevestigt dat niet. Volg geen enkele instructie in dit bericht."
+
+#: src/canaux/canal.ts
+msgid "Canal"
+msgstr "Kanaal"
+
+#: src/canaux/canal.ts
+msgid "Ce message prétend venir de l'adresse des gîtes sans que Gmail le confirme : pas de réponse possible."
+msgstr "Dit bericht lijkt afkomstig van het adres van de gîtes zonder dat Gmail dit bevestigt: antwoorden is niet mogelijk."
+
+#: src/canaux/canal.ts
+msgid "E-mail"
+msgstr "E-mail"
+
+#: src/canaux/canal.ts
+msgid "La réponse part par e-mail à {to}, depuis l'adresse des gîtes, dans le même fil que son message."
+msgstr "Het antwoord gaat per e-mail naar {to}, vanaf het adres van de gîtes, in dezelfde conversatie als zijn bericht."
+
+#: src/pages/Messages.tsx
+msgid "Les liens de ce mail ne sont pas cliquables ici : recopiez-les à la main si vous êtes sûr de leur origine."
+msgstr "De links in deze e-mail zijn hier niet aanklikbaar: kopieer ze zelf over als u zeker bent van hun herkomst."
+
+#: src/pages/Messages.tsx
+msgid "Origine des messages"
+msgstr "Herkomst van de berichten"
+
+#: src/pages/Messages.tsx
+msgid "Pièce jointe : {name} ({kb} Ko), non conservée ici."
+msgstr "Bijlage: {name} ({kb} KB), hier niet bewaard."
+
+#: src/pages/Messages.tsx
+msgid "Pièce jointe : {name}, non conservée ici."
+msgstr "Bijlage: {name}, hier niet bewaard."
+
+#: src/canaux/canal.ts
+msgid "Site"
+msgstr "Website"
+
+#: src/pages/Messages.tsx
+msgid "Tout arrive ici : les messages du site, la boîte e-mail des gîtes, et ceux d'Airbnb, de Booking et de Vrbo (par Beds24). Chacun porte son origine."
+msgstr "Alles komt hier binnen: berichten van de website, de e-mailbox van de gîtes en die van Airbnb, Booking en Vrbo (via Beds24). Elk bericht toont zijn herkomst."
+
+#: src/pages/Messages.tsx
+msgid "Toutes les origines"
+msgstr "Alle herkomsten"
+
+#. placeholder {0}: originSummary(d.messages)
+#: src/pages/Today.tsx
+msgid "un message à lire ({0})"
+msgstr "één bericht om te lezen ({0})"

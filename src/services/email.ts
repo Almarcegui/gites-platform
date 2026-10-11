@@ -63,6 +63,9 @@ export interface EmailToQueue {
   subject: string;
   bodyText: string;
   kind: string; // 'confirmation' | 'payment_link' | 'balance_reminder' | …
+  /** Réponse à un mail : garde le fil chez le destinataire (Gmail, Outlook). */
+  inReplyTo?: string | null;
+  references?: string | null;
   /** Version HTML du message (multipart/alternative) ; le texte reste la référence du journal. */
   bodyHtml?: string;
   /** Pièces jointes (le contrat PDF de la confirmation). */
@@ -98,6 +101,15 @@ export function emailTransport(env: Env): "smtp" | "resend" | null {
 }
 
 export async function queueEmail(db: D1Database, env: Env, e: EmailToQueue): Promise<"stub" | "sent" | "failed"> {
+  return (await queueEmailDetailed(db, env, e)).status;
+}
+
+/** Comme queueEmail, avec l'identifiant du fournisseur (le Message-ID SMTP, en <…>). */
+export async function queueEmailDetailed(
+  db: D1Database,
+  env: Env,
+  e: EmailToQueue,
+): Promise<{ status: "stub" | "sent" | "failed"; providerId: string | null }> {
   let status: "stub" | "sent" | "failed" = "stub";
   let providerId: string | null = null;
   // Sans le détail de l'échec, un voucher jamais parti était indiscernable
@@ -107,7 +119,7 @@ export async function queueEmail(db: D1Database, env: Env, e: EmailToQueue): Pro
 
   if (transport === "smtp" && env.SMTP_SEND) {
     try {
-      providerId = (await env.SMTP_SEND({ to: e.to, subject: e.subject, text: e.bodyText, html: e.bodyHtml, attachments: e.attachments })).id;
+      providerId = (await env.SMTP_SEND({ to: e.to, subject: e.subject, text: e.bodyText, html: e.bodyHtml, attachments: e.attachments, inReplyTo: e.inReplyTo, references: e.references })).id;
       status = "sent";
     } catch (err) {
       status = "failed";
@@ -126,6 +138,7 @@ export async function queueEmail(db: D1Database, env: Env, e: EmailToQueue): Pro
           to: [e.to],
           subject: e.subject,
           text: e.bodyText,
+          ...(e.inReplyTo ? { headers: { "In-Reply-To": e.inReplyTo, References: e.references || e.inReplyTo } } : {}),
           ...(e.bodyHtml ? { html: e.bodyHtml } : {}),
           ...(e.attachments?.length
             ? { attachments: e.attachments.map((a) => ({ filename: a.filename, content: toBase64(a.content) })) }
@@ -151,7 +164,7 @@ export async function queueEmail(db: D1Database, env: Env, e: EmailToQueue): Pro
     )
     .bind(e.bookingId ?? null, e.to, e.subject, e.bodyText, e.kind, status, providerId, errorDetail, attachmentsLog(e.attachments))
     .run();
-  return status;
+  return { status, providerId };
 }
 
 function quoteLinesText(lines: QuoteLine[], nl = false): string {
