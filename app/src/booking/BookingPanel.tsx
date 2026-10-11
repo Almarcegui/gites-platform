@@ -758,33 +758,90 @@ function WriteDialog({ open, b, guest, times, onClose }: { open: boolean; b: Boo
   );
 }
 
+interface CancelPlan {
+  mode: "canal" | "sans_paiement" | "arrhes";
+  par: "locataire" | "proprietaire";
+  paidCents: number;
+  keptCents: number;
+  refundCents: number;
+  stripeRefundCents: number;
+  manualRefundCents: number;
+  indemnityCents: number;
+  note: string;
+}
+
+interface CancelResult {
+  plan: CancelPlan;
+  refunds: { status: string }[];
+}
+
 function CancelDialog({ open, b, onClose }: { open: boolean; b: Booking; onClose: () => void }) {
   const { t } = useLingui();
   const a = useAction();
   const [reason, setReason] = useState("");
+  const [par, setPar] = useState<"locataire" | "proprietaire">("locataire");
   useEffect(() => {
     if (open) {
       setReason("");
+      setPar("locataire");
       a.reset();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
+  // Le plan vient du serveur (simulation, rien n'est fait) : l'écran n'invente aucun montant.
+  const planQuery = useQuery({
+    queryKey: ["cancel-plan", b.id, par, b.paidCents],
+    queryFn: () => api<{ plan: CancelPlan }>(`/bookings/${b.id}/cancel`, { method: "POST", body: { par, simuler: true } }).then((r) => r.plan),
+    enabled: open && b.status !== "cancelled",
+    staleTime: 0,
+  });
+  const plan = planQuery.data;
+  const moves = plan != null && plan.mode === "arrhes";
   return (
     <Box open={open} onClose={onClose} title={t`Annuler la réservation ${b.reference}`}>
-      <p className="lead">
-        {b.paidCents > 0
-          ? t`${eur(b.paidCents)} ont déjà été payés. L'annulation libère les dates mais ne rembourse rien d'elle-même : le remboursement éventuel se fait à part.`
-          : t`L'annulation libère les dates tout de suite, ici et sur Airbnb et Booking.`}
-      </p>
+      <fieldset style={{ border: 0, padding: 0, margin: "0 0 12px" }}>
+        <legend className="lead" style={{ marginBottom: 6 }}>
+          <Trans>Qui annule ?</Trans>
+        </legend>
+        <label style={{ display: "block", marginBottom: 4 }}>
+          <input type="radio" name="cancel-par" checked={par === "locataire"} onChange={() => setPar("locataire")} /> <Trans>Le locataire</Trans>
+        </label>
+        <label style={{ display: "block" }}>
+          <input type="radio" name="cancel-par" checked={par === "proprietaire"} onChange={() => setPar("proprietaire")} /> <Trans>Le propriétaire</Trans>
+        </label>
+      </fieldset>
+      {plan == null ? (
+        <p className="lead">{planQuery.isError ? t`Le calcul du remboursement a échoué. Réessayez.` : t`Calcul du remboursement…`}</p>
+      ) : moves ? (
+        <div className="lead" data-testid="cancel-plan">
+          {plan.par === "locataire" ? <p>{t`Arrhes conservées : ${eur(plan.keptCents)}`}</p> : null}
+          <p>{t`Remboursement : ${eur(plan.refundCents)}`}</p>
+          {plan.manualRefundCents > 0 ? <p>{t`Dont ${eur(plan.manualRefundCents)} à rendre à la main (hors Stripe).`}</p> : null}
+          {plan.indemnityCents > 0 ? <p>{t`Indemnité : ${eur(plan.indemnityCents)} à virer à la main (double des arrhes).`}</p> : null}
+          <p>{plan.par === "locataire" ? t`Le solde payé est rendu dans les 14 jours.` : t`Le client en est prévenu par mail.`}</p>
+        </div>
+      ) : (
+        <p className="lead">
+          {plan.mode === "canal" ? plan.note : t`Rien n'a été payé : rien à rembourser. L'annulation libère les dates tout de suite, ici et sur Airbnb et Booking.`}
+        </p>
+      )}
       <Textarea label={t`Motif de l'annulation`} description={t`Il reste dans l'historique de la réservation.`} autosize minRows={3} size="md" value={reason} onChange={(e) => setReason(e.currentTarget.value)} required />
       <div className="acts" style={{ marginTop: 16 }}>
         <button
           type="button"
           className="btn pri"
           style={{ background: "var(--danger)", borderColor: "var(--danger)" }}
-          disabled={a.state.status === "busy" || reason.trim().length < 3}
+          disabled={a.state.status === "busy" || reason.trim().length < 3 || plan == null}
           onClick={async () => {
-            const ok = await a.run(() => api(`/bookings/${b.id}/cancel`, { method: "POST", body: { reason: reason.trim() } }), t`C'est fait. Réservation annulée, les dates sont libres.`);
+            const ok = await a.run(
+              () => api<CancelResult>(`/bookings/${b.id}/cancel`, { method: "POST", body: { reason: reason.trim(), par, confirmer: true } }),
+              (r) => {
+                const res = r as CancelResult;
+                return res.refunds.some((x) => x.status === "failed")
+                  ? t`Réservation annulée, mais un remboursement Stripe a échoué : il est à rejouer.`
+                  : t`C'est fait. Réservation annulée, les dates sont libres.`;
+              },
+            );
             if (ok) onClose();
           }}
         >

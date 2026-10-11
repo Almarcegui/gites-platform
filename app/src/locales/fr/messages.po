@@ -461,11 +461,6 @@ msgstr "{0} nuits min."
 msgid "{0} nuits. Si une autre saison couvre aussi ces jours, la plus courte l'emporte."
 msgstr "{0} nuits. Si une autre saison couvre aussi ces jours, la plus courte l'emporte."
 
-#. placeholder {0}: eur(b.paidCents)
-#: src/booking/BookingPanel.tsx
-msgid "{0} ont déjà été payés. L'annulation libère les dates mais ne rembourse rien d'elle-même : le remboursement éventuel se fait à part."
-msgstr "{0} ont déjà été payés. L'annulation libère les dates mais ne rembourse rien d'elle-même : le remboursement éventuel se fait à part."
-
 #. placeholder {0}: appliedChange.label
 #. placeholder {1}: pctFr(appliedChange.markupPct)
 #. placeholder {2}: pctFr(appliedChange.pct ?? 0)
@@ -1235,6 +1230,11 @@ msgstr "Arrhes à la réservation (%)"
 #: src/booking/BookingPanel.tsx
 msgid "Arrhes attendues"
 msgstr "Arrhes attendues"
+
+#. placeholder {0}: eur(plan.keptCents)
+#: src/booking/BookingPanel.tsx
+msgid "Arrhes conservées : {0}"
+msgstr "Arrhes conservées : {0}"
 
 #: src/pages/Today.tsx
 msgid "Arrhes pas encore reçues."
@@ -2149,6 +2149,10 @@ msgstr "Calcul"
 #: src/sale/SaleFlow.tsx
 msgid "Calcul du prix…"
 msgstr "Calcul du prix…"
+
+#: src/booking/BookingPanel.tsx
+msgid "Calcul du remboursement…"
+msgstr "Calcul du remboursement…"
 
 #: src/pages/settings/Tarifs.tsx
 msgid "Calculées sur vos réservations et vos prix des 31 prochains jours. Un bouton prépare le changement ; rien ne s'enregistre sans vous."
@@ -3165,6 +3169,11 @@ msgstr "Donner un accès"
 msgid "Donner un nouveau mot de passe"
 msgstr "Donner un nouveau mot de passe"
 
+#. placeholder {0}: eur(plan.manualRefundCents)
+#: src/booking/BookingPanel.tsx
+msgid "Dont {0} à rendre à la main (hors Stripe)."
+msgstr "Dont {0} à rendre à la main (hors Stripe)."
+
 #: src/pages/settings/Register.tsx
 msgid "Du"
 msgstr "Du"
@@ -3765,6 +3774,11 @@ msgstr "inconnu"
 msgid "inconnus"
 msgstr "inconnus"
 
+#. placeholder {0}: eur(plan.indemnityCents)
+#: src/booking/BookingPanel.tsx
+msgid "Indemnité : {0} à virer à la main (double des arrhes)."
+msgstr "Indemnité : {0} à virer à la main (double des arrhes)."
+
 #: src/pages/settings/Tarifs.tsx
 msgid "Indiquez le prix d'une nuit en semaine pour chaque bien qui a ses prix de saison."
 msgstr "Indiquez le prix d'une nuit en semaine pour chaque bien qui a ses prix de saison."
@@ -3900,10 +3914,6 @@ msgstr "L'année {year}"
 #: src/pages/settings/Tarifs.tsx
 msgid "L'année n'a pas pu être lue."
 msgstr "L'année n'a pas pu être lue."
-
-#: src/booking/BookingPanel.tsx
-msgid "L'annulation libère les dates tout de suite, ici et sur Airbnb et Booking."
-msgstr "L'annulation libère les dates tout de suite, ici et sur Airbnb et Booking."
 
 #: src/sale/SaleFlow.tsx
 msgid "L'arrivée est dans le passé."
@@ -4097,6 +4107,10 @@ msgstr "Largeur de la fenêtre : {0} px"
 msgid "Le {0} est déjà pris pour {1}. Choisissez un jour libre."
 msgstr "Le {0} est déjà pris pour {1}. Choisissez un jour libre."
 
+#: src/booking/BookingPanel.tsx
+msgid "Le calcul du remboursement a échoué. Réessayez."
+msgstr "Le calcul du remboursement a échoué. Réessayez."
+
 #: src/pages/settings/Help.tsx
 msgid "Le calendrier"
 msgstr "Le calendrier"
@@ -4121,6 +4135,10 @@ msgstr "Le calendrier ne sera plus lu. Les réservations déjà reprises restent
 #: src/canaux/canal.ts
 msgid "le canal"
 msgstr "le canal"
+
+#: src/booking/BookingPanel.tsx
+msgid "Le client en est prévenu par mail."
+msgstr "Le client en est prévenu par mail."
 
 #. placeholder {0}: eur(amount)
 #: src/booking/BookingPanel.tsx
@@ -4220,6 +4238,10 @@ msgstr "Le lien n'a pas pu être copié : sélectionnez-le et copiez-le à la ma
 msgid "Le lien ne s'ouvrira plus. Les ménages déjà cochés restent cochés."
 msgstr "Le lien ne s'ouvrira plus. Les ménages déjà cochés restent cochés."
 
+#: src/booking/BookingPanel.tsx
+msgid "Le locataire"
+msgstr "Le locataire"
+
 #: src/pages/settings/Help.tsx
 msgid "Le ménage"
 msgstr "Le ménage"
@@ -4279,6 +4301,10 @@ msgstr "Le prix se calcule à l'étape suivante."
 msgid "Le prix se calcule tout seul. Notez le nom, le téléphone et, si possible, le mail."
 msgstr "Le prix se calcule tout seul. Notez le nom, le téléphone et, si possible, le mail."
 
+#: src/booking/BookingPanel.tsx
+msgid "Le propriétaire"
+msgstr "Le propriétaire"
+
 #: src/pages/settings/Help.tsx
 msgid "Le rappel du solde part tout seul au client à l'échéance."
 msgstr "Le rappel du solde part tout seul au client à l'échéance."
@@ -4299,6 +4325,10 @@ msgstr "Le serveur n'a pas pu le faire. Rien n'a été changé ; réessayez dans
 #: src/pages/Today.tsx
 msgid "Le solde était attendu le {0}."
 msgstr "Le solde était attendu le {0}."
+
+#: src/booking/BookingPanel.tsx
+msgid "Le solde payé est rendu dans les 14 jours."
+msgstr "Le solde payé est rendu dans les 14 jours."
 
 #: src/pages/settings/Import.tsx
 msgid "Le test ne change rien. L'import n'est possible qu'après un test du même texte."
@@ -6066,6 +6096,10 @@ msgstr "Qui : {0}"
 msgid "Qui a fait quoi, mails envoyés aux clients"
 msgstr "Qui a fait quoi, mails envoyés aux clients"
 
+#: src/booking/BookingPanel.tsx
+msgid "Qui annule ?"
+msgstr "Qui annule ?"
+
 #: src/pages/settings/Help.tsx
 msgid "Qui appeler"
 msgstr "Qui appeler"
@@ -6244,6 +6278,11 @@ msgstr "remboursement"
 msgid "Remboursement"
 msgstr "Remboursement"
 
+#. placeholder {0}: eur(plan.refundCents)
+#: src/booking/BookingPanel.tsx
+msgid "Remboursement : {0}"
+msgstr "Remboursement : {0}"
+
 #: src/pages/Messages.tsx
 msgid "Remettre à répondre"
 msgstr "Remettre à répondre"
@@ -6386,6 +6425,10 @@ msgstr "Réservation {0}"
 #: src/pages/settings/Logs.tsx
 msgid "réservation annulée"
 msgstr "réservation annulée"
+
+#: src/booking/BookingPanel.tsx
+msgid "Réservation annulée, mais un remboursement Stripe a échoué : il est à rejouer."
+msgstr "Réservation annulée, mais un remboursement Stripe a échoué : il est à rejouer."
 
 #: src/booking/BookingPanel.tsx
 msgid "Réservation annulée."
@@ -6638,6 +6681,10 @@ msgstr "Rien de prévu."
 #: src/calendar/PricePanel.tsx
 msgid "Rien n'a été changé. {0}"
 msgstr "Rien n'a été changé. {0}"
+
+#: src/booking/BookingPanel.tsx
+msgid "Rien n'a été payé : rien à rembourser. L'annulation libère les dates tout de suite, ici et sur Airbnb et Booking."
+msgstr "Rien n'a été payé : rien à rembourser. L'annulation libère les dates tout de suite, ici et sur Airbnb et Booking."
 
 #. placeholder {0}: r.beds24RoomId
 #: src/pages/settings/Beds24Property.tsx

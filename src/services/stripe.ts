@@ -428,3 +428,58 @@ export async function fetchPaymentFees(
     return null;
   }
 }
+
+// ---------------------------------------------------------------------------
+// Remboursements (annulation, CGV art. 5)
+// ---------------------------------------------------------------------------
+
+/** Rembourse `amountCents` d'un PaymentIntent (`POST /v1/refunds`). Lève en cas
+ *  d'échec : l'appelant garde la ligne `payments` en `failed` et la rejoue.
+ *
+ *  L'`Idempotency-Key` est celle de la LIGNE de remboursement (`gp-refund-<id>`) :
+ *  rejouer la même ligne après un délai de réseau ne rembourse jamais deux fois.
+ *  Stripe refuse de toute façon de rembourser plus que l'encaissé. */
+export async function createRefund(
+  cfg: StripeConfig,
+  p: { paymentIntent: string; amountCents: number; idempotencyKey: string; reference: string },
+): Promise<{ id: string; status: string }> {
+  if (!stripeEnabled(cfg)) throw new Error("Stripe non configuré");
+  if (!Number.isInteger(p.amountCents) || p.amountCents <= 0) throw new Error("montant de remboursement invalide");
+  const body = new URLSearchParams({
+    payment_intent: p.paymentIntent,
+    amount: String(p.amountCents),
+    "metadata[reference]": p.reference,
+    "metadata[origine]": "annulation",
+  });
+  const res = await fetch(`${STRIPE_API}/refunds`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${cfg.secretKey}`,
+      "content-type": "application/x-www-form-urlencoded",
+      "idempotency-key": p.idempotencyKey,
+    },
+    body: body.toString(),
+  });
+  if (!res.ok) throw new Error(`Stripe refund ${res.status}: ${stripeErrorText(await res.text(), cfg)}`);
+  const refund = (await res.json()) as { id?: string; status?: string };
+  if (!refund.id) throw new Error("Stripe refund : réponse inexploitable");
+  return { id: refund.id, status: refund.status ?? "unknown" };
+}
+
+/** Montant déjà remboursé chez Stripe sur la charge d'un PaymentIntent, ou
+ *  `null` si Stripe est injoignable. Sert avant de REJOUER un remboursement
+ *  échoué : un délai d'attente peut cacher un remboursement en fait passé. */
+export async function paymentIntentRefundedCents(cfg: StripeConfig, intentId: string): Promise<number | null> {
+  if (!stripeEnabled(cfg) || !intentId.startsWith("pi_")) return null;
+  try {
+    const res = await fetch(`${STRIPE_API}/payment_intents/${encodeURIComponent(intentId)}?expand[]=latest_charge`, {
+      headers: { authorization: `Bearer ${cfg.secretKey}` },
+    });
+    if (!res.ok) return null;
+    const intent = (await res.json()) as { latest_charge?: { amount_refunded?: unknown } | string | null };
+    const charge = intent.latest_charge;
+    return charge && typeof charge === "object" && typeof charge.amount_refunded === "number" ? charge.amount_refunded : null;
+  } catch {
+    return null;
+  }
+}

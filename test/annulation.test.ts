@@ -1,0 +1,303 @@
+// Annulation et argent (CGV v3, articles 4-5 ; décision de Julien du 12/10/2026).
+//
+//  - locataire : arrhes acquises, solde remboursé par Stripe ;
+//  - propriétaire : tout est rendu, plus une indemnité = arrhes, à virer à la main ;
+//  - option non payée et réservation de canal : aucun mouvement d'argent ;
+//  - jamais plus que l'encaissé, une double annulation ne rembourse pas deux fois ;
+//  - un remboursement échoué ne bloque pas l'annulation et se rejoue.
+// Stripe n'est jamais appelé pour de vrai : `fetch` est intercepté sur api.stripe.com.
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import type { D1Database } from "@cloudflare/workers-types";
+import { createTestDb, type TestDb } from "./helpers/d1";
+import { Router } from "../src/api/router";
+import { registerAdminRoutes } from "../src/api/admin";
+import { addPayment, getBooking } from "../src/db/repo";
+import { addDays, todayInZone } from "../src/core/dates";
+
+const router = new Router();
+registerAdminRoutes(router);
+
+const ADMIN = "test-admin-token";
+const CHECKIN = addDays(todayInZone(), 90);
+const CHECKOUT = addDays(CHECKIN, 5);
+
+let t: TestDb;
+let db: D1Database;
+let env: Env;
+let realFetch: typeof fetch;
+
+interface StripeCall { url: string; method: string; body: URLSearchParams; headers: Headers }
+let calls: StripeCall[] = [];
+let refundSeq = 0;
+/** Réponse de POST /refunds : "ok" | "pending" | "http500". */
+let refundMode: "ok" | "pending" | "http500" = "ok";
+/** Montant déjà remboursé que Stripe annonce sur la charge (relecture avant rejeu). */
+let remoteRefunded = 0;
+
+beforeAll(async () => {
+  t = await createTestDb();
+  db = t.db;
+  env = { DB: db, ASSETS: undefined as unknown as Fetcher, PUBLIC_BASE_URL: "http://test.local", EMAILS_ENABLED: "false", ADMIN_TOKEN: ADMIN, STRIPE_SECRET_KEY: "sk_test_ann" } as Env;
+  realFetch = globalThis.fetch;
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.href : (input as Request).url;
+    if (!url.startsWith("https://api.stripe.com/")) return realFetch(input as RequestInfo, init);
+    const method = (init?.method ?? "GET").toUpperCase();
+    calls.push({ url, method, body: new URLSearchParams(String(init?.body ?? "")), headers: new Headers(init?.headers ?? {}) });
+    const json = (o: unknown, status = 200) => new Response(JSON.stringify(o), { status, headers: { "content-type": "application/json" } });
+    if (method === "POST" && url.endsWith("/refunds")) {
+      if (refundMode === "http500") return json({ error: { message: "boom" } }, 500);
+      refundSeq += 1;
+      return json({ id: `re_test_${refundSeq}`, status: refundMode === "pending" ? "pending" : "succeeded" });
+    }
+    if (method === "GET" && /\/payment_intents\/pi_/.test(url)) return json({ id: "pi", latest_charge: { amount_refunded: remoteRefunded } });
+    return json({});
+  }) as typeof fetch;
+});
+afterAll(async () => {
+  globalThis.fetch = realFetch;
+  await t.dispose();
+});
+beforeEach(async () => {
+  for (const table of ["payments", "email_log", "audit_log", "bookings", "guests"]) await db.prepare(`DELETE FROM ${table}`).run();
+  calls = [];
+  refundSeq = 0;
+  refundMode = "ok";
+  remoteRefunded = 0;
+});
+
+async function call(method: string, path: string, body?: unknown) {
+  const req = new Request(`http://test.local${path}`, {
+    method,
+    headers: { "content-type": "application/json", authorization: `Bearer ${ADMIN}` },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const res = await router.handle(req, env);
+  if (!res) throw new Error(`route non matchée : ${method} ${path}`);
+  return { status: res.status, data: (await res.json()) as Record<string, any> };
+}
+
+async function mkBooking(o: { status?: string; source?: string; lang?: string; total?: number; deposit?: number } = {}): Promise<number> {
+  const g = await db
+    .prepare("INSERT INTO guests (email, first_name, last_name, lang) VALUES ('client@example.com', 'Camille', 'Testeur', ?1)")
+    .bind(o.lang ?? "fr")
+    .run();
+  const res = await db
+    .prepare(
+      `INSERT INTO bookings (unit_id, checkin, checkout, adults, children, status, source, reference, total_cents, deposit_cents, paid_cents, guest_id)
+       VALUES (2, ?1, ?2, 2, 0, ?3, ?4, ?5, ?6, ?7, 0, ?8)`,
+    )
+    .bind(CHECKIN, CHECKOUT, o.status ?? "confirmed", o.source ?? "direct", `AN-${Math.random().toString(36).slice(2, 8).toUpperCase()}`, o.total ?? 100000, o.deposit ?? 30000, g.meta.last_row_id)
+    .run();
+  return res.meta.last_row_id;
+}
+const stripePay = (bookingId: number, kind: "deposit" | "balance" | "full", amountCents: number, pi: string) =>
+  addPayment(db, { bookingId, kind, method: "stripe", amountCents, status: "succeeded", stripeSessionId: pi, stripePaymentIntent: pi, receivedAt: "2026-10-01 10:00:00" });
+const refundCalls = () => calls.filter((c) => c.method === "POST" && c.url.endsWith("/refunds"));
+const mails = async () => (await db.prepare("SELECT kind, to_email, subject, body_text FROM email_log WHERE kind = 'cancellation'").all()).results as { subject: string; body_text: string }[];
+
+describe("annulation par le locataire", () => {
+  it("arrhes seules payées : tout reste acquis, rien à rembourser", async () => {
+    const id = await mkBooking();
+    await stripePay(id, "deposit", 30000, "pi_a1");
+    const r = await call("POST", `/api/admin/bookings/${id}/cancel`, { reason: "client malade" });
+    expect(r.status).toBe(200);
+    expect(r.data.plan).toMatchObject({ mode: "arrhes", par: "locataire", keptCents: 30000, refundCents: 0, stripeRefundCents: 0, indemnityCents: 0 });
+    expect(refundCalls()).toHaveLength(0);
+    expect(r.data.note).not.toContain("TODO");
+    expect((await getBooking(db, id))!.status).toBe("cancelled");
+  });
+
+  it("arrhes + solde : le solde est remboursé par Stripe, les arrhes restent", async () => {
+    const id = await mkBooking();
+    await stripePay(id, "deposit", 30000, "pi_d1");
+    await stripePay(id, "balance", 70000, "pi_b1");
+    const sim = await call("POST", `/api/admin/bookings/${id}/cancel`, { reason: "x", simuler: true });
+    expect(sim.data.simule).toBe(true);
+    expect(sim.data.plan).toMatchObject({ keptCents: 30000, refundCents: 70000, stripeRefundCents: 70000, manualRefundCents: 0 });
+    expect(calls).toHaveLength(0);
+    expect((await getBooking(db, id))!.status).toBe("confirmed"); // la simulation n'annule rien
+
+    // sans confirmer, un plan qui rembourse par Stripe est refusé
+    const refused = await call("POST", `/api/admin/bookings/${id}/cancel`, { reason: "x" });
+    expect(refused.status).toBe(400);
+    expect(refundCalls()).toHaveLength(0);
+
+    const r = await call("POST", `/api/admin/bookings/${id}/cancel`, { reason: "x", confirmer: true });
+    expect(r.status).toBe(200);
+    const sent = refundCalls();
+    expect(sent).toHaveLength(1);
+    expect(sent[0]!.body.get("payment_intent")).toBe("pi_b1");
+    expect(sent[0]!.body.get("amount")).toBe("70000");
+    expect(sent[0]!.headers.get("idempotency-key")).toMatch(/^gp-refund-\d+$/);
+    const rows = (await db.prepare("SELECT kind, status, amount_cents, stripe_payment_intent, note FROM payments WHERE kind = 'refund'").all()).results as any[];
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ status: "succeeded", amount_cents: -70000, stripe_payment_intent: "pi_b1" });
+    expect(rows[0].note).toContain("re_test_1");
+    expect((await getBooking(db, id))!.paidCents).toBe(30000); // les arrhes restent encaissées
+    const actions = (await db.prepare("SELECT action FROM audit_log").all()).results.map((x: any) => x.action);
+    expect(actions).toEqual(expect.arrayContaining(["booking.cancel", "refund.done"]));
+  });
+
+  it("une seconde annulation ne rembourse pas une seconde fois", async () => {
+    const id = await mkBooking();
+    await stripePay(id, "deposit", 30000, "pi_d2");
+    await stripePay(id, "balance", 70000, "pi_b2");
+    expect((await call("POST", `/api/admin/bookings/${id}/cancel`, { reason: "x", confirmer: true })).status).toBe(200);
+    expect((await call("POST", `/api/admin/bookings/${id}/cancel`, { reason: "x", confirmer: true })).status).toBe(409);
+    expect(refundCalls()).toHaveLength(1);
+  });
+
+  it("jamais plus que l'encaissé : un solde en deux paiements est plafonné par paiement", async () => {
+    const id = await mkBooking({ total: 100000, deposit: 30000 });
+    await stripePay(id, "deposit", 30000, "pi_d3");
+    await stripePay(id, "balance", 20000, "pi_b3a");
+    await stripePay(id, "balance", 50000, "pi_b3b");
+    const r = await call("POST", `/api/admin/bookings/${id}/cancel`, { reason: "x", confirmer: true });
+    const amounts = refundCalls().map((c) => [c.body.get("payment_intent"), c.body.get("amount")]);
+    expect(amounts).toEqual([["pi_b3b", "50000"], ["pi_b3a", "20000"]]);
+    expect(r.data.plan.stripeRefundCents).toBe(70000);
+    expect(r.data.plan.refundCents).toBe(70000);
+  });
+});
+
+describe("annulation par le propriétaire", () => {
+  it("tout est rendu par Stripe, plus l'indemnité (= arrhes) à virer à la main", async () => {
+    const id = await mkBooking();
+    await stripePay(id, "deposit", 30000, "pi_d4");
+    await stripePay(id, "balance", 70000, "pi_b4");
+    const r = await call("POST", `/api/admin/bookings/${id}/cancel`, { reason: "travaux", par: "proprietaire", confirmer: true });
+    expect(r.status).toBe(200);
+    expect(r.data.plan).toMatchObject({ par: "proprietaire", keptCents: 0, refundCents: 100000, stripeRefundCents: 100000, indemnityCents: 30000 });
+    const total = refundCalls().reduce((s, c) => s + Number(c.body.get("amount")), 0);
+    expect(total).toBe(100000); // jamais l'indemnité par Stripe
+    expect(refundCalls().map((c) => c.body.get("payment_intent")).sort()).toEqual(["pi_b4", "pi_d4"]);
+    expect((await getBooking(db, id))!.paidCents).toBe(0);
+    const manual = await db.prepare("SELECT detail FROM audit_log WHERE action = 'refund.manual_due'").first<{ detail: string }>();
+    expect(JSON.parse(manual!.detail).indemnityCents).toBe(30000);
+    expect(r.data.note).toContain("virer à la main");
+  });
+
+  it("un paiement par virement bancaire est rendu à la main, pas par Stripe", async () => {
+    const id = await mkBooking();
+    await stripePay(id, "deposit", 30000, "pi_d5");
+    await addPayment(db, { bookingId: id, kind: "balance", method: "transfer", amountCents: 70000, status: "succeeded", receivedAt: "2026-10-02 10:00:00" });
+    const r = await call("POST", `/api/admin/bookings/${id}/cancel`, { reason: "x", par: "proprietaire", confirmer: true });
+    expect(r.data.plan).toMatchObject({ stripeRefundCents: 30000, manualRefundCents: 70000, refundCents: 100000, indemnityCents: 30000 });
+    expect(refundCalls()).toHaveLength(1);
+  });
+});
+
+describe("cas sans mouvement d'argent", () => {
+  it("option non payée : rien à rembourser, pas de mail", async () => {
+    const id = await mkBooking({ status: "pending" });
+    const r = await call("POST", `/api/admin/bookings/${id}/cancel`, { reason: "option expirée" });
+    expect(r.status).toBe(200);
+    expect(r.data.plan).toMatchObject({ mode: "sans_paiement", refundCents: 0, indemnityCents: 0 });
+    expect(calls).toHaveLength(0);
+    expect(await mails()).toHaveLength(0);
+  });
+
+  it("réservation d'un canal : aucun mouvement, même si des paiements sont notés", async () => {
+    const id = await mkBooking({ source: "ical" });
+    await db.prepare("UPDATE bookings SET channel_label = 'Airbnb' WHERE id = ?1").bind(id).run();
+    await addPayment(db, { bookingId: id, kind: "manual", method: "other", amountCents: 50000, status: "succeeded" });
+    const r = await call("POST", `/api/admin/bookings/${id}/cancel`, { reason: "annulée sur Airbnb", par: "proprietaire", confirmer: true });
+    expect(r.data.plan).toMatchObject({ mode: "canal", refundCents: 0, indemnityCents: 0, stripeRefundCents: 0 });
+    expect(r.data.note).toContain("Airbnb");
+    expect(calls).toHaveLength(0);
+    expect(await mails()).toHaveLength(0);
+  });
+
+  it("réservation importée : même règle", async () => {
+    const id = await mkBooking({ source: "import" });
+    const r = await call("POST", `/api/admin/bookings/${id}/cancel`, { reason: "x" });
+    expect(r.data.plan.mode).toBe("canal");
+  });
+});
+
+describe("remboursement Stripe", () => {
+  it("échoué : l'annulation tient, la ligne est signalée puis rejouée", async () => {
+    const id = await mkBooking();
+    await stripePay(id, "deposit", 30000, "pi_d6");
+    await stripePay(id, "balance", 70000, "pi_b6");
+    refundMode = "http500";
+    const r = await call("POST", `/api/admin/bookings/${id}/cancel`, { reason: "x", confirmer: true });
+    expect(r.status).toBe(200);
+    expect((await getBooking(db, id))!.status).toBe("cancelled");
+    expect(r.data.refunds[0]).toMatchObject({ status: "failed" });
+    const failed = (await db.prepare("SELECT id, status, amount_cents FROM payments WHERE kind = 'refund'").first()) as any;
+    expect(failed.status).toBe("failed");
+    expect((await getBooking(db, id))!.paidCents).toBe(100000); // rien n'est parti
+    const acts = (await db.prepare("SELECT action FROM audit_log").all()).results.map((x: any) => x.action);
+    expect(acts).toContain("refund.failed");
+
+    // rejeu : Stripe dit que rien n'est remboursé → on renvoie l'ordre
+    refundMode = "ok";
+    calls = [];
+    const retry = await call("POST", `/api/admin/bookings/${id}/refunds/${failed.id}/retry`);
+    expect(retry.status).toBe(200);
+    expect(retry.data.refund.status).toBe("succeeded");
+    expect(refundCalls()).toHaveLength(1);
+    expect((await getBooking(db, id))!.paidCents).toBe(30000);
+    // et un second rejeu est refusé : la ligne n'est plus en échec
+    expect((await call("POST", `/api/admin/bookings/${id}/refunds/${failed.id}/retry`)).status).toBe(409);
+  });
+
+  it("rejeu : si Stripe a déjà remboursé, on n'envoie PAS un second ordre", async () => {
+    const id = await mkBooking();
+    await stripePay(id, "deposit", 30000, "pi_d7");
+    await stripePay(id, "balance", 70000, "pi_b7");
+    refundMode = "http500";
+    await call("POST", `/api/admin/bookings/${id}/cancel`, { reason: "x", confirmer: true });
+    const failed = (await db.prepare("SELECT id FROM payments WHERE kind = 'refund'").first()) as any;
+    remoteRefunded = 70000; // la réponse s'était perdue mais le remboursement est passé
+    calls = [];
+    const retry = await call("POST", `/api/admin/bookings/${id}/refunds/${failed.id}/retry`);
+    expect(retry.data.refund.status).toBe("succeeded");
+    expect(refundCalls()).toHaveLength(0);
+  });
+
+  it("pending (Bancontact) : la ligne compte comme remboursée", async () => {
+    const id = await mkBooking();
+    await stripePay(id, "deposit", 30000, "pi_d8");
+    await stripePay(id, "balance", 70000, "pi_b8");
+    refundMode = "pending";
+    const r = await call("POST", `/api/admin/bookings/${id}/cancel`, { reason: "x", confirmer: true });
+    expect(r.data.refunds[0].status).toBe("succeeded");
+  });
+});
+
+describe("mail au client", () => {
+  it("part une fois, en français, avec le détail", async () => {
+    const id = await mkBooking();
+    await stripePay(id, "deposit", 30000, "pi_d9");
+    await stripePay(id, "balance", 70000, "pi_b9");
+    await call("POST", `/api/admin/bookings/${id}/cancel`, { reason: "x", confirmer: true });
+    await call("POST", `/api/admin/bookings/${id}/cancel`, { reason: "x", confirmer: true }); // 409
+    const m = await mails();
+    expect(m).toHaveLength(1);
+    expect(m[0]!.subject).toContain("Annulation de votre réservation");
+    expect(m[0]!.body_text).toContain("restent acquises");
+    expect(m[0]!.body_text).toContain("14 jours");
+    expect(m[0]!.body_text).toContain("700,00");
+  });
+
+  it("en néerlandais pour un client néerlandophone, avec l'indemnité si le propriétaire annule", async () => {
+    const id = await mkBooking({ lang: "nl" });
+    await stripePay(id, "deposit", 30000, "pi_d10");
+    await call("POST", `/api/admin/bookings/${id}/cancel`, { reason: "x", par: "proprietaire", confirmer: true });
+    const m = await mails();
+    expect(m[0]!.subject).toContain("Annulering van uw reservering");
+    expect(m[0]!.body_text).toContain("dubbele");
+    expect(m[0]!.body_text).toContain("vergoeding");
+  });
+});
+
+describe("validation", () => {
+  it("par inconnu → 400, réservation inconnue → 404", async () => {
+    const id = await mkBooking();
+    expect((await call("POST", `/api/admin/bookings/${id}/cancel`, { par: "voisin" })).status).toBe(400);
+    expect((await call("POST", `/api/admin/bookings/99999/cancel`, {})).status).toBe(404);
+  });
+});

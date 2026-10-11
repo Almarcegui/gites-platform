@@ -385,3 +385,60 @@ function buildBalanceReminderEmailNl(b: BookingRow, property: PropertyRow, payUr
     ].join("\n"),
   };
 }
+
+/** Mail « Annulation de votre réservation » (CGV art. 5) : ce qui est conservé,
+ *  ce qui est remboursé (délai de 14 jours) et, quand c'est le propriétaire qui
+ *  annule, l'indemnité égale aux arrhes. Pas de PDF. Les montants sont ceux du
+ *  plan ; aucune promesse au-delà des CGV. */
+export function buildCancellationEmail(
+  b: BookingRow,
+  property: PropertyRow,
+  plan: { par: "locataire" | "proprietaire"; keptCents: number; refundCents: number; indemnityCents: number },
+): { subject: string; bodyText: string } {
+  const nl = isNl(b);
+  const m = (c: number) => money(c, nl);
+  const stay = nl
+    ? `Verblijf: van ${formatDateFr(b.checkin)} tot ${formatDateFr(b.checkout)}`
+    : `Séjour : du ${formatDateFr(b.checkin)} au ${formatDateFr(b.checkout)}`;
+  const contact = property.contactEmail ? [property.contactEmail] : [];
+  if (nl) {
+    const lines = [
+      `Beste,`,
+      ``,
+      plan.par === "locataire" ? `Uw reservering ${b.reference} is geannuleerd op uw verzoek.` : `Wij moeten uw reservering ${b.reference} helaas annuleren.`,
+      ``,
+      `Accommodatie: ${b.unitName ?? ""} — ${property.name}`,
+      stay,
+      ``,
+    ];
+    if (plan.par === "locataire") {
+      lines.push(`Volgens de algemene voorwaarden (artikel 5.2) blijft het voorschot${plan.keptCents > 0 ? ` (${m(plan.keptCents)})` : ""} verworven door de eigenaar.`);
+      lines.push(plan.refundCents > 0 ? `Wat u méér dan het voorschot betaalde, ${m(plan.refundCents)}, wordt binnen 14 dagen aan u terugbetaald.` : `Er is niets terug te betalen.`);
+    } else {
+      lines.push(`Conform artikel 5.3 van de algemene voorwaarden (artikel 1590 oud Burgerlijk Wetboek) ontvangt u het dubbele van het voorschot.`);
+      lines.push(plan.refundCents > 0 ? `Alles wat u betaalde, ${m(plan.refundCents)}, wordt aan u terugbetaald.` : `U had nog niets betaald.`);
+      if (plan.indemnityCents > 0) lines.push(`Daarbovenop volgt een vergoeding gelijk aan het voorschot: ${m(plan.indemnityCents)}, per overschrijving. Antwoord op dit bericht met uw rekeningnummer.`);
+    }
+    lines.push(``, `Tot ziens,`, `${property.name}`, ...contact);
+    return { subject: `Annulering van uw reservering ${b.reference} (${property.name})`, bodyText: lines.join("\n") };
+  }
+  const lines = [
+    `Bonjour,`,
+    ``,
+    plan.par === "locataire" ? `Votre réservation ${b.reference} est annulée à votre demande.` : `Nous sommes au regret d'annuler votre réservation ${b.reference}.`,
+    ``,
+    `Hébergement : ${b.unitName ?? ""} — ${property.name}`,
+    stay,
+    ``,
+  ];
+  if (plan.par === "locataire") {
+    lines.push(`Selon les conditions générales (article 5.2), les arrhes${plan.keptCents > 0 ? ` (${m(plan.keptCents)})` : ""} restent acquises au propriétaire.`);
+    lines.push(plan.refundCents > 0 ? `Ce que vous avez payé au-delà des arrhes, soit ${m(plan.refundCents)}, vous est remboursé dans les 14 jours.` : `Il n'y a rien à vous rembourser.`);
+  } else {
+    lines.push(`Conformément à l'article 5.3 des conditions générales (article 1590 de l'ancien Code civil), vous recevez le double des arrhes.`);
+    lines.push(plan.refundCents > 0 ? `Tout ce que vous avez payé, soit ${m(plan.refundCents)}, vous est remboursé.` : `Vous n'aviez encore rien payé.`);
+    if (plan.indemnityCents > 0) lines.push(`S'y ajoute une indemnité égale aux arrhes : ${m(plan.indemnityCents)}, versée par virement. Répondez à ce message en indiquant votre numéro de compte.`);
+  }
+  lines.push(``, `Cordialement,`, `${property.name}`, ...contact);
+  return { subject: `Annulation de votre réservation ${b.reference} (${property.name})`, bodyText: lines.join("\n") };
+}
