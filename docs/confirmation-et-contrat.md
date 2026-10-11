@@ -22,7 +22,10 @@ reste la consultation en ligne de la réservation). Les anciennes lignes
 Tout passe par `sendConfirmation()` (`booking-flow.ts`). **Sans doublon** : sauf
 `force` (le bouton « Renvoyer »), il ne part qu'une fois par réservation. Un envoi
 déjà journalisé, de type `confirmation` ou `voucher`, hors statut `failed`, bloque
-l'envoi automatique ; un envoi `failed` peut être retenté. Le reçu de paiement
+l'envoi automatique ; un envoi `failed` peut être retenté. Deux déclenchements
+simultanés (webhook rejoué, double clic) ne passent pas tous les deux : un verrou
+(`confirmation_claims`, migration 0030, une ligne par réservation) est posé AVANT
+l'envoi et rendu si l'envoi échoue. Le reçu de paiement
 (`payment_receipt`) reste un mail à part, émis à chaque encaissement.
 
 Le mail est en français ou en néerlandais selon `bookings.lang` (puis la langue du

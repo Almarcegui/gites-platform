@@ -34,7 +34,7 @@ afterAll(async () => {
   await t.dispose();
 });
 beforeEach(async () => {
-  for (const table of ["payments", "email_log", "audit_log", "bookings", "guests"]) await t.db.prepare(`DELETE FROM ${table}`).run();
+  for (const table of ["confirmation_claims", "payments", "email_log", "audit_log", "bookings", "guests"]) await t.db.prepare(`DELETE FROM ${table}`).run();
 });
 
 async function call(method: string, path: string, body?: unknown, headers: Record<string, string> = {}) {
@@ -95,10 +95,24 @@ describe("à la confirmation par paiement", () => {
     expect((await mails(b.id)).filter((m) => m.kind === "confirmation")).toHaveLength(2);
   });
 
-  it("un premier envoi échoué n'empêche pas le suivant ; une réservation sans e-mail n'en reçoit pas", async () => {
+  it("appels simultanés : un seul mail part (verrou posé avant l'envoi)", async () => {
     const b = await bookAndPay();
-    await t.db.prepare("UPDATE email_log SET status = 'failed' WHERE booking_id = ?1 AND kind = 'confirmation'").bind(b.id).run();
-    expect(await sendConfirmation(t.db, env, b.id)).toBe(true);
+    await t.db.prepare("DELETE FROM email_log").run();
+    await t.db.prepare("DELETE FROM confirmation_claims").run();
+    const results = await Promise.all(Array.from({ length: 6 }, () => sendConfirmation(t.db, env, b.id)));
+    expect(results.filter(Boolean)).toHaveLength(1);
+    expect((await mails(b.id)).filter((m) => m.kind === "confirmation")).toHaveLength(1);
+  });
+
+  it("un envoi échoué rend le verrou : le suivant peut repartir ; sans e-mail ou réservation inconnue, rien ne part", async () => {
+    const b = await bookAndPay();
+    await t.db.prepare("DELETE FROM email_log").run();
+    await t.db.prepare("DELETE FROM confirmation_claims").run();
+    const failing: Env = { ...env, EMAILS_ENABLED: "true", SMTP_HOST: "h", SMTP_USER: "u", SMTP_PASSWORD: "p", MAIL_FROM: "r@example.be", SMTP_SEND: async () => { throw new Error("SMTP 451 indisponible"); } };
+    expect(await sendConfirmation(t.db, failing, b.id)).toBe(true);
+    expect((await mails(b.id))[0]).toMatchObject({ kind: "confirmation", status: "failed", error_detail: "SMTP 451 indisponible" });
+    expect(await sendConfirmation(t.db, env, b.id)).toBe(true); // retenté, et cette fois journalisé
+    expect(await sendConfirmation(t.db, env, b.id)).toBe(false); // puis plus jamais en automatique
     await t.db.prepare("UPDATE guests SET email = NULL").run();
     expect(await sendConfirmation(t.db, env, b.id, { force: true })).toBe(false);
     expect(await sendConfirmation(t.db, env, 999999, { force: true })).toBe(false);
