@@ -306,7 +306,9 @@ export function isEmptyRule(rule: LiveRule): boolean {
   if (rule.name != null && rule.name.trim() !== "") return false;
   if (rule.link) return false;
   if (Object.values(rule.channels).some(Boolean)) return false;
-  if (rule.bookingPage && (rule.bookingPage.direct || rule.bookingPage.agent)) return false;
+  // bookingPage n'entre pas en compte : Beds24 pose « direct » par défaut sur ses lignes vierges
+  // (constaté le 11/10/2026 sur #741844 : refus « déjà utilisée («  ») » malgré une ligne sans nom,
+  // sans lien ni canal). Une ligne sans nom, sans lien et sans canal ouvert est libre.
   return true;
 }
 
