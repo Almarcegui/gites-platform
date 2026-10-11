@@ -1,5 +1,9 @@
 # Mise en ligne : ce qui reste avant la bascule complète
 
+> Depuis le 11/10/2026 la production est sur Hetzner (voir docs/hebergement-hetzner.md) ;
+> dev1.mdcdy.be reste en lecture comme retour arrière une semaine, puis s'éteint.
+
+
 Décision de Julien du 10/10/2026 : **une seule version**. La production est le
 site Node.js chez Infomaniak, `https://dev1.mdcdy.be` (hébergement web de
 Matthieu, clone de `main` de `Almarcegui/gites-platform`). Cloudflare s'éteint.
