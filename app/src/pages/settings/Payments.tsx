@@ -56,7 +56,7 @@ export function PaymentsPage() {
       {q.data && rows.length === 0 ? <Empty title={t`Aucun paiement ici`} /> : null}
       {rows.length ? (
         <div className="tbl-wrap">
-          <table className="tbl dense rows-link">
+          <table className="tbl dense rows-link mcards">
             <caption className="sr">{t`Paiements`}</caption>
             <thead>
               <tr>
@@ -71,7 +71,7 @@ export function PaymentsPage() {
             <tbody>
               {rows.map((p) => (
                 <tr key={p.id} onClick={() => setOpen(p)}>
-                  <td className="nowrap">
+                  <td className="nowrap mc-t">
                     <button type="button" className="cell-link" onClick={(e) => (e.stopPropagation(), setOpen(p))}>
                       {sqlWhen(p.receivedAt ?? p.createdAt)}
                     </button>
@@ -79,7 +79,7 @@ export function PaymentsPage() {
                   <td className="ref">{p.bookingReference}</td>
                   <td>{w.kind(p.kind)}</td>
                   <td className="hide-s">{w.method(p.method)}</td>
-                  <td className="r amt">{p.kind === "refund" ? `− ${eur(p.amountCents)}` : eur(p.amountCents)}</td>
+                  <td className="r amt mc-r">{p.kind === "refund" ? `− ${eur(p.amountCents)}` : eur(p.amountCents)}</td>
                   <td className="hide-s">
                     <span className={`pill ${w.tone(p)}`}>{w.status(p)}</span>
                   </td>
