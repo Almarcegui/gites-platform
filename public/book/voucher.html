@@ -20,7 +20,7 @@
 import { cgvHtml } from "./cgv.js";
 import { icsFile } from "./ics.js";
 import { mountPayment, paymentConfig } from "./pay-element.js";
-import { apiHeaders, CGV_NOTE_NL, eur, LANG, mountLangSwitch, pl, t, translateStatic } from "./i18n.js";
+import { apiHeaders, CGV_NOTE_NL, eur, hour, LANG, mountLangSwitch, pl, t, translateStatic } from "./i18n.js";
 translateStatic();
 mountLangSwitch(document.getElementById("langSwitch"));
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
@@ -132,8 +132,8 @@ const lineLabel = (l) => (l?.publicLabel && l.unitPriceCents != null
       <table class="quote">
         <tr><td>${t("Référence")}</td><td class="r"><b class="mono">${esc(b.reference)}</b> ${statusTag}</td></tr>
         <tr><td>${t("Hébergement")}</td><td class="r"><b>${esc(b.unitName)}</b></td></tr>
-        <tr><td>${t("Arrivée")}</td><td class="r">${t("{date} dès {heure}", { date: dfr(b.checkin), heure: esc(data.stay.checkinTime) })}</td></tr>
-        <tr><td>${t("Départ")}</td><td class="r">${t("{date} avant {heure}", { date: dfr(b.checkout), heure: esc(data.stay.checkoutTime) })}</td></tr>
+        <tr><td>${t("Arrivée")}</td><td class="r">${t("{date} dès {heure}", { date: dfr(b.checkin), heure: esc(hour(data.stay.checkinTime)) })}</td></tr>
+        <tr><td>${t("Départ")}</td><td class="r">${t("{date} avant {heure}", { date: dfr(b.checkout), heure: esc(hour(data.stay.checkoutTime)) })}</td></tr>
         <tr><td>${t("Voyageurs")}</td><td class="r">${pl(b.adults, "adulte", "adultes")}${b.children ? ` + ${pl(b.children, "enfant", "enfants")}` : ""}</td></tr>
       </table>
     </div>
@@ -157,8 +157,8 @@ const lineLabel = (l) => (l?.publicLabel && l.unitPriceCents != null
     <div class="card"><h3>💬 ${t("Échanges avec l'équipe")}</h3>
       <p class="small muted">${b.status !== "cancelled" ? t("Une question sur votre séjour ? Écrivez-nous ici — la réponse apparaîtra sur cette page (et par email).") : t("Une question sur votre séjour ? Écrivez-nous ici — la réponse apparaîtra sur cette page.")}</p>
       <div class="thread" id="thread"><span class="muted small">${t("Chargement…")}</span></div>
-      <textarea id="msgText" rows="3" placeholder="${t("Votre message…")}"></textarea>
-      <p style="margin-top:8px"><button class="btn" id="msgSend">${t("Envoyer")}</button> <span id="msgNote" class="small muted"></span></p>
+      <label class="f sr-only" for="msgText">${t("Votre message…")}</label><textarea id="msgText" rows="3" placeholder="${t("Votre message…")}"></textarea>
+      <p style="margin-top:8px"><button class="btn" id="msgSend">${t("Envoyer")}</button> <span id="msgNote" class="small muted" role="status"></span></p>
     </div>
     <div class="card" id="cgvCard"><h3>${t("Conditions générales")}</h3>
       <div class="cgv-box">${data.cgvText?.trim() ? (LANG === "nl" ? `<p class="cgv-h"><b>${CGV_NOTE_NL}</b></p>` : "") + cgvHtml(data.cgvText) + (b.depositPct != null ? `<p class="cgv-h"><b>${t("Pour {nom}, le pourcentage d'arrhes de l'article 4.1 est de {pct} %.", { nom: esc(b.unitName), pct: b.depositPct })}</b></p>` : "") : `<p>${t("Conditions générales à venir.")}</p>`}</div></div>
@@ -291,7 +291,9 @@ const lineLabel = (l) => (l?.publicLabel && l.unitPriceCents != null
     btn.disabled = false;
     if (res.ok) {
       document.getElementById("msgText").value = "";
-      document.getElementById("msgNote").textContent = t("Message envoyé — nous vous répondons vite.");
+      document.getElementById("msgNote").textContent = data2.ackSent
+        ? t("Message envoyé à l'équipe. Un e-mail de confirmation vous est envoyé à l'instant (objet : [{ref}]) ; la réponse arrive sur cette page et par e-mail.", { ref: b.reference })
+        : t("Message envoyé à l'équipe — la réponse arrive sur cette page et par e-mail.");
       renderThread(data2.messages || []);
     } else {
       document.getElementById("msgNote").textContent = data2.error || t("envoi impossible");

@@ -465,6 +465,11 @@ msgstr "min. {0} nachten"
 msgid "{0} nuits. Si une autre saison couvre aussi ces jours, la plus courte l'emporte."
 msgstr "{0} nachten. Als een ander seizoen dezelfde dagen dekt, krijgt het kortste voorrang."
 
+#. placeholder {0}: d.holds.length
+#: src/pages/Today.tsx
+msgid "{0} options en attente des arrhes"
+msgstr "{0} opties wachten op de voorschotten"
+
 #. placeholder {0}: appliedChange.label
 #. placeholder {1}: pctFr(appliedChange.markupPct)
 #. placeholder {2}: pctFr(appliedChange.pct ?? 0)
@@ -504,8 +509,8 @@ msgstr "{0} personen"
 
 #. placeholder {0}: rows.length
 #: src/shell/Health.tsx
-msgid "{0} points à vérifier en coulisses"
-msgstr "{0} punten om achter de schermen na te kijken"
+msgid "{0} points à vérifier"
+msgstr "{0} punten om na te kijken"
 
 #. placeholder {0}: rows.length
 #: src/shell/Health.tsx
@@ -816,8 +821,8 @@ msgid "1 nuit qui ne se vend pas, ici ni sur les plateformes."
 msgstr "1 nacht die niet verkocht wordt, hier noch op de platformen."
 
 #: src/shell/Health.tsx
-msgid "1 point à vérifier en coulisses"
-msgstr "1 punt om achter de schermen na te kijken"
+msgid "1 point à vérifier"
+msgstr "1 punt om na te kijken"
 
 #: src/shell/Health.tsx
 msgid "1 point à voir"
@@ -1241,8 +1246,8 @@ msgid "Arrhes conservées : {0}"
 msgstr "Voorschot dat de uitbater houdt: {0}"
 
 #: src/pages/Today.tsx
-msgid "Arrhes pas encore reçues."
-msgstr "Voorschot nog niet ontvangen."
+msgid "arrhes pas encore reçues"
+msgstr "voorschot nog niet ontvangen"
 
 #: src/pages/settings/Domain.tsx
 msgid "Arrhes propres à ce bien (%)"
@@ -1704,6 +1709,10 @@ msgstr "{0} blokkeren"
 #: src/calendar/Weeks.tsx
 msgid "Bloquer ces nuits"
 msgstr "Deze nachten blokkeren"
+
+#: src/pages/Today.tsx
+msgid "Bloquer des dates"
+msgstr "Data blokkeren"
 
 #: src/pages/settings/Templates.tsx
 msgid "Bonjour {prenom},\n"
@@ -2344,6 +2353,10 @@ msgstr "Deze reservering komt van {0}: wijzig ook daar de data, anders komen ze 
 msgid "Cette semaine"
 msgstr "Deze week"
 
+#: src/pages/settings/Channels.tsx
+msgid "chambres"
+msgstr "kamers"
+
 #. placeholder {0}: failures.join(" ")
 #: src/calendar/PricePanel.tsx
 msgid "Changé en partie : {applied} nuit(s) modifiées, le reste non. {0} Vérifiez la grille."
@@ -2389,6 +2402,10 @@ msgstr "Mijn wachtwoord wijzigen"
 #: src/shell/Shell.tsx
 msgid "Changer sans enregistrer"
 msgstr "Wijzigen zonder op te slaan"
+
+#: src/pages/Today.tsx
+msgid "Changer un prix"
+msgstr "Een prijs wijzigen"
 
 #: src/pages/settings/Channels.tsx
 msgid "Chaque bien d'ici et son équivalent chez Beds24. La correspondance se règle une fois, dans Beds24."
@@ -2905,6 +2922,10 @@ msgstr "Sleutel aanmaken"
 #: src/pages/settings/ServiceKeys.tsx
 msgid "Créer une clé de service"
 msgstr "Servicesleutel aanmaken"
+
+#: src/pages/settings/Channels.tsx
+msgid "créés"
+msgstr "aangemaakt"
 
 #: src/pages/settings/Channels.tsx
 msgid "Créez un « invite code » avec lecture et écriture (réservations, disponibilités, propriétés, canaux), sans liste d'adresses IP."
@@ -3469,6 +3490,10 @@ msgstr "Een betaallink sturen"
 #: src/pages/Today.tsx
 msgid "Envoyer un rappel"
 msgstr "Een herinnering sturen"
+
+#: src/pages/settings/Channels.tsx
+msgid "envoyés"
+msgstr "verzonden"
 
 #: src/pages/settings/Import.tsx
 msgid "erreur"
@@ -4631,6 +4656,11 @@ msgstr "koppelingen van een woning gewijzigd"
 msgid "liaisons de {0}"
 msgstr "koppelingen van {0}"
 
+#. placeholder {0}: longDate(h.holdExpiresAt.slice(0, 10))
+#: src/pages/Today.tsx
+msgid "libérée le {0} sans arrhes"
+msgstr "komt vrij op {0} zonder voorschot"
+
 #: src/booking/BookingPanel.tsx
 #: src/sale/SaleFlow.tsx
 msgid "Lien copié."
@@ -4837,6 +4867,10 @@ msgstr "Opzijleggen"
 #: src/calendar/PricePanel.tsx
 msgid "Minimum de nuits"
 msgstr "Minimum aantal nachten"
+
+#: src/pages/settings/Channels.tsx
+msgid "mis à jour"
+msgstr "bijgewerkt"
 
 #: src/pages/settings/Channels.tsx
 msgid "mis de côté"
@@ -5215,6 +5249,7 @@ msgstr "Nieuw seizoen"
 
 #: src/calendar/CalendarView.tsx
 #: src/pages/Bookings.tsx
+#: src/pages/Today.tsx
 #: src/sale/SaleFlow.tsx
 msgid "Nouvelle vente"
 msgstr "Nieuwe verkoop"
@@ -5391,7 +5426,6 @@ msgstr "Open Settings, dan Apps & Integrations, dan API."
 msgid "Ouvrir"
 msgstr "Openen"
 
-#: src/pages/Today.tsx
 #: src/sale/SaleFlow.tsx
 msgid "Ouvrir la fiche"
 msgstr "De fiche openen"
@@ -5465,6 +5499,7 @@ msgstr "Betaling met de hand genoteerd"
 #: src/booking/BookingPanel.tsx
 #: src/pages/settings/Encaissements.tsx
 #: src/pages/settings/Payments.tsx
+#: src/pages/Today.tsx
 #: src/shell/nav.tsx
 msgid "Paiements"
 msgstr "Betalingen"
@@ -5481,6 +5516,10 @@ msgstr "Betalingen, verstuurde mails en koppeling met de platformen: niets abnor
 #: src/pages/settings/Startup.tsx
 msgid "Papa"
 msgstr "Papa"
+
+#: src/pages/settings/Channels.tsx
+msgid "par"
+msgstr "door"
 
 #: src/pages/settings/Logs.tsx
 msgid "Par"
@@ -6120,6 +6159,10 @@ msgstr "Wie het doet, notitie"
 msgid "Quotidien"
 msgstr "Dagelijks"
 
+#: src/pages/Today.tsx
+msgid "Raccourcis"
+msgstr "Snelkoppelingen"
+
 #. placeholder {0}: m.errorDetail
 #: src/pages/settings/Logs.tsx
 msgid "Raison : {0}"
@@ -6732,9 +6775,7 @@ msgid "Saisons passées"
 msgstr "Voorbije seizoenen"
 
 #. placeholder {0}: longDate(b.holdExpiresAt.slice(0, 10))
-#. placeholder {0}: longDate(h.holdExpiresAt.slice(0, 10))
 #: src/booking/BookingPanel.tsx
-#: src/pages/Today.tsx
 msgid "Sans arrhes reçues, les dates se libèrent le {0}."
 msgstr "Zonder ontvangen voorschot komen de data vrij op {0}."
 
