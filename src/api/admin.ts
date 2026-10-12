@@ -1880,7 +1880,7 @@ export function registerAdminRoutes(router: Router): void {
     return json({ booking, paymentUrl, optionUrl, optionMailQueued }, 201);
   }));
 
-  // Annulation (CGV v3.1 art. 4-5, décision du 12/10/2026 : aucune indemnité) : voir services/annulation.ts.
+  // Annulation (CGV v3.1 art. 4-5, décisions du 12/10/2026) : voir services/annulation.ts.
   // `par` : « locataire » (le client) ou « proprietaire » (l'exploitant), noms d'API inchangés.
   // `simuler: true` rend le plan sans rien faire ; un plan qui rembourse par
   // Stripe exige `confirmer: true`.
@@ -1900,7 +1900,7 @@ export function registerAdminRoutes(router: Router): void {
     if (plan.stripeRefundCents > 0 && body?.confirmer !== true) {
       return json({ error: "Cette annulation rembourse de l'argent par Stripe : confirmer: true est requis (simuler: true pour voir le plan).", plan }, 400);
     }
-    // Argent en jeu (arrhes gardées, remboursement) : jamais par une clé de service
+    // Argent en jeu (arrhes gardées, remboursement, indemnité) : jamais par une clé de service
     // (script, agent) — une session humaine seulement.
     if (plan.mode === "arrhes" && !isHuman(req)) return apiError(403, "annuler une réservation payée se fait depuis une session humaine (pas par une clé de service)");
     // Les lignes de remboursement existent AVANT l'annulation : une panne entre les deux les laisse reprenables.
@@ -1918,8 +1918,8 @@ export function registerAdminRoutes(router: Router): void {
     const failed = refunds.filter((r) => r.status === "failed");
     if (failed.length > 0) await audit(env.DB, "admin", "refund.failed", `booking:${id}`, { failed });
     if (refunds.length > 0) await audit(env.DB, "admin", "refund.done", `booking:${id}`, { refunds });
-    if (plan.manualRefundCents > 0) {
-      await audit(env.DB, "admin", "refund.manual_due", `booking:${id}`, { manualRefundCents: plan.manualRefundCents });
+    if (plan.indemnityCents > 0 || plan.manualRefundCents > 0) {
+      await audit(env.DB, "admin", "refund.manual_due", `booking:${id}`, { indemnityCents: plan.indemnityCents, manualRefundCents: plan.manualRefundCents });
     }
 
     // Mail au client : une fois, à l'annulation, et seulement si de l'argent ou

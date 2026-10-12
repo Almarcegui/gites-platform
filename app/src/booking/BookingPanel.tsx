@@ -766,6 +766,7 @@ interface CancelPlan {
   refundCents: number;
   stripeRefundCents: number;
   manualRefundCents: number;
+  indemnityCents: number;
   note: string;
 }
 
@@ -816,7 +817,8 @@ function CancelDialog({ open, b, onClose }: { open: boolean; b: Booking; onClose
           {plan.par === "locataire" ? <p>{t`Arrhes conservées : ${eur(plan.keptCents)}`}</p> : null}
           <p>{t`Remboursement : ${eur(plan.refundCents)}`}</p>
           {plan.manualRefundCents > 0 ? <p>{t`Dont ${eur(plan.manualRefundCents)} à rendre à la main (hors Stripe).`}</p> : null}
-          <p>{plan.par === "locataire" ? t`Les arrhes restent acquises, le solde payé est rendu sous 14 jours sur le moyen de paiement utilisé.` : t`Tout ce qui a été payé est rendu sous 14 jours sur le moyen de paiement utilisé, sans autre indemnité.`}</p>
+          {plan.indemnityCents > 0 ? <p>{t`Indemnité : ${eur(plan.indemnityCents)} (égale aux arrhes) à virer à la main. Le mail demande son IBAN au client.`}</p> : null}
+          <p>{plan.par === "locataire" ? t`Les arrhes restent acquises, le solde payé est rendu sous 14 jours sur le moyen de paiement utilisé.` : t`Tout ce qui a été payé est rendu sous 14 jours sur le moyen de paiement utilisé.`}</p>
           <p>{t`Le client en est prévenu par mail.`}</p>
         </div>
       ) : (

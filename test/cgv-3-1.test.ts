@@ -1,5 +1,7 @@
-// CGV v3.1 (migration 0036, décision de Julien du 12/10/2026) : annulation sans
-// indemnité de part ni d'autre, arrhes acquises, résumé « Comment ça se passe ».
+// CGV v3.1 (migration 0036, décisions de Julien du 12/10/2026) : arrhes acquises
+// quand le client annule, remboursement intégral plus une indemnité égale aux
+// arrhes quand l'exploitant annule (art. 5.3, CDE VI.83, 27°), aucune autre
+// indemnité, résumé « Comment ça se passe ».
 // Vérifié contre une vraie base D1, toutes migrations rejouées : le texte des
 // deux domaines, l'archivage de la v3, le rejeu de la migration, et la version
 // enregistrée à l'acceptation.
@@ -45,6 +47,13 @@ describe("CGV v3.1 en base", () => {
       expect(cgv).toContain("arrhes");
       expect(cgv.toLowerCase()).not.toContain("double");
       expect(cgv).not.toContain("1590");
+      // « indemnité » n'est PROMISE qu'à l'art. 5.3 : ailleurs, seulement pour l'exclure
+      const a53 = /^5\.3\. .*$/m.exec(cgv)![0];
+      expect(a53).toContain("et lui verse en outre une indemnité égale au montant des arrhes.");
+      const ailleurs = cgv.replace(a53, "");
+      const mentions = [...ailleurs.matchAll(/indemnit/g)].map((x) => ailleurs.slice(Math.max(0, x.index! - 25), x.index! + 35));
+      expect(mentions.length).toBeGreaterThan(0);
+      for (const m of mentions) expect(m, m).toMatch(/sans indemnité|aucune autre indemnité|l'indemnité prévue à l'article 5\.3/);
       // vocabulaire : client et exploitant
       expect(cgv).not.toMatch(/locataire|propriétaire|contrat|\bbail\b/i);
       // le texte n'est pas tronqué par le découpage des migrations
@@ -68,7 +77,7 @@ describe("CGV v3.1 en base", () => {
     }
   });
 
-  it("articles 4 et 5 : arrhes, solde à 30 jours, annulation par le client et par l'exploitant sans indemnité, force majeure, séjour entamé", async () => {
+  it("articles 4 et 5 : arrhes, solde à 30 jours, annulation par le client, par l'exploitant avec indemnité égale aux arrhes, force majeure sans indemnité, séjour entamé", async () => {
     const cgv = await cgvOf(1);
     const a4 = cgvArticle(cgv, 4)!;
     const a5 = cgvArticle(cgv, 5)!;
@@ -78,10 +87,10 @@ describe("CGV v3.1 en base", () => {
     expect(a5).toContain("Article 5 — Caution et annulation");
     expect(a5).toContain("Aucune caution n'est demandée");
     expect(a5).toMatch(/5\.2\. Annulation par le client\..*les arrhes restent acquises à l'exploitant\..*remboursé dans les 14 jours, sur le moyen de paiement utilisé/s);
-    expect(a5).toMatch(/5\.3\. Annulation par l'exploitant\..*tout ce que celui-ci a payé, arrhes comprises, dans les 14 jours/s);
-    expect(a5).toContain("5.4. Force majeure.");
+    expect(a5).toContain("5.3. Annulation par l'exploitant. Si l'exploitant annule la réservation, hors cas de force majeure, il rembourse au client tout ce que celui-ci a payé, arrhes comprises, dans les 14 jours, sur le moyen de paiement utilisé, et lui verse en outre une indemnité égale au montant des arrhes.");
+    expect(a5).toMatch(/5\.4\. Force majeure\..*sans indemnité de part ni d'autre\./);
     expect(a5).toContain("5.5. Non-présentation et séjour entamé.");
-    expect(a5).toContain("aucune indemnité n'est due, ni par le client ni par l'exploitant");
+    expect(a5).toContain("5.6. En dehors de l'indemnité prévue à l'article 5.3, aucune autre indemnité n'est due, ni par le client ni par l'exploitant.");
   });
 
   it("la v3 est archivée, et la migration se rejoue sans rien écraser", async () => {

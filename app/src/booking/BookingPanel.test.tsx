@@ -67,8 +67,8 @@ describe("fiche réservation", () => {
     expect(within(box).getByText(/Remboursement : 700 €/)).toBeInTheDocument();
     await user.click(within(box).getByLabelText("L'exploitant"));
     expect(await within(box).findByText(/Remboursement : 1 000 €/)).toBeInTheDocument();
-    expect(within(box).getByText(/sans autre indemnité/)).toBeInTheDocument();
-    expect(within(box).queryByText(/Indemnité|double des arrhes|virer à la main/)).toBeNull();
+    expect(within(box).getByText(/Indemnité : 300 € \(égale aux arrhes\) à virer à la main/)).toBeInTheDocument();
+    expect(within(box).queryByText(/double/)).toBeNull();
     expect(within(box).queryByText(/Arrhes conservées/)).toBeNull();
     await user.type(within(box).getByLabelText(/Motif/), "Travaux");
     await user.click(within(box).getByRole("button", { name: "Annuler la réservation" }));

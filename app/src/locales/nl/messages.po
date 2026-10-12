@@ -3778,6 +3778,11 @@ msgstr "onbekend"
 msgid "inconnus"
 msgstr "onbekend"
 
+#. placeholder {0}: eur(plan.indemnityCents)
+#: src/booking/BookingPanel.tsx
+msgid "Indemnité : {0} (égale aux arrhes) à virer à la main. Le mail demande son IBAN au client."
+msgstr "Vergoeding: {0} (gelijk aan het voorschot) met de hand over te schrijven. De e-mail vraagt de klant om zijn IBAN."
+
 #: src/pages/settings/Tarifs.tsx
 msgid "Indiquez le prix d'une nuit en semaine pour chaque bien qui a ses prix de saison."
 msgstr "Geef de prijs van een nacht in de week voor elke woning met seizoensprijzen."
@@ -7167,8 +7172,8 @@ msgid "Tout ce qui a été encaissé ou attendu"
 msgstr "Alles wat geïnd of verwacht werd"
 
 #: src/booking/BookingPanel.tsx
-msgid "Tout ce qui a été payé est rendu sous 14 jours sur le moyen de paiement utilisé, sans autre indemnité."
-msgstr "Alles wat betaald werd, wordt binnen 14 dagen terugbetaald op het gebruikte betaalmiddel, zonder andere vergoeding."
+msgid "Tout ce qui a été payé est rendu sous 14 jours sur le moyen de paiement utilisé."
+msgstr "Alles wat betaald werd, wordt binnen 14 dagen terugbetaald op het gebruikte betaalmiddel."
 
 #: src/shell/Shell.tsx
 msgid "Tout le menu"

@@ -388,13 +388,13 @@ function buildBalanceReminderEmailNl(b: BookingRow, property: PropertyRow, payUr
 
 /** Mail « Annulation de votre réservation » (CGV v3.1, article 5) : ce qui
  *  reste acquis à l'exploitant, ce qui est remboursé, sur le moyen de paiement
- *  utilisé, sous 14 jours. Décision du 12/10/2026 : aucune indemnité de part
- *  ni d'autre, donc aucune promesse d'indemnité ni demande de numéro de compte.
+ *  utilisé, sous 14 jours ; quand l'exploitant annule (hors force majeure),
+ *  l'indemnité égale aux arrhes (5.3), virée à la main : on demande l'IBAN.
  *  Pas de PDF. Les montants sont ceux du plan ; rien au-delà des CGV. */
 export function buildCancellationEmail(
   b: BookingRow,
   property: PropertyRow,
-  plan: { par: "locataire" | "proprietaire"; keptCents: number; refundCents: number; forceMajeure?: boolean; sejourEntame?: boolean },
+  plan: { par: "locataire" | "proprietaire"; keptCents: number; refundCents: number; indemnityCents?: number; forceMajeure?: boolean; sejourEntame?: boolean },
 ): { subject: string; bodyText: string } {
   const nl = isNl(b);
   const m = (c: number) => money(c, nl);
@@ -403,6 +403,7 @@ export function buildCancellationEmail(
     : `Séjour : du ${formatDateFr(b.checkin)} au ${formatDateFr(b.checkout)}`;
   const contact = property.contactEmail ? [property.contactEmail] : [];
   const byClient = plan.par === "locataire";
+  const indemnity = !byClient && !plan.forceMajeure ? Math.max(0, plan.indemnityCents ?? 0) : 0;
   if (nl) {
     const lines = [
       `Beste,`,
@@ -416,12 +417,13 @@ export function buildCancellationEmail(
     if (plan.forceMajeure) lines.push(`Overmacht (artikel 5.4 van de algemene voorwaarden): alles wat u betaalde, voorschot inbegrepen, wordt aan u terugbetaald.`);
     else if (byClient && plan.sejourEntame) lines.push(`Volgens artikel 5.5 van de algemene voorwaarden wordt de prijs van het verblijf${plan.keptCents > 0 ? ` (${m(plan.keptCents)})` : ""} niet terugbetaald.`);
     else if (byClient) lines.push(`Volgens artikel 5.2 van de algemene voorwaarden blijft het voorschot${plan.keptCents > 0 ? ` (${m(plan.keptCents)})` : ""} verworven door de uitbater.`);
-    else lines.push(`Volgens artikel 5.3 van de algemene voorwaarden wordt alles wat u betaalde, voorschot inbegrepen, aan u terugbetaald.`);
+    else lines.push(`Volgens artikel 5.3 van de algemene voorwaarden wordt alles wat u betaalde, voorschot inbegrepen, aan u terugbetaald${indemnity > 0 ? `, en ontvangt u daarnaast een vergoeding gelijk aan het voorschot` : ""}.`);
     lines.push(
       plan.refundCents > 0
         ? `Terugbetaling: ${m(plan.refundCents)}, op het gebruikte betaalmiddel, binnen 14 dagen.`
         : byClient ? `Er is niets terug te betalen.` : `U had nog niets betaald.`,
     );
+    if (indemnity > 0) lines.push(`Daarnaast storten wij u een vergoeding gelijk aan het voorschot, ${m(indemnity)}. Antwoord op dit bericht met uw IBAN.`);
     lines.push(``, `Tot ziens,`, `${property.name}`, ...contact);
     return { subject: `Annulering van uw reservering ${b.reference} (${property.name})`, bodyText: lines.join("\n") };
   }
@@ -437,12 +439,13 @@ export function buildCancellationEmail(
   if (plan.forceMajeure) lines.push(`Force majeure (article 5.4 des conditions générales) : tout ce que vous avez payé, arrhes comprises, vous est remboursé.`);
   else if (byClient && plan.sejourEntame) lines.push(`Selon l'article 5.5 des conditions générales, le prix du séjour${plan.keptCents > 0 ? ` (${m(plan.keptCents)})` : ""} n'est pas remboursé.`);
   else if (byClient) lines.push(`Selon l'article 5.2 des conditions générales, les arrhes${plan.keptCents > 0 ? ` (${m(plan.keptCents)})` : ""} restent acquises à l'exploitant.`);
-  else lines.push(`Selon l'article 5.3 des conditions générales, tout ce que vous avez payé, arrhes comprises, vous est remboursé.`);
+  else lines.push(`Selon l'article 5.3 des conditions générales, tout ce que vous avez payé, arrhes comprises, vous est remboursé${indemnity > 0 ? `, et vous recevez en outre une indemnité égale aux arrhes` : ""}.`);
   lines.push(
     plan.refundCents > 0
       ? `Remboursement : ${m(plan.refundCents)}, sur le moyen de paiement utilisé, sous 14 jours.`
       : byClient ? `Il n'y a rien à vous rembourser.` : `Vous n'aviez encore rien payé.`,
   );
+  if (indemnity > 0) lines.push(`Une indemnité de ${m(indemnity)}, égale aux arrhes, vous sera virée en outre. Indiquez-nous votre IBAN en réponse à ce message.`);
   lines.push(``, `Cordialement,`, `${property.name}`, ...contact);
   return { subject: `Annulation de votre réservation ${b.reference} (${property.name})`, bodyText: lines.join("\n") };
 }

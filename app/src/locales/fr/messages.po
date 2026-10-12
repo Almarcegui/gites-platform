@@ -3774,6 +3774,11 @@ msgstr "inconnu"
 msgid "inconnus"
 msgstr "inconnus"
 
+#. placeholder {0}: eur(plan.indemnityCents)
+#: src/booking/BookingPanel.tsx
+msgid "Indemnité : {0} (égale aux arrhes) à virer à la main. Le mail demande son IBAN au client."
+msgstr "Indemnité : {0} (égale aux arrhes) à virer à la main. Le mail demande son IBAN au client."
+
 #: src/pages/settings/Tarifs.tsx
 msgid "Indiquez le prix d'une nuit en semaine pour chaque bien qui a ses prix de saison."
 msgstr "Indiquez le prix d'une nuit en semaine pour chaque bien qui a ses prix de saison."
@@ -7163,8 +7168,8 @@ msgid "Tout ce qui a été encaissé ou attendu"
 msgstr "Tout ce qui a été encaissé ou attendu"
 
 #: src/booking/BookingPanel.tsx
-msgid "Tout ce qui a été payé est rendu sous 14 jours sur le moyen de paiement utilisé, sans autre indemnité."
-msgstr "Tout ce qui a été payé est rendu sous 14 jours sur le moyen de paiement utilisé, sans autre indemnité."
+msgid "Tout ce qui a été payé est rendu sous 14 jours sur le moyen de paiement utilisé."
+msgstr "Tout ce qui a été payé est rendu sous 14 jours sur le moyen de paiement utilisé."
 
 #: src/shell/Shell.tsx
 msgid "Tout le menu"

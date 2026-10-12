@@ -1,11 +1,13 @@
 -- Migration 0036 : conditions générales de location, version 3.1.
 --
 -- Décision de Julien du 12/10/2026, appliquée telle quelle :
---   1. aucune indemnité de part ni d'autre en cas d'annulation. Le client
---      annule : les arrhes restent acquises à l'exploitant, le reste est
---      remboursé sous 14 jours. L'exploitant annule : tout ce qui a été payé
---      est remboursé sous 14 jours, sans autre indemnité. Plus de « double des
---      arrhes » ni de renvoi à l'article 1590 de l'ancien Code civil.
+--   1. annulation. Le client annule : les arrhes restent acquises à
+--      l'exploitant, le reste est remboursé sous 14 jours. L'exploitant annule
+--      (hors force majeure) : tout ce qui a été payé est remboursé sous 14 jours
+--      et il verse en outre une indemnité égale aux arrhes (décision du 12/10
+--      après lecture de l'art. VI.83, 27° du CDE, réciprocité). Force majeure :
+--      tout est remboursé, sans indemnité. Aucune autre indemnité. Plus de
+--      renvoi à l'article 1590 de l'ancien Code civil.
 --   2. articles 4 et 5 réécrits (arrhes, solde à 30 jours, annulation par le
 --      client, par l'exploitant, force majeure, non-présentation, séjour
 --      entamé), résumé « Comment ça se passe » en tête du texte.
@@ -80,13 +82,13 @@ Article 5 — Caution et annulation
 
 5.2. Annulation par le client. Si le client annule sa réservation, hors cas de force majeure, les arrhes restent acquises à l''exploitant. Ce que le client a payé au-delà des arrhes lui est remboursé dans les 14 jours, sur le moyen de paiement utilisé.
 
-5.3. Annulation par l''exploitant. Si l''exploitant annule la réservation, il rembourse au client tout ce que celui-ci a payé, arrhes comprises, dans les 14 jours, sur le moyen de paiement utilisé.
+5.3. Annulation par l''exploitant. Si l''exploitant annule la réservation, hors cas de force majeure, il rembourse au client tout ce que celui-ci a payé, arrhes comprises, dans les 14 jours, sur le moyen de paiement utilisé, et lui verse en outre une indemnité égale au montant des arrhes.
 
-5.4. Force majeure. Si un événement de force majeure, au sens du droit belge, rend le séjour impossible, la réservation est annulée. Tout ce que le client a payé, arrhes comprises, lui est remboursé dans les 14 jours, sur le moyen de paiement utilisé.
+5.4. Force majeure. Si un événement de force majeure, au sens du droit belge, rend le séjour impossible, la réservation est annulée. Tout ce que le client a payé, arrhes comprises, lui est remboursé dans les 14 jours, sur le moyen de paiement utilisé, sans indemnité de part ni d''autre.
 
 5.5. Non-présentation et séjour entamé. Le client qui ne se présente pas sans avoir annulé, ou qui écourte un séjour commencé, ne récupère pas le prix du séjour. Ce qu''il a payé au-delà de ce prix lui est remboursé dans les 14 jours.
 
-5.6. Dans chacun de ces cas, aucune indemnité n''est due, ni par le client ni par l''exploitant, en plus de ce que prévoit le présent article.
+5.6. En dehors de l''indemnité prévue à l''article 5.3, aucune autre indemnité n''est due, ni par le client ni par l''exploitant.
 
 5.7. Le client est invité à souscrire une assurance annulation auprès de l''assureur de son choix. L''exploitant n''en propose pas.
 
@@ -179,13 +181,13 @@ Article 5 — Caution et annulation
 
 5.2. Annulation par le client. Si le client annule sa réservation, hors cas de force majeure, les arrhes restent acquises à l''exploitant. Ce que le client a payé au-delà des arrhes lui est remboursé dans les 14 jours, sur le moyen de paiement utilisé.
 
-5.3. Annulation par l''exploitant. Si l''exploitant annule la réservation, il rembourse au client tout ce que celui-ci a payé, arrhes comprises, dans les 14 jours, sur le moyen de paiement utilisé.
+5.3. Annulation par l''exploitant. Si l''exploitant annule la réservation, hors cas de force majeure, il rembourse au client tout ce que celui-ci a payé, arrhes comprises, dans les 14 jours, sur le moyen de paiement utilisé, et lui verse en outre une indemnité égale au montant des arrhes.
 
-5.4. Force majeure. Si un événement de force majeure, au sens du droit belge, rend le séjour impossible, la réservation est annulée. Tout ce que le client a payé, arrhes comprises, lui est remboursé dans les 14 jours, sur le moyen de paiement utilisé.
+5.4. Force majeure. Si un événement de force majeure, au sens du droit belge, rend le séjour impossible, la réservation est annulée. Tout ce que le client a payé, arrhes comprises, lui est remboursé dans les 14 jours, sur le moyen de paiement utilisé, sans indemnité de part ni d''autre.
 
 5.5. Non-présentation et séjour entamé. Le client qui ne se présente pas sans avoir annulé, ou qui écourte un séjour commencé, ne récupère pas le prix du séjour. Ce qu''il a payé au-delà de ce prix lui est remboursé dans les 14 jours.
 
-5.6. Dans chacun de ces cas, aucune indemnité n''est due, ni par le client ni par l''exploitant, en plus de ce que prévoit le présent article.
+5.6. En dehors de l''indemnité prévue à l''article 5.3, aucune autre indemnité n''est due, ni par le client ni par l''exploitant.
 
 5.7. Le client est invité à souscrire une assurance annulation auprès de l''assureur de son choix. L''exploitant n''en propose pas.
 

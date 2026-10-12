@@ -1,13 +1,18 @@
 // Annulation d'une réservation et sort de l'argent (CGV v3.1, articles 4 et 5).
 //
-// Règle (décision de Julien, 12/10/2026) : AUCUNE indemnité de part ni d'autre.
+// Règle (décisions de Julien, 12/10/2026, la seconde après lecture de l'art.
+// VI.83, 27° du CDE) : seule indemnité, celle de l'exploitant qui annule.
 //  - le CLIENT annule (`par: "locataire"`, nom d'API inchangé) : les arrhes
 //    restent acquises à l'exploitant (5.2) ; ce qui a été payé au-delà des
 //    arrhes (le solde) est remboursé sous 14 jours, sur le moyen de paiement
 //    utilisé (Stripe quand il a été payé par Stripe) ;
 //  - l'EXPLOITANT annule (`par: "proprietaire"`) : tout ce qui a été payé,
-//    arrhes comprises, est remboursé sous 14 jours (5.3), rien de plus ;
-//  - force majeure (5.4), quelle que soit la partie : tout est remboursé ;
+//    arrhes comprises, est remboursé sous 14 jours (5.3), et il verse en outre
+//    une indemnité égale aux arrhes réellement reçues. L'indemnité ne passe PAS
+//    par Stripe (un remboursement ne dépasse jamais l'encaissé) : c'est un
+//    virement à faire à la main, consigné au journal (`refund.manual_due`) ;
+//  - force majeure (5.4), quelle que soit la partie : tout est remboursé,
+//    sans indemnité ;
 //  - non-présentation ou séjour entamé (5.5, client) : le prix du séjour
 //    n'est pas remboursé, un trop-perçu l'est ;
 //  - option non payée : rien à rembourser ;
@@ -46,7 +51,9 @@ export interface CancellationPlan {
   stripeRefundCents: number;
   /** Part à rendre à la main (virement/espèces payés, ou Stripe sans clé). */
   manualRefundCents: number;
-  /** Force majeure retenue (5.4) : tout est remboursé. */
+  /** Indemnité de l'exploitant qui annule (5.3) = arrhes reçues : virement à faire à la main. */
+  indemnityCents: number;
+  /** Force majeure retenue (5.4) : tout est remboursé, sans indemnité. */
   forceMajeure: boolean;
   /** Non-présentation ou séjour entamé retenu (5.5). */
   sejourEntame: boolean;
@@ -75,7 +82,7 @@ export async function planCancellation(
   const sejourEntame = par === "locataire" && !forceMajeure && opts.sejourEntame === true;
   const base = {
     par, paidCents: 0, arrhesCents: contractualArrhes(booking), keptCents: 0, refundCents: 0,
-    stripeRefunds: [] as StripeRefundLine[], stripeRefundCents: 0, manualRefundCents: 0, forceMajeure, sejourEntame,
+    stripeRefunds: [] as StripeRefundLine[], stripeRefundCents: 0, manualRefundCents: 0, indemnityCents: 0, forceMajeure, sejourEntame,
   };
   if (isStripeChannel(booking)) {
     const canal = booking.channelLabel ?? (booking.source === "import" ? "l'ancien système" : "le canal");
@@ -101,6 +108,8 @@ export async function planCancellation(
     ? (sejourEntame ? Math.min(paidNet, Math.max(booking.totalCents, arrhesRecues)) : arrhesRecues)
     : 0;
   const refund = paidNet - kept;
+  // 5.3 : l'exploitant qui annule verse une indemnité égale aux arrhes reçues, sauf force majeure.
+  const indemnity = par === "proprietaire" && !forceMajeure ? arrhesRecues : 0;
 
   // Déjà rendu par Stripe par PaymentIntent (lignes réussies ET en cours : la
   // ligne en cours réserve sa part, une ligne échouée ne compte pas).
@@ -137,8 +146,8 @@ export async function planCancellation(
   const stripeSum = stripeLines.reduce((s, l) => s + l.amountCents, 0);
   return {
     ...base, mode: "arrhes", paidCents: paidNet, keptCents: kept, refundCents: refund,
-    stripeRefunds: stripeLines, stripeRefundCents: stripeSum, manualRefundCents: manual,
-    note: planNote(par, kept, refund, manual, forceMajeure, sejourEntame),
+    stripeRefunds: stripeLines, stripeRefundCents: stripeSum, manualRefundCents: manual, indemnityCents: indemnity,
+    note: planNote(par, kept, refund, manual, indemnity, forceMajeure, sejourEntame),
   };
 }
 
@@ -169,15 +178,16 @@ function intentOf(p: PaymentRow): string | null {
   return null;
 }
 
-function planNote(par: AnnulationPar, kept: number, refund: number, manual: number, forceMajeure: boolean, sejourEntame: boolean): string {
+function planNote(par: AnnulationPar, kept: number, refund: number, manual: number, indemnity: number, forceMajeure: boolean, sejourEntame: boolean): string {
   const parts: string[] = [];
-  if (forceMajeure) parts.push("Force majeure : tout ce qui a été payé est rendu, arrhes comprises (art. 5.4 des CGV).");
+  if (forceMajeure) parts.push("Force majeure : tout ce qui a été payé est rendu, arrhes comprises, sans indemnité (art. 5.4 des CGV).");
   else if (par === "locataire" && sejourEntame) parts.push(`Séjour entamé ou non-présentation : ${eurTxt(kept)} restent acquis à l'exploitant (prix du séjour, art. 5.5 des CGV).`);
   else if (par === "locataire") parts.push(`Annulation par le client : ${eurTxt(kept)} restent acquis à l'exploitant (arrhes, art. 5.2 des CGV).`);
-  else parts.push("Annulation par l'exploitant : tout ce qui a été payé est rendu, arrhes comprises (art. 5.3 des CGV).");
+  else parts.push("Annulation par l'exploitant : tout ce qui a été payé est rendu, arrhes comprises, plus une indemnité égale aux arrhes (art. 5.3 des CGV).");
   if (refund > 0) parts.push(`Remboursement de ${eurTxt(refund)} sous 14 jours, sur le moyen de paiement utilisé.`);
   if (manual > 0) parts.push(`Dont ${eurTxt(manual)} à rendre à la main (paiement hors Stripe ou Stripe non disponible).`);
-  parts.push("Aucune indemnité de part ni d'autre (art. 5.6 des CGV).");
+  if (indemnity > 0) parts.push(`Indemnité de ${eurTxt(indemnity)} à virer à la main : Stripe ne rembourse pas plus que l'encaissé.`);
+  else parts.push("Aucune indemnité (art. 5.6 des CGV).");
   return parts.join(" ");
 }
 
