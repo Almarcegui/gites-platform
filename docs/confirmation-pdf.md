@@ -1,11 +1,17 @@
-# Confirmation de réservation et contrat de location PDF
+# Confirmation de réservation et conditions générales (PDF)
 
 Décision de Julien du 11/10/2026 : un client qui réserve en direct reçoit **un beau
-mail de confirmation** avec, **en pièce jointe, son contrat de location en PDF**.
-Airbnb et Booking envoient le leur ; ceci vaut pour les réservations directes.
-Il n'y a pas de vente « confirmée » au back-office (décision du 11/10/2026) : le
-contrat est conclu par l'acceptation en ligne des CGV et le paiement des arrhes,
-il ne se signe pas.
+mail de confirmation** avec, **en pièce jointe, un PDF**. Airbnb et Booking envoient
+le leur ; ceci vaut pour les réservations directes. Il n'y a pas de vente
+« confirmée » au back-office (décision du 11/10/2026) : la réservation est conclue
+par l'acceptation en ligne des CGV et le paiement des arrhes, rien ne se signe.
+
+Décision de Julien du 12/10/2026 : ce PDF **n'est plus un « contrat »**. Des CGV
+bien écrites et la trace de leur acceptation (version, date, heure, IP) suffisent.
+Le document s'appelle « Confirmation de réservation et conditions générales »
+(`Confirmation-<référence>.pdf`) ; les mots « contrat », « bail », « locataire »,
+« propriétaire » cèdent la place à « confirmation », « client », « exploitant »
+dans le PDF, les mails et les écrans.
 
 ## Vente du back-office : une option, puis le client confirme
 
@@ -17,7 +23,7 @@ le lien est dans la réponse (`optionUrl`). Sur cette page le client coche
 l'acceptation des CGV (`POST /api/public/bookings/:ref/pay` avec `cgvAccepted: true`,
 exigée tant qu'aucune acceptation n'est enregistrée ; version, heure et IP sont
 alors posées comme dans le tunnel), paie les arrhes, et reçoit la confirmation avec
-le contrat. `guest.lang: "nl"` envoie le lien en néerlandais.
+son PDF. `guest.lang: "nl"` envoie le lien en néerlandais.
 
 ## Ce qui part, et quand
 
@@ -47,7 +53,7 @@ doublon chez le client. Le reçu de paiement
 
 Le mail est en français ou en néerlandais selon `bookings.lang` (puis la langue du
 client). Les conditions générales n'existent qu'en français : en néerlandais, le
-mail et le contrat le disent (« De Franse versie is rechtsgeldend »).
+mail et le PDF le disent (« De Franse versie is rechtsgeldend »).
 
 ## Le mail
 
@@ -56,56 +62,61 @@ mail et le contrat le disent (« De Franse versie is rechtsgeldend »).
 styles en ligne, 600 px, bouton « Voir ma réservation » vers la page de la
 réservation) et version texte (c'est elle que garde le journal). Rubrique « Ce que
 vous devez savoir » : horaires, adresse, contact, solde et échéance, caution si
-demandée, contrat joint, renvoi vers l'article 5 (annulation).
+demandée, conclusion de la réservation (acceptation des CGV + arrhes, rien à
+signer), renvoi vers l'article 5 (annulation) et contact par e-mail avec la référence.
 
 Les données du client passent par `esc()` dans le HTML ; objet et texte reçoivent
 des valeurs ramenées à une ligne. Les coordonnées `TODO_…` du domaine ne sortent
 jamais. Le texte du mail se change dans les deux dictionnaires `FR` et `NL` en tête
 du fichier.
 
-## Le contrat PDF
+## Le PDF « Confirmation de réservation et conditions générales »
 
-`src/services/contrat.ts`, `buildContractPdf()`, fichier `Contrat-<référence>.pdf`.
-Générateur PDF maison, sans dépendance : `src/core/pdf.ts` (A4, Helvetica, WinAnsi,
-tableaux, pagination, pied de page « Page n / N »). Contenu :
+`src/services/confirmation-pdf.ts`, `buildConfirmationPdf()`, fichier
+`Confirmation-<référence>.pdf`. Générateur PDF maison, sans dépendance :
+`src/core/pdf.ts` (A4, Helvetica, WinAnsi, tableaux, pagination, pied de page
+« Page n / N »). Contenu :
 
-1. les parties : l'exploitant (domaine, adresse, contact, et la phrase « L'exploitant
-   est … » de l'article 1 des CGV) et le locataire ;
-2. l'hébergement loué ;
-3. le séjour : dates en toutes lettres, heures d'arrivée et de départ, nuits, occupants ;
-4. le prix, ligne par ligne d'après le devis figé de la réservation, et le total ;
-5. le paiement : arrhes (avec leur pourcentage) et solde avec son échéance, montant
-   réglé à la date d'émission, caution seulement si elle est > 0, puis **les
-   articles 4 et 5 des CGV reproduits mot pour mot** ;
-6. les conditions générales et la conclusion du contrat : acceptation en ligne et
-   paiement des arrhes (pas de signature) ; date, heure (Bruxelles), version des CGV
-   et adresse IP de l'acceptation quand elles sont enregistrées ; données du
-   locataire utilisées uniquement pour l'exécution du contrat ;
-7. en annexe, le texte complet des CGV en base (`settings.cgv_text`).
+1. **page 1, le récapitulatif** : exploitant (domaine, adresse, contact, et la
+   phrase « L'exploitant est … » de l'article 1 des CGV) et client ; hébergement ;
+   séjour (dates en toutes lettres, heures d'arrivée et de départ, nuits,
+   occupants) ; prix ligne par ligne d'après le devis figé, et total ; paiement
+   (arrhes avec leur pourcentage, solde et échéance, montant réglé à la date
+   d'émission, caution seulement si elle est > 0, renvoi à l'article 5 pour
+   l'annulation) ; puis le rappel de la conclusion : « Réservation conclue par
+   l'acceptation des conditions générales v3.1 le JJ/MM/AAAA à HH:MM depuis
+   l'adresse IP … et le paiement des arrhes » (heure de Bruxelles) ;
+2. **en annexe**, le texte complet des CGV en base (`settings.cgv_text`).
 
-**Le contrat ne crée aucune règle.** Les chiffres viennent de la réservation ; les
+La version citée est celle **enregistrée à l'acceptation** (`bookings.cgv_version`,
+de la forme `v3.1+sha256:<16 hex>-len<n>` depuis la 3.1) ; pour une acceptation
+plus ancienne (hash seul), c'est celle du texte en base.
+
+**Le document ne crée aucune règle.** Les chiffres viennent de la réservation ; les
 règles (arrhes, solde à 30 jours, annulation) sont celles des CGV en base. Changer
 une règle = changer `cgv_text` (nouvelle version, nouvelle migration sur le modèle de
-la 0019) : le contrat suit sans toucher au code.
+la 0036) : le document suit sans toucher au code.
 
-### Où modifier le texte du contrat
+### Où modifier le texte
 
-- **Libellés du contrat** (titres, clause de conclusion, confidentialité) : les deux
-  dictionnaires `FR` et `NL` de `src/services/contrat.ts`. 
+- **Libellés du document** (titres, rappel de conclusion, confidentialité) : les
+  deux dictionnaires `FR` et `NL` de `src/services/confirmation-pdf.ts`.
 - **Mise en page** (marges, polices, tableaux) : `src/core/pdf.ts`.
 - **Règles de paiement et d'annulation, identité de l'exploitant** : les CGV en base.
-- Après modification : `npx vitest run test/confirmation-contrat.test.ts`. Pour voir
-  le rendu : `SAMPLE_PDF_DIR=/chemin npx vitest run test/confirmation-contrat.test.ts -t "exemple"`
-  écrit un contrat et un mail FR et NL d'exemple dans ce dossier.
+- Après modification : `npx vitest run test/confirmation-pdf.test.ts`. Pour voir
+  le rendu : `SAMPLE_PDF_DIR=/chemin npx vitest run test/confirmation-pdf.test.ts -t "exemple"`
+  écrit un PDF et un mail FR et NL d'exemple dans ce dossier.
 
-## Accès au contrat
+## Accès au PDF
 
-- Back-office : `GET /api/admin/bookings/:id/contrat.pdf` (même garde que tout
-  `/api/admin/*`, toute réservation) ; bouton « Contrat PDF » dans la fiche
+- Back-office : `GET /api/admin/bookings/:id/confirmation.pdf` (même garde que tout
+  `/api/admin/*`, toute réservation) ; bouton « Confirmation PDF » dans la fiche
   réservation de l'écran `app/`, avec « Renvoyer la confirmation ».
-- Client : `GET /api/public/bookings/:référence/contrat.pdf?email=…` (même contrôle
-  que sa page de réservation : référence + e-mail), **réservation confirmée
-  seulement**.
+- Client : `GET /api/public/bookings/:référence/confirmation.pdf?email=…` (même
+  contrôle que sa page de réservation : référence + e-mail), **réservation
+  confirmée seulement**.
+- `contrat.pdf` reste un **alias** des deux routes (liens déjà envoyés, scripts) :
+  même réponse, même fichier `Confirmation-<référence>.pdf`.
 
 ## Transports
 

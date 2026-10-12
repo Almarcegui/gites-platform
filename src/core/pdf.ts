@@ -1,6 +1,6 @@
 // Générateur PDF minimal, sans dépendance (ni Node ni Workers : du texte et des
-// octets, rien d'autre). Il sert au contrat de location joint au mail de
-// confirmation (src/services/contrat.ts) ; il couvre exactement ce dont un
+// octets, rien d'autre). Il sert au PDF de confirmation joint au mail de
+// confirmation (src/services/confirmation-pdf.ts) ; il couvre exactement ce dont un
 // document de texte a besoin et rien de plus :
 //   - A4, marges réglables, Helvetica et Helvetica-Bold (polices standard du
 //     PDF : rien à embarquer), accents et « » € — … en WinAnsi ;
@@ -18,7 +18,7 @@
 //   - le fichier est ASCII pur (les chaînes sont en hexadécimal) : le décalage
 //     d'un objet est la longueur de la chaîne cumulée, la table xref est
 //     exacte par construction ;
-//   - les flux ne sont pas compressés : ils restent lisibles et un contrat
+//   - les flux ne sont pas compressés : ils restent lisibles et un document
 //     de quelques pages pèse quelques dizaines de ko.
 
 /** Largeurs Helvetica (AFM, 1/1000 em) pour les caractères ASCII 32 à 126. */

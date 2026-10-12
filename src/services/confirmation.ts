@@ -1,10 +1,10 @@
-// Mail de confirmation de réservation (FR / NL), avec le contrat de location en
-// pièce jointe. Il REMPLACE l'ancien « voucher » par mail (décision Julien du
+// Mail de confirmation de réservation (FR / NL), avec le PDF « Confirmation de
+// réservation et conditions générales » en pièce jointe. Il REMPLACE l'ancien « voucher » par mail (décision Julien du
 // 11/10/2026) : un seul message part à la confirmation, avec
 //   - une version HTML (tableaux, bouton vers la page de la réservation) et la
 //     version texte, qui reste celle du journal d'e-mails ;
-//   - le contrat PDF (src/services/contrat.ts), qui porte aussi les conditions
-//     générales en annexe : le mail ne les recopie plus.
+//   - le PDF de confirmation (src/services/confirmation-pdf.ts), qui porte les
+//     conditions générales en annexe : le mail ne les recopie plus.
 // La page « voucher » du site (public/book/voucher.html) reste la consultation
 // en ligne ; seul le MAIL ne s'appelle plus ainsi.
 //
@@ -72,7 +72,7 @@ interface Words {
   kContact: string;
   kBalance: (amount: string, date: string | null) => string;
   kCaution: (amount: string) => string;
-  kContract: (file: string) => string;
+  kDocument: (file: string) => string;
   kCancel: string;
   kLanguage: string | null;
   closing: string;
@@ -83,8 +83,8 @@ const FR: Words = {
   lang: "fr",
   hello: (n) => (n ? `Bonjour ${n},` : "Bonjour,"),
   confirmed: "Votre réservation est confirmée — merci de votre confiance !",
-  attached: (f) => `Vous trouverez votre contrat de location en pièce jointe (${f}). Il reprend les détails de votre séjour et les conditions générales : conservez-le.`,
-  preheader: (a, d) => `Votre séjour du ${a} au ${d} est confirmé. Votre contrat de location est en pièce jointe.`,
+  attached: (f) => `Vous trouverez en pièce jointe la confirmation de votre réservation et les conditions générales (${f}). Conservez ce document.`,
+  preheader: (a, d) => `Votre séjour du ${a} au ${d} est confirmé. La confirmation et les conditions générales sont en pièce jointe.`,
   title: "Confirmation de réservation",
   recap: "Votre séjour",
   reference: "Référence",
@@ -110,8 +110,8 @@ const FR: Words = {
   kContact: "Une question ? Répondez simplement à ce message, ou contactez-nous",
   kBalance: (a, d) => `Le solde de ${a} est à régler${d ? ` au plus tard le ${d}` : ""}, en ligne depuis la page de votre réservation.`,
   kCaution: (a) => `Caution de ${a} : empreinte ou dépôt demandé avant l'arrivée, restitué après l'état des lieux.`,
-  kContract: (f) => `Votre contrat de location est joint à ce message (${f}). Il est conclu par l'acceptation des conditions générales et le paiement des arrhes : il ne se signe pas.`,
-  kCancel: "Conditions d'annulation : article 5 des conditions générales, reproduites en annexe du contrat.",
+  kDocument: (f) => `Votre réservation est conclue par l'acceptation des conditions générales et le paiement des arrhes. Rien à signer : le document joint (${f}) en garde la trace.`,
+  kCancel: "Annulation : article 5 des conditions générales, jointes à ce message. Un e-mail rappelant votre référence suffit pour nous joindre.",
   kLanguage: null,
   closing: "À très bientôt,",
   subject: (r, p) => `[${r}] Votre réservation est confirmée — ${p}`,
@@ -121,8 +121,8 @@ const NL: Words = {
   lang: "nl",
   hello: (n) => (n ? `Beste ${n},` : "Beste,"),
   confirmed: "Uw reservering is bevestigd — dank u wel voor uw vertrouwen!",
-  attached: (f) => `Uw huurcontract vindt u als bijlage (${f}). Het bevat de gegevens van uw verblijf en de algemene voorwaarden: bewaar het goed.`,
-  preheader: (a, d) => `Uw verblijf van ${a} tot ${d} is bevestigd. Uw huurcontract zit als bijlage bij dit bericht.`,
+  attached: (f) => `In bijlage vindt u de bevestiging van uw reservering en de algemene voorwaarden (${f}). Bewaar dit document goed.`,
+  preheader: (a, d) => `Uw verblijf van ${a} tot ${d} is bevestigd. De bevestiging en de algemene voorwaarden zitten als bijlage bij dit bericht.`,
   title: "Bevestiging van reservering",
   recap: "Uw verblijf",
   reference: "Referentie",
@@ -148,8 +148,8 @@ const NL: Words = {
   kContact: "Een vraag? Antwoord gewoon op dit bericht, of neem contact met ons op",
   kBalance: (a, d) => `Het saldo van ${a} moet betaald worden${d ? ` uiterlijk op ${d}` : ""}, online via de pagina van uw reservering.`,
   kCaution: (a) => `Waarborg van ${a}: kaartafdruk of storting gevraagd voor aankomst, terugbetaald na de plaatsbeschrijving.`,
-  kContract: (f) => `Uw huurcontract zit als bijlage bij dit bericht (${f}). Het komt tot stand door de aanvaarding van de algemene voorwaarden en de betaling van het voorschot: het wordt niet ondertekend.`,
-  kCancel: "Annuleringsvoorwaarden: artikel 5 van de algemene voorwaarden, als bijlage bij het contract.",
+  kDocument: (f) => `Uw reservering komt tot stand door de aanvaarding van de algemene voorwaarden en de betaling van het voorschot. U hoeft niets te ondertekenen: het bijgevoegde document (${f}) bewaart er het spoor van.`,
+  kCancel: "Annulering: artikel 5 van de algemene voorwaarden, als bijlage bij dit bericht. Een e-mail met uw referentie volstaat om ons te bereiken.",
   kLanguage: CGV_NL_NOTE,
   closing: "Tot binnenkort,",
   subject: (r, p) => `[${r}] Uw reservering is bevestigd — ${p}`,
@@ -212,7 +212,7 @@ export function buildConfirmationEmail(ctx: ConfirmationContext): ConfirmationMa
   if (contact.length) t.push(`- ${w.kContact} : ${contact.join(" · ")}`);
   if (balance > 0) t.push(`- ${w.kBalance(m(balance), due)}`);
   if (settings.cautionCents > 0) t.push(`- ${w.kCaution(m(settings.cautionCents))}`);
-  t.push(`- ${w.kContract(ctx.attachmentName)}`, `- ${w.kCancel}`);
+  t.push(`- ${w.kDocument(ctx.attachmentName)}`, `- ${w.kCancel}`);
   if (w.kLanguage) t.push(`- ${w.kLanguage}`);
   t.push(``, w.closing, propertyName, ...contact);
 
@@ -244,7 +244,7 @@ export function buildConfirmationEmail(ctx: ConfirmationContext): ConfirmationMa
   if (contact.length) know.push(`${w.kContact} : ${contact.join(" · ")}`);
   if (balance > 0) know.push(w.kBalance(m(balance), due));
   if (settings.cautionCents > 0) know.push(w.kCaution(m(settings.cautionCents)));
-  know.push(w.kContract(ctx.attachmentName), w.kCancel);
+  know.push(w.kDocument(ctx.attachmentName), w.kCancel);
   if (w.kLanguage) know.push(w.kLanguage);
 
   const bodyHtml = `<!doctype html>

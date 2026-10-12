@@ -22,7 +22,7 @@ import {
 } from "../db/repo";
 import { buildPaymentReceiptEmail, queueEmail } from "./email";
 import { buildConfirmationEmail } from "./confirmation";
-import { buildContractPdf, contractFileName, loadContractContext } from "./contrat";
+import { buildConfirmationPdf, confirmationFileName, loadConfirmationPdfContext } from "./confirmation-pdf";
 import {
   createCheckoutSession,
   createPaymentIntent,
@@ -465,7 +465,8 @@ async function sendPaymentReceipt(
   }
 }
 
-/** Mail de confirmation de réservation, avec le contrat de location en PDF.
+/** Mail de confirmation de réservation, avec le PDF « Confirmation de
+ *  réservation et conditions générales » en pièce jointe.
  *
  *  C'est LE mail de confirmation : il remplace l'ancien voucher par mail
  *  (décision du 11/10/2026), qui ne part donc plus en plus de lui. Il part
@@ -482,7 +483,7 @@ export async function sendConfirmation(
   bookingId: number,
   opts: { force?: boolean } = {},
 ): Promise<boolean> {
-  const ctx = await loadContractContext(db, bookingId);
+  const ctx = await loadConfirmationPdfContext(db, bookingId);
   if (!ctx || !ctx.booking.guestEmail) return false;
   let claimed = false;
   if (!opts.force) {
@@ -493,7 +494,7 @@ export async function sendConfirmation(
     if ((claim.meta?.changes ?? 0) === 0) return false;
     claimed = true;
   }
-  const filename = contractFileName(ctx.booking.reference);
+  const filename = confirmationFileName(ctx.booking.reference);
   let message: Parameters<typeof queueEmail>[2];
   try {
     const email = buildConfirmationEmail({
@@ -509,7 +510,7 @@ export async function sendConfirmation(
       subject: email.subject,
       bodyText: email.bodyText,
       bodyHtml: email.bodyHtml,
-      attachments: [{ filename, contentType: "application/pdf", content: buildContractPdf(ctx) }],
+      attachments: [{ filename, contentType: "application/pdf", content: buildConfirmationPdf(ctx) }],
       kind: "confirmation",
     };
   } catch (e) {

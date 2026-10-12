@@ -132,7 +132,7 @@ export async function api<T>(path: string, init: { method?: string; body?: unkno
   return data as T;
 }
 
-/** Ouvre un PDF du back-office (contrat de location) dans un nouvel onglet.
+/** Ouvre un PDF du back-office (confirmation de réservation et conditions générales) dans un nouvel onglet.
  *  Le fichier est demandé avec l'en-tête d'accès (un simple lien n'en porterait
  *  pas) ; l'onglet est ouvert AVANT l'attente pour ne pas être bloqué par le navigateur. */
 export async function openAdminPdf(path: string): Promise<void> {

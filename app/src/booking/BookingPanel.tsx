@@ -447,7 +447,7 @@ const HISTORY: Record<string, MessageDescriptor> = {
   "payment.manual": msg`paiement noté à la main`,
   "email.balance_reminder": msg`rappel du solde envoyé`,
   "email.voucher_resent": msg`confirmation renvoyée au client`,
-  "email.confirmation_resent": msg`confirmation et contrat renvoyés au client`,
+  "email.confirmation_resent": msg`confirmation et conditions générales renvoyées au client`,
   "message.reply": msg`message envoyé au client`,
 };
 function historyLabel(action: string): string {
@@ -463,8 +463,8 @@ function MainActions({ b, state, balance, setDialog }: { b: Booking; state: Book
   const confirm = useAction();
   const remind = useAction();
   const voucher = useAction();
-  const contrat = useAction();
-  const err = [confirm, remind, voucher, contrat].find((a) => a.state.status === "error")?.state;
+  const confirmationPdf = useAction();
+  const err = [confirm, remind, voucher, confirmationPdf].find((a) => a.state.status === "error")?.state;
   const btn = (key: string, icon: ReactNode, label: string, onClick: () => void, pri = false, a?: ReturnType<typeof useAction>) => (
     <button
       key={key}
@@ -500,8 +500,8 @@ function MainActions({ b, state, balance, setDialog }: { b: Booking; state: Book
   } else {
     acts = [
       write,
-      btn("voucher", <IconSend size={22} />, t`Renvoyer la confirmation`, () => void voucher.run(() => api(`/bookings/${b.id}/resend-confirmation`, { method: "POST" }), t`C'est fait. Confirmation et contrat renvoyés au client.`), false, voucher),
-      btn("contrat", <IconFileText size={22} />, t`Contrat PDF`, () => void contrat.run(() => openAdminPdf(`/bookings/${b.id}/contrat.pdf`), t`Contrat ouvert dans un nouvel onglet.`), false, contrat),
+      btn("voucher", <IconSend size={22} />, t`Renvoyer la confirmation`, () => void voucher.run(() => api(`/bookings/${b.id}/resend-confirmation`, { method: "POST" }), t`C'est fait. Confirmation et conditions générales renvoyées au client.`), false, voucher),
+      btn("confirmation-pdf", <IconFileText size={22} />, t`Confirmation PDF`, () => void confirmationPdf.run(() => openAdminPdf(`/bookings/${b.id}/confirmation.pdf`), t`Confirmation ouverte dans un nouvel onglet.`), false, confirmationPdf),
       btn("edit", <IconCalendar size={22} />, t`Modifier`, () => setDialog("edit")),
     ];
   }
@@ -519,7 +519,7 @@ function MainActions({ b, state, balance, setDialog }: { b: Booking; state: Book
 function MoreMenu({ b, setDialog }: { b: Booking; setDialog: (d: Dialog) => void }) {
   const { t } = useLingui();
   const voucher = useAction();
-  const contrat = useAction();
+  const confirmationPdf = useAction();
   return (
     <div className="more">
       <Menu width="target" position="bottom" shadow="md">
@@ -542,12 +542,12 @@ function MoreMenu({ b, setDialog }: { b: Booking; setDialog: (d: Dialog) => void
           ) : null}
           <Menu.Item
             style={{ minHeight: 44 }}
-            onClick={() => void voucher.run(() => api(`/bookings/${b.id}/resend-confirmation`, { method: "POST" }), t`C'est fait. Confirmation et contrat renvoyés au client.`)}
+            onClick={() => void voucher.run(() => api(`/bookings/${b.id}/resend-confirmation`, { method: "POST" }), t`C'est fait. Confirmation et conditions générales renvoyées au client.`)}
           >
             <Trans>Renvoyer la confirmation au client</Trans>
           </Menu.Item>
-          <Menu.Item style={{ minHeight: 44 }} onClick={() => void contrat.run(() => openAdminPdf(`/bookings/${b.id}/contrat.pdf`), t`Contrat ouvert dans un nouvel onglet.`)}>
-            <Trans>Contrat de location (PDF)</Trans>
+          <Menu.Item style={{ minHeight: 44 }} onClick={() => void confirmationPdf.run(() => openAdminPdf(`/bookings/${b.id}/confirmation.pdf`), t`Confirmation ouverte dans un nouvel onglet.`)}>
+            <Trans>Confirmation et conditions générales (PDF)</Trans>
           </Menu.Item>
           {!isChannel(b) ? (
             <Menu.Item style={{ minHeight: 44 }} onClick={() => setDialog("edit")}>
@@ -566,7 +566,7 @@ function MoreMenu({ b, setDialog }: { b: Booking; setDialog: (d: Dialog) => void
         </Menu.Dropdown>
       </Menu>
       {voucher.state.status === "error" ? <ErrorLine text={voucher.state.text} /> : null}
-      {contrat.state.status === "error" ? <ErrorLine text={contrat.state.text} /> : null}
+      {confirmationPdf.state.status === "error" ? <ErrorLine text={confirmationPdf.state.text} /> : null}
     </div>
   );
 }
@@ -804,10 +804,10 @@ function CancelDialog({ open, b, onClose }: { open: boolean; b: Booking; onClose
           <Trans>Qui annule ?</Trans>
         </legend>
         <label style={{ display: "block", marginBottom: 4 }}>
-          <input type="radio" name="cancel-par" checked={par === "locataire"} onChange={() => setPar("locataire")} /> <Trans>Le locataire</Trans>
+          <input type="radio" name="cancel-par" checked={par === "locataire"} onChange={() => setPar("locataire")} /> <Trans>Le client</Trans>
         </label>
         <label style={{ display: "block" }}>
-          <input type="radio" name="cancel-par" checked={par === "proprietaire"} onChange={() => setPar("proprietaire")} /> <Trans>Le propriétaire</Trans>
+          <input type="radio" name="cancel-par" checked={par === "proprietaire"} onChange={() => setPar("proprietaire")} /> <Trans>L'exploitant</Trans>
         </label>
       </fieldset>
       {plan == null ? (
@@ -817,8 +817,9 @@ function CancelDialog({ open, b, onClose }: { open: boolean; b: Booking; onClose
           {plan.par === "locataire" ? <p>{t`Arrhes conservées : ${eur(plan.keptCents)}`}</p> : null}
           <p>{t`Remboursement : ${eur(plan.refundCents)}`}</p>
           {plan.manualRefundCents > 0 ? <p>{t`Dont ${eur(plan.manualRefundCents)} à rendre à la main (hors Stripe).`}</p> : null}
-          {plan.indemnityCents > 0 ? <p>{t`Indemnité : ${eur(plan.indemnityCents)} à virer à la main (double des arrhes).`}</p> : null}
-          <p>{plan.par === "locataire" ? t`Le solde payé est rendu dans les 14 jours.` : t`Le client en est prévenu par mail.`}</p>
+          {plan.indemnityCents > 0 ? <p>{t`Indemnité : ${eur(plan.indemnityCents)} (égale aux arrhes) à virer à la main. Le mail demande son IBAN au client.`}</p> : null}
+          <p>{plan.par === "locataire" ? t`Les arrhes restent acquises, le solde payé est rendu sous 14 jours sur le moyen de paiement utilisé.` : t`Tout ce qui a été payé est rendu sous 14 jours sur le moyen de paiement utilisé.`}</p>
+          <p>{t`Le client en est prévenu par mail.`}</p>
         </div>
       ) : (
         <p className="lead">

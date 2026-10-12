@@ -272,7 +272,7 @@ export function SaleFlow({ prefill, onClose }: { prefill: SalePrefill | null; on
             <TextInput size="md" type="email" label={t`Mail`} value={email} onChange={(e) => setEmail(e.currentTarget.value)} autoComplete="off" />
           </div>
           <p className="muted" style={{ marginTop: 12 }}>
-            {t`Les dates sont gardées en option. Si le client a un mail, il reçoit un lien vers sa réservation : il y accepte les conditions générales, paie les arrhes (${q ? eur(q.depositCents) : ""}) et reçoit alors sa confirmation avec le contrat.`}
+            {t`Les dates sont gardées en option. Si le client a un mail, il reçoit un lien vers sa réservation : il y accepte les conditions générales, paie les arrhes (${q ? eur(q.depositCents) : ""}) et reçoit alors sa confirmation avec les conditions générales.`}
           </p>
           <div className="acts" style={{ marginTop: 16 }}>
             <button

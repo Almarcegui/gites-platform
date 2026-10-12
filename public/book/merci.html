@@ -69,7 +69,7 @@ async function poll(attempt = 0) {
         <p>${t("Référence <b class=\"mono\">{ref}</b>", { ref: esc(ref) })}<br>
         <span class="small muted">${esc(bk.unitName)} · ${t("du {du} au {au}", { du: dfr(bk.checkin), au: dfr(bk.checkout) })}</span></p>
         <div class="next" style="text-align:left"><h4>${t("Ce qui se passe maintenant")}</h4><ol>
-          <li>${t("Vous recevez dans quelques minutes un e-mail de confirmation, avec votre récapitulatif, les conditions générales et le contrat de location. Son objet commence par [{ref}].", { ref: esc(ref) })}</li>
+          <li>${t("Vous recevez dans quelques minutes un e-mail de confirmation, avec votre récapitulatif et les conditions générales. Son objet commence par [{ref}].", { ref: esc(ref) })}</li>
           <li>${balance}</li>
           <li>${t("Arrivée dès {arr}, départ avant {dep}.", { arr: esc(hour(data.stay?.checkinTime)), dep: esc(hour(data.stay?.checkoutTime)) })}</li>
           <li>${t("Une question ? Répondez simplement à l'e-mail de confirmation : pas de chat, nous répondons par e-mail.")}</li></ol></div>

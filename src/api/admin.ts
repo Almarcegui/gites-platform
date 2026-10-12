@@ -153,7 +153,7 @@ import {
 } from "../services/booking-flow";
 import { dropPreparedRefunds, executeRefunds, planCancellation, prepareRefunds, replayRefund } from "../services/annulation";
 import { buildBalanceReminderEmail, buildCancellationEmail, buildPaymentLinkEmail, queueEmail, queueEmailDetailed } from "../services/email";
-import { buildContractPdf, contractFileName, loadContractContext } from "../services/contrat";
+import { buildConfirmationPdf, confirmationFileName, loadConfirmationPdfContext } from "../services/confirmation-pdf";
 import { importElloha } from "../services/elloha-import";
 import { importAgendaGoogle, MAX_AGENDA_EVENTS } from "../services/agenda-import";
 import { replyOnChannel } from "../services/beds24-messages";
@@ -1825,7 +1825,7 @@ export function registerAdminRoutes(router: Router): void {
     // Décision de Julien (11/10/2026) : pas de vente « confirmée » au back-office.
     // La vente crée une OPTION ; le client reçoit un lien vers la page de sa
     // réservation, y accepte les CGV, paie les arrhes, puis reçoit la
-    // confirmation avec le contrat (handlePaymentSuccess). `confirmNow` est ignoré.
+    // confirmation et son PDF (handlePaymentSuccess). `confirmNow` est ignoré.
 
     const created = await createBookingAtomic(db, {
       unitId: ctx.unit.id,
@@ -1880,14 +1880,17 @@ export function registerAdminRoutes(router: Router): void {
     return json({ booking, paymentUrl, optionUrl, optionMailQueued }, 201);
   }));
 
-  // Annulation (CGV art. 4-5, décision du 12/10/2026) : voir services/annulation.ts.
+  // Annulation (CGV v3.1 art. 4-5, décisions du 12/10/2026) : voir services/annulation.ts.
+  // `par` : « locataire » (le client) ou « proprietaire » (l'exploitant), noms d'API inchangés.
   // `simuler: true` rend le plan sans rien faire ; un plan qui rembourse par
   // Stripe exige `confirmer: true`.
   router.post("/api/admin/bookings/:id/cancel", guard(async (req, env, p, _url, execCtx) => {
     const id = intParam(p.id, 0);
     const body = await readJson<{ reason?: string; par?: string; simuler?: boolean; confirmer?: boolean; forceMajeure?: boolean; sejourEntame?: boolean }>(req);
-    const par = body?.par ?? "locataire";
-    if (par !== "locataire" && par !== "proprietaire") return apiError(400, "par : « locataire » ou « proprietaire »");
+    // « client » et « exploitant » sont acceptés comme synonymes.
+    const parBrut = body?.par ?? "locataire";
+    const par = parBrut === "client" ? "locataire" : parBrut === "exploitant" ? "proprietaire" : parBrut;
+    if (par !== "locataire" && par !== "proprietaire") return apiError(400, "par : « locataire » (le client) ou « proprietaire » (l'exploitant)");
     const booking = await getBooking(env.DB, id);
     if (!booking) return apiError(404, "réservation inconnue");
     if (booking.status === "cancelled") return apiError(409, "déjà annulée");
@@ -2045,7 +2048,7 @@ export function registerAdminRoutes(router: Router): void {
     return json({ ok: true, balanceCents: balance, payUrl });
   }));
 
-  /** Renvoie la confirmation (mail soigné + contrat PDF en pièce jointe). L'URL
+  /** Renvoie la confirmation (mail soigné + PDF de confirmation et CGV en pièce jointe). L'URL
    *  `resend-voucher` est l'ancien nom, gardé pour les scripts et le back-office
    *  d'avant. */
   const resendConfirmation = guard(async (req, env, p) => {
@@ -2058,19 +2061,23 @@ export function registerAdminRoutes(router: Router): void {
   router.post("/api/admin/bookings/:id/resend-confirmation", resendConfirmation);
   router.post("/api/admin/bookings/:id/resend-voucher", resendConfirmation);
 
-  /** Contrat de location en PDF (toute réservation, y compris pour le relire avant envoi). */
-  router.get("/api/admin/bookings/:id/contrat.pdf", guard(async (_req, env, p) => {
+  /** « Confirmation de réservation et conditions générales » en PDF (toute
+   *  réservation, y compris pour la relire avant envoi). `contrat.pdf` est
+   *  l'ancien nom, gardé en alias : même réponse. */
+  const confirmationPdf = guard(async (_req, env, p) => {
     const id = intParam(p.id, 0);
-    const ctx = await loadContractContext(env.DB, id);
+    const ctx = await loadConfirmationPdfContext(env.DB, id);
     if (!ctx) return apiError(404, "réservation inconnue");
-    return new Response(buildContractPdf(ctx), {
+    return new Response(buildConfirmationPdf(ctx), {
       headers: {
         "content-type": "application/pdf",
-        "content-disposition": `inline; filename="${contractFileName(ctx.booking.reference)}"`,
+        "content-disposition": `inline; filename="${confirmationFileName(ctx.booking.reference)}"`,
         "cache-control": "private, no-store",
       },
     });
-  }));
+  });
+  router.get("/api/admin/bookings/:id/confirmation.pdf", confirmationPdf);
+  router.get("/api/admin/bookings/:id/contrat.pdf", confirmationPdf);
 
   /** Modifier une réservation SANS annuler-recréer (issue #73).
    *

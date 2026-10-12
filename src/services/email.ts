@@ -26,10 +26,10 @@ export function money(cents: number, nl: boolean): string {
 }
 
 /** Les conditions générales n'existent qu'en français (décision du lot 3). */
-export const CGV_NL_NOTE = "De algemene voorwaarden en het huurcontract bestaan alleen in het Frans. De Franse versie is rechtsgeldend.";
+export const CGV_NL_NOTE = "De algemene voorwaarden bestaan alleen in het Frans. De Franse versie is rechtsgeldend.";
 
 /** Coordonnée réelle d'un domaine : les « TODO_… » de la graine ne sortent jamais
- *  (issue #4), ni sur le site, ni dans un mail ou un contrat. null = à taire. */
+ *  (issue #4), ni sur le site, ni dans un mail ou un document. null = à taire. */
 export function realContact(value: string | null | undefined): string | null {
   const v = (value ?? "").trim();
   return v === "" || /^TODO_/i.test(v) ? null : v;
@@ -76,7 +76,7 @@ export interface EmailToQueue {
   references?: string | null;
   /** Version HTML du message (multipart/alternative) ; le texte reste la référence du journal. */
   bodyHtml?: string;
-  /** Pièces jointes (le contrat PDF de la confirmation). */
+  /** Pièces jointes (le PDF de la confirmation). */
   attachments?: EmailAttachment[];
 }
 
@@ -199,7 +199,7 @@ export function buildPaymentLinkEmail(
       `${label} : ${formatEur(amountCents)}`,
       payUrl,
       ``,
-      `Ce lien ouvre la page de votre réservation : vous y acceptez les conditions générales, réglez les arrhes en ligne (carte bancaire, via Stripe), puis recevez votre confirmation avec votre contrat de location.`,
+      `Ce lien ouvre la page de votre réservation : vous y acceptez les conditions générales, réglez les arrhes en ligne (carte bancaire, via Stripe), puis recevez votre confirmation avec les conditions générales.`,
       ...(opts.holdUntil ? [`Vos dates sont gardées jusqu'au ${formatDateFr(opts.holdUntil.slice(0, 10))}.`] : []),
       ``,
       `À bientôt,`,
@@ -212,7 +212,7 @@ export function buildPaymentLinkEmail(
  *  comme solde.
  *
  *  Distinct du voucher, et pas redondant avec lui : le voucher est le document
- *  contractuel de la réservation (conditions générales comprises), envoyé une
+ *  de la réservation (conditions générales comprises), envoyé une
  *  seule fois à la confirmation. Le reçu est un justificatif comptable, émis
  *  autant de fois qu'il y a d'encaissements — c'est le document qu'un client
  *  cherche quand il veut prouver ce qu'il a payé, et quand.
@@ -334,7 +334,7 @@ function buildPaymentLinkEmailNl(b: BookingRow, property: PropertyRow, label: st
       `${l}: ${money(amountCents, true)}`,
       payUrl,
       ``,
-      `Deze link opent de pagina van uw reservering: u aanvaardt er de algemene voorwaarden, betaalt het voorschot online (bankkaart, via Stripe) en ontvangt daarna uw bevestiging met uw huurcontract.`,
+      `Deze link opent de pagina van uw reservering: u aanvaardt er de algemene voorwaarden, betaalt het voorschot online (bankkaart, via Stripe) en ontvangt daarna uw bevestiging met de algemene voorwaarden.`,
       ...(opts.holdUntil ? [`Uw data worden bewaard tot ${formatDateFr(opts.holdUntil.slice(0, 10))}.`] : []),
       ``,
       `Tot binnenkort,`,
@@ -394,14 +394,15 @@ function buildBalanceReminderEmailNl(b: BookingRow, property: PropertyRow, payUr
   };
 }
 
-/** Mail « Annulation de votre réservation » (CGV art. 5) : ce qui est conservé,
- *  ce qui est remboursé (délai de 14 jours) et, quand c'est le propriétaire qui
- *  annule, l'indemnité égale aux arrhes. Pas de PDF. Les montants sont ceux du
- *  plan ; aucune promesse au-delà des CGV. */
+/** Mail « Annulation de votre réservation » (CGV v3.1, article 5) : ce qui
+ *  reste acquis à l'exploitant, ce qui est remboursé, sur le moyen de paiement
+ *  utilisé, sous 14 jours ; quand l'exploitant annule (hors force majeure),
+ *  l'indemnité égale aux arrhes (5.3), virée à la main : on demande l'IBAN.
+ *  Pas de PDF. Les montants sont ceux du plan ; rien au-delà des CGV. */
 export function buildCancellationEmail(
   b: BookingRow,
   property: PropertyRow,
-  plan: { par: "locataire" | "proprietaire"; keptCents: number; refundCents: number; indemnityCents: number },
+  plan: { par: "locataire" | "proprietaire"; keptCents: number; refundCents: number; indemnityCents?: number; forceMajeure?: boolean; sejourEntame?: boolean },
 ): { subject: string; bodyText: string } {
   const nl = isNl(b);
   const m = (c: number) => money(c, nl);
@@ -409,44 +410,50 @@ export function buildCancellationEmail(
     ? `Verblijf: van ${formatDateFr(b.checkin)} tot ${formatDateFr(b.checkout)}`
     : `Séjour : du ${formatDateFr(b.checkin)} au ${formatDateFr(b.checkout)}`;
   const contact = property.contactEmail ? [property.contactEmail] : [];
+  const byClient = plan.par === "locataire";
+  const indemnity = !byClient && !plan.forceMajeure ? Math.max(0, plan.indemnityCents ?? 0) : 0;
   if (nl) {
     const lines = [
       `Beste,`,
       ``,
-      plan.par === "locataire" ? `Uw reservering ${b.reference} is geannuleerd op uw verzoek.` : `Wij moeten uw reservering ${b.reference} helaas annuleren.`,
+      byClient ? `Uw reservering ${b.reference} is geannuleerd op uw verzoek.` : `Wij moeten uw reservering ${b.reference} helaas annuleren.`,
       ``,
       `Accommodatie: ${b.unitName ?? ""} — ${property.name}`,
       stay,
       ``,
     ];
-    if (plan.par === "locataire") {
-      lines.push(`Volgens de algemene voorwaarden (artikel 5.2) blijft het voorschot${plan.keptCents > 0 ? ` (${m(plan.keptCents)})` : ""} verworven door de eigenaar.`);
-      lines.push(plan.refundCents > 0 ? `Wat u méér dan het voorschot betaalde, ${m(plan.refundCents)}, wordt binnen 14 dagen aan u terugbetaald.` : `Er is niets terug te betalen.`);
-    } else {
-      if (plan.indemnityCents > 0) lines.push(`Conform artikel 5.3 van de algemene voorwaarden (artikel 1590 oud Burgerlijk Wetboek) ontvangt u het dubbele van het voorschot.`);
-      lines.push(plan.refundCents > 0 ? `Alles wat u betaalde, ${m(plan.refundCents)}, wordt aan u terugbetaald.` : `U had nog niets betaald.`);
-      if (plan.indemnityCents > 0) lines.push(`Daarbovenop volgt een vergoeding gelijk aan het voorschot: ${m(plan.indemnityCents)}, per overschrijving. Antwoord op dit bericht met uw rekeningnummer.`);
-    }
+    if (plan.forceMajeure) lines.push(`Overmacht (artikel 5.4 van de algemene voorwaarden): alles wat u betaalde, voorschot inbegrepen, wordt aan u terugbetaald.`);
+    else if (byClient && plan.sejourEntame) lines.push(`Volgens artikel 5.5 van de algemene voorwaarden wordt de prijs van het verblijf${plan.keptCents > 0 ? ` (${m(plan.keptCents)})` : ""} niet terugbetaald.`);
+    else if (byClient) lines.push(`Volgens artikel 5.2 van de algemene voorwaarden blijft het voorschot${plan.keptCents > 0 ? ` (${m(plan.keptCents)})` : ""} verworven door de uitbater.`);
+    else lines.push(`Volgens artikel 5.3 van de algemene voorwaarden wordt alles wat u betaalde, voorschot inbegrepen, aan u terugbetaald${indemnity > 0 ? `, en ontvangt u daarnaast een vergoeding gelijk aan het voorschot` : ""}.`);
+    lines.push(
+      plan.refundCents > 0
+        ? `Terugbetaling: ${m(plan.refundCents)}, op het gebruikte betaalmiddel, binnen 14 dagen.`
+        : byClient ? `Er is niets terug te betalen.` : `U had nog niets betaald.`,
+    );
+    if (indemnity > 0) lines.push(`Daarnaast storten wij u een vergoeding gelijk aan het voorschot, ${m(indemnity)}. Antwoord op dit bericht met uw IBAN.`);
     lines.push(``, `Tot ziens,`, `${property.name}`, ...contact);
     return { subject: refSubject(b.reference, `Annulering van uw reservering — ${property.name}`), bodyText: lines.join("\n") };
   }
   const lines = [
     `Bonjour,`,
     ``,
-    plan.par === "locataire" ? `Votre réservation ${b.reference} est annulée à votre demande.` : `Nous sommes au regret d'annuler votre réservation ${b.reference}.`,
+    byClient ? `Votre réservation ${b.reference} est annulée à votre demande.` : `Nous sommes au regret d'annuler votre réservation ${b.reference}.`,
     ``,
     `Hébergement : ${b.unitName ?? ""} — ${property.name}`,
     stay,
     ``,
   ];
-  if (plan.par === "locataire") {
-    lines.push(`Selon les conditions générales (article 5.2), les arrhes${plan.keptCents > 0 ? ` (${m(plan.keptCents)})` : ""} restent acquises au propriétaire.`);
-    lines.push(plan.refundCents > 0 ? `Ce que vous avez payé au-delà des arrhes, soit ${m(plan.refundCents)}, vous est remboursé dans les 14 jours.` : `Il n'y a rien à vous rembourser.`);
-  } else {
-    if (plan.indemnityCents > 0) lines.push(`Conformément à l'article 5.3 des conditions générales (article 1590 de l'ancien Code civil), vous recevez le double des arrhes.`);
-    lines.push(plan.refundCents > 0 ? `Tout ce que vous avez payé, soit ${m(plan.refundCents)}, vous est remboursé.` : `Vous n'aviez encore rien payé.`);
-    if (plan.indemnityCents > 0) lines.push(`S'y ajoute une indemnité égale aux arrhes : ${m(plan.indemnityCents)}, versée par virement. Répondez à ce message en indiquant votre numéro de compte.`);
-  }
+  if (plan.forceMajeure) lines.push(`Force majeure (article 5.4 des conditions générales) : tout ce que vous avez payé, arrhes comprises, vous est remboursé.`);
+  else if (byClient && plan.sejourEntame) lines.push(`Selon l'article 5.5 des conditions générales, le prix du séjour${plan.keptCents > 0 ? ` (${m(plan.keptCents)})` : ""} n'est pas remboursé.`);
+  else if (byClient) lines.push(`Selon l'article 5.2 des conditions générales, les arrhes${plan.keptCents > 0 ? ` (${m(plan.keptCents)})` : ""} restent acquises à l'exploitant.`);
+  else lines.push(`Selon l'article 5.3 des conditions générales, tout ce que vous avez payé, arrhes comprises, vous est remboursé${indemnity > 0 ? `, et vous recevez en outre une indemnité égale aux arrhes` : ""}.`);
+  lines.push(
+    plan.refundCents > 0
+      ? `Remboursement : ${m(plan.refundCents)}, sur le moyen de paiement utilisé, sous 14 jours.`
+      : byClient ? `Il n'y a rien à vous rembourser.` : `Vous n'aviez encore rien payé.`,
+  );
+  if (indemnity > 0) lines.push(`Une indemnité de ${m(indemnity)}, égale aux arrhes, vous sera virée en outre. Indiquez-nous votre IBAN en réponse à ce message.`);
   lines.push(``, `Cordialement,`, `${property.name}`, ...contact);
   return { subject: refSubject(b.reference, `Annulation de votre réservation — ${property.name}`), bodyText: lines.join("\n") };
 }

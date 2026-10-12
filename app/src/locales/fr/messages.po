@@ -1873,8 +1873,8 @@ msgid "C'est fait. Compte supprimé."
 msgstr "C'est fait. Compte supprimé."
 
 #: src/booking/BookingPanel.tsx
-msgid "C'est fait. Confirmation et contrat renvoyés au client."
-msgstr "C'est fait. Confirmation et contrat renvoyés au client."
+msgid "C'est fait. Confirmation et conditions générales renvoyées au client."
+msgstr "C'est fait. Confirmation et conditions générales renvoyées au client."
 
 #: src/booking/Register.tsx
 msgid "C'est fait. Correction enregistrée."
@@ -2669,16 +2669,28 @@ msgid "confirmation de réservation"
 msgstr "confirmation de réservation"
 
 #: src/pages/settings/Logs.tsx
-msgid "confirmation et contrat de location"
-msgstr "confirmation et contrat de location"
-
-#: src/pages/settings/Logs.tsx
-msgid "confirmation et contrat renvoyés"
-msgstr "confirmation et contrat renvoyés"
+msgid "confirmation et conditions générales"
+msgstr "confirmation et conditions générales"
 
 #: src/booking/BookingPanel.tsx
-msgid "confirmation et contrat renvoyés au client"
-msgstr "confirmation et contrat renvoyés au client"
+msgid "Confirmation et conditions générales (PDF)"
+msgstr "Confirmation et conditions générales (PDF)"
+
+#: src/pages/settings/Logs.tsx
+msgid "confirmation et conditions générales renvoyées"
+msgstr "confirmation et conditions générales renvoyées"
+
+#: src/booking/BookingPanel.tsx
+msgid "confirmation et conditions générales renvoyées au client"
+msgstr "confirmation et conditions générales renvoyées au client"
+
+#: src/booking/BookingPanel.tsx
+msgid "Confirmation ouverte dans un nouvel onglet."
+msgstr "Confirmation ouverte dans un nouvel onglet."
+
+#: src/booking/BookingPanel.tsx
+msgid "Confirmation PDF"
+msgstr "Confirmation PDF"
 
 #: src/booking/BookingPanel.tsx
 msgid "confirmation refusée : dates reprises entre-temps"
@@ -2740,18 +2752,6 @@ msgstr "Continuer"
 #: src/ui/kit.tsx
 msgid "Continuer la saisie"
 msgstr "Continuer la saisie"
-
-#: src/booking/BookingPanel.tsx
-msgid "Contrat de location (PDF)"
-msgstr "Contrat de location (PDF)"
-
-#: src/booking/BookingPanel.tsx
-msgid "Contrat ouvert dans un nouvel onglet."
-msgstr "Contrat ouvert dans un nouvel onglet."
-
-#: src/booking/BookingPanel.tsx
-msgid "Contrat PDF"
-msgstr "Contrat PDF"
 
 #: src/pages/settings/Domain.tsx
 msgid "coordonnées"
@@ -3801,8 +3801,8 @@ msgstr "inconnus"
 
 #. placeholder {0}: eur(plan.indemnityCents)
 #: src/booking/BookingPanel.tsx
-msgid "Indemnité : {0} à virer à la main (double des arrhes)."
-msgstr "Indemnité : {0} à virer à la main (double des arrhes)."
+msgid "Indemnité : {0} (égale aux arrhes) à virer à la main. Le mail demande son IBAN au client."
+msgstr "Indemnité : {0} (égale aux arrhes) à virer à la main. Le mail demande son IBAN au client."
 
 #: src/pages/settings/Tarifs.tsx
 msgid "Indiquez le prix d'une nuit en semaine pour chaque bien qui a ses prix de saison."
@@ -3963,6 +3963,10 @@ msgstr "L'état des plateformes n'a pas pu être lu."
 #: src/pages/settings/Beds24Property.tsx
 msgid "L'état du compte Beds24 n'a pas pu être lu."
 msgstr "L'état du compte Beds24 n'a pas pu être lu."
+
+#: src/booking/BookingPanel.tsx
+msgid "L'exploitant"
+msgstr "L'exploitant"
 
 #: src/ui/kit.tsx
 msgid "L'export n'a pas pu être préparé."
@@ -4162,6 +4166,10 @@ msgid "le canal"
 msgstr "le canal"
 
 #: src/booking/BookingPanel.tsx
+msgid "Le client"
+msgstr "Le client"
+
+#: src/booking/BookingPanel.tsx
 msgid "Le client en est prévenu par mail."
 msgstr "Le client en est prévenu par mail."
 
@@ -4263,10 +4271,6 @@ msgstr "Le lien n'a pas pu être copié : sélectionnez-le et copiez-le à la ma
 msgid "Le lien ne s'ouvrira plus. Les ménages déjà cochés restent cochés."
 msgstr "Le lien ne s'ouvrira plus. Les ménages déjà cochés restent cochés."
 
-#: src/booking/BookingPanel.tsx
-msgid "Le locataire"
-msgstr "Le locataire"
-
 #: src/pages/settings/Help.tsx
 msgid "Le ménage"
 msgstr "Le ménage"
@@ -4326,10 +4330,6 @@ msgstr "Le prix se calcule à l'étape suivante."
 msgid "Le prix se calcule tout seul. Notez le nom, le téléphone et, si possible, le mail."
 msgstr "Le prix se calcule tout seul. Notez le nom, le téléphone et, si possible, le mail."
 
-#: src/booking/BookingPanel.tsx
-msgid "Le propriétaire"
-msgstr "Le propriétaire"
-
 #: src/pages/settings/Help.tsx
 msgid "Le rappel du solde part tout seul au client à l'échéance."
 msgstr "Le rappel du solde part tout seul au client à l'échéance."
@@ -4351,10 +4351,6 @@ msgstr "Le serveur n'a pas pu le faire. Rien n'a été changé ; réessayez dans
 msgid "Le solde était attendu le {0}."
 msgstr "Le solde était attendu le {0}."
 
-#: src/booking/BookingPanel.tsx
-msgid "Le solde payé est rendu dans les 14 jours."
-msgstr "Le solde payé est rendu dans les 14 jours."
-
 #: src/pages/settings/Import.tsx
 msgid "Le test ne change rien. L'import n'est possible qu'après un test du même texte."
 msgstr "Le test ne change rien. L'import n'est possible qu'après un test du même texte."
@@ -4375,6 +4371,10 @@ msgstr "Légende"
 #: src/pages/settings/Domain.tsx
 msgid "Légende (facultatif)"
 msgstr "Légende (facultatif)"
+
+#: src/booking/BookingPanel.tsx
+msgid "Les arrhes restent acquises, le solde payé est rendu sous 14 jours sur le moyen de paiement utilisé."
+msgstr "Les arrhes restent acquises, le solde payé est rendu sous 14 jours sur le moyen de paiement utilisé."
 
 #: src/pages/Reviews.tsx
 msgid "Les avis Airbnb et Booking relevés par Beds24. On y répond dans Beds24."
@@ -4422,8 +4422,8 @@ msgstr "Les comptes Stripe n'ont pas pu être lus."
 
 #. placeholder {0}: q ? eur(q.depositCents) : ""
 #: src/sale/SaleFlow.tsx
-msgid "Les dates sont gardées en option. Si le client a un mail, il reçoit un lien vers sa réservation : il y accepte les conditions générales, paie les arrhes ({0}) et reçoit alors sa confirmation avec le contrat."
-msgstr "Les dates sont gardées en option. Si le client a un mail, il reçoit un lien vers sa réservation : il y accepte les conditions générales, paie les arrhes ({0}) et reçoit alors sa confirmation avec le contrat."
+msgid "Les dates sont gardées en option. Si le client a un mail, il reçoit un lien vers sa réservation : il y accepte les conditions générales, paie les arrhes ({0}) et reçoit alors sa confirmation avec les conditions générales."
+msgstr "Les dates sont gardées en option. Si le client a un mail, il reçoit un lien vers sa réservation : il y accepte les conditions générales, paie les arrhes ({0}) et reçoit alors sa confirmation avec les conditions générales."
 
 #. placeholder {0}: channelName(b)
 #: src/booking/BookingPanel.tsx
@@ -7207,6 +7207,10 @@ msgstr "Tout arrive ici : les messages du site, la boîte e-mail des gîtes, et 
 #: src/pages/Settings.tsx
 msgid "Tout ce qui a été encaissé ou attendu"
 msgstr "Tout ce qui a été encaissé ou attendu"
+
+#: src/booking/BookingPanel.tsx
+msgid "Tout ce qui a été payé est rendu sous 14 jours sur le moyen de paiement utilisé."
+msgstr "Tout ce qui a été payé est rendu sous 14 jours sur le moyen de paiement utilisé."
 
 #: src/shell/Shell.tsx
 msgid "Tout le menu"

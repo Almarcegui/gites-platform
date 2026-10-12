@@ -53,7 +53,7 @@ import {
   type QuoteBody,
 } from "../services/booking-flow";
 import { buildContactAckEmail, queueEmail, realContact, refSubject } from "../services/email";
-import { buildContractPdf, contractFileName, loadContractContext } from "../services/contrat";
+import { buildConfirmationPdf, cgvVersionLabel, confirmationFileName, loadConfirmationPdfContext } from "../services/confirmation-pdf";
 import { publicHealth } from "../services/health";
 import { clearHoldCookie, readHoldReference, setHoldCookie } from "../services/hold-session";
 import { buildIcs, exportSpansForUnit } from "../services/ical";
@@ -185,13 +185,16 @@ interface CreateBookingBody extends QuoteBody {
   turnstileToken?: string;
 }
 
-/** Version courte des CGV acceptées : sha256 hex tronqué + longueur du texte.
- *  Suffit à prouver QUEL texte était affiché au moment de l'acceptation. */
+/** Version courte des CGV acceptées : numéro de version lu dans le texte
+ *  (« v3.1+ », depuis la 3.1), puis sha256 hex tronqué + longueur du texte.
+ *  Le hash prouve QUEL texte était affiché au moment de l'acceptation, le
+ *  numéro le dit en clair (document de confirmation, fiche réservation). */
 async function cgvVersion(text: string): Promise<string> {
   if (!text.trim()) return "v0-empty";
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
   const hex = [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
-  return `sha256:${hex.slice(0, 16)}-len${text.length}`;
+  const label = cgvVersionLabel(text);
+  return `${label ? `v${label}+` : ""}sha256:${hex.slice(0, 16)}-len${text.length}`;
 }
 
 /** Réservation encore en cours de CE visiteur, d'après son cookie signé.
@@ -1276,8 +1279,8 @@ export function registerPublicRoutes(router: Router): void {
       return apiError(410, "l'option a expiré — le créneau est de nouveau ouvert, relancez une réservation");
     }
     // Option ouverte par le back-office : le client n'a pas encore accepté les
-    // CGV (le tunnel public le fait à la création). Le contrat est conclu par
-    // cette acceptation et le paiement des arrhes : version, heure et IP sont
+    // CGV (le tunnel public le fait à la création). La réservation est conclue
+    // par cette acceptation et le paiement des arrhes : version, heure et IP sont
     // enregistrées ici, comme dans le tunnel, et la case seule ne suffit pas.
     if ((await getCgvAcceptance(db, booking.id)).acceptedAt == null) {
       if (body?.cgvAccepted !== true) {
@@ -1300,23 +1303,27 @@ export function registerPublicRoutes(router: Router): void {
     });
   });
 
-  /** Contrat de location en PDF, pour le client : même contrôle que sa page de
-   *  réservation (référence + email), et seulement une fois la réservation
-   *  confirmée (avant, ni le prix ni les parties ne sont définitifs). */
-  router.get("/api/public/bookings/:reference/contrat.pdf", async (_req, env, p, url) => {
+  /** « Confirmation de réservation et conditions générales » en PDF, pour le
+   *  client : même contrôle que sa page de réservation (référence + email), et
+   *  seulement une fois la réservation confirmée (avant, ni le prix ni les
+   *  dates ne sont définitifs). `contrat.pdf` est l'ancien nom, gardé en alias
+   *  pour les liens déjà envoyés : même réponse. */
+  const confirmationPdf: Parameters<typeof router.get>[1] = async (_req, env, p, url) => {
     const email = (url.searchParams.get("email") ?? "").trim();
     const booking = await authedBooking(env.DB, p.reference ?? "", email);
-    if (!booking || booking.status !== "confirmed") return apiError(404, "contrat introuvable");
-    const ctx = await loadContractContext(env.DB, booking.id);
-    if (!ctx) return apiError(404, "contrat introuvable");
-    return new Response(buildContractPdf(ctx), {
+    if (!booking || booking.status !== "confirmed") return apiError(404, "confirmation introuvable");
+    const ctx = await loadConfirmationPdfContext(env.DB, booking.id);
+    if (!ctx) return apiError(404, "confirmation introuvable");
+    return new Response(buildConfirmationPdf(ctx), {
       headers: {
         "content-type": "application/pdf",
-        "content-disposition": `inline; filename="${contractFileName(booking.reference)}"`,
+        "content-disposition": `inline; filename="${confirmationFileName(booking.reference)}"`,
         "cache-control": "private, no-store",
       },
     });
-  });
+  };
+  router.get("/api/public/bookings/:reference/confirmation.pdf", confirmationPdf);
+  router.get("/api/public/bookings/:reference/contrat.pdf", confirmationPdf);
 
   /** Fil de conversation du client (page voucher). */
   router.get("/api/public/bookings/:reference/messages", async (_req, env, p, url) => {
