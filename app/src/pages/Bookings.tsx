@@ -179,15 +179,14 @@ export function BookingsPage() {
                         {phaseOf(b) ? <span className="phase"> · {phaseOf(b)}</span> : null}
                       </small>
                     </td>
+                    <td className="hide-s muted">
+                      {shortDate(b.createdAt.slice(0, 10))}
+                    </td>
                     <td className="r mc-r">
                       <b className="amt">{st === "plat" && !b.totalCents ? "—" : eur(b.totalCents)}</b>
                       {st === "solde" ? <small>{t`reste ${eur(balance)}`}</small> : null}
                     </td>
                     <td className="r hide-s mc-off">{b.paidCents ? eur(b.paidCents) : "—"}</td>
-                    <td className="hide-s muted">
-                      {shortDate(b.createdAt.slice(0, 10))}
-                      <small className="show-s-inline">{sourceLabel(b)}</small>
-                    </td>
                     <td className="hide-s">
                       <span className={`pill ${st}`}>{pill[st]}</span>
                     </td>
