@@ -60,6 +60,7 @@ sudo install -m 0644 "$TMP"/gites.service "$TMP"/gites-cron.service "$TMP"/gites
   "$TMP"/gites-backup.service "$TMP"/gites-backup.timer /etc/systemd/system/
 sudo install -o gites -g gites -m 0755 "$TMP/deploy.sh" /srv/gites/deploy.sh
 sudo install -o gites -g gites -m 0755 "$TMP/sauvegarde.sh" /srv/gites/sauvegarde.sh
+sudo install -d -m 755 /etc/caddy/sites
 sed "s|__DOMAIN__|$DOMAINES|" "$TMP/Caddyfile" | sudo tee /etc/caddy/Caddyfile >/dev/null
 sudo caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
 sudo systemctl daemon-reload

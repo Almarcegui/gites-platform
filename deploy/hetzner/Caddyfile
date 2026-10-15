@@ -36,3 +36,7 @@ http:// {
 		respond "Utiliser le nom de domaine (HTTPS)." 403
 	}
 }
+
+# Autres sites hébergés sur le même serveur (un fichier par site, posé par leur propre dépôt ; ex. jarvis-relais).
+# Ce Caddyfile n'est réécrit qu'à l'installation : ces sites survivent aux déploiements des gîtes.
+import /etc/caddy/sites/*.caddy
