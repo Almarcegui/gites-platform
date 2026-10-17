@@ -2639,6 +2639,7 @@ export function registerAdminRoutes(router: Router): void {
     "caution_cents", "checkin_time", "checkout_time", "cgv_text",
     "allow_deposit", "allow_full_payment",
     "auto_reply_enabled", "auto_reply_text", "email_forward_to",
+    "stay_emails_enabled", "review_url", "arrival_info_text",
   ]);
 
   router.get("/api/admin/settings", guard(async (_req, env, _p, url) => {

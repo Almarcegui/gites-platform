@@ -46,6 +46,9 @@ interface Form {
     auto_reply_enabled: boolean;
     auto_reply_text: string;
     email_forward_to: string;
+    stay_emails_enabled: boolean;
+    review_url: string;
+    arrival_info_text: string;
     cgv_text: string;
   };
   units: Record<number, UnitForm>;
@@ -71,6 +74,9 @@ function toForm(p: PropertyFull, s: FullSettings, units: UnitFull[], links: Unit
       auto_reply_enabled: s.autoReplyEnabled,
       auto_reply_text: s.autoReplyText,
       email_forward_to: s.emailForwardTo,
+      stay_emails_enabled: s.stayEmailsEnabled,
+      review_url: s.reviewUrl,
+      arrival_info_text: s.arrivalInfoText,
       cgv_text: s.cgvText,
     },
     units: Object.fromEntries(
@@ -234,6 +240,15 @@ function DomainForm({ propertyId, init, units, onDirty }: { propertyId: number; 
         <Switch size="md" label={t`Répondre tout de suite par un accusé de réception`} checked={f.set.auto_reply_enabled} onChange={(e) => setS("auto_reply_enabled", e.currentTarget.checked)} />
         <Textarea mt="sm" size="md" autosize minRows={4} label={t`Texte de l'accusé de réception`} description={t`${"{nom}"} et ${"{reference}"} sont remplacés par le nom du client et la référence de sa réservation`} value={f.set.auto_reply_text} onChange={(e) => setS("auto_reply_text", e.currentTarget.value)} />
         <TextInput mt="sm" size="md" type="email" label={t`Faire suivre les mails reçus à`} placeholder="vous@exemple.be" value={f.set.email_forward_to} onChange={(e) => setS("email_forward_to", e.currentTarget.value)} />
+      </Section>
+
+      <Section
+        title={t`Mails automatiques du séjour`}
+        hint={t`Pour les réservations faites sur le site ou au téléphone : un mois avant (préparer le séjour), une semaine avant (infos d'arrivée), trois jours avant (rappel), le lendemain du départ (merci et avis), et un mail si un paiement en ligne n'aboutit pas. Jamais pour Airbnb, Booking ni les séjours importés. Chaque mail part une seule fois : activez-les quand l'envoi des mails est ouvert, sinon ils sont seulement préparés (visibles dans Journaux).`}
+      >
+        <Switch size="md" label={t`Envoyer les mails automatiques du séjour`} checked={f.set.stay_emails_enabled} onChange={(e) => setS("stay_emails_enabled", e.currentTarget.checked)} />
+        <Textarea mt="sm" size="md" autosize minRows={3} label={t`Infos d'arrivée (mails une semaine et trois jours avant)`} description={t`Clés, code, parking, chemin… L'adresse et les heures d'arrivée et de départ sont ajoutées toutes seules.`} value={f.set.arrival_info_text} onChange={(e) => setS("arrival_info_text", e.currentTarget.value)} />
+        <TextInput mt="sm" size="md" type="url" label={t`Lien pour laisser un avis (mail d'après séjour)`} placeholder="https://g.page/r/…/review" description={t`Laissez vide : le mail de remerciement part sans demande d'avis.`} value={f.set.review_url} onChange={(e) => setS("review_url", e.currentTarget.value)} />
       </Section>
 
       <Section title={t`Conditions de location`} hint={t`Jointes à chaque confirmation. Une ligne « Article 1 » seule s'affiche en gras sur le site.`}>
