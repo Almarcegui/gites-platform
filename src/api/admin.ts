@@ -343,6 +343,25 @@ export function guard(inner: Handler): Handler {
   };
 }
 
+/** Échecs de connexion tolérés sur 15 minutes avant le blocage (429). Par
+ *  identifiant : assez pour quelques fautes de frappe, trop peu pour deviner
+ *  un mot de passe. Par adresse : plus large (plusieurs personnes derrière une
+ *  même box), il arrête l'essai d'identifiants en série. */
+export const LOGIN_MAX_FAILURES_PER_USER = 10;
+export const LOGIN_MAX_FAILURES_PER_IP = 30;
+
+async function loginFailures(db: D1Database, entity: string, ip: string | null): Promise<{ user: number; ip: number }> {
+  const row = await db
+    .prepare(
+      "SELECT COALESCE(SUM(CASE WHEN entity = ?1 THEN 1 ELSE 0 END), 0) AS by_user, " +
+        "COALESCE(SUM(CASE WHEN ?2 IS NOT NULL AND json_extract(detail, '$.ip') = ?2 THEN 1 ELSE 0 END), 0) AS by_ip " +
+        "FROM audit_log WHERE action = 'login.failed' AND created_at > datetime('now', '-15 minutes')",
+    )
+    .bind(entity, ip)
+    .first<{ by_user: number; by_ip: number }>();
+  return { user: Number(row?.by_user ?? 0), ip: Number(row?.by_ip ?? 0) };
+}
+
 /** Pourcentage de remise borné à [0,100] — une saisie « 150 » au lieu de « 15 »
  *  produisait un devis et des arrhes NÉGATIFS (audit ECC 2026-07-30). Le moteur
  *  de tarification plafonne aussi de son côté : double ceinture, la saisie
@@ -611,6 +630,18 @@ export function registerAdminRoutes(router: Router): void {
     // (tiré depuis le Mac, export seul) peut ouvrir une session.
     if (isIpDenied(req) && user !== BACKUP_USER) return ipDeniedResponse();
 
+    // Frein aux essais en série (audit de sécurité du 17/10) : sans lui, rien
+    // n'empêchait de tenter des milliers de mots de passe sur un identifiant
+    // connu. Les échecs sont déjà journalisés (login.failed) : on les compte
+    // sur 15 minutes, par identifiant et par adresse, AVANT de vérifier le mot
+    // de passe — pendant le blocage, même le bon mot de passe attend.
+    const ip = req.headers.get("cf-connecting-ip")?.trim() || null;
+    const failures = await loginFailures(env.DB, `user:${user.slice(0, 40)}`, ip);
+    if (failures.user >= LOGIN_MAX_FAILURES_PER_USER || failures.ip >= LOGIN_MAX_FAILURES_PER_IP) {
+      await audit(env.DB, "admin", "login.throttled", `user:${user.slice(0, 40)}`, { ip, failuresUser: failures.user, failuresIp: failures.ip });
+      return apiError(429, "trop d'essais de connexion — réessayez dans un quart d'heure", { code: "login_throttled" });
+    }
+
     // 1) Comptes en base (gérés par la page Utilisateurs) → session de 30 jours.
     const row = await env.DB.prepare("SELECT id, username, password_hash, active FROM admin_users WHERE username = ?")
       .bind(user)
@@ -618,7 +649,7 @@ export function registerAdminRoutes(router: Router): void {
     if (row) {
       if (!row.active) return apiError(401, "compte désactivé");
       if (!(await verifyPassword(password, row.password_hash))) {
-        await audit(env.DB, "admin", "login.failed", `user:${row.username}`);
+        await audit(env.DB, "admin", "login.failed", `user:${row.username}`, { ip });
         return apiError(401, "identifiant ou mot de passe incorrect");
       }
       const session = await createSession(env.DB, row.id);
@@ -634,7 +665,7 @@ export function registerAdminRoutes(router: Router): void {
       const hasUsers = await env.DB.prepare("SELECT 1 FROM admin_users LIMIT 1").first();
       if (!hasUsers) return apiError(503, "ADMIN_TOKEN non configuré — accès refusé (fail-closed)");
     }
-    await audit(env.DB, "admin", "login.failed", `user:${user.slice(0, 40)}`);
+    await audit(env.DB, "admin", "login.failed", `user:${user.slice(0, 40)}`, { ip });
     return apiError(401, "identifiant ou mot de passe incorrect");
   });
 
