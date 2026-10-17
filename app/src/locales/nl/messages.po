@@ -901,6 +901,11 @@ msgstr "Aanvinken voor een met de hand bijgehouden agenda die ook de vertrekdag 
 msgid "À coller dans Airbnb (« Importer un calendrier ») ou ailleurs. Si les deux maisons sont réservées ensemble, chacune y apparaît prise."
 msgstr "Te plakken in Airbnb (« Kalender importeren ») of elders. Als de twee huizen samen geboekt zijn, staat elk ervan als bezet."
 
+#. placeholder {0}: unfilled.join(" ")
+#: src/pages/Messages.tsx
+msgid "À compléter avant d'envoyer : {0}"
+msgstr "Aan te vullen voor het verzenden: {0}"
+
 #: src/pages/settings/Beds24Property.tsx
 msgid "À compléter dans Beds24"
 msgstr "Aan te vullen in Beds24"

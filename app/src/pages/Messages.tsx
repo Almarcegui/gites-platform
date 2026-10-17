@@ -12,6 +12,7 @@ import type { Message } from "../api/types";
 import { ActionButton, ErrorLine, useAction } from "../lib/action";
 import { hourLabel, longDate, todayBrussels, whenLabel } from "../lib/dates";
 import { eur } from "../lib/money";
+import { unfilledVariables } from "../lib/templates";
 import { TemplateChips } from "../messages/TemplateChips";
 import { useLayout } from "../lib/useLayout";
 import { deliveryText } from "../booking/BookingPanel";
@@ -135,6 +136,7 @@ function Thread({ message, onBack }: { message: Message; onBack?: () => void }) 
     signature: properties.find((p) => p.id === (booking?.propertyId ?? message.propertyId))?.name ?? "",
   };
   const items = thread.data?.thread ?? [message];
+  const unfilled = unfilledVariables(text);
   return (
     <section className="thread" aria-labelledby="h-th">
       <div className="th-head">
@@ -191,6 +193,11 @@ function Thread({ message, onBack }: { message: Message; onBack?: () => void }) 
         <Trans>Votre réponse</Trans>
       </label>
       <textarea id="rep" className="reply" value={text} onChange={(e) => setText(e.currentTarget.value)} />
+      {unfilled.length ? (
+        <p className="warnline" role="status">
+          {t`À compléter avant d'envoyer : ${unfilled.join(" ")}`}
+        </p>
+      ) : null}
       {send.state.status === "error" ? <ErrorLine text={t`Pas envoyé. ${send.state.text} Votre texte est gardé.`} /> : null}
       <div className="send">
         <p>{replyHint(message)}</p>
