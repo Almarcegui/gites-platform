@@ -385,7 +385,10 @@ function renderCalRules(days, minLeadDays = 0) {
     : "";
   const segments = [];
   for (const d of days) {
-    if (d.past || !d.available || d.minNights == null) continue;
+    // Une règle ne dépend pas de l'occupation : sauter les jours pris coupait la
+    // même règle en autant de segments qu'il y a de réservations, et la ligne
+    // se répétait cinq fois. Seuls les jours passés ou sans tarif sortent.
+    if (d.past || d.minNights == null) continue;
     const key = `${d.minNights}|${(d.arrivalDays ?? []).join(",")}`;
     const last = segments.at(-1);
     if (last && last.key === key && nightsBetween(last.to, d.date) === 1) last.to = d.date;

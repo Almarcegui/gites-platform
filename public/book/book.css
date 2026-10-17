@@ -135,7 +135,7 @@ a{color:var(--accent)}
 .stay-bar{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-top:10px}
 /* Le groupe se choisit AVANT les dates : sinon on sélectionne un séjour pour
    découvrir ensuite que l'hébergement ne prend pas tout le monde (#47-1). */
-.pax-top{margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--line)}
+.pax-top{flex-wrap:wrap;margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--line)}
 .pax-top .pax-title{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-right:auto}
 .stay-bar>div:first-child{flex:1;min-width:220px}
 .pax{display:flex;gap:8px;align-items:center;flex:none}

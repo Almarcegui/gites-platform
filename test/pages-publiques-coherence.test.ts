@@ -47,4 +47,9 @@ describe("pages publiques statiques", () => {
     const home = readFileSync(join(PUBLIC, "index.html"), "utf8");
     expect(home.match(/data-frais-unit="[123]"/g)?.length).toBeGreaterThanOrEqual(3);
   });
+
+  it("tunnel : la ligne Voyageurs passe à la ligne (les libellés NL débordaient à 375 px)", () => {
+    const css = readFileSync(join(PUBLIC, "book", "book.css"), "utf8");
+    expect(css).toMatch(/\.pax-top\{[^}]*flex-wrap:wrap/);
+  });
 });
