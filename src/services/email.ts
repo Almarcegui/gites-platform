@@ -11,6 +11,7 @@
 import type { BookingRow, PropertyRow, PropertySettings } from "../db/repo";
 import type { Quote, QuoteLine } from "../core/pricing";
 import { nlText } from "../core/public-i18n";
+import { mailIntroLines } from "../core/mail-intro";
 
 /** Le client écrit en néerlandais (guests.lang = 'nl', choisi dans le tunnel). */
 export function isNl(b: BookingRow): boolean {
@@ -403,9 +404,20 @@ export function buildCancellationEmail(
   b: BookingRow,
   property: PropertyRow,
   plan: { par: "locataire" | "proprietaire"; keptCents: number; refundCents: number; indemnityCents?: number; forceMajeure?: boolean; sejourEntame?: boolean },
+  introRaw?: string,
 ): { subject: string; bodyText: string } {
   const nl = isNl(b);
   const m = (c: number) => money(c, nl);
+  // Intro personnalisable (Réglages › Modèles de réponse) : vide = phrase
+  // d'annonce d'origine. Les lignes légales (article des CGV, remboursement,
+  // indemnité) restent générées : elles seules portent les montants exacts.
+  const introLines = mailIntroLines(introRaw ?? "", {
+    prenom: b.guestName?.split(" ")[0] ?? "",
+    bien: b.unitName ?? "",
+    arrivee: formatDateFr(b.checkin),
+    signature: property.name,
+    reference: b.reference,
+  });
   const stay = nl
     ? `Verblijf: van ${formatDateFr(b.checkin)} tot ${formatDateFr(b.checkout)}`
     : `Séjour : du ${formatDateFr(b.checkin)} au ${formatDateFr(b.checkout)}`;
@@ -416,7 +428,9 @@ export function buildCancellationEmail(
     const lines = [
       `Beste,`,
       ``,
-      byClient ? `Uw reservering ${b.reference} is geannuleerd op uw verzoek.` : `Wij moeten uw reservering ${b.reference} helaas annuleren.`,
+      ...(introLines ?? [
+        byClient ? `Uw reservering ${b.reference} is geannuleerd op uw verzoek.` : `Wij moeten uw reservering ${b.reference} helaas annuleren.`,
+      ]),
       ``,
       `Accommodatie: ${b.unitName ?? ""} — ${property.name}`,
       stay,
@@ -438,7 +452,9 @@ export function buildCancellationEmail(
   const lines = [
     `Bonjour,`,
     ``,
-    byClient ? `Votre réservation ${b.reference} est annulée à votre demande.` : `Nous sommes au regret d'annuler votre réservation ${b.reference}.`,
+    ...(introLines ?? [
+      byClient ? `Votre réservation ${b.reference} est annulée à votre demande.` : `Nous sommes au regret d'annuler votre réservation ${b.reference}.`,
+    ]),
     ``,
     `Hébergement : ${b.unitName ?? ""} — ${property.name}`,
     stay,

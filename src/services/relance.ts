@@ -34,12 +34,14 @@ import {
   audit,
   bookingsInWindow,
   getProperty,
+  getSettings,
   hasEmailOfKind,
   listLinks,
   manualBlocksInWindow,
   type PropertyRow,
 } from "../db/repo";
 import { formatDateFr, queueEmail, refSubject } from "./email";
+import { mailIntroLines } from "../core/mail-intro";
 
 /** Délai après l'expiration du blocage avant d'envoyer la relance (issue : « proposer 24 h »). */
 export const ABANDON_DELAY_HOURS = 24;
@@ -159,16 +161,30 @@ export function buildAbandonReminderEmail(
   b: AbandonedBooking,
   property: PropertyRow,
   url: string,
+  introRaw?: string,
 ): { subject: string; bodyText: string } {
   const bonjour = b.guestFirstName ? `Bonjour ${b.guestFirstName},` : "Bonjour,";
+  // Intro personnalisable (Réglages › Modèles de réponse) : vide = paragraphes
+  // d'origine. Le lien de reprise et la mention « un seul message » restent
+  // générés : elles portent l'engagement anti-spam de la plateforme.
+  const introLines = mailIntroLines(introRaw ?? "", {
+    prenom: b.guestFirstName ?? "",
+    bien: b.unitName,
+    arrivee: formatDateFr(b.checkin),
+    signature: property.name,
+    reference: b.reference,
+    lien: url,
+  });
   return {
     subject: refSubject(b.reference, `Votre réservation en cours — ${b.unitName} du ${formatDateFr(b.checkin)} (${property.name})`),
     bodyText: [
       bonjour,
       ``,
-      `Vous avez commencé une réservation pour ${b.unitName} du ${formatDateFr(b.checkin)} au ${formatDateFr(b.checkout)}, sans aller jusqu'au paiement.`,
-      ``,
-      `Le blocage de 30 minutes a pris fin, mais ces dates sont encore libres au moment où nous vous écrivons. Si vous souhaitez reprendre, tout est prérempli ici :`,
+      ...(introLines ?? [
+        `Vous avez commencé une réservation pour ${b.unitName} du ${formatDateFr(b.checkin)} au ${formatDateFr(b.checkout)}, sans aller jusqu'au paiement.`,
+        ``,
+        `Le blocage de 30 minutes a pris fin, mais ces dates sont encore libres au moment où nous vous écrivons. Si vous souhaitez reprendre, tout est prérempli ici :`,
+      ]),
       ``,
       url,
       ``,
@@ -237,7 +253,8 @@ export async function runAbandonedReminders(env: Env, now: Date = new Date()): P
       result.skipped += 1;
       continue;
     }
-    const email = buildAbandonReminderEmail(b, property, resumeUrl(env.PUBLIC_BASE_URL, b));
+    const settings = await getSettings(db, b.propertyId);
+    const email = buildAbandonReminderEmail(b, property, resumeUrl(env.PUBLIC_BASE_URL, b), settings.abandonIntroFr);
     await queueEmail(db, env, {
       bookingId: b.id,
       to: b.guestEmail,

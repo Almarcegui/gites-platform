@@ -1943,6 +1943,10 @@ msgstr "C'est fait. Fiche client enregistrée."
 msgid "C'est fait. Fichier {filename} téléchargé."
 msgstr "C'est fait. Fichier {filename} téléchargé."
 
+#: src/pages/settings/Templates.tsx
+msgid "C'est fait. Intro enregistrée."
+msgstr "C'est fait. Intro enregistrée."
+
 #: src/pages/settings/Tarifs.tsx
 msgid "C'est fait. La saison la plus courte l'emporte désormais."
 msgstr "C'est fait. La saison la plus courte l'emporte désormais."
@@ -2293,6 +2297,10 @@ msgstr "Ce qu'il faut régler avant et pendant le lancement. « Fait » : la dé
 #: src/pages/settings/Channels.tsx
 msgid "Ce qu'une plateforme annonce et que nous n'avons pas pu reprendre : ces dates restent en vente d'un côté et prises de l'autre. Un désaccord disparaît tout seul quand la liaison ne le revoit plus."
 msgstr "Ce qu'une plateforme annonce et que nous n'avons pas pu reprendre : ces dates restent en vente d'un côté et prises de l'autre. Un désaccord disparaît tout seul quand la liaison ne le revoit plus."
+
+#: src/pages/settings/Templates.tsx
+msgid "Ce que le client lira (exemple, en français)"
+msgstr "Ce que le client lira (exemple, en français)"
 
 #: src/pages/settings/Templates.tsx
 msgid "Ce que le client lira (exemple)"
@@ -3456,6 +3464,10 @@ msgstr "Enregistrer"
 msgid "Enregistrer et envoyer"
 msgstr "Enregistrer et envoyer"
 
+#: src/pages/settings/Templates.tsx
+msgid "Enregistrer l'intro"
+msgstr "Enregistrer l'intro"
+
 #: src/pages/settings/Domain.tsx
 msgid "Enregistrer l'ordre et les textes"
 msgstr "Enregistrer l'ordre et les textes"
@@ -3922,6 +3934,14 @@ msgstr "Inscrire les voyageurs — {0}"
 msgid "Insérer à l'endroit du curseur"
 msgstr "Insérer à l'endroit du curseur"
 
+#: src/pages/settings/Templates.tsx
+msgid "Intro en français"
+msgstr "Intro en français"
+
+#: src/pages/settings/Templates.tsx
+msgid "Intro en néerlandais"
+msgstr "Intro en néerlandais"
+
 #: src/pages/settings/ServiceKeys.tsx
 msgid "J'ai copié la clé"
 msgstr "J'ai copié la clé"
@@ -4033,6 +4053,10 @@ msgstr "L'année {year}"
 msgid "L'année n'a pas pu être lue."
 msgstr "L'année n'a pas pu être lue."
 
+#: src/pages/settings/Templates.tsx
+msgid "L'annonce de l'annulation, en français et en néerlandais. Les lignes légales (article des conditions, remboursement, indemnité) restent automatiques : elles portent les montants exacts. Laissez vide pour le texte d'origine."
+msgstr "L'annonce de l'annulation, en français et en néerlandais. Les lignes légales (article des conditions, remboursement, indemnité) restent automatiques : elles portent les montants exacts. Laissez vide pour le texte d'origine."
+
 #: src/sale/SaleFlow.tsx
 msgid "L'arrivée est dans le passé."
 msgstr "L'arrivée est dans le passé."
@@ -4072,6 +4096,10 @@ msgstr "L'historique n'a pas pu être lu. Fermez la fiche et réessayez."
 #: src/pages/settings/Beds24Property.tsx
 msgid "L'identifiant enregistré n'existe pas dans ce compte (ancien compte résilié) : les calendriers ne partent nulle part tant que la propriété n'est pas recréée."
 msgstr "L'identifiant enregistré n'existe pas dans ce compte (ancien compte résilié) : les calendriers ne partent nulle part tant que la propriété n'est pas recréée."
+
+#: src/pages/settings/Templates.tsx
+msgid "L'intro du mail envoyé à la confirmation d'une réservation, en français et en néerlandais. Le reste du mail (séjour, prix, bouton, PDF joint) est automatique. Laissez vide pour le texte d'origine."
+msgstr "L'intro du mail envoyé à la confirmation d'une réservation, en français et en néerlandais. Le reste du mail (séjour, prix, bouton, PDF joint) est automatique. Laissez vide pour le texte d'origine."
 
 #: src/pages/settings/Domain.tsx
 msgid "L'ordre de la liste est l'ordre sur le site ; la première photo affichée sert de vignette. Le texte décrit la photo pour qui ne la voit pas : il est obligatoire."
@@ -4456,6 +4484,10 @@ msgstr "Le solde était attendu le {0}."
 msgid "Le test ne change rien. L'import n'est possible qu'après un test du même texte."
 msgstr "Le test ne change rien. L'import n'est possible qu'après un test du même texte."
 
+#: src/pages/settings/Templates.tsx
+msgid "Le texte du message envoyé une seule fois à un visiteur qui n'a pas achevé sa réservation. Le lien de reprise et la mention « un seul message » restent automatiques. Laissez vide pour le texte d'origine."
+msgstr "Le texte du message envoyé une seule fois à un visiteur qui n'a pas achevé sa réservation. Le lien de reprise et la mention « un seul message » restent automatiques. Laissez vide pour le texte d'origine."
+
 #: src/pages/settings/Tarifs.tsx
 msgid "Le week-end, ce sont les nuits du vendredi et du samedi. Les jours fériés belges, leurs veilles et les ponts sont majorés tout seuls du pourcentage choisi."
 msgstr "Le week-end, ce sont les nuits du vendredi et du samedi. Les jours fériés belges, leurs veilles et les ponts sont majorés tout seuls du pourcentage choisi."
@@ -4665,6 +4697,7 @@ msgid "Les promotions Airbnb n'ont pas pu être lues."
 msgstr "Les promotions Airbnb n'ont pas pu être lues."
 
 #: src/pages/settings/Domain.tsx
+#: src/pages/settings/Templates.tsx
 msgid "Les réglages n'ont pas pu être lus."
 msgstr "Les réglages n'ont pas pu être lus."
 
@@ -4838,6 +4871,14 @@ msgstr "mail"
 #: src/sale/SaleFlow.tsx
 msgid "Mail"
 msgstr "Mail"
+
+#: src/pages/settings/Templates.tsx
+msgid "Mail d'annulation"
+msgstr "Mail d'annulation"
+
+#: src/pages/settings/Templates.tsx
+msgid "Mail de confirmation"
+msgstr "Mail de confirmation"
 
 #: src/pages/settings/Domain.tsx
 msgid "Mail de contact"
@@ -6408,6 +6449,10 @@ msgstr "Réf."
 msgid "Référence"
 msgstr "Référence"
 
+#: src/pages/settings/Templates.tsx
+msgid "référence de la réservation"
+msgstr "référence de la réservation"
+
 #: src/booking/BookingPanel.tsx
 msgid "registre"
 msgstr "registre"
@@ -6451,6 +6496,10 @@ msgstr "réglés"
 #: src/pages/settings/ClientHistory.tsx
 msgid "Relance : réservation commencée"
 msgstr "Relance : réservation commencée"
+
+#: src/pages/settings/Templates.tsx
+msgid "Relance d'une réservation abandonnée"
+msgstr "Relance d'une réservation abandonnée"
 
 #: src/pages/settings/Encaissements.tsx
 msgid "Relever les frais manquants ({unknown})"

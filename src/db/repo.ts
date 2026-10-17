@@ -434,6 +434,11 @@ export interface PropertySettings {
   reviewUrl: string;
   /** Texte libre des mails J-7 et J-3 : clés, code, parking, chemin. */
   arrivalInfoText: string;
+  confirmationIntroFr: string;
+  confirmationIntroNl: string;
+  cancellationIntroFr: string;
+  cancellationIntroNl: string;
+  abandonIntroFr: string;
 }
 
 const SETTINGS_DEFAULTS: PropertySettings = {
@@ -454,6 +459,11 @@ const SETTINGS_DEFAULTS: PropertySettings = {
   stayEmailsEnabled: false,
   reviewUrl: "",
   arrivalInfoText: "",
+  confirmationIntroFr: "",
+  confirmationIntroNl: "",
+  cancellationIntroFr: "",
+  cancellationIntroNl: "",
+  abandonIntroFr: "",
 };
 
 export async function getSettings(db: D1Database, propertyId: number): Promise<PropertySettings> {
@@ -484,6 +494,11 @@ export async function getSettings(db: D1Database, propertyId: number): Promise<P
     stayEmailsEnabled: bool("stay_emails_enabled", D.stayEmailsEnabled),
     reviewUrl: text("review_url", D.reviewUrl),
     arrivalInfoText: text("arrival_info_text", D.arrivalInfoText),
+    confirmationIntroFr: text("confirmation_intro_fr", D.confirmationIntroFr),
+    confirmationIntroNl: text("confirmation_intro_nl", D.confirmationIntroNl),
+    cancellationIntroFr: text("cancellation_intro_fr", D.cancellationIntroFr),
+    cancellationIntroNl: text("cancellation_intro_nl", D.cancellationIntroNl),
+    abandonIntroFr: text("abandon_intro_fr", D.abandonIntroFr),
   };
 }
 
