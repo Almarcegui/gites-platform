@@ -2297,6 +2297,10 @@ msgstr "Deze woning wordt verhuurd"
 msgid "ce client"
 msgstr "deze klant"
 
+#: src/sale/QuoteWarnings.tsx
+msgid "Ce code de réduction n'est pas valable : il n'est pas appliqué au prix."
+msgstr "Deze kortingscode is niet geldig: hij wordt niet op de prijs toegepast."
+
 #: src/pages/settings/MyAccount.tsx
 msgid "Ce compte est aussi ouvert sur {others} autre(s) appareil(s). Changer le mot de passe les déconnecte."
 msgstr "Deze account is ook open op {others} ander(e) toestel(len). Het wachtwoord wijzigen meldt ze af."
@@ -4591,6 +4595,14 @@ msgstr "De server kon het niet uitvoeren. Er is niets gewijzigd; probeer zo mete
 #: src/pages/settings/Shortcode.tsx
 msgid "Le shortcode"
 msgstr "De shortcode"
+
+#: src/sale/QuoteWarnings.tsx
+msgid "Le site public refuserait cette arrivée : il faut réserver au moins {n} jours avant. Vous pouvez l'enregistrer quand même, la vente sera notée au journal."
+msgstr "De openbare site zou deze aankomst weigeren: er moet minstens {n} dagen vooraf worden geboekt. U kunt ze toch registreren, de verkoop wordt in het logboek genoteerd."
+
+#: src/sale/QuoteWarnings.tsx
+msgid "Le site public refuserait cette arrivée : il faut réserver au plus tard la veille. Vous pouvez l'enregistrer quand même, la vente sera notée au journal."
+msgstr "De openbare site zou deze aankomst weigeren: er moet uiterlijk de dag ervoor worden geboekt. U kunt ze toch registreren, de verkoop wordt in het logboek genoteerd."
 
 #. placeholder {0}: longDate(o.balanceDueDate)
 #: src/pages/Today.tsx

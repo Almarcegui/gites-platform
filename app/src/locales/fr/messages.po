@@ -2293,6 +2293,10 @@ msgstr "Ce bien se vend"
 msgid "ce client"
 msgstr "ce client"
 
+#: src/sale/QuoteWarnings.tsx
+msgid "Ce code de réduction n'est pas valable : il n'est pas appliqué au prix."
+msgstr "Ce code de réduction n'est pas valable : il n'est pas appliqué au prix."
+
 #: src/pages/settings/MyAccount.tsx
 msgid "Ce compte est aussi ouvert sur {others} autre(s) appareil(s). Changer le mot de passe les déconnecte."
 msgstr "Ce compte est aussi ouvert sur {others} autre(s) appareil(s). Changer le mot de passe les déconnecte."
@@ -4587,6 +4591,14 @@ msgstr "Le serveur n'a pas pu le faire. Rien n'a été changé ; réessayez dans
 #: src/pages/settings/Shortcode.tsx
 msgid "Le shortcode"
 msgstr "Le shortcode"
+
+#: src/sale/QuoteWarnings.tsx
+msgid "Le site public refuserait cette arrivée : il faut réserver au moins {n} jours avant. Vous pouvez l'enregistrer quand même, la vente sera notée au journal."
+msgstr "Le site public refuserait cette arrivée : il faut réserver au moins {n} jours avant. Vous pouvez l'enregistrer quand même, la vente sera notée au journal."
+
+#: src/sale/QuoteWarnings.tsx
+msgid "Le site public refuserait cette arrivée : il faut réserver au plus tard la veille. Vous pouvez l'enregistrer quand même, la vente sera notée au journal."
+msgstr "Le site public refuserait cette arrivée : il faut réserver au plus tard la veille. Vous pouvez l'enregistrer quand même, la vente sera notée au journal."
 
 #. placeholder {0}: longDate(o.balanceDueDate)
 #: src/pages/Today.tsx
