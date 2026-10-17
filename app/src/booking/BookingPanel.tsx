@@ -30,7 +30,7 @@ import { api, openAdminPdf } from "../api/client";
 import { useBooking, useGuest, useProperties } from "../api/hooks";
 import type { AuditEntry, Booking, BookingDetail, Guest, QuoteResponse } from "../api/types";
 import { ErrorLine, useAction } from "../lib/action";
-import { diffDays, hourLabel, longDate, todayBrussels } from "../lib/dates";
+import { diffDays, hourLabel, longDate, sqlToBrussels, todayBrussels } from "../lib/dates";
 import { channelName, isChannel } from "../lib/derive";
 import { eur } from "../lib/money";
 import { TemplateChips } from "../messages/TemplateChips";
@@ -39,6 +39,7 @@ import { useLayout } from "../lib/useLayout";
 import { RegisterSection } from "./Register";
 import { sqlWhen } from "../ui/kit";
 import { Choix } from "../ui/Choix";
+import { QuoteWarnings } from "../sale/QuoteWarnings";
 
 export type BookingState = "option" | "solde" | "soldee" | "plat" | "annulee";
 
@@ -261,7 +262,7 @@ function Fiche({ detail, dialog, setDialog }: { detail: BookingDetail; dialog: D
               </span>
             ) : null}
             {b.status === "pending" && b.holdExpiresAt ? (
-              <span className="late">{t`Sans arrhes reçues, les dates se libèrent le ${longDate(b.holdExpiresAt.slice(0, 10))}.`}</span>
+              <span className="late">{t`Sans arrhes reçues, les dates se libèrent le ${longDate(sqlToBrussels(b.holdExpiresAt)?.day ?? b.holdExpiresAt.slice(0, 10))}.`}</span>
             ) : null}
           </div>
         )}
@@ -1025,6 +1026,8 @@ function EditDialog({ open, b, onClose }: { open: boolean; b: Booking; onClose: 
         </p>
       ) : null}
       {qd && !qd.quote.ok ? <ErrorLine text={t`Au moins ${qd.quote.minNights} nuits sur ces dates.`} /> : null}
+      {/* Séjour inchangé : le délai minimum du site n'a rien à dire. */}
+      {checkin !== b.checkin ? <QuoteWarnings quote={qd?.quote} /> : null}
       <div className="acts" style={{ marginTop: 16 }}>
         <button
           type="button"

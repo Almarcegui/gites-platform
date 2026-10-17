@@ -104,7 +104,8 @@ export function ClientsPage() {
                   <td className="hide-s mc-off">{g.gites || "—"}</td>
                   <td className="hide-s mc-off">{g.lastCheckin && g.lastCheckout ? stayWithYear(g.lastCheckin, g.lastCheckout) : "—"}</td>
                   <td className="hide-s nowrap mc-off">{g.lastBookedAt ? dayWithYear(g.lastBookedAt) : "—"}</td>
-                  <td className="r mc-off">{g.bookingsCount ?? 0}</td>
+                  {/* Comme « Total des séjours » : les séjours annulés ne comptent pas. */}
+                  <td className="r mc-off">{g.staysCount ?? g.bookingsCount ?? 0}</td>
                   <td className="r amt mc-r">{eur(g.totalSpentCents ?? 0)}</td>
                 </tr>
               ))}

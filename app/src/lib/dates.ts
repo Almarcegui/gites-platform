@@ -73,8 +73,16 @@ export function monthName(d: IsoDate): string {
 export function monthShort(d: IsoDate): string {
   return names().moisCourts[Number(d.slice(5, 7)) - 1] ?? "";
 }
+/** Mois abrégé d'après son rang 0 = janvier … 11 = décembre (« janv. », « jan. »). */
+export function monthShortOfIndex(i: number): string {
+  return names().moisCourts[i] ?? "";
+}
 export function weekdayShort(d: IsoDate): string {
   return names().joursCourts[weekdayMon(d)] ?? "";
+}
+/** Jour de la semaine abrégé d'après son numéro 0 = dimanche … 6 = samedi (« ven. », « vr »). */
+export function weekdayShortOfIndex(day: number): string {
+  return names().joursCourts[(day + 6) % 7] ?? "";
 }
 export function weekdayLong(d: IsoDate): string {
   return names().jours[weekdayMon(d)] ?? "";
@@ -107,6 +115,23 @@ export function hourLabel(hhmm: string | undefined | null): string {
   const hh = String(Number(h));
   if (isNl()) return m && m !== "00" ? `${hh}.${m} u` : `${hh} u`;
   return m && m !== "00" ? `${hh} h ${m}` : `${hh} h`;
+}
+
+/** Date-heure de la base (UTC, « 2026-10-10 12:32:00 » ou ISO) → jour et heure de Belgique :
+ *  { day: "2026-10-10", time: "14:32" }. Rend null si le texte n'est pas une date-heure. */
+export function sqlToBrussels(s: string | null | undefined): { day: IsoDate; time: string } | null {
+  const m = (s ?? "").match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/);
+  if (!m) return null;
+  // Sans décalage écrit, la base parle en UTC ; avec un « Z » ou un « +02:00 », on le respecte.
+  const explicit = /(Z|[+-]\d{2}:?\d{2})$/i.test((s ?? "").trim());
+  const utc = explicit ? new Date((s ?? "").trim().replace(" ", "T")) : new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Number(m[4]), Number(m[5])));
+  if (Number.isNaN(utc.getTime())) return null;
+  const p = Object.fromEntries(
+    new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Brussels", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" })
+      .formatToParts(utc)
+      .map((x) => [x.type, x.value]),
+  ) as Record<string, string>;
+  return { day: `${p.year}-${p.month}-${p.day}`, time: `${p.hour}:${p.minute}` };
 }
 
 /** Date-heure SQL « 2026-10-10 08:42:00 » (UTC) → « 8 h 42 », « hier », « jeudi », « 8 oct. » */

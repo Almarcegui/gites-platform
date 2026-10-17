@@ -8,16 +8,18 @@ import { useState } from "react";
 import { api } from "../../api/client";
 import type { StatsResponse } from "../../api/types2";
 import { ErrorLine } from "../../lib/action";
-import { stayRange, todayBrussels } from "../../lib/dates";
+import { monthShortOfIndex, stayRange, todayBrussels } from "../../lib/dates";
 import { eur } from "../../lib/money";
 import { useScope } from "../../lib/scope";
 import { DownloadButton, Fold, Loading, Page, Section, useWorkingProperty } from "../../ui/kit";
 
-const MONTHS = ["janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc."];
 const fr = (n: number, d = 0) => n.toLocaleString("fr-BE", { minimumFractionDigits: d, maximumFractionDigits: d });
 
 export function StatsPage() {
   const { t } = useLingui();
+  // Les étapes de l'entonnoir arrivent du serveur en français : on les dit dans la langue de l'écran.
+  const stepLabel = (s: { key: string; label: string }): string =>
+    ({ searches: t`Recherches`, quotes: t`Devis affichés`, started: t`Réservations démarrées`, confirmed: t`Réservations confirmées` } as Record<string, string>)[s.key] ?? s.label;
   const { property, picker } = useWorkingProperty();
   const { scope } = useScope();
   const pid = property?.id;
@@ -84,7 +86,7 @@ export function StatsPage() {
             <div className="mbars" role="img" aria-label={t`Remplissage par mois en ${year}, comparé à ${year - 1}`}>
               {cur.months.map((m, i) => {
                 const p = prev.months[i]?.occupancyPct ?? 0;
-                const tip = t`${MONTHS[i]} ${year} : ${fr(m.occupancyPct, 1)} % (${m.occupiedNights} nuits sur ${m.capacityNights}), ${eur(m.revenueCents)}. En ${year - 1} : ${fr(p, 1)} %.`;
+                const tip = t`${monthShortOfIndex(i)} ${year} : ${fr(m.occupancyPct, 1)} % (${m.occupiedNights} nuits sur ${m.capacityNights}), ${eur(m.revenueCents)}. En ${year - 1} : ${fr(p, 1)} %.`;
                 return (
                   <div key={m.month} className="mcol" title={tip}>
                     <b>{m.occupancyPct > 0 ? fr(m.occupancyPct) : ""}</b>
@@ -92,7 +94,7 @@ export function StatsPage() {
                       <i className="mbar" style={{ height: `${(m.occupancyPct / max) * 100}%` }} />
                       {p > 0 ? <i className="mprev" style={{ bottom: `${(p / max) * 100}%` }} /> : null}
                     </div>
-                    <span>{MONTHS[i]}</span>
+                    <span>{monthShortOfIndex(i)}</span>
                   </div>
                 );
               })}
@@ -121,7 +123,7 @@ export function StatsPage() {
                 <tbody>
                   {cur.months.map((m, i) => (
                     <tr key={m.month}>
-                      <td>{MONTHS[i]}</td>
+                      <td>{monthShortOfIndex(i)}</td>
                       <td className="r">
                         {m.occupiedNights} / {m.capacityNights}
                       </td>
@@ -189,7 +191,7 @@ export function StatsPage() {
                       .filter((m) => m.count > 0)
                       .map((m) => (
                         <tr key={m.key}>
-                          <td>{m.label}</td>
+                          <td>{monthShortOfIndex(m.key - 1) || m.label}</td>
                           <td className="r">{m.count}</td>
                           <td className="r">{t`${fr(m.avgDays, 1)} j`}</td>
                           <td className="r">{t`${fr(m.medianDays, 1)} j`}</td>
@@ -211,7 +213,7 @@ export function StatsPage() {
                     {q.data.funnel.steps.map((s) => (
                       <tr key={s.key} className={s.key === q.data!.funnel!.biggestDropKey ? "warn-row" : ""}>
                         <td>
-                          {s.label}
+                          {stepLabel(s)}
                           {s.key === q.data!.funnel!.biggestDropKey ? t` (plus forte perte)` : ""}
                         </td>
                         <td className="r">{s.count}</td>

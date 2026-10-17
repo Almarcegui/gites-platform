@@ -9,7 +9,7 @@ import { IconArrowRight, IconArrowLeft } from "@tabler/icons-react";
 import { useNavigate } from "@tanstack/react-router";
 
 import type { Overview } from "../api/types";
-import { longDate, shortDate, todayBrussels, weekdayShort } from "../lib/dates";
+import { hourLabel, longDate, shortDate, sqlToBrussels, todayBrussels, weekdayShort } from "../lib/dates";
 import { eur } from "../lib/money";
 import { useOpenBooking } from "../shell/Shell";
 import { stayPhase } from "../../../src/core/stay-phase";
@@ -143,6 +143,11 @@ export function AlertsCard({ overviews }: { overviews: Overview[] }) {
   const openBooking = useOpenBooking();
   const navigate = useNavigate();
   const many = overviews.length > 1;
+  // Heure de Belgique : la base garde l'heure UTC, qui tombe deux heures plus tôt l'été.
+  const holdText = (at: string) => {
+    const b = sqlToBrussels(at);
+    return b ? t` (expire le ${longDate(b.day)} à ${hourLabel(b.time)})` : "";
+  };
   const rows: { key: string; kind: string; text: string; go: () => void }[] = [];
   for (const o of overviews) {
     const where = many ? `${o.property.name} : ` : "";
@@ -153,7 +158,7 @@ export function AlertsCard({ overviews }: { overviews: Overview[] }) {
     for (const f of o.alerts.feedAlerts ?? [])
       rows.push({ key: `f${o.property.id}-${f.id}`, kind: t`Flux iCal`, text: `${where}${f.name} : ${f.status ?? ""}`, go: () => void navigate({ to: "/reglages/calendriers" }) });
     for (const h of o.alerts.activeHolds)
-      rows.push({ key: `h${h.id}`, kind: t`Option en cours`, text: t`${where}${h.reference}, ${h.unitName}${h.holdExpiresAt ? t` (expire le ${longDate(h.holdExpiresAt.slice(0, 10))} à ${h.holdExpiresAt.slice(11, 16)} UTC)` : ""}`, go: () => openBooking(h.id) });
+      rows.push({ key: `h${h.id}`, kind: t`Option en cours`, text: t`${where}${h.reference}, ${h.unitName}${h.holdExpiresAt ? holdText(h.holdExpiresAt) : ""}`, go: () => openBooking(h.id) });
     if (o.alerts.newEmails > 0) rows.push({ key: `m${o.property.id}`, kind: t`Messages`, text: t`${where}${o.alerts.newEmails} message(s) client à traiter`, go: () => void navigate({ to: "/messages" }) });
   }
   return (

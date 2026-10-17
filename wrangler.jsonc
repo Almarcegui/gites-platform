@@ -113,7 +113,8 @@
       "vars": {
         "PUBLIC_BASE_URL": "https://gites-platform-essai.j-decartier.workers.dev",
         "EMAILS_ENABLED": "false",
-        "BEDS24_WRITE_ENABLED": "false"
+        "BEDS24_WRITE_ENABLED": "false",
+        "ALLOW_STUB_PAYMENTS": "true"
       },
       "assets": {
         "directory": "public",

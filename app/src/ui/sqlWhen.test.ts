@@ -1,0 +1,46 @@
+// Les dates-heures de la base sont en UTC : l'écran les dit à l'heure de Belgique.
+import { afterEach, describe, expect, it } from "vitest";
+
+import { activate } from "../i18n";
+import { sqlWhen } from "./kit";
+
+afterEach(() => activate("fr"));
+
+describe("sqlWhen", () => {
+  it("été : UTC + 2 h", () => {
+    expect(sqlWhen("2026-10-10 12:32:00")).toBe("10/10/2026 à 14 h 32");
+  });
+  it("hiver : UTC + 1 h", () => {
+    expect(sqlWhen("2026-12-24 08:05:00")).toBe("24/12/2026 à 9 h 05");
+  });
+  it("passe minuit : le jour suivant", () => {
+    expect(sqlWhen("2026-07-14 22:30:00")).toBe("15/07/2026 à 0 h 30");
+  });
+  it("format ISO avec T", () => {
+    expect(sqlWhen("2026-10-10T12:32:00Z")).toBe("10/10/2026 à 14 h 32");
+  });
+  it("néerlandais : « om 14.32 u », sans « à »", () => {
+    activate("nl");
+    expect(sqlWhen("2026-10-10 12:32:00")).toBe("10/10/2026 om 14.32 u");
+  });
+  it("vide ou illisible", () => {
+    expect(sqlWhen(null)).toBe("");
+    expect(sqlWhen("hier")).toBe("hier");
+  });
+});
+
+import { sqlToBrussels } from "../lib/dates";
+
+describe("sqlToBrussels (échéance d'une option)", () => {
+  it("23 h 30 UTC l'été : déjà le lendemain en Belgique", () => {
+    expect(sqlToBrussels("2026-10-20 22:30:00")).toEqual({ day: "2026-10-21", time: "00:30" });
+  });
+  it("avec un décalage écrit, on le respecte (+02:00 = déjà l'heure de Belgique l'été)", () => {
+    expect(sqlToBrussels("2026-10-10T12:32:00+02:00")).toEqual({ day: "2026-10-10", time: "12:32" });
+    expect(sqlToBrussels("2026-10-10T12:32:00Z")).toEqual({ day: "2026-10-10", time: "14:32" });
+  });
+  it("ce qui n'est pas une date-heure : null", () => {
+    expect(sqlToBrussels("2026-10-20")).toBeNull();
+    expect(sqlToBrussels(null)).toBeNull();
+  });
+});

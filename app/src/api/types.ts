@@ -216,6 +216,10 @@ export interface QuoteLine {
 export interface Quote {
   ok: boolean;
   errors: string[];
+  /** Avertissements non bloquants du back-office : 'lead_time' (délai minimum du site public non tenu), 'promo_invalid'. */
+  warnings?: string[];
+  /** Délai minimum de réservation du domaine, en jours (présent seulement s'il est non nul). */
+  minLeadDays?: number;
   nights: number;
   minNights: number;
   checkinDays: number[] | null;

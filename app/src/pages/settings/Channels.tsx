@@ -288,39 +288,41 @@ function MarkupsCard({ m }: { m: MarkupState }) {
           ? t`Aujourd'hui : + ${pctFr(m.pushMarkupPct)} % (référence ${applied.label}). Une nuit à ${eur(m.example.directCents)} sur votre site part à ${eur(m.example.pushedCents)} sur les plateformes.`
           : t`Aujourd'hui : aucune majoration. Les plateformes reçoivent le prix de votre site, commission non compensée.`}
       </p>
-      <table className="tbl">
-        <thead>
-          <tr>
-            <th>{t`Plateforme`}</th>
-            <th>{t`Majoration`}</th>
-            <th>{t`Exemple`}</th>
-            <th className="r" />
-          </tr>
-        </thead>
-        <tbody>
-          {m.channels.map((c) => {
-            const ex = m.examples.find((e) => e.channel === c.channel);
-            return (
-              <tr key={c.channel}>
-                <td>{c.label}</td>
-                <td>
-                  <NumberInput size="md" w={120} min={0} max={m.maxPct} step={0.5} decimalSeparator="," suffix=" %" aria-label={t`Majoration ${c.label}, en pourcentage`} value={v[c.channel]} onChange={(x) => setV({ ...v, [c.channel]: x })} />
-                </td>
-                <td>{t`${eur(m.example.directCents)} → ${eur(ex?.suggestedCents ?? m.example.directCents)}`}</td>
-                <td className="r">
-                  {c.channel === m.pushChannel ? (
-                    <span className="pill soldee">{t`appliquée`}</span>
-                  ) : (
-                    <button type="button" className="btn" disabled={dirty || app.state.status === "busy"} title={dirty ? t`Enregistrez d'abord les pourcentages` : undefined} onClick={() => setApply(c.channel)}>
-                      {t`Appliquer`}
-                    </button>
-                  )}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+      <div className="tbl-wrap">
+        <table className="tbl">
+          <thead>
+            <tr>
+              <th>{t`Plateforme`}</th>
+              <th>{t`Majoration`}</th>
+              <th>{t`Exemple`}</th>
+              <th className="r" />
+            </tr>
+          </thead>
+          <tbody>
+            {m.channels.map((c) => {
+              const ex = m.examples.find((e) => e.channel === c.channel);
+              return (
+                <tr key={c.channel}>
+                  <td>{c.label}</td>
+                  <td>
+                    <NumberInput size="md" w={120} min={0} max={m.maxPct} step={0.5} decimalSeparator="," suffix=" %" aria-label={t`Majoration ${c.label}, en pourcentage`} value={v[c.channel]} onChange={(x) => setV({ ...v, [c.channel]: x })} />
+                  </td>
+                  <td>{t`${eur(m.example.directCents)} → ${eur(ex?.suggestedCents ?? m.example.directCents)}`}</td>
+                  <td className="r">
+                    {c.channel === m.pushChannel ? (
+                      <span className="pill soldee">{t`appliquée`}</span>
+                    ) : (
+                      <button type="button" className="btn" disabled={dirty || app.state.status === "busy"} title={dirty ? t`Enregistrez d'abord les pourcentages` : undefined} onClick={() => setApply(c.channel)}>
+                        {t`Appliquer`}
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
       {m.pushChannel ? (
         <button type="button" className="btn ghost" style={{ marginTop: 8 }} disabled={dirty} onClick={() => setApply(null)}>
           {t`Ne plus majorer`}

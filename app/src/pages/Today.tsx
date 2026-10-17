@@ -14,7 +14,7 @@ import { originSummary, sourceLabel } from "../canaux/canal";
 import { ActionButton, ErrorLine } from "../lib/action";
 import { toCleaningItem, type CleaningItem } from "../lib/tasks";
 import { TaskTick } from "./Cleaning";
-import { addDays, hourLabel, longDate, stayRange, titleDate, todayBrussels, weekdayShort, dayNum } from "../lib/dates";
+import { addDays, hourLabel, longDate, stayRange, sqlToBrussels, titleDate, todayBrussels, weekdayShort, dayNum } from "../lib/dates";
 import { channelName, dayEvents, daySentence, isChannel, nombre, type DayEvent } from "../lib/derive";
 import { eur } from "../lib/money";
 import { useLayout } from "../lib/useLayout";
@@ -387,7 +387,7 @@ function TodayB() {
                   <li key={`h${h.id}`}>
                     <button type="button" onClick={() => openBooking(h.id)}>
                       <b>{h.unitName}</b>
-                      <span>{h.holdExpiresAt ? t`libérée le ${longDate(h.holdExpiresAt.slice(0, 10))} sans arrhes` : t`arrhes pas encore reçues`}</span>
+                      <span>{h.holdExpiresAt ? t`libérée le ${longDate(sqlToBrussels(h.holdExpiresAt)?.day ?? h.holdExpiresAt.slice(0, 10))} sans arrhes` : t`arrhes pas encore reçues`}</span>
                     </button>
                   </li>
                 ))}
