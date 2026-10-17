@@ -70,6 +70,16 @@ describe("liste des clients", () => {
     expect(durand.staysCount).toBe(0);
   });
 
+  it("trie par nom sans tenir compte de la casse ni des accents (de Vries entre Dupont et Martin)", async () => {
+    const units = (await t.db.prepare("SELECT id FROM units ORDER BY id LIMIT 1").all()).results as { id: number }[];
+    await book(units[0].id, D1, D2, { firstName: "Zoé", lastName: "Zimmer", email: "zoe@exemple.test" });
+    await book(units[0].id, D3, D4, { firstName: "Éva", lastName: "Étienne", email: "eva@exemple.test" });
+    await book(units[0].id, addDays(D4, 10), addDays(D4, 12), { firstName: "Dirk", lastName: "de Vries", email: "dirk@exemple.test" });
+    await book(units[0].id, addDays(D4, 20), addDays(D4, 22), { firstName: "Alix", lastName: "Dupont", email: "alix@exemple.test" });
+    const names = (JSON.parse((await call("/api/admin/guests")).text).guests as { lastName: string }[]).map((g) => g.lastName);
+    expect(names).toEqual(["de Vries", "Dupont", "Étienne", "Zimmer"]);
+  });
+
   it("trie par séjour : récent d'abord, ancien d'abord, sans séjour en fin", async () => {
     await seed();
     const names = async (sort: string) => (JSON.parse((await call(`/api/admin/guests?sort=${sort}`)).text).guests as { lastName: string }[]).map((g) => g.lastName);
