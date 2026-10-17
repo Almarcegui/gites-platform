@@ -35,6 +35,10 @@ describe("sqlToBrussels (échéance d'une option)", () => {
   it("23 h 30 UTC l'été : déjà le lendemain en Belgique", () => {
     expect(sqlToBrussels("2026-10-20 22:30:00")).toEqual({ day: "2026-10-21", time: "00:30" });
   });
+  it("avec un décalage écrit, on le respecte (+02:00 = déjà l'heure de Belgique l'été)", () => {
+    expect(sqlToBrussels("2026-10-10T12:32:00+02:00")).toEqual({ day: "2026-10-10", time: "12:32" });
+    expect(sqlToBrussels("2026-10-10T12:32:00Z")).toEqual({ day: "2026-10-10", time: "14:32" });
+  });
   it("ce qui n'est pas une date-heure : null", () => {
     expect(sqlToBrussels("2026-10-20")).toBeNull();
     expect(sqlToBrussels(null)).toBeNull();

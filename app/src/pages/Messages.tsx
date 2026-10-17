@@ -131,7 +131,7 @@ function Thread({ message, onBack }: { message: Message; onBack?: () => void }) 
     arrival: booking ? longDate(booking.checkin) : "",
     checkinTime: hourLabel(times?.checkinTime ?? "16:00"),
     checkoutTime: hourLabel(times?.checkoutTime ?? "10:00"),
-    balance: balance > 0 ? eur(balance) : null,
+    balance: booking ? (balance > 0 ? eur(balance) : null) : undefined,
     // Signature : le nom du domaine (« Les Gîtes du Pré Moré »), pas celui du bien.
     signature: properties.find((p) => p.id === (booking?.propertyId ?? message.propertyId))?.name ?? "",
   };

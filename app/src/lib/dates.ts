@@ -122,7 +122,10 @@ export function hourLabel(hhmm: string | undefined | null): string {
 export function sqlToBrussels(s: string | null | undefined): { day: IsoDate; time: string } | null {
   const m = (s ?? "").match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/);
   if (!m) return null;
-  const utc = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Number(m[4]), Number(m[5])));
+  // Sans décalage écrit, la base parle en UTC ; avec un « Z » ou un « +02:00 », on le respecte.
+  const explicit = /(Z|[+-]\d{2}:?\d{2})$/i.test((s ?? "").trim());
+  const utc = explicit ? new Date((s ?? "").trim().replace(" ", "T")) : new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Number(m[4]), Number(m[5])));
+  if (Number.isNaN(utc.getTime())) return null;
   const p = Object.fromEntries(
     new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Brussels", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" })
       .formatToParts(utc)

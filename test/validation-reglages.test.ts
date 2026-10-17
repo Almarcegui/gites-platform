@@ -66,6 +66,8 @@ describe("PATCH /api/admin/units/:id : un bien garde un nom, une capacité, un m
     ["maximum sous le nombre habituel", { capacityBase: 9, capacityMax: 3 }],
     ["capacité décimale", { capacityMax: 4.5 }],
     ["ménage négatif", { cleaningFeeCents: -500 }],
+    ["ménage vidé", { cleaningFeeCents: "" }],
+    ["capacité vidée", { capacityMax: "" }],
   ])("%s → 400", async (_nom, body) => {
     const before = (await call("GET", "/api/admin/units?property=1")).data.units[0];
     const r = await call("PATCH", `/api/admin/units/${before.id}`, body);

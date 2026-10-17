@@ -149,6 +149,12 @@ describe("export CSV des clients", () => {
     expect(text).toContain(";+32 470 00 01 02;");
     expect(text).not.toContain("'+32");
     expect(text).toContain(";'+1+cmd|calc;");
+    // Une arithmétique n'est pas un numéro : elle reste neutralisée.
+    await t.db.prepare("UPDATE guests SET phone = '+1/1' WHERE last_name = 'Martin'").run();
+    await t.db.prepare("UPDATE guests SET phone = '-1+1' WHERE last_name = 'Dupont'").run();
+    const text2 = (await call("/api/admin/guests.csv")).text;
+    expect(text2).toContain(";'+1/1;");
+    expect(text2).toContain(";'-1+1;");
   });
 
   it("met entre guillemets une valeur contenant un retour chariot", async () => {

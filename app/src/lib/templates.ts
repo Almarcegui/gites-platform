@@ -15,7 +15,8 @@ export interface TemplateContext {
   arrival: string;
   checkinTime: string;
   checkoutTime: string;
-  balance: string | null;
+  /** Solde restant ; null = rien à payer ; undefined = inconnu (aucune réservation liée). */
+  balance: string | null | undefined;
   signature: string;
 }
 
@@ -38,7 +39,7 @@ export function fillTemplate(body: string, c: TemplateContext): string {
     prenom: c.firstName.trim(),
     ...(c.unitName ? { bien: c.unitName } : {}),
     ...(c.arrival ? { arrivee: c.arrival } : {}),
-    solde: c.balance ?? "0 €",
+    ...(c.balance === undefined ? {} : { solde: c.balance ?? "0 €" }),
     heure_arrivee: c.checkinTime,
     heure_depart: c.checkoutTime,
     signature: c.signature,

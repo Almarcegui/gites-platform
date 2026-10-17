@@ -428,9 +428,10 @@ function csvEscape(v: unknown): string {
   // Injection de formule Excel/LibreOffice : un client qui saisit son nom en
   // « =HYPERLINK("http://…"&A1,"Cliquez") » verrait la formule s'exécuter à
   // l'ouverture de l'export. L'apostrophe de tête neutralise la cellule.
-  // Un numéro (« +32 470 00 01 02 », « -12,50 ») ne contient que des chiffres et des
-  // séparateurs : aucune formule possible, et l'apostrophe s'afficherait telle quelle.
-  const numberLike = /^[+-]?\d[\d\s().,/-]*$/.test(raw);
+  // Un numéro de téléphone international (« +32 470 00 01 02 ») : « + » puis chiffres,
+  // espaces, points ou parenthèses, sans aucun opérateur (« + » ou « - » ensuite, « / »),
+  // donc aucune formule possible ; l'apostrophe, elle, s'afficherait telle quelle.
+  const numberLike = /^\+\d[\d\s().]*$/.test(raw);
   const s = /^[=+\-@\t\r]/.test(raw) && !numberLike ? `'${raw}` : raw;
   return /[";\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
@@ -783,7 +784,7 @@ export function registerAdminRoutes(router: Router): void {
       if (!unit) return apiError(404, "hébergement inconnu");
       if ((capBase ?? unit.capacityBase) > (capMax ?? unit.capacityMax)) return apiError(400, "capacité : le maximum ne peut pas être inférieur au nombre de personnes en temps normal");
     }
-    if (body.cleaningFeeCents != null && !(Number.isFinite(Number(body.cleaningFeeCents)) && Number(body.cleaningFeeCents) >= 0)) {
+    if (body.cleaningFeeCents != null && (String(body.cleaningFeeCents).trim() === "" || !(Number.isFinite(Number(body.cleaningFeeCents)) && Number(body.cleaningFeeCents) >= 0))) {
       return apiError(400, "frais de ménage : un montant positif ou nul");
     }
 
