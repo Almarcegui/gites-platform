@@ -101,6 +101,7 @@ const env = {
   IMAP_PORT: process.env.IMAP_PORT,
   IMAP_USER: process.env.IMAP_USER,
   IMAP_PASSWORD: process.env.IMAP_PASSWORD,
+  IMAP_FOLDER: process.env.IMAP_FOLDER,
   IMAP_FETCH: imapConfigFromEnv() ? imapTransport(imapConfigFromEnv()) : undefined,
   // Instantané de la base pour GET /api/admin/export.sqlite (Node seulement).
   SQLITE_SNAPSHOT: async () => snapshotSqlite(db, dirname(resolve(SQLITE_PATH))),
@@ -410,7 +411,7 @@ server.listen(PORT, () => {
   console.log(`[gites] photos : ${UPLOADS_DIR}`);
   console.log(`[gites] beds24 : écritures ${env.BEDS24_WRITE_ENABLED === "true" ? "ACTIVES" : "FERMÉES (BEDS24_WRITE_ENABLED ≠ true)"}`);
   console.log(`[gites] admin  : ${(env.ADMIN_ALLOWED_IPS || "").trim() ? `réservé à ${env.ADMIN_ALLOWED_IPS}${TRUST_PROXY ? " (via X-Forwarded-For)" : ""}` : "ouvert à toute adresse"}`);
-  console.log(`[gites] boîte  : ${env.IMAP_FETCH ? `relève IMAP ${env.IMAP_USER} @ ${env.IMAP_HOST || "imap.gmail.com"} (lecture seule)` : "relève IMAP inactive (IMAP_USER / mot de passe absents)"}`);
+  console.log(`[gites] boîte  : ${env.IMAP_FETCH ? `relève IMAP ${env.IMAP_USER} @ ${env.IMAP_HOST || "imap.gmail.com"}, dossier ${(env.IMAP_FOLDER || "").trim() || "INBOX"} (lecture seule)` : "relève IMAP inactive (IMAP_USER / mot de passe absents)"}`);
   if (!env.ADMIN_TOKEN) console.warn("[gites] ⚠️ ADMIN_TOKEN absent — le back-office refusera tout (garde fail-closed)");
   if (!CRON_KEY) console.warn("[gites] ⚠️ CRON_KEY absente — /internal/cron est désactivé");
 });
