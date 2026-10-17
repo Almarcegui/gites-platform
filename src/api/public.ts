@@ -71,7 +71,14 @@ import {
   stripePublishableKey,
   verifyStripeSignature,
 } from "../services/stripe";
-import { anyStripeConfigured, propertyIdOfPayment, resolveStripeConfig } from "../services/stripe-config";
+import {
+  anyStripeConfigured,
+  PAYMENT_UNAVAILABLE_MESSAGE,
+  propertyIdOfPayment,
+  publicPaymentUnavailable,
+  resolveStripeConfig,
+  stubPaymentsAllowed,
+} from "../services/stripe-config";
 import { processStripeEvent } from "../services/stripe-webhook";
 import { turnstileSiteKey, verifyTurnstile } from "../services/turnstile";
 import { registerTaskShareRoutes } from "./tasks-public";
@@ -849,6 +856,11 @@ export function registerPublicRoutes(router: Router): void {
     if (stay.adults + stay.children > ctx.unit.capacityMax) {
       return apiError(400, `capacité dépassée (max ${ctx.unit.capacityMax} personnes)`);
     }
+    // Avant toute écriture : sans clés Stripe, le paiement tomberait sur le
+    // simulateur, qui confirme la réservation sans encaisser.
+    if (await publicPaymentUnavailable(db, env, ctx.property.id)) {
+      return apiError(503, PAYMENT_UNAVAILABLE_MESSAGE, { code: "payment_unavailable" });
+    }
 
     const quote = quoteFromContext(ctx, { ...body, ...stay }, today);
     if (body.promoCode && quote.warnings.includes("promo_invalid")) {
@@ -1149,6 +1161,7 @@ export function registerPublicRoutes(router: Router): void {
   // --- simulateur de paiement — MODE STUB UNIQUEMENT (pas de clé Stripe) -----
   router.get("/api/public/dev-pay/info", async (_req, env, _p, url) => {
     const session = url.searchParams.get("session") ?? "";
+    if (!stubPaymentsAllowed(env)) return apiError(404, "indisponible");
     const payment = await findPaymentBySession(env.DB, session);
     if (!payment) return apiError(404, "session inconnue");
     // Le simulateur n'existe que pour une propriété SANS compte Stripe.
@@ -1172,6 +1185,7 @@ export function registerPublicRoutes(router: Router): void {
     const body = await readJson<{ session?: string }>(req);
     const session = String(body?.session ?? "");
     if (!session.startsWith("stub_")) return apiError(400, "session invalide");
+    if (!stubPaymentsAllowed(env)) return apiError(404, "indisponible");
     const stubbed = await findPaymentBySession(env.DB, session);
     if (stubbed && stripeEnabled(await resolveStripeConfig(env.DB, env, await propertyIdOfPayment(env.DB, stubbed.id)))) {
       return apiError(404, "indisponible");
@@ -1289,6 +1303,9 @@ export function registerPublicRoutes(router: Router): void {
     const body = await readJson<{ email?: string; cgvAccepted?: boolean }>(req);
     const booking = await authedBooking(db, p.reference ?? "", String(body?.email ?? "").trim());
     if (!booking) return apiError(404, "réservation introuvable");
+    if (await publicPaymentUnavailable(db, env, booking.propertyId)) {
+      return apiError(503, PAYMENT_UNAVAILABLE_MESSAGE, { code: "payment_unavailable" });
+    }
 
     const balance = booking.totalCents - booking.paidCents;
     if (booking.status === "confirmed") {

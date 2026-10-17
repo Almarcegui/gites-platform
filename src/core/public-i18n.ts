@@ -37,6 +37,8 @@ const EXACT: Record<string, string> = {
   "code promo invalide ou expiré": "promotiecode ongeldig of verlopen",
   "séjour impossible à ces conditions": "verblijf niet mogelijk onder deze voorwaarden",
   "montant trop faible pour un paiement en ligne": "bedrag te laag voor een onlinebetaling",
+  "Le paiement en ligne n'est pas encore ouvert pour ce domaine. Contactez-nous pour réserver : nous finalisons votre réservation avec vous.":
+    "Online betalen is voor dit domein nog niet geopend. Neem contact met ons op om te boeken: wij ronden uw reservering samen met u af.",
   "cet hébergement vient d'être réservé sur ces dates": "deze accommodatie is net voor deze data geboekt",
   "réservation introuvable": "reservering niet gevonden",
   "aucune fiche client sur cette réservation — écrivez-nous via le formulaire de contact": "geen klantenfiche bij deze reservering — schrijf ons via het contactformulier",

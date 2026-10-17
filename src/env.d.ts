@@ -29,6 +29,10 @@ interface Env {
   /** Clé SECRÈTE Turnstile (`wrangler secret put`). Absente = anti-robot
    *  désactivé : les deux clés vont ensemble, cf. services/turnstile.ts. */
   TURNSTILE_SECRET_KEY?: string;
+  /** "true" = laisse le simulateur de paiement ouvert sur un site en https. Par
+   *  défaut il est FERMÉ dès que PUBLIC_BASE_URL est en https : une propriété
+   *  sans clés Stripe y confirmerait des réservations sans aucun encaissement. */
+  ALLOW_STUB_PAYMENTS?: string;
   /** Autorise les ÉCRITURES vers Beds24 (compte réel, pas de bac à sable).
    *  Seule la valeur "true" autorise (fermé par défaut) — cf. beds24WritesAllowed(). */
   BEDS24_WRITE_ENABLED?: string;
