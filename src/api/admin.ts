@@ -428,10 +428,11 @@ function csvEscape(v: unknown): string {
   // Injection de formule Excel/LibreOffice : un client qui saisit son nom en
   // « =HYPERLINK("http://…"&A1,"Cliquez") » verrait la formule s'exécuter à
   // l'ouverture de l'export. L'apostrophe de tête neutralise la cellule.
-  // Un numéro de téléphone international (« +32 470 00 01 02 ») : « + » puis chiffres,
-  // espaces, points ou parenthèses, sans aucun opérateur (« + » ou « - » ensuite, « / »),
-  // donc aucune formule possible ; l'apostrophe, elle, s'afficherait telle quelle.
-  const numberLike = /^\+\d[\d\s().]*$/.test(raw);
+  // Un numéro de téléphone international écrit à la belge (« +32 470 00 01 02 », « +32 (0)470 … ») :
+  // « + », l'indicatif, puis des groupes de chiffres séparés par UNE espace. Aucun opérateur,
+  // aucune fonction : ce n'est pas une formule, et l'apostrophe s'afficherait telle quelle.
+  // Un numéro collé (« +32470000102 ») reste neutralisé : un tableur le lirait comme un nombre.
+  const numberLike = /^\+\d{1,3}(?: \(\d+\)\d*| \d+)+$/.test(raw);
   const s = /^[=+\-@\t\r]/.test(raw) && !numberLike ? `'${raw}` : raw;
   return /[";\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
@@ -2816,7 +2817,7 @@ export function registerAdminRoutes(router: Router): void {
       if (!SETTING_KEYS.has(key)) return apiError(400, `clé inconnue : ${key}`);
       if (key === "min_lead_days") {
         const n = Number(value);
-        if (!Number.isInteger(n) || n < 0 || n > 365) {
+        if (String(value ?? "").trim() === "" || !Number.isInteger(n) || n < 0 || n > 365) {
           return apiError(400, "délai minimum de réservation : un nombre entier de jours, de 0 à 365");
         }
       }

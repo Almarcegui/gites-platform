@@ -155,6 +155,11 @@ describe("export CSV des clients", () => {
     const text2 = (await call("/api/admin/guests.csv")).text;
     expect(text2).toContain(";'+1/1;");
     expect(text2).toContain(";'-1+1;");
+    // Collé, sans espace : un tableur le lirait comme un nombre, il reste neutralisé.
+    await t.db.prepare("UPDATE guests SET phone = '+32470000102' WHERE last_name = 'Martin'").run();
+    expect((await call("/api/admin/guests.csv")).text).toContain(";'+32470000102;");
+    await t.db.prepare("UPDATE guests SET phone = '+32 (0)470 00 01 02' WHERE last_name = 'Martin'").run();
+    expect((await call("/api/admin/guests.csv")).text).toContain(";+32 (0)470 00 01 02;");
   });
 
   it("met entre guillemets une valeur contenant un retour chariot", async () => {

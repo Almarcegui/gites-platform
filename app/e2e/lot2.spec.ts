@@ -92,6 +92,7 @@ test("modèles : créé dans Réglages, proposé dans Messages, supprimé", asyn
   // Les migrations posent un nombre de modèles de départ (4, puis 10 avec la 0037) : on compte, on ne devine pas.
   await expect(page.locator(".list-row").first()).toBeVisible();
   const before = await page.locator(".list-row").count();
+  expect(before).toBeGreaterThanOrEqual(10); // 4 modèles d'origine + 6 de la migration 0037
   await page.getByRole("button", { name: "Nouveau modèle" }).click();
   const d = drawer(page);
   await d.getByLabel("Nom du modèle").fill("Code wifi");

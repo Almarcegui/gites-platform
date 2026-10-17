@@ -42,6 +42,7 @@ describe("PUT /api/admin/settings : valeurs refusées, rien n'est écrit", () =>
     ["taxe de séjour vidée", { tourist_tax_cents_per_person_night: "" }],
     ["heure d'arrivée absurde", { checkin_time: "25:99" }],
     ["heure de départ vidée", { checkout_time: "" }],
+    ["délai minimum vidé", { min_lead_days: "" }],
   ])("%s → 400", async (_nom, settings) => {
     const before = (await call("GET", "/api/admin/settings?property=1")).data.settings;
     const r = await put(settings);
