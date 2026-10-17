@@ -85,7 +85,9 @@ import {
   listAuditByEntity,
   listEmailLog,
   listFeeds,
+  GUEST_SORTS,
   listGuests,
+  type GuestSort,
   listLinks,
   blockingBookings,
   blockingManualBlocks,
@@ -418,7 +420,11 @@ function csvEscape(v: unknown): string {
   // « =HYPERLINK("http://…"&A1,"Cliquez") » verrait la formule s'exécuter à
   // l'ouverture de l'export. L'apostrophe de tête neutralise la cellule.
   const s = /^[=+\-@\t\r]/.test(raw) ? `'${raw}` : raw;
-  return /[";\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  return /[";\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+function guestSortParam(raw: string | null): GuestSort {
+  return (GUEST_SORTS as readonly string[]).includes(raw ?? "") ? (raw as GuestSort) : "name";
 }
 
 function csvResponse(rows: unknown[][], filename: string): Response {
@@ -428,6 +434,7 @@ function csvResponse(rows: unknown[][], filename: string): Response {
     headers: {
       "content-type": "text/csv; charset=utf-8",
       "content-disposition": `attachment; filename="${filename}"`,
+      "cache-control": "no-store",
     },
   });
 }
@@ -2547,7 +2554,26 @@ export function registerAdminRoutes(router: Router): void {
 
   // --- clients ---------------------------------------------------------------------
   router.get("/api/admin/guests", guard(async (_req, env, _p, url) => {
-    return json({ guests: await listGuests(env.DB, url.searchParams.get("search") ?? undefined) });
+    return json({ guests: await listGuests(env.DB, url.searchParams.get("search") ?? undefined, guestSortParam(url.searchParams.get("sort"))) });
+  }));
+
+  // Export de la liste des clients (sauvegarde). Mêmes filtres que la liste ;
+  // le consentement marketing est exporté tel qu'enregistré (case non
+  // pré-cochée du tunnel de réservation) : une newsletter ne s'adresse qu'à
+  // ceux dont la colonne vaut « oui ».
+  router.get("/api/admin/guests.csv", guard(async (req, env, _p, url) => {
+    const guests = await listGuests(env.DB, url.searchParams.get("search") ?? undefined, guestSortParam(url.searchParams.get("sort")));
+    const day = (v: string | null | undefined) => (v ? v.slice(0, 10) : "");
+    const rows: unknown[][] = [
+      ["Nom", "Prénom", "Email", "Téléphone", "Langue", "Pays", "Hébergement(s)", "Premier séjour (arrivée)", "Dernier séjour (arrivée)", "Dernier séjour (départ)", "Dernier séjour réservé le", "Nombre de séjours", "Consentement marketing", "Consentement donné le"],
+      ...guests.map((g) => [
+        g.lastName, g.firstName ?? "", g.email ?? "", g.phone ?? "", g.lang, g.country ?? "", g.gites ?? "",
+        g.firstCheckin ?? "", g.lastCheckin ?? "", g.lastCheckout ?? "", day(g.lastBookedAt), g.staysCount ?? 0,
+        g.marketingOptIn ? "oui" : "non", day(g.marketingOptInAt),
+      ]),
+    ];
+    await audit(env.DB, "admin", "guests.export_csv", undefined, { lignes: guests.length, filtre: url.searchParams.get("search") ? "recherche" : "aucun", par: currentUser(req) });
+    return csvResponse(rows, `clients-${todayInZone()}.csv`);
   }));
 
   router.get("/api/admin/guests/:id", guard(async (_req, env, p) => {

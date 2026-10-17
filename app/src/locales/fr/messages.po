@@ -3079,6 +3079,10 @@ msgstr "Déplier le menu"
 msgid "Déplier le menu ({keys})"
 msgstr "Déplier le menu ({keys})"
 
+#: src/pages/settings/Clients.tsx
+msgid "Dernier séjour"
+msgstr "Dernier séjour"
+
 #: src/pages/settings/ServiceKeys.tsx
 msgid "Dernier usage"
 msgstr "Dernier usage"
@@ -3640,6 +3644,7 @@ msgid "Exemple"
 msgstr "Exemple"
 
 #: src/pages/Bookings.tsx
+#: src/pages/settings/Clients.tsx
 msgid "Exporter"
 msgstr "Exporter"
 
@@ -3807,6 +3812,10 @@ msgstr "Garder la saison"
 #: src/pages/Login.tsx
 msgid "Gestion des gîtes"
 msgstr "Gestion des gîtes"
+
+#: src/pages/settings/Clients.tsx
+msgid "Gîte"
+msgstr "Gîte"
 
 #: src/pages/settings/Domain.tsx
 msgid "Glissez des photos ici"
@@ -5737,6 +5746,10 @@ msgstr "Par exemple : Panier petit-déjeuner"
 msgid "par exemple : panier, séance"
 msgstr "par exemple : panier, séance"
 
+#: src/pages/settings/Clients.tsx
+msgid "Par nom"
+msgstr "Par nom"
+
 #: src/pages/settings/Options.tsx
 msgid "par nuit"
 msgstr "par nuit"
@@ -6452,7 +6465,6 @@ msgstr "Reçus ({0})"
 msgid "Réel (vrais paiements)"
 msgstr "Réel (vrais paiements)"
 
-#: src/pages/Bookings.tsx
 #: src/pages/settings/Channels.tsx
 msgid "Réf."
 msgstr "Réf."
@@ -6792,6 +6804,15 @@ msgstr "Réservé et payé"
 msgid "Réservé et payé sur {0}."
 msgstr "Réservé et payé sur {0}."
 
+#: src/pages/settings/Clients.tsx
+msgid "Réservé le"
+msgstr "Réservé le"
+
+#. placeholder {0}: dayWithYear(g.lastBookedAt)
+#: src/pages/settings/Clients.tsx
+msgid "réservé le {0}"
+msgstr "réservé le {0}"
+
 #: src/pages/Today.tsx
 msgid "Réservé par téléphone."
 msgstr "Réservé par téléphone."
@@ -7094,6 +7115,14 @@ msgstr "Séjour cherché"
 #: src/pages/settings/Payments.tsx
 msgid "Séjour entier"
 msgstr "Séjour entier"
+
+#: src/pages/settings/Clients.tsx
+msgid "Séjour le plus ancien"
+msgstr "Séjour le plus ancien"
+
+#: src/pages/settings/Clients.tsx
+msgid "Séjour le plus récent"
+msgstr "Séjour le plus récent"
 
 #: src/booking/BookingPanel.tsx
 #: src/pages/settings/Logs.tsx
@@ -7527,6 +7556,10 @@ msgstr "Toutes les plateformes recevront de nouveau le même prix. Les calendrie
 #: src/pages/settings/Stats.tsx
 msgid "Toutes les réservations"
 msgstr "Toutes les réservations"
+
+#: src/pages/settings/Clients.tsx
+msgid "Trier les clients"
+msgstr "Trier les clients"
 
 #: src/pages/settings/Improvements.tsx
 msgid "Trier par"
