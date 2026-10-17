@@ -14,6 +14,7 @@ import { Link, useBlocker, useRouterState } from "@tanstack/react-router";
 import { useEffect, useState, type ReactNode } from "react";
 
 import { authHeader, errorText } from "../api/client";
+import { i18n } from "../i18n";
 import { useProperties } from "../api/hooks";
 import type { Property } from "../api/types";
 import { ErrorLine } from "../lib/action";
@@ -366,10 +367,19 @@ export function centsToEuros(c: number | null | undefined): number | string {
   return c == null ? "" : c / 100;
 }
 
-/** Date et heure SQL (« 2026-10-10 14:32:00 ») → « 10/10/2026 à 14 h 32 ». */
+/** Date et heure SQL, écrites en UTC par la base (« 2026-10-10 12:32:00 »), dites à l'heure
+ *  de Belgique : « 10/10/2026 à 14 h 32 » (en néerlandais « 10/10/2026 om 14.32 u »). */
 export function sqlWhen(s: string | null | undefined): string {
   if (!s) return "";
   const m = s.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/);
   if (!m) return s.slice(0, 10);
-  return `${m[3]}/${m[2]}/${m[1]} à ${Number(m[4])} h ${m[5]}`;
+  const utc = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Number(m[4]), Number(m[5])));
+  const p = Object.fromEntries(
+    new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Brussels", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" })
+      .formatToParts(utc)
+      .map((x) => [x.type, x.value]),
+  ) as Record<string, string>;
+  const date = `${p.day}/${p.month}/${p.year}`;
+  const h = Number(p.hour);
+  return i18n.locale === "nl" ? `${date} om ${h}.${p.minute} u` : `${date} à ${h} h ${p.minute}`;
 }
