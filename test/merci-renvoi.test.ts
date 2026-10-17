@@ -8,7 +8,7 @@ import { createTestDb, type TestDb } from "./helpers/d1";
 import { Router } from "../src/api/router";
 import { registerPublicRoutes } from "../src/api/public";
 import { addDays, todayInZone } from "../src/core/dates";
-import { maskEmail } from "../src/core/mask-email";
+import { isDeliverableEmail, maskEmail } from "../src/core/mask-email";
 import { localizePublicResponse } from "../src/core/public-i18n";
 import { merciUrl } from "../src/services/booking-flow";
 import { merciToken, verifyMerciToken } from "../src/services/merci-token";
@@ -75,6 +75,15 @@ const audits = async (bookingId: number) =>
 const guestEmail = async (bookingId: number) =>
   (await t.db.prepare("SELECT g.email FROM bookings b JOIN guests g ON g.id = b.guest_id WHERE b.id = ?1").bind(bookingId).first<{ email: string | null }>())?.email ?? null;
 
+describe("adresse acceptée pour un renvoi", () => {
+  it("refuse ce que le transport refuserait", () => {
+    for (const ok of ["claire@example.be", "c.d+gites@sous.example.co.uk", "o'neil@example.ie"]) expect(isDeliverableEmail(ok), ok).toBe(true);
+    for (const ko of ["a@example.com.", "a@-example.com", "a@example..com", "x<y@example.com", "a b@example.com", ".a@example.com", "a.@example.com", "a@example", "a@example.c0m", "@example.com", `${"a".repeat(65)}@example.com`, "a@exa_mple.com"]) {
+      expect(isDeliverableEmail(ko), ko).toBe(false);
+    }
+  });
+});
+
 describe("adresse masquée", () => {
   it("garde la première lettre et le domaine", () => {
     expect(maskEmail("claire.dubois@example.be")).toBe("c•••@example.be");
@@ -103,6 +112,9 @@ describe("jeton de la page Merci", () => {
     const b = await createBooking();
     const url = new URL(await merciUrl(env, { id: b.id, reference: b.reference, guestEmail: b.email }));
     expect(url.searchParams.get("k")).toBe(await merciToken(env, b));
+    expect(url.searchParams.has("lang")).toBe(false);
+    const nl = new URL(await merciUrl(env, { id: b.id, reference: b.reference, guestEmail: b.email, guestLang: "nl" }));
+    expect(nl.searchParams.get("lang")).toBe("nl");
   });
 
   it("sans ADMIN_TOKEN : pas de jeton (fail-closed), le couple référence + e-mail reste", async () => {
@@ -122,13 +134,13 @@ describe("GET : à quelle adresse part la confirmation", () => {
     expect((await call("GET", `${api("PM-2099-999")}?k=${b.k}`)).status).toBe(404);
   });
 
-  it("par e-mail ou par jeton : adresse masquée, jamais en clair", async () => {
+  it("par e-mail ou par jeton : adresse masquée, jamais en clair ; renvoi proposé avec le jeton seulement", async () => {
     const b = await bookAndPay();
-    for (const qs of [`email=${encodeURIComponent(b.email)}`, `k=${b.k}`]) {
+    for (const [qs, canResend] of [[`email=${encodeURIComponent(b.email)}`, false], [`k=${b.k}`, true]] as const) {
       const r = await call("GET", `${api(b.reference)}?${qs}`);
       expect(r.status).toBe(200);
       expect(r.data).toMatchObject({
-        reference: b.reference, status: "confirmed", hasEmail: true,
+        reference: b.reference, status: "confirmed", hasEmail: true, canResend,
         recipient: "c•••@example.be", lastSent: { to: "c•••@example.be", failed: false }, resendsLeft: 3,
       });
       expect(r.text).not.toContain("claire.dubois");
@@ -139,7 +151,7 @@ describe("GET : à quelle adresse part la confirmation", () => {
 describe("POST : renvoyer la confirmation à une autre adresse", () => {
   it("part à la nouvelle adresse avec le PDF, au journal ; la fiche client n'est pas modifiée", async () => {
     const b = await bookAndPay("claire.dubois@exmaple.be"); // faute de frappe dans le domaine
-    const r = await call("POST", api(b.reference), { email: b.email, to: "claire.dubois@example.be" });
+    const r = await call("POST", api(b.reference), { k: b.k, to: "claire.dubois@example.be" });
     expect(r.status).toBe(200);
     expect(r.data).toMatchObject({ ok: true, lastSent: { to: "c•••@example.be", failed: false }, resendsLeft: 2, hasEmail: true, recipient: "c•••@exmaple.be" });
     expect(r.text).not.toContain("claire.dubois");
@@ -170,8 +182,11 @@ describe("POST : renvoyer la confirmation à une autre adresse", () => {
     const b = await bookAndPay();
     expect((await call("POST", api(b.reference), { to: "x@example.org" })).status).toBe(404);
     expect((await call("POST", api(b.reference), { k: "A".repeat(32), to: "x@example.org" })).status).toBe(404);
-    expect((await call("POST", api(b.reference), { email: b.email, to: "pas-une-adresse" })).status).toBe(400);
-    expect((await call("POST", api(b.reference), { email: b.email, to: `${"a".repeat(250)}@example.org` })).status).toBe(400);
+    // Le couple référence + e-mail ne suffit pas pour renvoyer : il faut le jeton.
+    expect((await call("POST", api(b.reference), { email: b.email, to: "x@example.org" })).status).toBe(404);
+    expect((await call("POST", api(b.reference), { k: b.k, to: "pas-une-adresse" })).status).toBe(400);
+    expect((await call("POST", api(b.reference), { k: b.k, to: `${"a".repeat(250)}@example.org` })).status).toBe(400);
+    expect((await call("POST", api(b.reference), { k: b.k, to: "a@example..org" })).status).toBe(400);
     const pending = await createBooking("pending@example.be", 20);
     const r = await call("POST", api(pending.reference), { k: await merciToken(env, pending), to: "x@example.org" });
     expect(r.status).toBe(409);
@@ -181,7 +196,7 @@ describe("POST : renvoyer la confirmation à une autre adresse", () => {
 
   it("trois renvois au plus par réservation, même en rafale", async () => {
     const b = await bookAndPay();
-    const results = await Promise.all(Array.from({ length: 5 }, (_, i) => call("POST", api(b.reference), { email: b.email, to: `essai${i}@example.org` })));
+    const results = await Promise.all(Array.from({ length: 5 }, (_, i) => call("POST", api(b.reference), { k: b.k, to: `essai${i}@example.org` })));
     expect(results.filter((r) => r.status === 200)).toHaveLength(3);
     const refused = results.filter((r) => r.status === 429);
     expect(refused).toHaveLength(2);
@@ -201,6 +216,37 @@ describe("POST : renvoyer la confirmation à une autre adresse", () => {
     const limit = await call("POST", api(b.reference), { k: b.k, to: "n9@example.org" }, { "x-gites-lang": "nl" });
     expect(limit.status).toBe(429);
     expect(limit.data.error).toMatch(/^maximaal aantal keer opnieuw verzonden/);
+  });
+});
+
+describe("échecs : rien n'est annoncé comme envoyé, le quota n'est pas consommé", () => {
+  it("transport en échec : 502, ligne d'historique marquée en échec, quota intact", async () => {
+    const b = await bookAndPay();
+    const failing: Env = { ...env, EMAILS_ENABLED: "true", SMTP_HOST: "h", SMTP_USER: "u", SMTP_PASSWORD: "p", MAIL_FROM: "r@example.be", SMTP_SEND: async () => { throw new Error("SMTP 550 boîte inconnue"); } };
+    const r = await call("POST", api(b.reference), { k: b.k, to: "claire@example.org" }, {}, failing);
+    expect(r.status).toBe(502);
+    expect(r.data).toMatchObject({ lastSent: { failed: true }, resendsLeft: 3 });
+    expect(await audits(b.id)).toHaveLength(0);
+    const failed = await t.db.prepare("SELECT detail FROM audit_log WHERE action = 'email.confirmation_resent_public_failed'").all<{ detail: string }>();
+    expect(failed.results).toHaveLength(1);
+    expect((await mails(b.id)).at(-1)).toMatchObject({ to_email: "claire@example.org", status: "failed" });
+  });
+
+  it("réservation sans fiche client : refusée avant le quota", async () => {
+    const b = await bookAndPay();
+    await t.db.prepare("UPDATE bookings SET guest_id = NULL WHERE id = ?1").bind(b.id).run();
+    const r = await call("POST", api(b.reference), { k: b.k, to: "claire@example.org" });
+    expect(r.status).toBe(409);
+    expect(await audits(b.id)).toHaveLength(0);
+  });
+
+  it("réservation annulée : pas de renvoi, et sendConfirmation refuse aussi une adresse explicite", async () => {
+    const b = await bookAndPay();
+    await t.db.prepare("UPDATE bookings SET status = 'cancelled' WHERE id = ?1").bind(b.id).run();
+    expect((await call("POST", api(b.reference), { k: b.k, to: "claire@example.org" })).status).toBe(409);
+    const { sendConfirmation } = await import("../src/services/booking-flow");
+    expect(await sendConfirmation(t.db, env, b.id, { to: "claire@example.org" })).toBe(false);
+    expect(await audits(b.id)).toHaveLength(0);
   });
 });
 

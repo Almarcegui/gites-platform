@@ -171,10 +171,12 @@ export function paymentLabel(booking: BookingRow, kind: PaymentKind): string {
 /** Page Merci d'une réservation : référence, e-mail s'il existe, et jeton `k`
  *  (merci-token.ts) qui autorise le renvoi de la confirmation — y compris sur
  *  une réservation sans e-mail. */
-export async function merciUrl(env: Env, booking: { id: number; reference: string; guestEmail?: string | null }): Promise<string> {
+export async function merciUrl(env: Env, booking: { id: number; reference: string; guestEmail?: string | null; guestLang?: string | null }): Promise<string> {
   const emailParam = booking.guestEmail ? `&email=${encodeURIComponent(booking.guestEmail)}` : "";
   const k = await merciToken(env, booking);
-  return `${env.PUBLIC_BASE_URL}/book/merci.html?ref=${encodeURIComponent(booking.reference)}${emailParam}${k ? `&k=${k}` : ""}`;
+  // Client néerlandophone : la page Merci s'ouvre dans sa langue, comme le voucher.
+  const lang = booking.guestLang === "nl" ? "&lang=nl" : "";
+  return `${env.PUBLIC_BASE_URL}/book/merci.html?ref=${encodeURIComponent(booking.reference)}${emailParam}${k ? `&k=${k}` : ""}${lang}`;
 }
 
 /** URLs de retour après paiement.
@@ -499,6 +501,8 @@ export async function sendConfirmation(
   // adresse que celle de sa fiche (faute de frappe). Toujours un renvoi forcé.
   const to = opts.to ?? ctx.booking.guestEmail;
   if (!to) return false;
+  // Une réservation annulée entre-temps ne reçoit pas de « confirmation ».
+  if (opts.to && ctx.booking.status !== "confirmed") return false;
   let claimed = false;
   if (!opts.force && !opts.to) {
     if (await hasEmailOfKinds(db, bookingId, ["confirmation", "voucher"])) return false;

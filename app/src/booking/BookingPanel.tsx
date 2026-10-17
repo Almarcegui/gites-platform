@@ -457,6 +457,7 @@ const HISTORY: Record<string, MessageDescriptor> = {
   "email.voucher_resent": msg`confirmation renvoyée au client`,
   "email.confirmation_resent": msg`confirmation et conditions générales renvoyées au client`,
   "email.confirmation_resent_public": msg`confirmation renvoyée par le client depuis la page Merci (adresse dans les mails envoyés)`,
+  "email.confirmation_resent_public_failed": msg`renvoi de la confirmation demandé par le client : envoi en échec`,
   "message.reply": msg`message envoyé au client`,
 };
 function historyLabel(action: string): string {

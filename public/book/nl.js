@@ -271,6 +271,7 @@ export const NL = {
   "départ": "vertrek",
   // Page Merci : adresse de la confirmation et renvoi à une autre adresse.
   "Adresse e-mail": "E-mailadres",
+  "Aucun montant n'a été débité. Pour réessayer, reprenez le lien de paiement que vous avez reçu, ou contactez-nous.": "Er is niets afgeschreven. Om opnieuw te proberen, gebruik de betaallink die u ontvangen hebt, of neem contact met ons op.",
   "C'est envoyé à <b>{adresse}</b>. Pensez à regarder dans vos courriers indésirables.": "Verstuurd naar <b>{adresse}</b>. Kijk ook even in uw spamfolder.",
   "Ce n'est pas la bonne adresse ? Envoyer la confirmation à une autre adresse": "Niet het juiste adres? Stuur de bevestiging naar een ander adres",
   "Cette adresse e-mail ne semble pas valide.": "Dit e-mailadres lijkt niet geldig.",

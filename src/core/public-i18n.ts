@@ -39,6 +39,8 @@ const EXACT: Record<string, string> = {
   "montant trop faible pour un paiement en ligne": "bedrag te laag voor een onlinebetaling",
   "cet hébergement vient d'être réservé sur ces dates": "deze accommodatie is net voor deze data geboekt",
   "réservation introuvable": "reservering niet gevonden",
+  "aucune fiche client sur cette réservation — écrivez-nous via le formulaire de contact": "geen klantenfiche bij deze reservering — schrijf ons via het contactformulier",
+  "l'envoi n'a pas abouti — vérifiez l'adresse, ou réessayez dans un instant": "het verzenden is mislukt — controleer het adres, of probeer het zo meteen opnieuw",
   "la confirmation ne part qu'une fois la réservation confirmée": "de bevestiging wordt pas verstuurd zodra de reservering bevestigd is",
   "nombre maximal de renvois atteint — écrivez-nous en répondant à un de nos e-mails ou via le formulaire de contact":
     "maximaal aantal keer opnieuw verzonden — schrijf ons door op een van onze e-mails te antwoorden of via het contactformulier",

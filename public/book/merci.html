@@ -54,6 +54,7 @@ function recipientHtml(info, done) {
   else if (info.lastSent?.failed) line = `<div class="note bad">${t("L'envoi à <b>{adresse}</b> n'a pas abouti. Vérifiez l'adresse, ou indiquez-en une autre ci-dessous.", { adresse: esc(info.lastSent.to) })}</div>`;
   else if (info.lastSent) line = `<p class="small">${t("Confirmation envoyée à <b>{adresse}</b>.", { adresse: esc(info.lastSent.to) })}</p>`;
   else line = `<p class="small">${t("La confirmation part à <b>{adresse}</b>.", { adresse: esc(info.recipient) })}</p>`;
+  if (!info.canResend) return line;
   if (info.resendsLeft <= 0) {
     return `${line}<p class="small muted">${t("Nombre maximal de renvois atteint. Écrivez-nous via le formulaire de contact du site : nous vous répondrons par e-mail.")}</p>`;
   }
@@ -96,12 +97,14 @@ function bindResend(el, info) {
       const res = await fetch(recipientApi(), {
         method: "POST",
         headers: apiHeaders({ "content-type": "application/json" }),
-        body: JSON.stringify({ email: email || undefined, k: k || undefined, to }),
+        body: JSON.stringify({ k, to }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         msg.textContent = data.error || t("Envoi impossible pour le moment. Réessayez dans un instant.");
         btn.disabled = false;
+        // Plus de renvoi possible : le formulaire laisse place au message.
+        if (res.status === 429 || data.resendsLeft === 0) { el.innerHTML = recipientHtml({ ...info, resendsLeft: 0 }); }
         return;
       }
       el.innerHTML = recipientHtml(data, data.lastSent?.to || to);
@@ -148,7 +151,14 @@ async function pollByToken(attempt = 0) {
 
 async function poll(attempt = 0) {
   const box = document.getElementById("box");
-  if (ref && !email && k && redirectStatus !== "failed") {
+  // Paiement refusé au retour de la banque : à dire avant tout le reste, même
+  // sans e-mail dans l'adresse (la reprise passe alors par l'équipe).
+  if (attempt === 0 && ref && !email && redirectStatus === "failed") {
+    box.innerHTML = `<div class="big-check">⚠️</div><h3>${t("Paiement non abouti")}</h3>
+      <p class="muted small">${t("Aucun montant n'a été débité. Pour réessayer, reprenez le lien de paiement que vous avez reçu, ou contactez-nous.")}</p>`;
+    return;
+  }
+  if (ref && !email && k) {
     pollByToken();
     return;
   }

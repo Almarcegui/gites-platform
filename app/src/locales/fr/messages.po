@@ -6594,6 +6594,11 @@ msgstr "Rendre l'accès"
 msgid "Rendre l'accès à {0} ?"
 msgstr "Rendre l'accès à {0} ?"
 
+#: src/booking/BookingPanel.tsx
+#: src/pages/settings/Logs.tsx
+msgid "renvoi de la confirmation demandé par le client : envoi en échec"
+msgstr "renvoi de la confirmation demandé par le client : envoi en échec"
+
 #: src/pages/settings/ChannelPrices.tsx
 msgid "Renvoyer à Beds24"
 msgstr "Renvoyer à Beds24"
