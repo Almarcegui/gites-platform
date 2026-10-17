@@ -4,7 +4,7 @@
 // Photos d'un bien et ajout d'un bien : en panneau et en boîte, chacun avec
 // son propre bouton (ils n'attendent pas l'enregistrement de la page).
 import { Trans, useLingui } from "@lingui/react/macro";
-import { Checkbox, NumberInput, Select, Switch, Textarea, TextInput } from "@mantine/core";
+import { Checkbox, NumberInput, Switch, Textarea, TextInput } from "@mantine/core";
 import { IconArrowDown, IconArrowUp, IconPhoto, IconPlus, IconUpload } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -17,6 +17,7 @@ import { ErrorLine, useAction } from "../../lib/action";
 import { useToast } from "../../lib/toasts";
 import { Box, Fold, Loading, Page, parseEuros, SaveBar, Section, SidePanel, useWorkingProperty } from "../../ui/kit";
 import { useSettingsFull, useUnitsFull } from "./useAdmin";
+import { Choix } from "../../ui/Choix";
 
 interface UnitForm {
   name: string;
@@ -39,6 +40,7 @@ interface Form {
     deposit_pct: number | string;
     balance_due_days: number | string;
     hold_minutes: number | string;
+    min_lead_days: number | string;
     allow_deposit: boolean;
     allow_full_payment: boolean;
     tourist_tax: number | string;
@@ -67,6 +69,7 @@ function toForm(p: PropertyFull, s: FullSettings, units: UnitFull[], links: Unit
       deposit_pct: s.depositPct,
       balance_due_days: s.balanceDueDays,
       hold_minutes: s.holdMinutes,
+      min_lead_days: s.minLeadDays ?? 0,
       allow_deposit: s.allowDeposit,
       allow_full_payment: s.allowFullPayment,
       tourist_tax: s.touristTaxCentsPerPersonNight / 100,
@@ -216,6 +219,24 @@ function DomainForm({ propertyId, init, units, onDirty }: { propertyId: number; 
           <TextInput size="md" type="time" label={t`Arrivée à partir de`} value={f.set.checkin_time} onChange={(e) => setS("checkin_time", e.currentTarget.value)} />
           <TextInput size="md" type="time" label={t`Départ au plus tard à`} value={f.set.checkout_time} onChange={(e) => setS("checkout_time", e.currentTarget.value)} />
         </div>
+        <div className="grid2" style={{ marginTop: 12 }}>
+          <NumberInput
+            size="md"
+            label={t`Délai minimum de réservation (jours)`}
+            description={
+              Number(f.set.min_lead_days) > 1
+                ? t`sur le site, une arrivée se réserve au plus tard ${Number(f.set.min_lead_days)} jours avant. Vous pouvez passer outre en vente manuelle.`
+                : Number(f.set.min_lead_days) === 1
+                  ? t`sur le site, une arrivée se réserve au plus tard la veille. Vous pouvez passer outre en vente manuelle.`
+                  : t`0 = on peut réserver sur le site jusqu'au jour même`
+            }
+            min={0}
+            max={365}
+            allowDecimal={false}
+            value={f.set.min_lead_days}
+            onChange={(v) => setS("min_lead_days", v === "" ? 0 : v)}
+          />
+        </div>
         {f.set.checkin_time === f.set.checkout_time ? <p className="warn">{t`Arrivée et départ sont à la même heure : le ménage n'a pas de temps entre deux séjours. Vérifiez ces heures.`}</p> : null}
       </Section>
 
@@ -278,7 +299,7 @@ function DomainForm({ propertyId, init, units, onDirty }: { propertyId: number; 
                 <NumberInput size="md" label={t`Personnes, au plus`} min={1} value={x.capacityMax} onChange={(v) => setU(u.id, { capacityMax: v })} />
                 <NumberInput size="md" label={t`Arrhes propres à ce bien (%)`} description={t`vide = ${f.set.deposit_pct} % comme le domaine`} min={0} max={100} value={x.deposit} onChange={(v) => setU(u.id, { deposit: v })} />
                 {u.isComposite ? (
-                  <Select
+                  <Choix
                     size="md"
                     label={t`Prix de ce bien`}
                     allowDeselect={false}
@@ -536,7 +557,7 @@ function AddUnitBox({ open, propertyId, units, onClose }: { open: boolean; prope
   const a = useAction();
   return (
     <Box open={open} onClose={onClose} title={t`Ajouter un bien`}>
-      <p className="lead">{t`Une nouvelle maison, ou un ensemble vendu d'un bloc comme le Domaine entier.`}</p>
+      <p className="lead">{t`Une nouvelle maison, ou un ensemble vendu d'un bloc comme « Les deux maisons du Pré Moré ».`}</p>
       <TextInput size="md" label={t`Nom`} placeholder={t`Par exemple : La Maison C`} value={v.name} onChange={(e) => setV({ ...v, name: e.currentTarget.value })} />
       <div className="grid2" style={{ marginTop: 12 }}>
         <NumberInput size="md" label={t`Personnes, en temps normal`} min={1} value={v.capB} onChange={(x) => setV({ ...v, capB: x })} />

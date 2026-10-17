@@ -177,6 +177,9 @@ export interface WeekendAvailabilityInput {
   now: string;
   /** Horizon de recherche du prochain week-end libre (jours). */
   horizonDays?: number;
+  /** Première arrivée réservable en ligne (délai minimum, demande n° 15).
+   *  Absent = aujourd'hui. */
+  bookableFrom?: IsoDate;
 }
 
 /** Compte les week-ends réellement libres et rédige la phrase associée.
@@ -190,10 +193,13 @@ export function weekendAvailability(input: WeekendAvailabilityInput): Availabili
   const to = twoMonthWindowEnd(today);
   const horizon = addDays(today, input.horizonDays ?? 400);
 
+  const bookableFrom = input.bookableFrom ?? today;
   const freeOn = (friday: IsoDate): boolean =>
-    unitIds.some((id) => isUnitFree(id, friday, addDays(friday, 2), bookings, links, now));
+    friday >= bookableFrom && unitIds.some((id) => isUnitFree(id, friday, addDays(friday, 2), bookings, links, now));
 
-  const inWindow = weekendFridays(today, to);
+  // Un week-end en deçà du délai minimum n'est ni libre ni pris : il sort du
+  // décompte, sinon il ferait baisser le taux de week-ends libres à tort.
+  const inWindow = weekendFridays(today, to).filter((f) => f >= bookableFrom);
   const weekendsTotal = inWindow.length;
   const weekendsFree = inWindow.filter(freeOn).length;
 

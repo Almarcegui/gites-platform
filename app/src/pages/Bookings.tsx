@@ -148,7 +148,6 @@ export function BookingsPage() {
             <thead>
               <tr>
                 <SortTh k="name" sort={sort} onSort={setSort}>{t`Client`}</SortTh>
-                <th scope="col">{t`Réf.`}</th>
                 <th scope="col" className="hide-s">{t`Bien`}</th>
                 <SortTh k="checkin" sort={sort} onSort={setSort}>{t`Séjour`}</SortTh>
                 <SortTh k="submitted" sort={sort} onSort={setSort} className="hide-s">{t`Soumise le`}</SortTh>
@@ -168,9 +167,9 @@ export function BookingsPage() {
                       <button type="button" className="cell-link" onClick={(e) => (e.stopPropagation(), openBooking(b.id))}>
                         {b.guestName || channelName(b)}
                       </button>
+                      <small className="ref-sub">{b.reference}</small>
                       <small className="show-s-inline">{b.unitName}</small>
                     </td>
-                    <td className="ref">{b.reference}</td>
                     <td className="hide-s mc-off">{b.unitName}</td>
                     <td>
                       {stayRange(b.checkin, b.checkout)}

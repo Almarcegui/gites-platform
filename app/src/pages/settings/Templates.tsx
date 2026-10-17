@@ -4,7 +4,7 @@ import { t } from "@lingui/core/macro";
 import { hourLabel, longDate } from "../../lib/dates";
 import { eur } from "../../lib/money";
 import { Trans, useLingui } from "@lingui/react/macro";
-import { NumberInput, Select, Switch, Textarea, TextInput } from "@mantine/core";
+import { NumberInput, Switch, Textarea, TextInput } from "@mantine/core";
 import { IconPlus } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useRef, useState } from "react";
@@ -14,12 +14,20 @@ import { useProperties } from "../../api/hooks";
 import type { MessageTemplate } from "../../api/types";
 import { ErrorLine, useAction } from "../../lib/action";
 import { fillTemplate, templateVariables } from "../../lib/templates";
-import { Confirm, Empty, Loading, Page, Section, SidePanel } from "../../ui/kit";
+import { Confirm, Empty, Loading, Page, Section, SidePanel, useWorkingProperty } from "../../ui/kit";
+import { Choix } from "../../ui/Choix";
 
 const langLabel = (l: MessageTemplate["lang"]): string => (l === "nl" ? t`néerlandais` : l === "en" ? t`anglais` : t`français`);
 
 /** Exemple de remplissage montré sous le texte : le résultat se lit avant l'envoi. */
 const sample = () => ({ firstName: "Claire", unitName: "La Scierie", arrival: longDate("2026-10-17"), checkinTime: hourLabel("16:00"), checkoutTime: hourLabel("10:00"), balance: eur(45000), signature: "Les Gîtes du Pré Moré" });
+
+/** Variables des intros de mails : celles des modèles, plus {reference} et
+ *  {lien} (lien de reprise, relance seulement). Vide = texte d'origine. */
+const introVariables = (): { key: string; label: string }[] => [
+  ...templateVariables(),
+  { key: "reference", label: t`référence de la réservation` },
+];
 
 export function TemplatesPage() {
   const { t } = useLingui();
@@ -32,6 +40,22 @@ export function TemplatesPage() {
       {q.error ? <ErrorLine text={t`Les modèles n'ont pas pu être lus.`} /> : null}
       {q.isLoading ? <Loading /> : null}
       {q.data ? (
+        <>
+        <MailIntroSection
+          mail="confirmation"
+          title={t`Mail de confirmation`}
+          hint={t`L'intro du mail envoyé à la confirmation d'une réservation, en français et en néerlandais. Le reste du mail (séjour, prix, bouton, PDF joint) est automatique. Laissez vide pour le texte d'origine.`}
+        />
+        <MailIntroSection
+          mail="annulation"
+          title={t`Mail d'annulation`}
+          hint={t`L'annonce de l'annulation, en français et en néerlandais. Les lignes légales (article des conditions, remboursement, indemnité) restent automatiques : elles portent les montants exacts. Laissez vide pour le texte d'origine.`}
+        />
+        <MailIntroSection
+          mail="relance"
+          title={t`Relance d'une réservation abandonnée`}
+          hint={t`Le texte du message envoyé une seule fois à un visiteur qui n'a pas achevé sa réservation. Le lien de reprise et la mention « un seul message » restent automatiques. Laissez vide pour le texte d'origine.`}
+        />
         <Section
           title={t`Modèles`}
           tools={
@@ -56,9 +80,102 @@ export function TemplatesPage() {
             </div>
           )}
         </Section>
+        </>
       ) : null}
       {open ? <TemplatePanel template={open === "new" ? null : open} onClose={() => setOpen(null)} /> : null}
     </Page>
+  );
+}
+
+/** Intro d'un mail automatique, par langue : vide = texte d'origine.
+ *  Sauvegardée dans les réglages du domaine (confirmation_intro_fr/_nl,
+ *  cancellation_intro_fr/_nl, abandon_intro_fr), appliquée à l'envoi. */
+function MailIntroSection({ mail, title, hint }: { mail: "confirmation" | "annulation" | "relance"; title: string; hint: string }) {
+  const { t } = useLingui();
+  const { property, picker } = useWorkingProperty();
+  const propertyId = property?.id;
+  const keys =
+    mail === "confirmation"
+      ? { fr: "confirmation_intro_fr", nl: "confirmation_intro_nl" }
+      : mail === "annulation"
+        ? { fr: "cancellation_intro_fr", nl: "cancellation_intro_nl" }
+        : { fr: "abandon_intro_fr", nl: null };
+  const sq = useQuery({
+    queryKey: ["settings", propertyId],
+    enabled: propertyId != null,
+    queryFn: () => api<{ settings: Record<string, string> }>("/settings", { query: { property: propertyId } }),
+  });
+  const s = sq.data?.settings ?? {};
+  const base = { fr: s[keys.fr] ?? "", nl: keys.nl ? (s[keys.nl] ?? "") : "" };
+  const [v, setV] = useState<{ fr: string; nl: string } | null>(null);
+  const form = v ?? base;
+  const a = useAction();
+  const dirty = propertyId != null && (form.fr !== base.fr || form.nl !== base.nl);
+  const area = useRef<HTMLTextAreaElement>(null);
+  const insert = (key: string) => {
+    const el = area.current;
+    const token = `{${key}}`;
+    if (!el) return;
+    const start = el.selectionStart ?? form.fr.length;
+    const end = el.selectionEnd ?? start;
+    setV({ ...form, fr: form.fr.slice(0, start) + token + form.fr.slice(end) });
+    requestAnimationFrame(() => {
+      el.focus();
+      el.setSelectionRange(start + token.length, start + token.length);
+    });
+  };
+  return (
+    <Section title={title} hint={hint} tools={picker}>
+      {sq.error ? <ErrorLine text={t`Les réglages n'ont pas pu être lus.`} /> : null}
+      {propertyId == null ? (
+        <Loading />
+      ) : (
+        <>
+          <div className={keys.nl ? "grid2" : undefined}>
+            <Textarea size="md" autosize minRows={4} label={t`Intro en français`} maxLength={2000} value={form.fr} onChange={(e) => setV({ ...form, fr: e.currentTarget.value })} />
+            {keys.nl ? (
+              <Textarea ref={area} size="md" autosize minRows={4} label={t`Intro en néerlandais`} maxLength={2000} value={form.nl} onChange={(e) => setV({ ...form, nl: e.currentTarget.value })} />
+            ) : null}
+          </div>
+          <p className="tpl" id={`intro-${mail}-vars-l`}>
+            <Trans>Insérer à l'endroit du curseur</Trans>
+          </p>
+          <div className="chips" role="group" aria-labelledby={`intro-${mail}-vars-l`}>
+            {introVariables().map((x) => (
+              <button key={x.key} type="button" className="chip" onClick={() => insert(x.key)} title={x.label}>
+                {`{${x.key}}`} <small style={{ marginLeft: 4 }}>{x.label}</small>
+              </button>
+            ))}
+          </div>
+          <p className="tpl">
+            <Trans>Ce que le client lira (exemple, en français)</Trans>
+          </p>
+          <div className="bub out" style={{ whiteSpace: "pre-wrap" }}>
+            {fillTemplate(form.fr, sample())}
+          </div>
+          <button
+            type="button"
+            className="btn pri"
+            style={{ marginTop: 12 }}
+            disabled={!dirty || a.state.status === "busy"}
+            onClick={() =>
+              a.run(
+                () =>
+                  api("/settings", {
+                    method: "PUT",
+                    query: { property: propertyId },
+                    body: { settings: { [keys.fr]: form.fr, ...(keys.nl ? { [keys.nl]: form.nl } : {}) } },
+                  }),
+                t`C'est fait. Intro enregistrée.`,
+              )
+            }
+          >
+            {a.state.status === "busy" ? t`Un instant…` : t`Enregistrer l'intro`}
+          </button>
+          {a.state.status === "error" ? <ErrorLine text={a.state.text} /> : null}
+        </>
+      )}
+    </Section>
   );
 }
 
@@ -121,8 +238,8 @@ function TemplatePanel({ template, onClose }: { template: MessageTemplate | null
     >
       <TextInput size="md" label={t`Nom du modèle`} description={t`le mot affiché sur la puce, par exemple : Accès et clés`} maxLength={60} value={v.name} onChange={(e) => setV({ ...v, name: e.currentTarget.value })} />
       <div className="grid2" style={{ marginTop: 12 }}>
-        <Select size="md" label={t`Langue`} allowDeselect={false} value={v.lang} onChange={(x) => setV({ ...v, lang: (x as MessageTemplate["lang"]) ?? "fr" })} data={(["fr", "nl", "en"] as const).map((l) => ({ value: l, label: langLabel(l) }))} />
-        <Select size="md" label={t`Pour quels gîtes`} allowDeselect={false} value={v.pid} onChange={(x) => setV({ ...v, pid: x ?? "all" })} data={[{ value: "all", label: t`Tous mes gîtes` }, ...properties.map((p) => ({ value: String(p.id), label: p.name }))]} />
+        <Choix size="md" label={t`Langue`} allowDeselect={false} value={v.lang} onChange={(x) => setV({ ...v, lang: (x as MessageTemplate["lang"]) ?? "fr" })} data={(["fr", "nl", "en"] as const).map((l) => ({ value: l, label: langLabel(l) }))} />
+        <Choix size="md" label={t`Pour quels gîtes`} allowDeselect={false} value={v.pid} onChange={(x) => setV({ ...v, pid: x ?? "all" })} data={[{ value: "all", label: t`Tous mes gîtes` }, ...properties.map((p) => ({ value: String(p.id), label: p.name }))]} />
       </div>
       <Textarea ref={area} mt="md" size="md" autosize minRows={8} label={t`Texte`} maxLength={4000} value={v.body} onChange={(e) => setV({ ...v, body: e.currentTarget.value })} />
       <p className="tpl" id="vars-l">

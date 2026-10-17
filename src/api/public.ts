@@ -6,7 +6,7 @@
 import { apiError, json, readJson, Router } from "./router";
 import { addDays, diffDays, isIsoDate, sqlNow, todayInZone, type IsoDate } from "../core/dates";
 import { blockingSourceUnitIds, blocksAsSpans, isUnitFree } from "../core/availability";
-import { rateCalendar, type UnitPricingInfo } from "../core/pricing";
+import { firstBookableDate, rateCalendar, type UnitPricingInfo } from "../core/pricing";
 import { suggestStays, type NightOption, type StaySuggestion } from "../core/stay-options";
 import {
   audit,
@@ -451,6 +451,9 @@ export function registerPublicRoutes(router: Router): void {
               // La règle des jours d'arrivée était invisible : le tunnel doit
               // pouvoir la DIRE, pas seulement refuser (issue #66).
               checkinDays: q.checkinDays,
+              // Délai minimum de réservation (demande n° 15) : présent quand il
+              // est réglé, pour que le tunnel dise « au plus tard N jours avant ».
+              ...(q.minLeadDays ? { minLeadDays: q.minLeadDays } : {}),
               totalCents: q.totalCents,
               depositCents: q.depositCents,
               depositPct: q.depositPct,
@@ -477,7 +480,9 @@ export function registerPublicRoutes(router: Router): void {
               ctx.rateOverrides,
             ).map((r) => ({
               date: r.date,
-              available: r.date >= today && isUnitFree(u.id, r.date, addDays(r.date, 1), spans, links, now),
+              // Une nuit en deçà du délai minimum ne peut entrer dans aucun
+              // séjour réservable en ligne : elle n'est pas proposée.
+              available: r.date >= firstBookableDate(today, ctx.settings.minLeadDays) && isUnitFree(u.id, r.date, addDays(r.date, 1), spans, links, now),
               minNights: r.minNights,
               checkinDays: r.checkinDays,
             }));
@@ -562,7 +567,7 @@ export function registerPublicRoutes(router: Router): void {
     // Les surcharges par jour entrent ici aussi : sans elles, le calendrier
     // public afficherait le prix de saison tandis que le devis facturerait la
     // surcharge — un écart visible du client, entre l'annonce et le paiement.
-    const [units, links, seasons, rules, overrides, rows, blocks] = await Promise.all([
+    const [units, links, seasons, rules, overrides, rows, blocks, settings] = await Promise.all([
       listUnits(db, property.id),
       listLinks(db, property.id),
       listSeasons(db, property.id),
@@ -570,7 +575,13 @@ export function registerPublicRoutes(router: Router): void {
       listRateOverridesForProperty(db, property.id, from, to),
       bookingsInWindow(db, property.id, from, to),
       manualBlocksInWindow(db, property.id, from, to),
+      getSettings(db, property.id),
     ]);
+    // Délai minimum de réservation (demande n° 15) : les nuits d'avant la
+    // première arrivée réservable sont fermées à la vente en ligne. Elles
+    // s'affichent comme passées (non cliquables), pas comme « complet » :
+    // ce serait faux, elles peuvent être libres.
+    const bookableFrom = firstBookableDate(today, settings.minLeadDays);
     const now = sqlNow();
     const spans = [
       ...rows.map((b) => ({
@@ -606,8 +617,8 @@ export function registerPublicRoutes(router: Router): void {
         isComposite: u.isComposite,
         days: rates.map((r) => ({
           date: r.date,
-          past: r.date < today,
-          available: r.date >= today && isUnitFree(u.id, r.date, addDays(r.date, 1), spans, links, now),
+          past: r.date < bookableFrom,
+          available: r.date >= bookableFrom && isUnitFree(u.id, r.date, addDays(r.date, 1), spans, links, now),
           priceCents: r.priceCents,
           minNights: r.minNights,
           // Jours d'arrivée imposés — invisibles jusqu'ici, donc vécus comme
@@ -616,7 +627,7 @@ export function registerPublicRoutes(router: Router): void {
         })),
       };
     });
-    return json({ property: property.slug, month, from, today, units: out });
+    return json({ property: property.slug, month, from, today, minLeadDays: settings.minLeadDays, bookableFrom, units: out });
   });
 
   // --- offres visibles : remises actives + disponibilité factuelle (#35) -----
@@ -632,17 +643,21 @@ export function registerPublicRoutes(router: Router): void {
     const today = todayInZone();
     const horizon = availabilityHorizon(today);
 
-    const [promotions, units, links, bookings, blocks] = await Promise.all([
+    const [promotions, units, links, bookings, blocks, settings] = await Promise.all([
       listPromotions(db, property.id),
       listUnits(db, property.id),
       listLinks(db, property.id),
       bookingsInWindow(db, property.id, today, horizon),
       manualBlocksInWindow(db, property.id, today, horizon),
+      getSettings(db, property.id),
     ]);
 
     const offers = publicPromotions(promotions, today);
     const availability = weekendAvailability({
       today,
+      // Un week-end en deçà du délai minimum n'est plus réservable en ligne :
+      // l'annoncer « libre » dirait plus que le calendrier (demande n° 15).
+      bookableFrom: firstBookableDate(today, settings.minLeadDays),
       unitIds: units.filter((u) => u.active).map((u) => u.id),
       links,
       bookings: [
@@ -840,6 +855,13 @@ export function registerPublicRoutes(router: Router): void {
       return apiError(400, "code promo invalide ou expiré");
     }
     if (!quote.ok) {
+      if (quote.errors.includes("lead_time")) {
+        return apiError(
+          409,
+          `Réservation en ligne au plus tard ${quote.minLeadDays} jour${(quote.minLeadDays ?? 0) > 1 ? "s" : ""} avant l'arrivée. Contactez-nous : nous verrons si c'est possible.`,
+          { code: "lead_time", details: quote.errors, minLeadDays: quote.minLeadDays, minNights: quote.minNights },
+        );
+      }
       return apiError(409, "séjour impossible à ces conditions", { details: quote.errors, minNights: quote.minNights });
     }
 

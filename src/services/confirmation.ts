@@ -13,6 +13,7 @@
 
 import type { BookingRow, PropertyRow, PropertySettings } from "../db/repo";
 import { nlText } from "../core/public-i18n";
+import { mailIntroLines } from "../core/mail-intro";
 import { CGV_NL_NOTE, formatDateFr, isNl, money, parseQuote, postalAddress, realContact } from "./email";
 
 export interface ConfirmationContext {
@@ -182,12 +183,26 @@ export function buildConfirmationEmail(ctx: ConfirmationContext): ConfirmationMa
   const address = oneLine(postalAddress(property));
   const contact = [oneLine(realContact(property.contactEmail)), oneLine(realContact(property.contactPhone))].filter(Boolean);
 
+  // Intro personnalisable (Réglages › Modèles de réponse) : vide = texte par
+  // défaut. Elle remplace la phrase de confirmation et la mention de la pièce
+  // jointe ; le récapitulatif, le détail du prix, le bouton et le PDF restent
+  // générés. Les variables sont celles des modèles, plus {reference}.
+  const introLines = mailIntroLines(nl ? settings.confirmationIntroNl : settings.confirmationIntroFr, {
+    prenom: name,
+    bien: unit,
+    arrivee: checkin,
+    solde: m(balance),
+    heure_arrivee: settings.checkinTime,
+    heure_depart: settings.checkoutTime,
+    signature: propertyName,
+    reference: b.reference,
+  });
+
   // --- texte ---------------------------------------------------------------------
   const t: string[] = [
     w.hello(name),
     ``,
-    w.confirmed,
-    w.attached(ctx.attachmentName),
+    ...(introLines ?? [w.confirmed, w.attached(ctx.attachmentName)]),
     ``,
     w.recap.toUpperCase(),
     `${w.reference} : ${b.reference}`,
@@ -256,8 +271,7 @@ export function buildConfirmationEmail(ctx: ConfirmationContext): ConfirmationMa
 <tr><td style="background:#1f4533;padding:26px 28px"><div style="font:bold 22px Georgia,'Times New Roman',serif;color:#ffffff">${esc(propertyName)}</div><div style="margin-top:4px;font-size:13px;color:#cfe0d6;letter-spacing:.6px;text-transform:uppercase">${esc(w.title)}</div></td></tr>
 <tr><td style="padding:26px 28px 8px">
 <p style="margin:0 0 10px;font-size:16px;line-height:1.5">${esc(w.hello(name))}</p>
-<p style="margin:0 0 10px;font-size:15px;line-height:1.5"><b>${esc(w.confirmed)}</b></p>
-<p style="margin:0;font-size:14px;line-height:1.5;color:#3d3d38">${esc(w.attached(ctx.attachmentName))}</p>
+${(introLines ?? [w.confirmed, w.attached(ctx.attachmentName)]).map((line, i) => `<p style="margin:0 0 10px;font-size:${i === 0 ? "15px" : "14px"};line-height:1.5${i === 0 ? "" : ";color:#3d3d38"}">${i === 0 && !introLines ? `<b>${esc(line)}</b>` : esc(line)}</p>`).join("")}
 ${section(w.recap, recapRows)}
 ${section(w.priceTitle, priceRows.join(""))}
 <p style="margin:24px 0 10px;font-size:14px;line-height:1.5;color:#3d3d38">${esc(w.buttonHint)}</p>

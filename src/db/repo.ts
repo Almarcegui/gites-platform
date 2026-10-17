@@ -11,6 +11,7 @@ import { addDays, isIsoDate, sqlNow, todayInZone, type IsoDate } from "../core/d
 import type { UnitLink } from "../core/availability";
 import type { GuestIdType, GuestRegisterEntry } from "../core/guest-register";
 import type { OptionDef, Promotion, RateOverride, RateRule, Season, UnitPricingInfo } from "../core/pricing";
+import { normalizeLeadDays } from "../core/pricing";
 import {
   MESSAGE_UNANSWERED_HOURS,
   RATE_HORIZON_DAYS,
@@ -434,6 +435,14 @@ export interface PropertySettings {
   reviewUrl: string;
   /** Texte libre des mails J-7 et J-3 : clés, code, parking, chemin. */
   arrivalInfoText: string;
+  confirmationIntroFr: string;
+  confirmationIntroNl: string;
+  cancellationIntroFr: string;
+  cancellationIntroNl: string;
+  abandonIntroFr: string;
+  /** Délai minimum de réservation en ligne, en jours avant l'arrivée (demande
+   *  n° 15). 0 = aucun. Le back-office peut passer outre, avec avertissement. */
+  minLeadDays: number;
 }
 
 const SETTINGS_DEFAULTS: PropertySettings = {
@@ -454,6 +463,12 @@ const SETTINGS_DEFAULTS: PropertySettings = {
   stayEmailsEnabled: false,
   reviewUrl: "",
   arrivalInfoText: "",
+  confirmationIntroFr: "",
+  confirmationIntroNl: "",
+  cancellationIntroFr: "",
+  cancellationIntroNl: "",
+  abandonIntroFr: "",
+  minLeadDays: 0,
 };
 
 export async function getSettings(db: D1Database, propertyId: number): Promise<PropertySettings> {
@@ -484,6 +499,12 @@ export async function getSettings(db: D1Database, propertyId: number): Promise<P
     stayEmailsEnabled: bool("stay_emails_enabled", D.stayEmailsEnabled),
     reviewUrl: text("review_url", D.reviewUrl),
     arrivalInfoText: text("arrival_info_text", D.arrivalInfoText),
+    confirmationIntroFr: text("confirmation_intro_fr", D.confirmationIntroFr),
+    confirmationIntroNl: text("confirmation_intro_nl", D.confirmationIntroNl),
+    cancellationIntroFr: text("cancellation_intro_fr", D.cancellationIntroFr),
+    cancellationIntroNl: text("cancellation_intro_nl", D.cancellationIntroNl),
+    abandonIntroFr: text("abandon_intro_fr", D.abandonIntroFr),
+    minLeadDays: normalizeLeadDays(kv.get("min_lead_days") ?? D.minLeadDays),
   };
 }
 
@@ -1125,25 +1146,63 @@ export interface GuestRow {
   createdAt: string;
   bookingsCount?: number;
   totalSpentCents?: number;
+  /** Renseignés par `listGuests` seulement (séjours non annulés). */
+  staysCount?: number;
+  /** Noms des hébergements, séparés par « / ». */
+  gites?: string | null;
+  firstCheckin?: string | null;
+  lastCheckin?: string | null;
+  lastCheckout?: string | null;
+  /** Horodatage de création de la réservation du dernier séjour. */
+  lastBookedAt?: string | null;
+  marketingOptIn?: boolean;
+  marketingOptInAt?: string | null;
 }
 
-export async function listGuests(db: D1Database, search?: string): Promise<GuestRow[]> {
+/** Tris de la liste des clients. Liste blanche : la clause ORDER BY n'est
+ *  jamais construite à partir de la saisie. `stay_desc` = séjour le plus récent
+ *  d'abord (les séjours à venir en tête), `stay_asc` = le plus ancien d'abord ;
+ *  les clients sans séjour valide (tout annulé) restent en fin de liste. */
+export const GUEST_SORTS = ["name", "stay_desc", "stay_asc"] as const;
+export type GuestSort = (typeof GUEST_SORTS)[number];
+const GUEST_ORDER: Record<GuestSort, string> = {
+  name: "g.last_name",
+  stay_desc: "last_checkin IS NULL, last_checkin DESC, g.last_name",
+  stay_asc: "last_checkin IS NULL, last_checkin ASC, g.last_name",
+};
+
+/** Clients avec leurs séjours (hors annulés) : hébergements, premier et dernier
+ *  séjour, date de réservation du dernier séjour, consentement marketing. */
+export async function listGuests(db: D1Database, search?: string, sort: GuestSort = "name"): Promise<GuestRow[]> {
+  const live = "b3.guest_id = g.id AND b3.status != 'cancelled'";
+  const lastStay = `SELECT %COL% FROM bookings b3 WHERE ${live} ORDER BY b3.checkin DESC, b3.id DESC LIMIT 1`;
   const base = `
-    SELECT g.*, COUNT(b.id) AS bookings_count, COALESCE(SUM(CASE WHEN b.status != 'cancelled' THEN b.total_cents ELSE 0 END), 0) AS total_spent
+    SELECT g.*, COUNT(b.id) AS bookings_count, COALESCE(SUM(CASE WHEN b.status != 'cancelled' THEN b.total_cents ELSE 0 END), 0) AS total_spent,
+           COUNT(CASE WHEN b.status != 'cancelled' THEN 1 END) AS stays_count,
+           MIN(CASE WHEN b.status != 'cancelled' THEN b.checkin END) AS first_checkin,
+           MAX(CASE WHEN b.status != 'cancelled' THEN b.checkin END) AS last_checkin,
+           (${lastStay.replace("%COL%", "b3.checkout")}) AS last_checkout,
+           (${lastStay.replace("%COL%", "b3.created_at")}) AS last_booked_at,
+           (SELECT GROUP_CONCAT(n, ' / ') FROM (SELECT DISTINCT u3.name AS n FROM bookings b3 JOIN units u3 ON u3.id = b3.unit_id WHERE ${live} ORDER BY u3.name)) AS gites
       FROM guests g LEFT JOIN bookings b ON b.guest_id = g.id`;
+  const order = GUEST_ORDER[sort] ?? GUEST_ORDER.name;
   const core = search ? phoneCore(search) : null;
   const phone = core ? ` OR ${sqlPhoneDigits("g.phone")} LIKE ?2` : "";
   const stmt = search
     ? db
-        .prepare(`${base} WHERE g.last_name LIKE ?1 OR g.first_name LIKE ?1 OR g.email LIKE ?1${phone} GROUP BY g.id ORDER BY g.last_name`)
+        .prepare(`${base} WHERE g.last_name LIKE ?1 OR g.first_name LIKE ?1 OR g.email LIKE ?1${phone} GROUP BY g.id ORDER BY ${order}`)
         .bind(`%${search}%`, ...(core ? [`%${core}%`] : []))
-    : db.prepare(`${base} GROUP BY g.id ORDER BY g.last_name`);
+    : db.prepare(`${base} GROUP BY g.id ORDER BY ${order}`);
   const { results } = await stmt.all();
   return (results as Raw[]).map((r) => ({
     id: num(r.id), email: strOrNull(r.email), firstName: strOrNull(r.first_name), lastName: str(r.last_name),
     phone: strOrNull(r.phone), address: strOrNull(r.address), country: strOrNull(r.country),
     lang: str(r.lang), notes: strOrNull(r.notes), createdAt: str(r.created_at),
     bookingsCount: num(r.bookings_count), totalSpentCents: num(r.total_spent),
+    staysCount: num(r.stays_count), gites: strOrNull(r.gites),
+    firstCheckin: strOrNull(r.first_checkin), lastCheckin: strOrNull(r.last_checkin),
+    lastCheckout: strOrNull(r.last_checkout), lastBookedAt: strOrNull(r.last_booked_at),
+    marketingOptIn: num(r.marketing_opt_in) === 1, marketingOptInAt: strOrNull(r.marketing_opt_in_at),
   }));
 }
 
@@ -1968,12 +2027,16 @@ export async function updateRateRule(db: D1Database, id: number, r: Partial<Rate
          price_weekend_cents = COALESCE(?3, price_weekend_cents),
          holiday_pct = COALESCE(?4, holiday_pct),
          min_nights = COALESCE(?5, min_nights),
-         checkin_days = ?6
+         checkin_days = CASE WHEN ?7 = 1 THEN ?6 ELSE checkin_days END
         WHERE id = ?1`,
     )
     .bind(
       id, r.priceWeekCents ?? null, r.priceWeekendCents ?? null, r.holidayPct ?? null, r.minNights ?? null,
-      r.checkinDays === undefined ? null : r.checkinDays && r.checkinDays.length > 0 ? r.checkinDays.join(",") : null,
+      r.checkinDays && r.checkinDays.length > 0 ? r.checkinDays.join(",") : null,
+      // `checkinDays` absent du PATCH = jours d'arrivée INCHANGÉS. Avant le
+      // 17/10/2026, un PATCH des seuls prix par l'API effaçait la règle en
+      // silence (null écrit d'office). `null` ou [] explicite = aucune contrainte.
+      r.checkinDays === undefined ? 0 : 1,
     )
     .run();
 }

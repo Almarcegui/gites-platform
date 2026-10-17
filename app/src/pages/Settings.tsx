@@ -46,6 +46,7 @@ export function SettingsPage() {
       items: [
         { to: "/reglages/plateformes", label: t`Airbnb, Booking et Vrbo`, hint: t`La liaison avec les plateformes, leurs réservations, leurs prix` },
         { to: "/reglages/plateformes/prix", label: t`Promotions Airbnb et prix par plateforme`, hint: t`Remises long séjour, réservation tôt, dernière minute ; un prix propre à chaque plateforme` },
+        { to: "/reglages/shortcode", label: t`Shortcode WordPress`, hint: t`Le moteur de réservation à intégrer dans une page WordPress, avec ses options` },
         { to: "/reglages/calendriers", label: t`Calendriers reliés`, hint: t`Adresses à donner aux autres sites, calendriers à lire` },
         { to: "/avis", label: t`Avis`, hint: t`La note Airbnb et Booking, les avis qui attendent une réponse` },
       ],

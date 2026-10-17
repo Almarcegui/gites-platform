@@ -644,8 +644,8 @@ msgstr "{0}, nouveaux voyageurs le jour même"
 
 #. placeholder {0}: property.name
 #: src/pages/settings/Stats.tsx
-msgid "{0}. Seules les réservations confirmées comptent ; une réservation du Domaine entier occupe ses deux maisons."
-msgstr "{0}. Seules les réservations confirmées comptent ; une réservation du Domaine entier occupe ses deux maisons."
+msgid "{0}. Seules les réservations confirmées comptent ; une réservation des deux maisons ensemble les occupe toutes les deux."
+msgstr "{0}. Seules les réservations confirmées comptent ; une réservation des deux maisons ensemble les occupe toutes les deux."
 
 #. placeholder {0}: occ(overviews[0]!).d >= 0 ? "+" : ""
 #. placeholder {1}: fr1(occ(overviews[0]!).d)
@@ -678,6 +678,10 @@ msgstr "{dueCount} dossiers"
 #: src/calendar/Weeks.tsx
 msgid "{free} nuits libres"
 msgstr "{free} nuits libres"
+
+#: src/pages/settings/Shortcode.tsx
+msgid "{label} copié."
+msgstr "{label} copié."
 
 #: src/pages/settings/Tarifs.tsx
 msgid "{missing} nuits sans prix en {year} : elles ne se vendent pas."
@@ -793,6 +797,10 @@ msgstr "− {0} %"
 msgid "− {LAST_MINUTE_PCT} % sur chacune de ces nuits libres, par exemple {0} → {1}. Au-delà, vous vendriez moins cher que votre prix de base. Les nuits déjà vendues ne bougent pas."
 msgstr "− {LAST_MINUTE_PCT} % sur chacune de ces nuits libres, par exemple {0} → {1}. Au-delà, vous vendriez moins cher que votre prix de base. Les nuits déjà vendues ne bougent pas."
 
+#: src/pages/settings/Domain.tsx
+msgid "0 = on peut réserver sur le site jusqu'au jour même"
+msgstr "0 = on peut réserver sur le site jusqu'au jour même"
+
 #: src/pages/settings/Options.tsx
 msgid "1 = en premier sur le site"
 msgstr "1 = en premier sur le site"
@@ -886,8 +894,8 @@ msgid "À cocher pour un agenda tenu à la main qui bloque aussi le jour du dép
 msgstr "À cocher pour un agenda tenu à la main qui bloque aussi le jour du départ (du 22 au 26 = départ le 26). Airbnb, Booking et Beds24 laissent le jour du départ libre : pour eux, ne pas cocher."
 
 #: src/pages/settings/Ical.tsx
-msgid "À coller dans Airbnb (« Importer un calendrier ») ou ailleurs. Si le Domaine entier est réservé, les deux maisons y apparaissent prises."
-msgstr "À coller dans Airbnb (« Importer un calendrier ») ou ailleurs. Si le Domaine entier est réservé, les deux maisons y apparaissent prises."
+msgid "À coller dans Airbnb (« Importer un calendrier ») ou ailleurs. Si les deux maisons sont réservées ensemble, chacune y apparaît prise."
+msgstr "À coller dans Airbnb (« Importer un calendrier ») ou ailleurs. Si les deux maisons sont réservées ensemble, chacune y apparaît prise."
 
 #: src/pages/settings/Beds24Property.tsx
 msgid "À compléter dans Beds24"
@@ -952,6 +960,10 @@ msgstr "À répondre ({0})"
 msgid "à trancher"
 msgstr "à trancher"
 
+#: src/pages/settings/Shortcode.tsx
+msgid "À utiliser dans une page ou un article WordPress, une fois la fonction PHP collée dans le thème (voir la doc)."
+msgstr "À utiliser dans une page ou un article WordPress, une fois la fonction PHP collée dans le thème (voir la doc)."
+
 #: src/pages/Bookings.tsx
 msgid "À venir"
 msgstr "À venir"
@@ -1009,6 +1021,7 @@ msgstr "active"
 #: src/pages/settings/Clients.tsx
 #: src/pages/settings/Domain.tsx
 #: src/pages/settings/Improvements.tsx
+#: src/pages/settings/Shortcode.tsx
 msgid "Adresse"
 msgstr "Adresse"
 
@@ -1943,6 +1956,10 @@ msgstr "C'est fait. Fiche client enregistrée."
 msgid "C'est fait. Fichier {filename} téléchargé."
 msgstr "C'est fait. Fichier {filename} téléchargé."
 
+#: src/pages/settings/Templates.tsx
+msgid "C'est fait. Intro enregistrée."
+msgstr "C'est fait. Intro enregistrée."
+
 #: src/pages/settings/Tarifs.tsx
 msgid "C'est fait. La saison la plus courte l'emporte désormais."
 msgstr "C'est fait. La saison la plus courte l'emporte désormais."
@@ -2293,6 +2310,10 @@ msgstr "Ce qu'il faut régler avant et pendant le lancement. « Fait » : la dé
 #: src/pages/settings/Channels.tsx
 msgid "Ce qu'une plateforme annonce et que nous n'avons pas pu reprendre : ces dates restent en vente d'un côté et prises de l'autre. Un désaccord disparaît tout seul quand la liaison ne le revoit plus."
 msgstr "Ce qu'une plateforme annonce et que nous n'avons pas pu reprendre : ces dates restent en vente d'un côté et prises de l'autre. Un désaccord disparaît tout seul quand la liaison ne le revoit plus."
+
+#: src/pages/settings/Templates.tsx
+msgid "Ce que le client lira (exemple, en français)"
+msgstr "Ce que le client lira (exemple, en français)"
 
 #: src/pages/settings/Templates.tsx
 msgid "Ce que le client lira (exemple)"
@@ -3005,6 +3026,10 @@ msgstr "Dates bloquées"
 msgid "Dates cherchées sans réponse"
 msgstr "Dates cherchées sans réponse"
 
+#: src/pages/settings/Shortcode.tsx
+msgid "Dates d'arrivée et de départ proposées d'avance (AAAA-MM-JJ)."
+msgstr "Dates d'arrivée et de départ proposées d'avance (AAAA-MM-JJ)."
+
 #: src/pages/settings/Import.tsx
 msgid "dates déjà prises"
 msgstr "dates déjà prises"
@@ -3033,6 +3058,10 @@ msgstr "déjà là"
 #: src/booking/BookingPanel.tsx
 msgid "Déjà payé"
 msgstr "Déjà payé"
+
+#: src/pages/settings/Domain.tsx
+msgid "Délai minimum de réservation (jours)"
+msgstr "Délai minimum de réservation (jours)"
 
 #: src/pages/settings/Startup.tsx
 msgid "Démarche"
@@ -3070,6 +3099,10 @@ msgstr "Déplier le menu"
 #: src/shell/Shell.tsx
 msgid "Déplier le menu ({keys})"
 msgstr "Déplier le menu ({keys})"
+
+#: src/pages/settings/Clients.tsx
+msgid "Dernier séjour"
+msgstr "Dernier séjour"
 
 #: src/pages/settings/ServiceKeys.tsx
 msgid "Dernier usage"
@@ -3337,6 +3370,10 @@ msgstr "Elles apparaîtront ici, dans le calendrier et dans Réservations dès q
 msgid "Elles s'appliquent à toutes les annonces Airbnb de ce domaine, par Beds24, dès réception."
 msgstr "Elles s'appliquent à toutes les annonces Airbnb de ce domaine, par Beds24, dès réception."
 
+#: src/pages/settings/Shortcode.tsx
+msgid "Elles se collent dans le shortcode, séparées par des espaces : [gites_reservation option=\"valeur\"]."
+msgstr "Elles se collent dans le shortcode, séparées par des espaces : [gites_reservation option=\"valeur\"]."
+
 #. placeholder {0}: year - 1
 #: src/pages/settings/Stats.tsx
 msgid "En {0}"
@@ -3463,6 +3500,10 @@ msgstr "Enregistrer"
 #: src/pages/settings/Channels.tsx
 msgid "Enregistrer et envoyer"
 msgstr "Enregistrer et envoyer"
+
+#: src/pages/settings/Templates.tsx
+msgid "Enregistrer l'intro"
+msgstr "Enregistrer l'intro"
 
 #: src/pages/settings/Domain.tsx
 msgid "Enregistrer l'ordre et les textes"
@@ -3628,6 +3669,7 @@ msgid "Exemple"
 msgstr "Exemple"
 
 #: src/pages/Bookings.tsx
+#: src/pages/settings/Clients.tsx
 msgid "Exporter"
 msgstr "Exporter"
 
@@ -3776,6 +3818,10 @@ msgstr "Frais Stripe"
 msgid "français"
 msgstr "français"
 
+#: src/pages/settings/Shortcode.tsx
+msgid "Français"
+msgstr "Français"
+
 #: src/pages/settings/Tarifs.tsx
 msgid "garde son prix de base."
 msgstr "garde son prix de base."
@@ -3795,6 +3841,10 @@ msgstr "Garder la saison"
 #: src/pages/Login.tsx
 msgid "Gestion des gîtes"
 msgstr "Gestion des gîtes"
+
+#: src/pages/settings/Clients.tsx
+msgid "Gîte"
+msgstr "Gîte"
 
 #: src/pages/settings/Domain.tsx
 msgid "Glissez des photos ici"
@@ -3930,6 +3980,14 @@ msgstr "Inscrire les voyageurs — {0}"
 msgid "Insérer à l'endroit du curseur"
 msgstr "Insérer à l'endroit du curseur"
 
+#: src/pages/settings/Templates.tsx
+msgid "Intro en français"
+msgstr "Intro en français"
+
+#: src/pages/settings/Templates.tsx
+msgid "Intro en néerlandais"
+msgstr "Intro en néerlandais"
+
 #: src/pages/settings/ServiceKeys.tsx
 msgid "J'ai copié la clé"
 msgstr "J'ai copié la clé"
@@ -4016,6 +4074,10 @@ msgstr "Julien : l'écran, les prix, les accès, Airbnb, Booking et Beds24."
 msgid "jusqu'au {0}"
 msgstr "jusqu'au {0}"
 
+#: src/pages/settings/Shortcode.tsx
+msgid "L'adresse du tunnel"
+msgstr "L'adresse du tunnel"
+
 #: src/pages/settings/Ical.tsx
 msgid "L'adresse n'a pas pu être copiée : sélectionnez-la et copiez-la à la main."
 msgstr "L'adresse n'a pas pu être copiée : sélectionnez-la et copiez-la à la main."
@@ -4040,6 +4102,10 @@ msgstr "L'année {year}"
 #: src/pages/settings/Tarifs.tsx
 msgid "L'année n'a pas pu être lue."
 msgstr "L'année n'a pas pu être lue."
+
+#: src/pages/settings/Templates.tsx
+msgid "L'annonce de l'annulation, en français et en néerlandais. Les lignes légales (article des conditions, remboursement, indemnité) restent automatiques : elles portent les montants exacts. Laissez vide pour le texte d'origine."
+msgstr "L'annonce de l'annulation, en français et en néerlandais. Les lignes légales (article des conditions, remboursement, indemnité) restent automatiques : elles portent les montants exacts. Laissez vide pour le texte d'origine."
 
 #: src/sale/SaleFlow.tsx
 msgid "L'arrivée est dans le passé."
@@ -4073,6 +4139,10 @@ msgstr "L'exploitant"
 msgid "L'export n'a pas pu être préparé."
 msgstr "L'export n'a pas pu être préparé."
 
+#: src/pages/settings/Shortcode.tsx
+msgid "L'hébergement présélectionné quand il y en a plusieurs."
+msgstr "L'hébergement présélectionné quand il y en a plusieurs."
+
 #: src/pages/settings/ClientHistory.tsx
 msgid "L'historique n'a pas pu être lu. Fermez la fiche et réessayez."
 msgstr "L'historique n'a pas pu être lu. Fermez la fiche et réessayez."
@@ -4080,6 +4150,10 @@ msgstr "L'historique n'a pas pu être lu. Fermez la fiche et réessayez."
 #: src/pages/settings/Beds24Property.tsx
 msgid "L'identifiant enregistré n'existe pas dans ce compte (ancien compte résilié) : les calendriers ne partent nulle part tant que la propriété n'est pas recréée."
 msgstr "L'identifiant enregistré n'existe pas dans ce compte (ancien compte résilié) : les calendriers ne partent nulle part tant que la propriété n'est pas recréée."
+
+#: src/pages/settings/Templates.tsx
+msgid "L'intro du mail envoyé à la confirmation d'une réservation, en français et en néerlandais. Le reste du mail (séjour, prix, bouton, PDF joint) est automatique. Laissez vide pour le texte d'origine."
+msgstr "L'intro du mail envoyé à la confirmation d'une réservation, en français et en néerlandais. Le reste du mail (séjour, prix, bouton, PDF joint) est automatique. Laissez vide pour le texte d'origine."
 
 #: src/pages/settings/Domain.tsx
 msgid "L'ordre de la liste est l'ordre sur le site ; la première photo affichée sert de vignette. Le texte décrit la photo pour qui ne la voit pas : il est obligatoire."
@@ -4114,9 +4188,17 @@ msgstr "La fiche n'a pas pu être lue. Fermez-la et réessayez."
 msgid "La fin doit venir après le début."
 msgstr "La fin doit venir après le début."
 
+#: src/pages/settings/Shortcode.tsx
+msgid "La hauteur de l'iframe en pixels (1400 par défaut). À agrandir si le tunnel déborde."
+msgstr "La hauteur de l'iframe en pixels (1400 par défaut). À agrandir si le tunnel déborde."
+
 #: src/pages/Today.tsx
 msgid "La journée"
 msgstr "La journée"
+
+#: src/pages/settings/Shortcode.tsx
+msgid "La langue du tunnel : fr ou nl. Sans elle, la langue de l'appareil du visiteur."
+msgstr "La langue du tunnel : fr ou nl. Sans elle, la langue de l'appareil du visiteur."
 
 #: src/pages/settings/ChannelPrices.tsx
 msgid "La liaison avec Beds24 n'est pas en place : rétablissez-la d'abord sur l'écran Plateformes."
@@ -4230,6 +4312,10 @@ msgstr "Langue"
 msgid "Langue de l'écran"
 msgstr "Langue de l'écran"
 
+#: src/pages/settings/Shortcode.tsx
+msgid "Langue du tunnel"
+msgstr "Langue du tunnel"
+
 #: src/pages/settings/Improvements.tsx
 msgid "Largeur d'écran"
 msgstr "Largeur d'écran"
@@ -4308,6 +4394,10 @@ msgstr "Le code d'invitation ne semble pas autoriser l'écriture des propriété
 msgid "Le code n'a pas été accepté ({0}) Vérifiez qu'il est complet et qu'il n'a pas déjà servi, ou créez-en un nouveau."
 msgstr "Le code n'a pas été accepté ({0}) Vérifiez qu'il est complet et qu'il n'a pas déjà servi, ou créez-en un nouveau."
 
+#: src/pages/settings/Shortcode.tsx
+msgid "Le code n'a pas pu être copié : sélectionnez-le et copiez-le à la main."
+msgstr "Le code n'a pas pu être copié : sélectionnez-le et copiez-le à la main."
+
 #: src/pages/settings/Channels.tsx
 msgid "Le code ne sert qu'une fois : il est échangé contre un accès durable, gardé par le serveur. Il n'y a rien d'autre à faire."
 msgstr "Le code ne sert qu'une fois : il est échangé contre un accès durable, gardé par le serveur. Il n'y a rien d'autre à faire."
@@ -4334,6 +4424,11 @@ msgstr "Le domaine"
 #: src/pages/settings/Domain.tsx
 msgid "Le domaine et les biens"
 msgstr "Le domaine et les biens"
+
+#. placeholder {0}: property?.name ?? "—"
+#: src/pages/settings/Shortcode.tsx
+msgid "Le domaine qui reçoit la réservation (ici : {0})."
+msgstr "Le domaine qui reçoit la réservation (ici : {0})."
 
 #: src/pages/Messages.tsx
 msgid "Le fil de la conversation n'a pas pu être lu. Rechargez la page avant de répondre."
@@ -4396,6 +4491,14 @@ msgstr "Le mois en chiffres"
 msgid "le mot affiché sur la puce, par exemple : Accès et clés"
 msgstr "le mot affiché sur la puce, par exemple : Accès et clés"
 
+#: src/pages/Settings.tsx
+msgid "Le moteur de réservation à intégrer dans une page WordPress, avec ses options"
+msgstr "Le moteur de réservation à intégrer dans une page WordPress, avec ses options"
+
+#: src/pages/settings/Shortcode.tsx
+msgid "Le moteur de réservation de votre site, à intégrer dans une page WordPress. Copiez le code ci-dessous ; la marche à suivre complète est dans docs/integration-wordpress.md."
+msgstr "Le moteur de réservation de votre site, à intégrer dans une page WordPress. Copiez le code ci-dessous ; la marche à suivre complète est dans docs/integration-wordpress.md."
+
 #: src/sale/SaleFlow.tsx
 msgid "Le nom du client est nécessaire."
 msgstr "Le nom du client est nécessaire."
@@ -4455,6 +4558,10 @@ msgstr "Le réserver bloque aussi"
 msgid "Le serveur n'a pas pu le faire. Rien n'a été changé ; réessayez dans un instant."
 msgstr "Le serveur n'a pas pu le faire. Rien n'a été changé ; réessayez dans un instant."
 
+#: src/pages/settings/Shortcode.tsx
+msgid "Le shortcode"
+msgstr "Le shortcode"
+
 #. placeholder {0}: longDate(o.balanceDueDate)
 #: src/pages/Today.tsx
 msgid "Le solde était attendu le {0}."
@@ -4463,6 +4570,10 @@ msgstr "Le solde était attendu le {0}."
 #: src/pages/settings/Import.tsx
 msgid "Le test ne change rien. L'import n'est possible qu'après un test du même texte."
 msgstr "Le test ne change rien. L'import n'est possible qu'après un test du même texte."
+
+#: src/pages/settings/Templates.tsx
+msgid "Le texte du message envoyé une seule fois à un visiteur qui n'a pas achevé sa réservation. Le lien de reprise et la mention « un seul message » restent automatiques. Laissez vide pour le texte d'origine."
+msgstr "Le texte du message envoyé une seule fois à un visiteur qui n'a pas achevé sa réservation. Le lien de reprise et la mention « un seul message » restent automatiques. Laissez vide pour le texte d'origine."
 
 #: src/pages/settings/Tarifs.tsx
 msgid "Le week-end, ce sont les nuits du vendredi et du samedi. Les jours fériés belges, leurs veilles et les ponts sont majorés tout seuls du pourcentage choisi."
@@ -4616,6 +4727,10 @@ msgstr "Les modèles n'ont pas pu être lus."
 msgid "Les modèles n'ont pas pu être lus. Vous pouvez écrire sans."
 msgstr "Les modèles n'ont pas pu être lus. Vous pouvez écrire sans."
 
+#: src/pages/settings/Shortcode.tsx
+msgid "Les options"
+msgstr "Les options"
+
 #: src/pages/settings/Options.tsx
 msgid "Les options n'ont pas pu être lues."
 msgstr "Les options n'ont pas pu être lues."
@@ -4627,6 +4742,10 @@ msgstr "Les options non payées se libèrent toutes seules à la fin du délai."
 #: src/pages/settings/Payments.tsx
 msgid "Les paiements n'ont pas pu être lus."
 msgstr "Les paiements n'ont pas pu être lus."
+
+#: src/pages/settings/ChannelPrices.tsx
+msgid "Les paliers 7, 14 et 28 nuits sont ceux d'Airbnb : Beds24 n'en transmet pas d'autres. Pour une remise dès 5 nuits sur votre site, voyez"
+msgstr "Les paliers 7, 14 et 28 nuits sont ceux d'Airbnb : Beds24 n'en transmet pas d'autres. Pour une remise dès 5 nuits sur votre site, voyez"
 
 #: src/pages/settings/Domain.tsx
 msgid "Les photos n'ont pas pu être lues."
@@ -4673,6 +4792,7 @@ msgid "Les promotions Airbnb n'ont pas pu être lues."
 msgstr "Les promotions Airbnb n'ont pas pu être lues."
 
 #: src/pages/settings/Domain.tsx
+#: src/pages/settings/Templates.tsx
 msgid "Les réglages n'ont pas pu être lus."
 msgstr "Les réglages n'ont pas pu être lus."
 
@@ -4846,6 +4966,14 @@ msgstr "mail"
 #: src/sale/SaleFlow.tsx
 msgid "Mail"
 msgstr "Mail"
+
+#: src/pages/settings/Templates.tsx
+msgid "Mail d'annulation"
+msgstr "Mail d'annulation"
+
+#: src/pages/settings/Templates.tsx
+msgid "Mail de confirmation"
+msgstr "Mail de confirmation"
 
 #: src/pages/settings/Domain.tsx
 msgid "Mail de contact"
@@ -5183,6 +5311,10 @@ msgstr "né(e) le {0}, {1}, {2} {3}"
 msgid "néerlandais"
 msgstr "néerlandais"
 
+#: src/pages/settings/Shortcode.tsx
+msgid "Néerlandais"
+msgstr "Néerlandais"
+
 #: src/pages/settings/Encaissements.tsx
 msgid "Net"
 msgstr "Net"
@@ -5237,6 +5369,10 @@ msgstr "Nom, mail, téléphone ou référence"
 #: src/pages/settings/Stats.tsx
 msgid "Nombre"
 msgstr "Nombre"
+
+#: src/pages/settings/Shortcode.tsx
+msgid "Nombre d'adultes et d'enfants proposés d'avance."
+msgstr "Nombre d'adultes et d'enfants proposés d'avance."
 
 #: src/pages/settings/Promotions.tsx
 msgid "Nombre d'utilisations au plus"
@@ -5692,6 +5828,10 @@ msgstr "Par exemple : Panier petit-déjeuner"
 msgid "par exemple : panier, séance"
 msgstr "par exemple : panier, séance"
 
+#: src/pages/settings/Clients.tsx
+msgid "Par nom"
+msgstr "Par nom"
+
 #: src/pages/settings/Options.tsx
 msgid "par nuit"
 msgstr "par nuit"
@@ -6023,6 +6163,10 @@ msgstr "Pour qui"
 #: src/pages/settings/Logs.tsx
 msgid "Pour retrouver qui a fait quoi, et ce qui a été écrit aux clients."
 msgstr "Pour retrouver qui a fait quoi, et ce qui a été écrit aux clients."
+
+#: src/pages/settings/Shortcode.tsx
+msgid "Pour un bloc HTML WordPress sans PHP, ou tout autre site : cette adresse s'incruste dans une iframe. Elle accepte les mêmes options."
+msgstr "Pour un bloc HTML WordPress sans PHP, ou tout autre site : cette adresse s'incruste dans une iframe. Elle accepte les mêmes options."
 
 #: src/pages/settings/Domain.tsx
 msgid "Pour un fichier déjà sur le site (dossier des images, préparé par le script d'optimisation)."
@@ -6407,7 +6551,6 @@ msgstr "Reçus ({0})"
 msgid "Réel (vrais paiements)"
 msgstr "Réel (vrais paiements)"
 
-#: src/pages/Bookings.tsx
 #: src/pages/settings/Channels.tsx
 msgid "Réf."
 msgstr "Réf."
@@ -6415,6 +6558,10 @@ msgstr "Réf."
 #: src/booking/BookingPanel.tsx
 msgid "Référence"
 msgstr "Référence"
+
+#: src/pages/settings/Templates.tsx
+msgid "référence de la réservation"
+msgstr "référence de la réservation"
 
 #: src/booking/BookingPanel.tsx
 msgid "registre"
@@ -6459,6 +6606,10 @@ msgstr "réglés"
 #: src/pages/settings/ClientHistory.tsx
 msgid "Relance : réservation commencée"
 msgstr "Relance : réservation commencée"
+
+#: src/pages/settings/Templates.tsx
+msgid "Relance d'une réservation abandonnée"
+msgstr "Relance d'une réservation abandonnée"
 
 #: src/pages/settings/Encaissements.tsx
 msgid "Relever les frais manquants ({unknown})"
@@ -6556,6 +6707,7 @@ msgid "Remises automatiques"
 msgstr "Remises automatiques"
 
 #: src/pages/Settings.tsx
+#: src/pages/settings/ChannelPrices.tsx
 #: src/pages/settings/Promotions.tsx
 msgid "Remises et codes promo"
 msgstr "Remises et codes promo"
@@ -6742,6 +6894,15 @@ msgstr "Réservé et payé"
 #: src/pages/Today.tsx
 msgid "Réservé et payé sur {0}."
 msgstr "Réservé et payé sur {0}."
+
+#: src/pages/settings/Clients.tsx
+msgid "Réservé le"
+msgstr "Réservé le"
+
+#. placeholder {0}: dayWithYear(g.lastBookedAt)
+#: src/pages/settings/Clients.tsx
+msgid "réservé le {0}"
+msgstr "réservé le {0}"
 
 #: src/pages/Today.tsx
 msgid "Réservé par téléphone."
@@ -7046,6 +7207,14 @@ msgstr "Séjour cherché"
 msgid "Séjour entier"
 msgstr "Séjour entier"
 
+#: src/pages/settings/Clients.tsx
+msgid "Séjour le plus ancien"
+msgstr "Séjour le plus ancien"
+
+#: src/pages/settings/Clients.tsx
+msgid "Séjour le plus récent"
+msgstr "Séjour le plus récent"
+
 #: src/booking/BookingPanel.tsx
 #: src/pages/settings/Logs.tsx
 msgid "séjour modifié"
@@ -7095,6 +7264,15 @@ msgstr "Ses prix disparaissent pour tous les biens ; ces jours-là reviennent au
 #: src/pages/settings/Domain.tsx
 msgid "Ses propres prix"
 msgstr "Ses propres prix"
+
+#: src/pages/settings/Shortcode.tsx
+msgid "Shortcode"
+msgstr "Shortcode"
+
+#: src/pages/Settings.tsx
+#: src/pages/settings/Shortcode.tsx
+msgid "Shortcode WordPress"
+msgstr "Shortcode WordPress"
 
 #: src/pages/settings/Help.tsx
 msgid "Si une bande rouge apparaît en haut d'Aujourd'hui, quelque chose ne passe plus : lisez-la, elle dit quoi faire."
@@ -7242,6 +7420,15 @@ msgstr "Sur"
 #: src/booking/BookingPanel.tsx
 msgid "sur {0}"
 msgstr "sur {0}"
+
+#. placeholder {0}: Number(f.set.min_lead_days)
+#: src/pages/settings/Domain.tsx
+msgid "sur le site, une arrivée se réserve au plus tard {0} jours avant. Vous pouvez passer outre en vente manuelle."
+msgstr "sur le site, une arrivée se réserve au plus tard {0} jours avant. Vous pouvez passer outre en vente manuelle."
+
+#: src/pages/settings/Domain.tsx
+msgid "sur le site, une arrivée se réserve au plus tard la veille. Vous pouvez passer outre en vente manuelle."
+msgstr "sur le site, une arrivée se réserve au plus tard la veille. Vous pouvez passer outre en vente manuelle."
 
 #: src/pages/settings/StripeAccounts.tsx
 msgid "Tableau de bord Stripe, Développeurs, Webhooks, Ajouter un point de terminaison. Collez cette adresse, cochez ces événements, puis copiez le « secret de signature » (whsec_…) dans le champ ci-dessus."
@@ -7470,6 +7657,10 @@ msgstr "Toutes les plateformes recevront de nouveau le même prix. Les calendrie
 msgid "Toutes les réservations"
 msgstr "Toutes les réservations"
 
+#: src/pages/settings/Clients.tsx
+msgid "Trier les clients"
+msgstr "Trier les clients"
+
 #: src/pages/settings/Improvements.tsx
 msgid "Trier par"
 msgstr "Trier par"
@@ -7605,8 +7796,8 @@ msgid "Une maison est prise"
 msgstr "Une maison est prise"
 
 #: src/pages/settings/Domain.tsx
-msgid "Une nouvelle maison, ou un ensemble vendu d'un bloc comme le Domaine entier."
-msgstr "Une nouvelle maison, ou un ensemble vendu d'un bloc comme le Domaine entier."
+msgid "Une nouvelle maison, ou un ensemble vendu d'un bloc comme « Les deux maisons du Pré Moré »."
+msgstr "Une nouvelle maison, ou un ensemble vendu d'un bloc comme « Les deux maisons du Pré Moré »."
 
 #. placeholder {0}: eur(s.exampleDirectCents)
 #: src/pages/settings/ChannelPrices.tsx

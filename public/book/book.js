@@ -369,15 +369,20 @@ async function renderCalendar() {
   $("calGrid").querySelectorAll(".pday[data-date]").forEach((cell) => {
     cell.addEventListener("click", () => onDayClick(cell.dataset.date, cell));
   });
-  renderCalRules(days);
+  renderCalRules(days, data.minLeadDays);
 }
 
 /** Règles de séjour du mois affiché, regroupées par période contiguë (#66).
  *  « Séjour minimum : 7 nuits du 01/07 au 31/07 » — la règle existe depuis
  *  toujours côté moteur ; elle n'était écrite nulle part. */
-function renderCalRules(days) {
+function renderCalRules(days, minLeadDays = 0) {
   const zone = $("calRules");
   if (!zone) return;
+  // Délai minimum de réservation (demande n° 15) : les jours trop proches sont
+  // grisés comme des jours passés — la règle doit être écrite, pas devinée.
+  const lead = minLeadDays > 0
+    ? `<span class="rule">${esc(t("Réservation en ligne au plus tard {jours} avant l'arrivée", { jours: pl(minLeadDays, "jour", "jours") }))}</span>`
+    : "";
   const segments = [];
   for (const d of days) {
     if (d.past || !d.available || d.minNights == null) continue;
@@ -388,11 +393,11 @@ function renderCalRules(days) {
   }
   const notable = segments.filter((s) => s.minNights > 1 || s.arrivalDays != null);
   if (notable.length === 0) {
-    zone.innerHTML = "";
+    zone.innerHTML = lead;
     return;
   }
   const period = (s) => (s.from === s.to ? t("le {date}", { date: dfr(s.from) }) : t("du {du} au {au}", { du: dfr(s.from), au: dfr(s.to) }));
-  zone.innerHTML = notable
+  zone.innerHTML = (lead ? lead + " · " : "") + notable
     .map((s) => {
       const parts = [];
       if (s.minNights > 1) parts.push(`<b>${t("{n} nuits minimum", { n: s.minNights })}</b>`);
@@ -486,6 +491,9 @@ function unavailableReason(u, nights, units = []) {
     return jours
       ? t("Arrivée possible uniquement {jours} à ces dates", { jours })
       : t("Aucun jour d'arrivée n'est autorisé à ces dates");
+  }
+  if (q && !q.ok && q.errors.includes("lead_time")) {
+    return t("Réservation en ligne au plus tard {jours} avant l'arrivée", { jours: pl(q.minLeadDays, "jour", "jours") });
   }
   if (q && !q.ok && q.errors.includes("no_rate")) return t("Tarifs pas encore publiés pour ces dates");
   if (q && !q.ok) return t("Non réservable en ligne sur ces dates");
@@ -739,6 +747,7 @@ async function openBookingPanel(unitId) {
           <div class="paybox">
             <h4>💳 ${t("Paiement sécurisé")} <span class="badge-secure">Stripe</span></h4>
             <fieldset class="paychoices"><legend class="sr-only">${t("Montant à payer maintenant")}</legend>${payChoices.join("")}</fieldset>
+            <p id="payNote" class="pay-note small" aria-live="polite"></p>
             <div class="cards">${t("Bancontact · Visa · Mastercard — aucun montant n'est débité sans confirmation.")}</div>
           </div>
           <div class="agree"><label class="small" id="cgvLabel"><input type="checkbox" id="gCgv" aria-describedby="cgvMsg"> ${t('J\'accepte les <a href="#" id="cgvLink">conditions générales</a> *')}</label>
@@ -833,6 +842,9 @@ function collectOptions() {
   return [...numbers, ...toggles].filter((o) => o.qty > 0);
 }
 
+/** Vrai quand c'est le tunnel, pas le visiteur, qui a basculé sur « Totalité ». */
+let autoFull = false;
+
 function payButtonRefresh() {
   if (!SELECTED) return;
   const ok = QUOTE?.ok === true;
@@ -843,12 +855,41 @@ function payButtonRefresh() {
   $("bPay").disabled = !ok;
   $("mbPay").disabled = !ok;
   if (!ok) return;
+  // Arrivée à moins de `balanceDueDays` jours : l'échéance du solde est déjà
+  // passée, le moteur exige la totalité (balanceDueDate = null). Le choix
+  // « Arrhes » restait coché alors que le bouton annonçait la totalité : on le
+  // grise, on bascule sur « Totalité » et on dit pourquoi. Si le visiteur
+  // repart sur des dates lointaines, on lui rend les arrhes par défaut.
+  const forcedFull = QUOTE.balanceDueDate == null;
+  const depositRadio = document.querySelector('input[name="payMode"][value="deposit"]');
+  const fullRadio = document.querySelector('input[name="payMode"][value="full"]');
+  if (depositRadio) {
+    const lock = forcedFull && !!fullRadio;
+    depositRadio.disabled = lock;
+    depositRadio.closest("label")?.classList.toggle("off", lock);
+    if (forcedFull && depositRadio.checked && fullRadio) {
+      fullRadio.checked = true;
+      autoFull = true;
+    } else if (!forcedFull && autoFull) {
+      depositRadio.checked = true;
+      autoFull = false;
+    }
+  }
   const mode = document.querySelector('input[name="payMode"]:checked')?.value;
-  const amount = mode === "full" || QUOTE.balanceDueDate == null ? QUOTE.totalCents : QUOTE.depositCents;
+  const full = mode === "full" || forcedFull;
+  const amount = full ? QUOTE.totalCents : QUOTE.depositCents;
   const label = t("Payer {montant} et réserver", { montant: eur(amount) });
   $("bPay").textContent = label;
   $("mbAmount").textContent = eur(amount);
-  $("mbLabel").textContent = mode === "full" || QUOTE.balanceDueDate == null ? t("Totalité") : t("Arrhes");
+  $("mbLabel").textContent = full ? t("Totalité") : t("Arrhes");
+  const note = $("payNote");
+  if (note) {
+    note.innerHTML = forcedFull && PROP.settings.allowDeposit
+      ? t("Arrivée dans moins de {jours} jours : la totalité du séjour est à régler à la réservation.", { jours: PROP.settings.balanceDueDays })
+      : !full
+        ? t("Reste <b>{solde}</b> à régler au plus tard le <b>{date}</b>. Un e-mail de rappel avec un lien de paiement vous sera envoyé à l'échéance.", { solde: eur(QUOTE.balanceCents), date: dfr(QUOTE.balanceDueDate) })
+        : "";
+  }
   $("mobileBar").style.display = "flex";
 }
 
@@ -882,7 +923,12 @@ async function refreshQuote() {
     if (seq !== quoteSeq) return; // une saisie plus récente a relancé un devis
     QUOTE = quote;
     if (!quote.ok) {
-      zone.innerHTML = `<div class="note bad">${quote.errors.includes("min_nights") ? t("Minimum {n} nuits sur ces dates.", { n: quote.minNights }) : t("Séjour impossible à ces conditions.")}</div>`;
+      const why = quote.errors.includes("lead_time")
+        ? t("Réservation en ligne au plus tard {jours} avant l'arrivée. Contactez-nous : nous verrons si c'est possible.", { jours: pl(quote.minLeadDays, "jour", "jours") })
+        : quote.errors.includes("min_nights")
+          ? t("Minimum {n} nuits sur ces dates.", { n: quote.minNights })
+          : t("Séjour impossible à ces conditions.");
+      zone.innerHTML = `<div class="note bad">${esc(why)}</div>`;
       payButtonRefresh();
       return;
     }

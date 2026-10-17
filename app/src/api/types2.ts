@@ -36,6 +36,8 @@ export interface FullSettings {
   depositPct: number;
   balanceDueDays: number;
   holdMinutes: number;
+  /** Délai minimum de réservation en ligne, en jours (0 = aucun). */
+  minLeadDays?: number;
   touristTaxCentsPerPersonNight: number;
   touristTaxIncludeChildren: boolean;
   cautionCents: number;
@@ -120,6 +122,13 @@ export interface GuestRow {
   createdAt: string;
   bookingsCount?: number;
   totalSpentCents?: number;
+  /** Séjours non annulés : hébergements (« A / B »), premier et dernier séjour, réservation du dernier. */
+  staysCount?: number;
+  gites?: string | null;
+  firstCheckin?: string | null;
+  lastCheckin?: string | null;
+  lastCheckout?: string | null;
+  lastBookedAt?: string | null;
 }
 
 export interface PaymentRow {

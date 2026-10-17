@@ -47,7 +47,12 @@ export interface QuoteBody {
 
 /** Construit le devis à partir du contexte D1 (sélection d'options validée
  *  contre le référentiel — un id inconnu ou inactif est ignoré). */
-export function quoteFromContext(ctx: QuoteContext, body: QuoteBody, today: IsoDate): Quote {
+export function quoteFromContext(
+  ctx: QuoteContext,
+  body: QuoteBody,
+  today: IsoDate,
+  opts: { bypassLeadTime?: boolean } = {},
+): Quote {
   const selected = (body.options ?? [])
     .map((sel) => {
       const opt = ctx.options.find((o) => o.id === Number(sel.id));
@@ -74,7 +79,9 @@ export function quoteFromContext(ctx: QuoteContext, body: QuoteBody, today: IsoD
       touristTaxCentsPerPersonNight: ctx.settings.touristTaxCentsPerPersonNight,
       touristTaxIncludeChildren: ctx.settings.touristTaxIncludeChildren,
       cautionCents: ctx.settings.cautionCents,
+      minLeadDays: ctx.settings.minLeadDays,
     },
+    bypassLeadTime: opts.bypassLeadTime === true,
   });
 }
 

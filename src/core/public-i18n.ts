@@ -67,6 +67,7 @@ const EXACT: Record<string, string> = {
 
 const PATTERNS: Array<[RegExp, (...m: string[]) => string]> = [
   [/^séjour trop long \(max (\d+) nuits\)$/, (_, n) => `verblijf te lang (max. ${n} nachten)`],
+  [/^Réservation en ligne au plus tard (\d+) jours? avant l'arrivée\. Contactez-nous : nous verrons si c'est possible\.$/, (_, n) => `Online reserveren kan tot ${n} ${n === "1" ? "dag" : "dagen"} voor de aankomst. Neem contact met ons op: wij bekijken wat mogelijk is.`],
   [/^capacité dépassée \(max (\d+) personnes\)$/, (_, n) => `capaciteit overschreden (max. ${n} personen)`],
   [/^Vous avez déjà (\d+) réservations en attente de paiement\. .*$/, (_, n) => `U hebt al ${n} reserveringen die op betaling wachten. Rond er een af, of wacht tot de blokkering verloopt (30 minuten), voor u een nieuwe start.`],
   [/^(\d+) nuits? (weekend|semaine)( — (.+))?$/, (_, n, k, _s, unit) => `${nuits(n)} ${k === "weekend" ? "weekend" : "week"}${unit ? ` — ${unit}` : ""}`],

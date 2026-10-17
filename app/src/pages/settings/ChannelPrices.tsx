@@ -9,7 +9,7 @@
 // Rien ne part chez Beds24 sans le bouton « Envoyer », et seulement si le
 // serveur autorise les écritures (BEDS24_WRITE_ENABLED) : sinon l'écran le dit.
 import { useLingui } from "@lingui/react/macro";
-import { NumberInput, Select } from "@mantine/core";
+import { NumberInput } from "@mantine/core";
 import { IconAlertTriangle, IconCheck } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
@@ -20,6 +20,7 @@ import type { AirbnbPreview, AirbnbPromotions, AirbnbPromotionsState, Beds24Writ
 import { ErrorLine, useAction } from "../../lib/action";
 import { eur } from "../../lib/money";
 import { Confirm, Loading, Page, SaveBar, Section, sqlWhen, useWorkingProperty } from "../../ui/kit";
+import { Choix } from "../../ui/Choix";
 
 const pctTxt = (n: number) => String(n).replace(".", ",");
 const mult = (n: number) => String(n).replace(".", ",");
@@ -196,11 +197,15 @@ function PromotionsSection({ propertyId, onDirty }: { propertyId: number; onDirt
             {pctInput("biweeklyPct", t`14 nuits et plus`, 90)}
             {pctInput("monthlyPct", t`28 nuits et plus`, 90)}
           </div>
+          <p className="muted">
+            {t`Les paliers 7, 14 et 28 nuits sont ceux d'Airbnb : Beds24 n'en transmet pas d'autres. Pour une remise dès 5 nuits sur votre site, voyez`}{" "}
+            <Link to="/reglages/promotions">{t`Remises et codes promo`}</Link>.
+          </p>
         </fieldset>
         <fieldset className="fs">
           <legend>{t`Réservation tôt`}</legend>
           <div className="row-in">
-            <Select
+            <Choix
               size="md"
               w={220}
               label={t`Au moins … avant l'arrivée`}

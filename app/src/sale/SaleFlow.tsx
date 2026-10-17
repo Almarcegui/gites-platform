@@ -2,7 +2,7 @@
 // devis calculé tout seul (POST /quote), client et paiement (POST /bookings).
 // Ouverte depuis la grille (dates déjà choisies) ou par « Nouvelle vente ».
 import { Trans, useLingui } from "@lingui/react/macro";
-import { Modal, NumberInput, Select, TextInput } from "@mantine/core";
+import { Modal, NumberInput, TextInput } from "@mantine/core";
 import { IconCheck } from "@tabler/icons-react";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
@@ -16,6 +16,7 @@ import { addDays, diffDays, longDate, stayRange, todayBrussels } from "../lib/da
 import { eur } from "../lib/money";
 import { useToast } from "../lib/toasts";
 import { useLayout } from "../lib/useLayout";
+import { Choix } from "../ui/Choix";
 
 export interface SalePrefill {
   unitId?: number;
@@ -191,7 +192,7 @@ export function SaleFlow({ prefill, onClose }: { prefill: SalePrefill | null; on
         </div>
       ) : step === 1 ? (
         <div>
-          <Select
+          <Choix
             size="md"
             label={t`Bien`}
             placeholder={t`Choisir le bien`}

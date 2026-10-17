@@ -5,7 +5,7 @@
 import { i18n, type MessageDescriptor } from "@lingui/core";
 import { msg } from "@lingui/core/macro";
 import { Trans, useLingui } from "@lingui/react/macro";
-import { Drawer, Menu, Modal, NumberInput, Select, Textarea, TextInput } from "@mantine/core";
+import { Drawer, Menu, Modal, NumberInput, Textarea, TextInput } from "@mantine/core";
 import {
   IconCalendar,
   IconCheck,
@@ -38,6 +38,7 @@ import { useToast } from "../lib/toasts";
 import { useLayout } from "../lib/useLayout";
 import { RegisterSection } from "./Register";
 import { sqlWhen } from "../ui/kit";
+import { Choix } from "../ui/Choix";
 
 export type BookingState = "option" | "solde" | "soldee" | "plat" | "annulee";
 
@@ -611,7 +612,7 @@ function PayDialog({ open, b, balance, onClose }: { open: boolean; b: Booking; b
       <p className="lead">{t`Reste à payer : ${eur(balance)}. Indiquez ce que vous avez reçu.`}</p>
       <div className="grid2">
         <NumberInput label={t`Montant reçu (€)`} size="md" min={0.01} decimalScale={2} decimalSeparator="," value={amount} onChange={setAmount} />
-        <Select
+        <Choix
           label={t`Reçu par`}
           size="md"
           allowDeselect={false}

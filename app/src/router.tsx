@@ -18,6 +18,7 @@ import { CleaningPage } from "./pages/Cleaning";
 import { SettingsPage } from "./pages/Settings";
 import { AccountsPage } from "./pages/settings/Accounts";
 import { ChannelsPage } from "./pages/settings/Channels";
+import { ShortcodePage } from "./pages/settings/Shortcode";
 import { ChannelPricesPage } from "./pages/settings/ChannelPrices";
 import { HelpPage } from "./pages/settings/Help";
 import { ClientsPage } from "./pages/settings/Clients";
@@ -93,6 +94,7 @@ const settingsRoutes = [
   sub("chiffres", StatsPage),
   sub("plateformes", ChannelsPage),
   sub("plateformes/prix", ChannelPricesPage),
+  sub("shortcode", ShortcodePage),
   sub("calendriers", IcalPage),
   sub("comptes", AccountsPage),
   sub("domaine", DomainPage),
