@@ -648,8 +648,8 @@ msgstr "{0}, nieuwe gasten dezelfde dag"
 
 #. placeholder {0}: property.name
 #: src/pages/settings/Stats.tsx
-msgid "{0}. Seules les réservations confirmées comptent ; une réservation du Domaine entier occupe ses deux maisons."
-msgstr "{0}. Alleen bevestigde reserveringen tellen; een reservering van het hele domein bezet de twee huizen."
+msgid "{0}. Seules les réservations confirmées comptent ; une réservation des deux maisons ensemble les occupe toutes les deux."
+msgstr "{0}. Alleen bevestigde reserveringen tellen; een reservering van de twee huizen samen bezet ze allebei."
 
 #. placeholder {0}: occ(overviews[0]!).d >= 0 ? "+" : ""
 #. placeholder {1}: fr1(occ(overviews[0]!).d)
@@ -797,6 +797,10 @@ msgstr "− {0} %"
 msgid "− {LAST_MINUTE_PCT} % sur chacune de ces nuits libres, par exemple {0} → {1}. Au-delà, vous vendriez moins cher que votre prix de base. Les nuits déjà vendues ne bougent pas."
 msgstr "− {LAST_MINUTE_PCT} % op elk van deze vrije nachten, bijvoorbeeld {0} → {1}. Verder verkoopt u goedkoper dan uw basisprijs. Al verkochte nachten veranderen niet."
 
+#: src/pages/settings/Domain.tsx
+msgid "0 = on peut réserver sur le site jusqu'au jour même"
+msgstr "0 = op de site reserveren kan tot op de dag zelf"
+
 #: src/pages/settings/Options.tsx
 msgid "1 = en premier sur le site"
 msgstr "1 = als eerste op de site"
@@ -890,8 +894,8 @@ msgid "À cocher pour un agenda tenu à la main qui bloque aussi le jour du dép
 msgstr "Aanvinken voor een met de hand bijgehouden agenda die ook de vertrekdag blokkeert (van 22 tot 26 = vertrek op 26). Airbnb, Booking en Beds24 laten de vertrekdag vrij: voor hen niet aanvinken."
 
 #: src/pages/settings/Ical.tsx
-msgid "À coller dans Airbnb (« Importer un calendrier ») ou ailleurs. Si le Domaine entier est réservé, les deux maisons y apparaissent prises."
-msgstr "Te plakken in Airbnb (« Kalender importeren ») of elders. Als het hele domein geboekt is, staan beide huizen er als bezet."
+msgid "À coller dans Airbnb (« Importer un calendrier ») ou ailleurs. Si les deux maisons sont réservées ensemble, chacune y apparaît prise."
+msgstr "Te plakken in Airbnb (« Kalender importeren ») of elders. Als de twee huizen samen geboekt zijn, staat elk ervan als bezet."
 
 #: src/pages/settings/Beds24Property.tsx
 msgid "À compléter dans Beds24"
@@ -3038,6 +3042,10 @@ msgstr "al aanwezig"
 msgid "Déjà payé"
 msgstr "Al betaald"
 
+#: src/pages/settings/Domain.tsx
+msgid "Délai minimum de réservation (jours)"
+msgstr "Minimale reserveringstermijn (dagen)"
+
 #: src/pages/settings/Startup.tsx
 msgid "Démarche"
 msgstr "Stap"
@@ -4655,6 +4663,10 @@ msgstr "Niet-betaalde opties komen aan het einde van de termijn vanzelf vrij."
 #: src/pages/settings/Payments.tsx
 msgid "Les paiements n'ont pas pu être lus."
 msgstr "De betalingen konden niet gelezen worden."
+
+#: src/pages/settings/ChannelPrices.tsx
+msgid "Les paliers 7, 14 et 28 nuits sont ceux d'Airbnb : Beds24 n'en transmet pas d'autres. Pour une remise dès 5 nuits sur votre site, voyez"
+msgstr "De drempels van 7, 14 en 28 nachten zijn die van Airbnb: Beds24 geeft geen andere door. Voor een korting vanaf 5 nachten op uw site, zie"
 
 #: src/pages/settings/Domain.tsx
 msgid "Les photos n'ont pas pu être lues."
@@ -6601,6 +6613,7 @@ msgid "Remises automatiques"
 msgstr "Automatische kortingen"
 
 #: src/pages/Settings.tsx
+#: src/pages/settings/ChannelPrices.tsx
 #: src/pages/settings/Promotions.tsx
 msgid "Remises et codes promo"
 msgstr "Kortingen en promotiecodes"
@@ -7283,6 +7296,15 @@ msgstr "Op"
 msgid "sur {0}"
 msgstr "op {0}"
 
+#. placeholder {0}: Number(f.set.min_lead_days)
+#: src/pages/settings/Domain.tsx
+msgid "sur le site, une arrivée se réserve au plus tard {0} jours avant. Vous pouvez passer outre en vente manuelle."
+msgstr "op de site wordt een aankomst ten laatste {0} dagen vooraf gereserveerd. Bij een handmatige verkoop kunt u ervan afwijken."
+
+#: src/pages/settings/Domain.tsx
+msgid "sur le site, une arrivée se réserve au plus tard la veille. Vous pouvez passer outre en vente manuelle."
+msgstr "op de site wordt een aankomst ten laatste de dag ervoor gereserveerd. Bij een handmatige verkoop kunt u ervan afwijken."
+
 #: src/pages/settings/StripeAccounts.tsx
 msgid "Tableau de bord Stripe, Développeurs, Webhooks, Ajouter un point de terminaison. Collez cette adresse, cochez ces événements, puis copiez le « secret de signature » (whsec_…) dans le champ ci-dessus."
 msgstr "Stripe-dashboard, Ontwikkelaars, Webhooks, Eindpunt toevoegen. Plak dit adres, vink deze gebeurtenissen aan en kopieer dan het \"ondertekeningsgeheim\" (whsec_…) in het veld hierboven."
@@ -7645,8 +7667,8 @@ msgid "Une maison est prise"
 msgstr "Een huis is bezet"
 
 #: src/pages/settings/Domain.tsx
-msgid "Une nouvelle maison, ou un ensemble vendu d'un bloc comme le Domaine entier."
-msgstr "Een nieuw huis, of een geheel dat in één keer verhuurd wordt, zoals het hele domein."
+msgid "Une nouvelle maison, ou un ensemble vendu d'un bloc comme « Les deux maisons du Pré Moré »."
+msgstr "Een nieuw huis, of een geheel dat in één keer verhuurd wordt, zoals « Les deux maisons du Pré Moré »."
 
 #. placeholder {0}: eur(s.exampleDirectCents)
 #: src/pages/settings/ChannelPrices.tsx

@@ -26,6 +26,8 @@ export interface Settings {
   depositPct: number;
   balanceDueDays: number;
   holdMinutes: number;
+  /** Délai minimum de réservation en ligne, en jours (0 = aucun). */
+  minLeadDays?: number;
 }
 
 export function useProperties() {

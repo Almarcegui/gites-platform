@@ -102,6 +102,9 @@ export interface PricingSettings {
   touristTaxCentsPerPersonNight: number;
   touristTaxIncludeChildren: boolean;
   cautionCents: number;                  // informatif — PAS inclus dans le total
+  /** Délai minimum de réservation, en jours avant l'arrivée (demande n° 15,
+   *  2026-10-17). 0 ou absent = aucune contrainte. Réglage du DOMAINE. */
+  minLeadDays?: number;
 }
 
 export interface UnitPricingInfo {
@@ -132,6 +135,9 @@ export interface QuoteRequest {
   promoCode?: string | null;
   optionsSelected: { option: OptionDef; qty: number }[];
   settings: PricingSettings;
+  /** Vente du back-office : le délai minimum devient un avertissement
+   *  (`warnings: ['lead_time']`) au lieu d'une erreur. Jamais côté public. */
+  bypassLeadTime?: boolean;
 }
 
 export interface QuoteLine {
@@ -148,9 +154,9 @@ export interface QuoteLine {
 
 export interface Quote {
   ok: boolean;
-  /** erreurs bloquantes : 'invalid_dates', 'no_rate', 'min_nights', 'checkin_day' */
+  /** erreurs bloquantes : 'invalid_dates', 'no_rate', 'min_nights', 'checkin_day', 'lead_time' */
   errors: string[];
-  /** avertissements non bloquants : 'promo_invalid' */
+  /** avertissements non bloquants : 'promo_invalid', 'lead_time' (back-office seulement) */
   warnings: string[];
   nights: number;
   minNights: number;
@@ -158,6 +164,10 @@ export interface Quote {
    *  null = aucune contrainte. Exposé pour que le tunnel puisse DIRE la règle
    *  au lieu d'afficher un refus sec (issue #66). */
   checkinDays: number[] | null;
+  /** Délai minimum de réservation du domaine, en jours. Présent seulement
+   *  quand il est non nul : avec le réglage à 0, le devis reste identique à
+   *  l'octet près (la reprise d'option compare le JSON du devis). */
+  minLeadDays?: number;
   lines: QuoteLine[];
   accommodationCents: number; // hébergement avant remises (majoration comprise)
   discountCents: number;      // remise auto + code promo (positif)
@@ -515,6 +525,18 @@ function effectiveDepositPct(req: QuoteRequest): number {
   return req.unit.depositPct ?? req.settings.depositPct;
 }
 
+/** Délai minimum lu dans les réglages : entier de 0 à 365, tout le reste vaut 0
+ *  (une valeur illisible ne doit jamais fermer la vente en ligne). */
+export function normalizeLeadDays(v: unknown): number {
+  const n = Number(v);
+  return Number.isInteger(n) && n > 0 && n <= 365 ? n : 0;
+}
+
+/** Première date d'arrivée réservable en ligne, compte tenu du délai minimum. */
+export function firstBookableDate(today: IsoDate, minLeadDays: unknown): IsoDate {
+  return addDays(today, normalizeLeadDays(minLeadDays));
+}
+
 export function computeQuote(req: QuoteRequest): Quote {
   const errors: string[] = [];
   const warnings: string[] = [];
@@ -565,6 +587,14 @@ export function computeQuote(req: QuoteRequest): Quote {
   // Liste vide = aucune arrivée possible : `includes` est faux, l'erreur tombe.
   if (checkinDays != null && !checkinDays.includes(dayOfWeek(req.checkin))) {
     errors.push("checkin_day");
+  }
+
+  // --- délai minimum de réservation (demande n° 15) : l'arrivée doit être au
+  //     moins `minLeadDays` jours après la date de réservation. Bloquant sur le
+  //     site public, simple avertissement pour une vente du back-office.
+  const minLeadDays = normalizeLeadDays(req.settings.minLeadDays);
+  if (minLeadDays > 0 && diffDays(req.today, req.checkin) < minLeadDays) {
+    (req.bypassLeadTime ? warnings : errors).push("lead_time");
   }
 
   // --- remise automatique : la meilleure seule
@@ -695,6 +725,7 @@ export function computeQuote(req: QuoteRequest): Quote {
     nights,
     minNights,
     checkinDays,
+    ...(minLeadDays > 0 ? { minLeadDays } : {}),
     lines,
     accommodationCents,
     discountCents,

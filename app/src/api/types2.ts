@@ -36,6 +36,8 @@ export interface FullSettings {
   depositPct: number;
   balanceDueDays: number;
   holdMinutes: number;
+  /** Délai minimum de réservation en ligne, en jours (0 = aucun). */
+  minLeadDays?: number;
   touristTaxCentsPerPersonNight: number;
   touristTaxIncludeChildren: boolean;
   cautionCents: number;

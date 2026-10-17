@@ -1806,7 +1806,10 @@ export function registerAdminRoutes(router: Router): void {
     if (!ctx) return apiError(404, "hébergement inconnu");
 
     const today = todayInZone();
-    const quote = quoteFromContext(ctx, { ...body, adults, children }, today);
+    // Le délai minimum de réservation (demande n° 15) ne vaut que pour le site
+    // public : l'exploitant au téléphone peut passer outre — le devis le dit
+    // alors dans `warnings` ('lead_time') et la vente est tracée au journal.
+    const quote = quoteFromContext(ctx, { ...body, adults, children }, today, { bypassLeadTime: true });
     // En vente manuelle, min_nights et jour d'arrivée restent bloquants ;
     // seul un devis calculable passe.
     if (!quote.ok) return apiError(409, "devis impossible", { details: quote.errors, minNights: quote.minNights });
@@ -1848,7 +1851,11 @@ export function registerAdminRoutes(router: Router): void {
       internalNotes: String(body.internalNotes ?? "").trim() || null,
     });
     if (!created.ok) return apiError(409, "créneau indisponible (conflit avec une autre réservation)");
-    await audit(db, "admin", "booking.create_manual", `booking:${created.id}`, { reference: created.reference });
+    const leadTimeOverridden = quote.warnings.includes("lead_time");
+    await audit(db, "admin", "booking.create_manual", `booking:${created.id}`, {
+      reference: created.reference,
+      ...(leadTimeOverridden ? { leadTimeOverridden: true, minLeadDays: quote.minLeadDays } : {}),
+    });
     triggerBeds24Push(db, env, execCtx, ctx.unit.propertyId);
 
     let paymentUrl: string | null = null;
@@ -1879,7 +1886,7 @@ export function registerAdminRoutes(router: Router): void {
         }
       }
     }
-    return json({ booking, paymentUrl, optionUrl, optionMailQueued }, 201);
+    return json({ booking, paymentUrl, optionUrl, optionMailQueued, warnings: quote.warnings }, 201);
   }));
 
   // Annulation (CGV v3.1 art. 4-5, décisions du 12/10/2026) : voir services/annulation.ts.
@@ -2167,6 +2174,9 @@ export function registerAdminRoutes(router: Router): void {
           promoCode: body.promoCode !== undefined ? body.promoCode : before.promoCode,
         },
         todayInZone(),
+        // Modifier une réservation existante relève de l'exploitant : le délai
+        // minimum du site public ne s'y applique pas (avertissement seulement).
+        { bypassLeadTime: true },
       );
       if (!quote.ok) return apiError(409, "devis impossible sur ces dates", { details: quote.errors, minNights: quote.minNights });
 
@@ -2207,6 +2217,9 @@ export function registerAdminRoutes(router: Router): void {
           unitId, unitName: ctx.unit.name, checkin, checkout,
           adults, children, totalCents: quote.totalCents,
         },
+        // Délai minimum du site public dépassé par l'exploitant (demande n° 15) :
+        // permis, mais tracé comme à la vente manuelle.
+        ...(quote.warnings.includes("lead_time") ? { leadTimeOverridden: true, minLeadDays: quote.minLeadDays } : {}),
       });
       quotePayload = quote;
       triggerBeds24Push(db, env, execCtx, ctx.unit.propertyId);
@@ -2267,6 +2280,8 @@ export function registerAdminRoutes(router: Router): void {
       ctx,
       { ...body, adults: Math.max(1, Number(body.adults ?? 1)), children: Math.max(0, Number(body.children ?? 0)) },
       todayInZone(),
+      // Vente du back-office : délai minimum en avertissement, pas en refus.
+      { bypassLeadTime: true },
     );
     // Le devis dit combien ; il doit aussi dire SI c'est vendable (issue #70).
     // Sans ce champ, la vente téléphone calculait un prix sur un créneau déjà
@@ -2646,6 +2661,7 @@ export function registerAdminRoutes(router: Router): void {
     "confirmation_intro_fr", "confirmation_intro_nl",
     "cancellation_intro_fr", "cancellation_intro_nl",
     "abandon_intro_fr",
+    "min_lead_days",
   ]);
 
   router.get("/api/admin/settings", guard(async (_req, env, _p, url) => {
@@ -2666,6 +2682,12 @@ export function registerAdminRoutes(router: Router): void {
     const entries: Record<string, string> = {};
     for (const [key, value] of Object.entries(body.settings)) {
       if (!SETTING_KEYS.has(key)) return apiError(400, `clé inconnue : ${key}`);
+      if (key === "min_lead_days") {
+        const n = Number(value);
+        if (!Number.isInteger(n) || n < 0 || n > 365) {
+          return apiError(400, "délai minimum de réservation : un nombre entier de jours, de 0 à 365");
+        }
+      }
       entries[key] = String(value);
     }
     await updateSettings(env.DB, propertyId, entries);
