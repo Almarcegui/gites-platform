@@ -15,6 +15,8 @@ export const NL = {
     "<a href=\"/mentions-legales/\">Wettelijke vermeldingen</a> · <a href=\"/confidentialite/\">Privacy</a> · <a href=\"/conditions-generales/\">Algemene voorwaarden</a> (in het Frans)",
   "<b>Arrhes de {pct} %</b> maintenant — solde {jours} jours avant l'arrivée": "<b>Voorschot van {pct} %</b> nu — saldo {jours} dagen voor aankomst",
   "<b>Totalité</b> maintenant": "<b>Volledig bedrag</b> nu",
+  "Arrivée dans moins de {jours} jours : la totalité du séjour est à régler à la réservation.": "Aankomst binnen {jours} dagen: het volledige bedrag van het verblijf moet bij reservering betaald worden.",
+  "Reste <b>{solde}</b> à régler au plus tard le <b>{date}</b>. Un e-mail de rappel avec un lien de paiement vous sera envoyé à l'échéance.": "Nog <b>{solde}</b> te betalen uiterlijk op <b>{date}</b>. Op de vervaldag ontvangt u een herinneringsmail met een betaallink.",
   "Adresse et calendrier": "Adres en agenda",
   "Adultes": "Volwassenen",
   "Ajouter à mon agenda": "Toevoegen aan mijn agenda",

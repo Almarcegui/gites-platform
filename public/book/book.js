@@ -739,6 +739,7 @@ async function openBookingPanel(unitId) {
           <div class="paybox">
             <h4>💳 ${t("Paiement sécurisé")} <span class="badge-secure">Stripe</span></h4>
             <fieldset class="paychoices"><legend class="sr-only">${t("Montant à payer maintenant")}</legend>${payChoices.join("")}</fieldset>
+            <p id="payNote" class="pay-note small" aria-live="polite"></p>
             <div class="cards">${t("Bancontact · Visa · Mastercard — aucun montant n'est débité sans confirmation.")}</div>
           </div>
           <div class="agree"><label class="small" id="cgvLabel"><input type="checkbox" id="gCgv" aria-describedby="cgvMsg"> ${t('J\'accepte les <a href="#" id="cgvLink">conditions générales</a> *')}</label>
@@ -833,6 +834,9 @@ function collectOptions() {
   return [...numbers, ...toggles].filter((o) => o.qty > 0);
 }
 
+/** Vrai quand c'est le tunnel, pas le visiteur, qui a basculé sur « Totalité ». */
+let autoFull = false;
+
 function payButtonRefresh() {
   if (!SELECTED) return;
   const ok = QUOTE?.ok === true;
@@ -843,12 +847,41 @@ function payButtonRefresh() {
   $("bPay").disabled = !ok;
   $("mbPay").disabled = !ok;
   if (!ok) return;
+  // Arrivée à moins de `balanceDueDays` jours : l'échéance du solde est déjà
+  // passée, le moteur exige la totalité (balanceDueDate = null). Le choix
+  // « Arrhes » restait coché alors que le bouton annonçait la totalité : on le
+  // grise, on bascule sur « Totalité » et on dit pourquoi. Si le visiteur
+  // repart sur des dates lointaines, on lui rend les arrhes par défaut.
+  const forcedFull = QUOTE.balanceDueDate == null;
+  const depositRadio = document.querySelector('input[name="payMode"][value="deposit"]');
+  const fullRadio = document.querySelector('input[name="payMode"][value="full"]');
+  if (depositRadio) {
+    const lock = forcedFull && !!fullRadio;
+    depositRadio.disabled = lock;
+    depositRadio.closest("label")?.classList.toggle("off", lock);
+    if (forcedFull && depositRadio.checked && fullRadio) {
+      fullRadio.checked = true;
+      autoFull = true;
+    } else if (!forcedFull && autoFull) {
+      depositRadio.checked = true;
+      autoFull = false;
+    }
+  }
   const mode = document.querySelector('input[name="payMode"]:checked')?.value;
-  const amount = mode === "full" || QUOTE.balanceDueDate == null ? QUOTE.totalCents : QUOTE.depositCents;
+  const full = mode === "full" || forcedFull;
+  const amount = full ? QUOTE.totalCents : QUOTE.depositCents;
   const label = t("Payer {montant} et réserver", { montant: eur(amount) });
   $("bPay").textContent = label;
   $("mbAmount").textContent = eur(amount);
-  $("mbLabel").textContent = mode === "full" || QUOTE.balanceDueDate == null ? t("Totalité") : t("Arrhes");
+  $("mbLabel").textContent = full ? t("Totalité") : t("Arrhes");
+  const note = $("payNote");
+  if (note) {
+    note.innerHTML = forcedFull && PROP.settings.allowDeposit
+      ? t("Arrivée dans moins de {jours} jours : la totalité du séjour est à régler à la réservation.", { jours: PROP.settings.balanceDueDays })
+      : !full
+        ? t("Reste <b>{solde}</b> à régler au plus tard le <b>{date}</b>. Un e-mail de rappel avec un lien de paiement vous sera envoyé à l'échéance.", { solde: eur(QUOTE.balanceCents), date: dfr(QUOTE.balanceDueDate) })
+        : "";
+  }
   $("mobileBar").style.display = "flex";
 }
 
