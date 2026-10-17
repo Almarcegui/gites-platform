@@ -85,6 +85,13 @@ export function cacheControlFor(pathname: string, contentType: string | null): s
   // HTML : jamais mis en cache dur, sinon une correction de contenu reste
   // invisible pour les visiteurs déjà venus.
   if ((contentType ?? "").includes("text/html")) return "no-cache";
+  // Fichiers hachés par le build de l'écran (/admin/assets/index-XXXX.js) :
+  // le nom change à chaque version, cache long sans risque.
+  if (pathname.startsWith("/admin/assets/")) return `public, max-age=${ONE_YEAR}, immutable`;
+  // Scripts et styles à nom fixe (book.js, site.css…) : revalidés à chaque
+  // visite (304 si inchangés). Avec un jour de cache, un visiteur déjà passé
+  // gardait l'ancien tunnel après un déploiement (17/10, PR #156).
+  if (/\.(m?js|css)$/.test(pathname)) return "no-cache";
   return `public, max-age=${ONE_DAY}`;
 }
 
