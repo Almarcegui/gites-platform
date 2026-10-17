@@ -162,6 +162,15 @@ describe("export CSV des clients", () => {
     expect((await call("/api/admin/guests.csv")).text).toContain(";+32 (0)470 00 01 02;");
   });
 
+  it("neutralise toujours « +cmd », « =1+1 », « @x » et « -1+1 » (exception téléphone de la #162 bornée)", async () => {
+    await seed();
+    for (const v of ["+cmd", "=1+1", "@x", "-1+1", "+32 470 00 01 02+1", "+32 470 =1", "+32 SUM(1)"]) {
+      await t.db.prepare("UPDATE guests SET phone = ?1 WHERE last_name = 'Martin'").bind(v).run();
+      const text = (await call("/api/admin/guests.csv")).text;
+      expect(text, v).toContain(`;'${v};`);
+    }
+  });
+
   it("met entre guillemets une valeur contenant un retour chariot", async () => {
     await seed();
     await t.db.prepare("UPDATE guests SET notes = NULL, address = 'a\r=cmd' WHERE last_name = 'Martin'").run();
