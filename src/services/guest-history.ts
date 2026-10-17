@@ -3,7 +3,7 @@
 // Airbnb / Booking.com / Vrbo par Beds24, réponses de l'équipe), rangés par
 // séjour. Lecture seule. Rien d'un autre client : un mail ou un message n'entre
 // que s'il se rattache à ce client par sa réservation, son identifiant, ou (à
-// défaut de tout rattachement) son adresse.
+// défaut de tout rattachement) son adresse, si aucune autre fiche ne la porte.
 
 export interface HistoryItem {
   /** « mail:12 » (journal des envois) ou « msg:5 » (messagerie) : clé stable côté écran. */
@@ -86,7 +86,7 @@ export async function guestHistory(db: D1Database, guestId: number): Promise<Gue
   const mailSql = `SELECT * FROM email_log
       WHERE kind <> 'reply'
         AND (booking_id IN (SELECT id FROM bookings WHERE guest_id = ?1)
-             ${email ? "OR (booking_id IS NULL AND lower(to_email) = ?2)" : ""})
+             ${email ? "OR (booking_id IS NULL AND lower(to_email) = ?2 AND NOT EXISTS (SELECT 1 FROM guests g2 WHERE g2.id <> ?1 AND lower(g2.email) = ?2))" : ""})
       ORDER BY created_at DESC, id DESC LIMIT ${LIMIT}`;
   const { results: mailRows } = await (email ? db.prepare(mailSql).bind(guestId, email) : db.prepare(mailSql).bind(guestId)).all();
 
@@ -94,7 +94,7 @@ export async function guestHistory(db: D1Database, guestId: number): Promise<Gue
       FROM messages e
       WHERE e.guest_id = ?1
          OR (e.guest_id IS NULL AND e.booking_id IN (SELECT id FROM bookings WHERE guest_id = ?1))
-         ${email ? "OR (e.guest_id IS NULL AND e.booking_id IS NULL AND (lower(e.from_email) = ?2 OR lower(e.to_email) = ?2))" : ""}
+         ${email ? "OR (e.guest_id IS NULL AND e.booking_id IS NULL AND (lower(e.from_email) = ?2 OR lower(e.to_email) = ?2) AND NOT EXISTS (SELECT 1 FROM guests g2 WHERE g2.id <> ?1 AND lower(g2.email) = ?2))" : ""}
       ORDER BY e.received_at DESC, e.id DESC LIMIT ${LIMIT}`;
   const { results: msgRows } = await (email ? db.prepare(msgSql).bind(guestId, email) : db.prepare(msgSql).bind(guestId)).all();
 

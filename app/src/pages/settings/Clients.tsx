@@ -33,7 +33,7 @@ export function ClientsPage() {
   const navigate = useNavigate();
   const [open, setOpen] = useState<number | null>(fromLink);
   useEffect(() => {
-    if (fromLink != null) setOpen(fromLink);
+    setOpen(fromLink);
   }, [fromLink]);
   const close = () => {
     setOpen(null);

@@ -136,6 +136,16 @@ describe("historique des échanges d'un client", () => {
     expect(hp.items.map((i) => i.subject).sort()).toEqual(["Paul sans rattachement", "accusé Paul", "message de Paul", "pour Paul"]);
   });
 
+  it("deux fiches avec la même adresse : les échanges rattachés à rien ne sont montrés à aucune des deux", async () => {
+    const b = await book(2, D1, D2, MARIE);
+    await t.db.prepare("INSERT INTO guests (email, last_name) VALUES (?1, 'Homonyme')").bind(MARIE.email.toUpperCase()).run();
+    await mail(null, MARIE.email, "contact_ack", "accusé sans rattachement", "2026-10-01 10:00:00");
+    await message({ direction: "in", from: MARIE.email, subject: "message sans rattachement", at: "2026-10-01 11:00:00" });
+    await message({ guestId: b.guestId, direction: "in", from: MARIE.email, subject: "message rattaché", at: "2026-10-01 12:00:00" });
+    const h = (await call("GET", `/api/admin/guests/${b.guestId}/history`)).data as unknown as Hist;
+    expect(h.items.map((i) => i.subject)).toEqual(["message rattaché"]);
+  });
+
   it("n'affiche pas deux fois une réponse (mail « reply » + message sortant), garde le nom de la plateforme", async () => {
     const b = await book(2, D1, D2, MARIE);
     await mail(b.id, MARIE.email, "reply", "doublon de réponse", "2026-10-02 10:30:00", "stub");
