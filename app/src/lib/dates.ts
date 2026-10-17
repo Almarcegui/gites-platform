@@ -76,6 +76,10 @@ export function monthShort(d: IsoDate): string {
 export function weekdayShort(d: IsoDate): string {
   return names().joursCourts[weekdayMon(d)] ?? "";
 }
+/** Jour de la semaine abrégé d'après son numéro 0 = dimanche … 6 = samedi (« ven. », « vr »). */
+export function weekdayShortOfIndex(day: number): string {
+  return names().joursCourts[(day + 6) % 7] ?? "";
+}
 export function weekdayLong(d: IsoDate): string {
   return names().jours[weekdayMon(d)] ?? "";
 }
