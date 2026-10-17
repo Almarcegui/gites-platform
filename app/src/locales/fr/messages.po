@@ -1363,6 +1363,11 @@ msgstr "Au moins {0} nuits sur ces dates."
 msgid "Au moins combien de jours avant l'arrivée"
 msgstr "Au moins combien de jours avant l'arrivée"
 
+#. placeholder {0}: eur(plan.refundableCents)
+#: src/booking/BookingPanel.tsx
+msgid "Au plus {0} remboursables par Stripe, sur le moyen de paiement utilisé par le client."
+msgstr "Au plus {0} remboursables par Stripe, sur le moyen de paiement utilisé par le client."
+
 #: src/pages/settings/Promotions.tsx
 msgid "Au plus combien de jours avant l'arrivée"
 msgstr "Au plus combien de jours avant l'arrivée"
@@ -1792,6 +1797,11 @@ msgstr "C'est fait. {0} frais relevés chez Stripe."
 msgid "C'est fait. {0} nouvelle(s), {1} modifiée(s), {2} annulée(s)."
 msgstr "C'est fait. {0} nouvelle(s), {1} modifiée(s), {2} annulée(s)."
 
+#. placeholder {0}: eur(cents)
+#: src/booking/BookingPanel.tsx
+msgid "C'est fait. {0} remboursés par Stripe."
+msgstr "C'est fait. {0} remboursés par Stripe."
+
 #. placeholder {0}: x.imported
 #: src/pages/settings/Import.tsx
 msgid "C'est fait. {0} réservation(s) importée(s)."
@@ -2196,6 +2206,10 @@ msgstr "C'est votre compte : vous ne pouvez ni couper ni supprimer votre propre 
 #: src/pages/settings/ChannelPrices.tsx
 msgid "Calcul"
 msgstr "Calcul"
+
+#: src/booking/BookingPanel.tsx
+msgid "Calcul du montant remboursable…"
+msgstr "Calcul du montant remboursable…"
 
 #: src/sale/SaleFlow.tsx
 msgid "Calcul du prix…"
@@ -3969,6 +3983,10 @@ msgstr "jamais lu"
 msgid "jamais ouvert"
 msgstr "jamais ouvert"
 
+#: src/booking/BookingPanel.tsx
+msgid "Je confirme : de l'argent réel part vers le client, sans retour possible."
+msgstr "Je confirme : de l'argent réel part vers le client, sans retour possible."
+
 #: src/pages/settings/Domain.tsx
 msgid "Jointes à chaque confirmation. Une ligne « Article 1 » seule s'affiche en gras sur le site."
 msgstr "Jointes à chaque confirmation. Une ligne « Article 1 » seule s'affiche en gras sur le site."
@@ -4266,6 +4284,10 @@ msgid "Le {0} est déjà pris pour {1}. Choisissez un jour libre."
 msgstr "Le {0} est déjà pris pour {1}. Choisissez un jour libre."
 
 #: src/booking/BookingPanel.tsx
+msgid "Le calcul du montant remboursable a échoué. Réessayez."
+msgstr "Le calcul du montant remboursable a échoué. Réessayez."
+
+#: src/booking/BookingPanel.tsx
 msgid "Le calcul du remboursement a échoué. Réessayez."
 msgstr "Le calcul du remboursement a échoué. Réessayez."
 
@@ -4466,6 +4488,10 @@ msgstr "Le rappel du solde part tout seul au client à l'échéance."
 #: src/booking/Register.tsx
 msgid "Le registre n'a pas pu être lu."
 msgstr "Le registre n'a pas pu être lu."
+
+#: src/booking/BookingPanel.tsx
+msgid "Le remboursement Stripe a échoué : il est à rejouer depuis la liste des paiements."
+msgstr "Le remboursement Stripe a échoué : il est à rejouer depuis la liste des paiements."
 
 #: src/pages/settings/Domain.tsx
 msgid "Le réserver bloque aussi"
@@ -5118,6 +5144,10 @@ msgid "Montant"
 msgstr "Montant"
 
 #: src/booking/BookingPanel.tsx
+msgid "Montant à rembourser (€)"
+msgstr "Montant à rembourser (€)"
+
+#: src/booking/BookingPanel.tsx
 msgid "Montant reçu (€)"
 msgstr "Montant reçu (€)"
 
@@ -5169,6 +5199,10 @@ msgstr "Motif : {0}"
 #: src/booking/BookingPanel.tsx
 msgid "Motif de l'annulation"
 msgstr "Motif de l'annulation"
+
+#: src/booking/BookingPanel.tsx
+msgid "Motif du remboursement"
+msgstr "Motif du remboursement"
 
 #: src/pages/Dashboard.tsx
 msgid "Mouvement"
@@ -6230,6 +6264,10 @@ msgstr "Prix, nuits min."
 msgid "problème"
 msgstr "problème"
 
+#: src/booking/BookingPanel.tsx
+msgid "Procéder à un remboursement"
+msgstr "Procéder à un remboursement"
+
 #: src/pages/Cleaning.tsx
 #: src/pages/Dashboard.tsx
 msgid "Prochaine arrivée"
@@ -6547,6 +6585,24 @@ msgstr "Remboursement"
 msgid "Remboursement : {0}"
 msgstr "Remboursement : {0}"
 
+#: src/booking/BookingPanel.tsx
+msgid "Remboursement à faire sur le canal de la réservation"
+msgstr "Remboursement à faire sur le canal de la réservation"
+
+#: src/booking/BookingPanel.tsx
+msgid "Rembourser"
+msgstr "Rembourser"
+
+#. placeholder {0}: b.reference
+#: src/booking/BookingPanel.tsx
+msgid "Rembourser — {0}"
+msgstr "Rembourser — {0}"
+
+#. placeholder {0}: eur(cents)
+#: src/booking/BookingPanel.tsx
+msgid "Rembourser {0}"
+msgstr "Rembourser {0}"
+
 #: src/pages/Messages.tsx
 msgid "Remettre à répondre"
 msgstr "Remettre à répondre"
@@ -6732,6 +6788,10 @@ msgstr "Réservation tôt"
 #: src/pages/settings/Promotions.tsx
 msgid "Réservation tôt (longtemps avant l'arrivée)"
 msgstr "Réservation tôt (longtemps avant l'arrivée)"
+
+#: src/booking/BookingPanel.tsx
+msgid "Réservation venue d'un canal : le remboursement se fait sur ce canal."
+msgstr "Réservation venue d'un canal : le remboursement se fait sur ce canal."
 
 #: src/pages/Bookings.tsx
 #: src/pages/settings/Stats.tsx
@@ -6924,6 +6984,10 @@ msgstr "Révoquer la clé « {0} » ?"
 #: src/pages/settings/Channels.tsx
 msgid "Revu"
 msgstr "Revu"
+
+#: src/booking/BookingPanel.tsx
+msgid "Rien à rembourser par Stripe sur cette réservation."
+msgstr "Rien à rembourser par Stripe sur cette réservation."
 
 #: src/pages/Dashboard.tsx
 msgid "Rien à signaler."
@@ -7221,6 +7285,14 @@ msgstr "Source"
 msgid "Statut"
 msgstr "Statut"
 
+#: src/booking/BookingPanel.tsx
+msgid "Stripe n'est pas configuré pour ce gîte : un remboursement se fait à la main (virement)."
+msgstr "Stripe n'est pas configuré pour ce gîte : un remboursement se fait à la main (virement)."
+
+#: src/booking/BookingPanel.tsx
+msgid "Stripe ne répond pas : impossible de vérifier ce qui a déjà été remboursé. Réessayez dans quelques minutes."
+msgstr "Stripe ne répond pas : impossible de vérifier ce qui a déjà été remboursé. Réessayez dans quelques minutes."
+
 #: src/pages/settings/Tarifs.tsx
 msgid "Suggestion"
 msgstr "Suggestion"
@@ -7466,6 +7538,10 @@ msgstr "Tout ce qui a été payé est rendu sous 14 jours sur le moyen de paieme
 msgid "Tout le menu"
 msgstr "Tout le menu"
 
+#: src/booking/BookingPanel.tsx
+msgid "Tout le remboursable"
+msgstr "Tout le remboursable"
+
 #: src/pages/settings/Ical.tsx
 msgid "Tout relire maintenant"
 msgstr "Tout relire maintenant"
@@ -7600,6 +7676,10 @@ msgstr "un prénom suffit, il s'affiche sur le lien de partage"
 #: src/pages/settings/Tarifs.tsx
 msgid "Un prix fixé à la main sur ce jour passe avant tout."
 msgstr "Un prix fixé à la main sur ce jour passe avant tout."
+
+#: src/booking/BookingPanel.tsx
+msgid "Un remboursement est en cours ou en échec sur cette réservation : rejouez-le depuis la liste des paiements avant d'en lancer un autre."
+msgstr "Un remboursement est en cours ou en échec sur cette réservation : rejouez-le depuis la liste des paiements avant d'en lancer un autre."
 
 #. placeholder {0}: p.nights
 #. placeholder {1}: eur(p.stayCents)

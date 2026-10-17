@@ -57,7 +57,7 @@ function useTimes(propertyId: number | undefined) {
   });
 }
 
-type Dialog = null | "pay" | "write" | "cancel" | "edit" | "notes" | "link";
+type Dialog = null | "pay" | "write" | "cancel" | "edit" | "notes" | "link" | "refund";
 
 export function BookingPanel({ id, onClose }: { id: number | null; onClose: () => void }) {
   const { t } = useLingui();
@@ -266,7 +266,7 @@ function Fiche({ detail, dialog, setDialog }: { detail: BookingDetail; dialog: D
         )}
 
         {state !== "annulee" ? <MainActions b={b} state={state} balance={balance} setDialog={setDialog} /> : null}
-        {state !== "annulee" ? <MoreMenu b={b} setDialog={setDialog} /> : null}
+        <MoreMenu b={b} setDialog={setDialog} cancelled={state === "annulee"} />
 
         <Fold title={t`Devis`} count={eur(detail.quote?.totalCents ?? b.totalCents)}>
           <table className="tbl dense mini">
@@ -394,6 +394,7 @@ function Fiche({ detail, dialog, setDialog }: { detail: BookingDetail; dialog: D
       <EditDialog open={dialog === "edit"} b={b} onClose={() => setDialog(null)} />
       <NotesDialog open={dialog === "notes"} b={b} onClose={() => setDialog(null)} />
       <LinkDialog open={dialog === "link"} b={b} balance={balance} onClose={() => setDialog(null)} />
+      <RefundDialog open={dialog === "refund"} b={b} onClose={() => setDialog(null)} />
     </>
   );
 }
@@ -524,7 +525,7 @@ function MainActions({ b, state, balance, setDialog }: { b: Booking; state: Book
   );
 }
 
-function MoreMenu({ b, setDialog }: { b: Booking; setDialog: (d: Dialog) => void }) {
+function MoreMenu({ b, setDialog, cancelled }: { b: Booking; setDialog: (d: Dialog) => void; cancelled: boolean }) {
   const { t } = useLingui();
   const voucher = useAction();
   const confirmationPdf = useAction();
@@ -538,35 +539,57 @@ function MoreMenu({ b, setDialog }: { b: Booking; setDialog: (d: Dialog) => void
           </button>
         </Menu.Target>
         <Menu.Dropdown>
-          {!isChannel(b) ? (
+          {cancelled ? (
+            !isChannel(b) ? (
+              <Menu.Item style={{ minHeight: 44 }} onClick={() => setDialog("refund")}>
+                <Trans>Procéder à un remboursement</Trans>
+              </Menu.Item>
+            ) : (
+              <Menu.Item style={{ minHeight: 44 }} disabled>
+                <Trans>Remboursement à faire sur le canal de la réservation</Trans>
+              </Menu.Item>
+            )
+          ) : null}
+          {!cancelled && !isChannel(b) ? (
             <Menu.Item style={{ minHeight: 44 }} onClick={() => setDialog("link")}>
               <Trans>Envoyer un lien de paiement</Trans>
             </Menu.Item>
           ) : null}
-          {!isChannel(b) ? (
+          {!cancelled && !isChannel(b) ? (
             <Menu.Item style={{ minHeight: 44 }} onClick={() => setDialog("pay")}>
               <Trans>Noter un paiement reçu</Trans>
             </Menu.Item>
           ) : null}
-          <Menu.Item
-            style={{ minHeight: 44 }}
-            onClick={() => void voucher.run(() => api(`/bookings/${b.id}/resend-confirmation`, { method: "POST" }), t`C'est fait. Confirmation et conditions générales renvoyées au client.`)}
-          >
-            <Trans>Renvoyer la confirmation au client</Trans>
-          </Menu.Item>
-          <Menu.Item style={{ minHeight: 44 }} onClick={() => void confirmationPdf.run(() => openAdminPdf(`/bookings/${b.id}/confirmation.pdf`), t`Confirmation ouverte dans un nouvel onglet.`)}>
-            <Trans>Confirmation et conditions générales (PDF)</Trans>
-          </Menu.Item>
-          {!isChannel(b) ? (
+          {!cancelled ? (
+            <Menu.Item
+              style={{ minHeight: 44 }}
+              onClick={() => void voucher.run(() => api(`/bookings/${b.id}/resend-confirmation`, { method: "POST" }), t`C'est fait. Confirmation et conditions générales renvoyées au client.`)}
+            >
+              <Trans>Renvoyer la confirmation au client</Trans>
+            </Menu.Item>
+          ) : null}
+          {!cancelled ? (
+            <Menu.Item style={{ minHeight: 44 }} onClick={() => void confirmationPdf.run(() => openAdminPdf(`/bookings/${b.id}/confirmation.pdf`), t`Confirmation ouverte dans un nouvel onglet.`)}>
+              <Trans>Confirmation et conditions générales (PDF)</Trans>
+            </Menu.Item>
+          ) : null}
+          {!cancelled && !isChannel(b) ? (
             <Menu.Item style={{ minHeight: 44 }} onClick={() => setDialog("edit")}>
               <Trans>Changer les dates ou le nombre de voyageurs</Trans>
             </Menu.Item>
           ) : null}
-          <Menu.Item style={{ minHeight: 44 }} onClick={() => setDialog("notes")}>
-            <Trans>Modifier la note</Trans>
-          </Menu.Item>
-          {!isChannel(b) ? <Menu.Divider /> : null}
-          {!isChannel(b) ? (
+          {!cancelled ? (
+            <Menu.Item style={{ minHeight: 44 }} onClick={() => setDialog("notes")}>
+              <Trans>Modifier la note</Trans>
+            </Menu.Item>
+          ) : null}
+          {!cancelled && !isChannel(b) ? <Menu.Divider /> : null}
+          {!cancelled && !isChannel(b) ? (
+            <Menu.Item style={{ minHeight: 44 }} onClick={() => setDialog("refund")}>
+              <Trans>Procéder à un remboursement</Trans>
+            </Menu.Item>
+          ) : null}
+          {!cancelled && !isChannel(b) ? (
             <Menu.Item style={{ minHeight: 44 }} color="red" onClick={() => setDialog("cancel")}>
               <Trans>Annuler la réservation</Trans>
             </Menu.Item>
@@ -858,6 +881,97 @@ function CancelDialog({ open, b, onClose }: { open: boolean; b: Booking; onClose
         </button>
         <button type="button" className="btn ghost" onClick={onClose}>
           <Trans>Garder la réservation</Trans>
+        </button>
+      </div>
+      {a.state.status === "error" ? <ErrorLine text={a.state.text} /> : null}
+    </Box>
+  );
+}
+
+interface RefundPlan {
+  mode: "canal" | "stripe_absent" | "ok";
+  refundableCents: number;
+  failedRefunds: number;
+  pendingRefunds: number;
+  stripeUnknown: boolean;
+}
+
+/** Remboursement exceptionnel, hors annulation : montant libre, plafonné par le serveur. */
+function RefundDialog({ open, b, onClose }: { open: boolean; b: Booking; onClose: () => void }) {
+  const { t } = useLingui();
+  const a = useAction();
+  const [amount, setAmount] = useState<number | string>("");
+  const [reason, setReason] = useState("");
+  const [sure, setSure] = useState(false);
+  useEffect(() => {
+    if (open) {
+      setAmount("");
+      setReason("");
+      setSure(false);
+      a.reset();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+  const planQuery = useQuery({
+    queryKey: ["refund-plan", b.id, b.paidCents],
+    queryFn: () => api<{ plan: RefundPlan }>(`/bookings/${b.id}/refund`, { method: "POST", body: { simuler: true } }).then((r) => r.plan),
+    enabled: open,
+    staleTime: 0,
+  });
+  const plan = planQuery.data;
+  const cents = Math.round(Number(amount) * 100);
+  const blocked = plan != null && (plan.failedRefunds > 0 || plan.pendingRefunds > 0 || plan.stripeUnknown);
+  const valid = plan != null && plan.mode === "ok" && !blocked && Number.isFinite(cents) && cents > 0 && cents <= plan.refundableCents && reason.trim().length >= 3 && sure;
+  return (
+    <Box open={open} onClose={onClose} title={t`Rembourser — ${b.reference}`}>
+      {plan == null ? (
+        <p className="lead">{planQuery.isError ? t`Le calcul du montant remboursable a échoué. Réessayez.` : t`Calcul du montant remboursable…`}</p>
+      ) : plan.mode === "canal" ? (
+        <p className="lead">{t`Réservation venue d'un canal : le remboursement se fait sur ce canal.`}</p>
+      ) : plan.mode === "stripe_absent" ? (
+        <p className="lead">{t`Stripe n'est pas configuré pour ce gîte : un remboursement se fait à la main (virement).`}</p>
+      ) : plan.failedRefunds > 0 || plan.pendingRefunds > 0 ? (
+        <p className="lead">{t`Un remboursement est en cours ou en échec sur cette réservation : rejouez-le depuis la liste des paiements avant d'en lancer un autre.`}</p>
+      ) : plan.stripeUnknown ? (
+        <p className="lead">{t`Stripe ne répond pas : impossible de vérifier ce qui a déjà été remboursé. Réessayez dans quelques minutes.`}</p>
+      ) : plan.refundableCents <= 0 ? (
+        <p className="lead">{t`Rien à rembourser par Stripe sur cette réservation.`}</p>
+      ) : (
+        <>
+          <p className="lead">{t`Au plus ${eur(plan.refundableCents)} remboursables par Stripe, sur le moyen de paiement utilisé par le client.`}</p>
+          <NumberInput label={t`Montant à rembourser (€)`} value={amount} onChange={setAmount} min={0.01} max={plan.refundableCents / 100} decimalScale={2} decimalSeparator="," size="md" />
+          <button type="button" className="btn ghost" style={{ marginTop: 8 }} onClick={() => setAmount(plan.refundableCents / 100)}>
+            <Trans>Tout le remboursable</Trans>
+          </button>
+          <Textarea label={t`Motif du remboursement`} description={t`Il reste dans l'historique de la réservation.`} autosize minRows={2} size="md" value={reason} onChange={(e) => setReason(e.currentTarget.value)} required mt="sm" />
+          <label style={{ display: "block", marginTop: 12 }}>
+            <input type="checkbox" checked={sure} onChange={(e) => setSure(e.currentTarget.checked)} /> <Trans>Je confirme : de l'argent réel part vers le client, sans retour possible.</Trans>
+          </label>
+        </>
+      )}
+      <div className="acts" style={{ marginTop: 16 }}>
+        {plan?.mode === "ok" && !blocked && plan.refundableCents > 0 ? (
+          <button
+            type="button"
+            className="btn pri"
+            style={{ background: "var(--danger)", borderColor: "var(--danger)" }}
+            disabled={a.state.status === "busy" || !valid}
+            onClick={async () => {
+              const ok = await a.run(
+                () => api<{ ok: boolean; refunds: { status: string }[] }>(`/bookings/${b.id}/refund`, { method: "POST", body: { amountCents: cents, reason: reason.trim(), confirmer: true } }),
+                (r) => {
+                  const res = r as { ok: boolean };
+                  return res.ok ? t`C'est fait. ${eur(cents)} remboursés par Stripe.` : t`Le remboursement Stripe a échoué : il est à rejouer depuis la liste des paiements.`;
+                },
+              );
+              if (ok) onClose();
+            }}
+          >
+            {a.state.status === "busy" ? t`Un instant…` : valid ? t`Rembourser ${eur(cents)}` : t`Rembourser`}
+          </button>
+        ) : null}
+        <button type="button" className="btn ghost" onClick={onClose}>
+          <Trans>Fermer</Trans>
         </button>
       </div>
       {a.state.status === "error" ? <ErrorLine text={a.state.text} /> : null}
