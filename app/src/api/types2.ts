@@ -134,6 +134,7 @@ export interface PaymentRow {
   receivedAt: string | null;
   createdAt: string;
   bookingReference?: string;
+  bookingGuestName?: string | null;
 }
 
 export interface MonthStat {
