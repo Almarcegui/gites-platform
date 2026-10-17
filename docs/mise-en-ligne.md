@@ -112,10 +112,10 @@ et les anciennes adresses d'écran (`#/dash`, `#/cal`, `#/resa`, `#/canaux`,
 
 - [ ] **Julien** — créer la boîte `reservations@<domaine>` (Service Mail
       Infomaniak), SPF, DKIM et DMARC du domaine.
-- [ ] Poser `SMTP_HOST=mail.infomaniak.com`, `SMTP_PORT=465`, `SMTP_USER`,
+- [ ] Poser `SMTP_HOST=mail.infomaniak.com`, `SMTP_PORT=587`, `SMTP_USER`,
       `SMTP_PASSWORD`, `MAIL_FROM` dans le Manager (cf. `.env.example`).
 - [ ] **À vérifier** : l'hébergement web laisse-t-il le site Node ouvrir une
-      connexion sortante vers `mail.infomaniak.com:465` (ou 587) ? Un premier
+      connexion sortante vers `mail.infomaniak.com:587` ? (Hetzner bloque 25 et 465.) Un premier
       envoi en échec se lit dans `email_log.error_detail` (« SMTP : connexion
       à … impossible »).
 - [ ] **Julien** (décision) — `EMAILS_ENABLED=true` : à partir de là, vouchers,
