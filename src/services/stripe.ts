@@ -441,7 +441,7 @@ export async function fetchPaymentFees(
  *  Stripe refuse de toute façon de rembourser plus que l'encaissé. */
 export async function createRefund(
   cfg: StripeConfig,
-  p: { paymentIntent: string; amountCents: number; idempotencyKey: string; reference: string; refundRowId: number },
+  p: { paymentIntent: string; amountCents: number; idempotencyKey: string; reference: string; refundRowId: number; origine?: string },
 ): Promise<{ id: string; status: string }> {
   if (!stripeEnabled(cfg)) throw new Error("Stripe non configuré");
   if (!Number.isInteger(p.amountCents) || p.amountCents <= 0) throw new Error("montant de remboursement invalide");
@@ -449,7 +449,7 @@ export async function createRefund(
     payment_intent: p.paymentIntent,
     amount: String(p.amountCents),
     "metadata[reference]": p.reference,
-    "metadata[origine]": "annulation",
+    "metadata[origine]": p.origine ?? "annulation",
     "metadata[refund_row]": String(p.refundRowId),
   });
   const res = await fetch(`${STRIPE_API}/refunds`, {
@@ -465,6 +465,26 @@ export async function createRefund(
   const refund = (await res.json()) as { id?: string; status?: string };
   if (!refund.id) throw new Error("Stripe refund : réponse inexploitable");
   return { id: refund.id, status: refund.status ?? "unknown" };
+}
+
+/** Total déjà remboursé chez Stripe sur un PaymentIntent, quelle que soit l'origine
+ *  (plateforme ou tableau de bord Stripe). Les remboursements échoués ou annulés ne
+ *  comptent pas. `"inconnu"` = Stripe injoignable, réponse illisible ou liste tronquée. */
+export async function stripeRefundedForIntent(cfg: StripeConfig, intentId: string): Promise<number | "inconnu"> {
+  if (!stripeEnabled(cfg) || !intentId.startsWith("pi_")) return "inconnu";
+  try {
+    const res = await fetch(`${STRIPE_API}/refunds?payment_intent=${encodeURIComponent(intentId)}&limit=100`, {
+      headers: { authorization: `Bearer ${cfg.secretKey}` },
+    });
+    if (!res.ok) return "inconnu";
+    const list = (await res.json()) as { data?: { amount?: number; status?: string }[]; has_more?: boolean };
+    if (!Array.isArray(list.data) || list.has_more) return "inconnu";
+    return list.data
+      .filter((r) => r.status !== "failed" && r.status !== "canceled")
+      .reduce((sum, r) => sum + (Number.isFinite(Number(r.amount)) ? Number(r.amount) : 0), 0);
+  } catch {
+    return "inconnu";
+  }
 }
 
 /** Retrouve chez Stripe le remboursement créé pour NOTRE ligne `refundRowId`

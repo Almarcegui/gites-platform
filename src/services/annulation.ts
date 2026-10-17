@@ -24,7 +24,7 @@
 
 import { sqlNow } from "../core/dates";
 import { addPayment, audit, listPayments, markPaymentStatus, recomputePaid, type BookingRow, type PaymentRow } from "../db/repo";
-import { createRefund, findRefundForRow, stripeEnabled, type StripeConfig } from "./stripe";
+import { createRefund, findRefundForRow, stripeEnabled, stripeRefundedForIntent, type StripeConfig } from "./stripe";
 
 export type AnnulationPar = "locataire" | "proprietaire";
 
@@ -195,6 +195,77 @@ function eurTxt(cents: number): string {
   return `${(cents / 100).toFixed(2).replace(".", ",")} €`;
 }
 
+/** Remboursement exceptionnel (hors annulation) : ce qui reste remboursable par
+ *  Stripe, paiement par paiement. Une ligne de remboursement en échec réserve
+ *  aussi sa part : elle se rejoue, elle ne se double pas d'un nouvel ordre. */
+export interface ExceptionalRefundPlan {
+  mode: "canal" | "stripe_absent" | "ok";
+  refundableCents: number;
+  /** Lignes possibles, la plus récente d'abord, plafonnées au restant de chaque paiement. */
+  lines: StripeRefundLine[];
+  /** Remboursements en échec à rejouer avant d'en créer un autre. */
+  failedRefunds: number;
+  /** Remboursements partis mais pas encore soldés ici (opération en cours). */
+  pendingRefunds: number;
+  /** Stripe n'a pas pu confirmer ce qu'il a déjà remboursé : on ne rembourse pas à l'aveugle. */
+  stripeUnknown: boolean;
+}
+
+/** Lignes de remboursement non soldées (en cours ou en échec) : tant qu'il y en a,
+ *  aucune nouvelle opération d'argent ne part sur la réservation (annulation comprise). */
+export function unsettledRefunds(payments: PaymentRow[]): PaymentRow[] {
+  return payments.filter((r) => r.kind === "refund" && (r.status === "pending" || r.status === "failed"));
+}
+
+export async function planExceptionalRefund(db: D1Database, cfg: StripeConfig, booking: BookingRow): Promise<ExceptionalRefundPlan> {
+  const empty = { refundableCents: 0, lines: [], failedRefunds: 0, pendingRefunds: 0, stripeUnknown: false };
+  if (isStripeChannel(booking)) return { mode: "canal", ...empty };
+  if (!stripeEnabled(cfg)) return { mode: "stripe_absent", ...empty };
+  const payments = await listPayments(db, { bookingId: booking.id });
+  const reserved = new Map<string, number>();
+  let failedRefunds = 0;
+  let pendingRefunds = 0;
+  let stripeUnknown = false;
+  for (const r of payments) {
+    if (r.kind !== "refund" || !r.stripePaymentIntent) continue;
+    if (r.status === "failed") failedRefunds++;
+    if (r.status === "pending") pendingRefunds++;
+    if (r.status === "succeeded" || r.status === "pending" || r.status === "failed") {
+      reserved.set(r.stripePaymentIntent, (reserved.get(r.stripePaymentIntent) ?? 0) + Math.abs(r.amountCents));
+    }
+  }
+  const paid = payments
+    .filter((p) => p.status === "succeeded" && p.kind !== "refund" && p.amountCents > 0 && p.method === "stripe")
+    .sort((a, b) => b.id - a.id);
+  const lines: StripeRefundLine[] = [];
+  for (const p of paid) {
+    const intent = intentOf(p);
+    if (!intent) continue;
+    // Un remboursement fait à la main dans le tableau de bord Stripe compte aussi.
+    const remote = await stripeRefundedForIntent(cfg, intent);
+    if (remote === "inconnu") stripeUnknown = true;
+    else reserved.set(intent, Math.max(reserved.get(intent) ?? 0, remote));
+    const already = reserved.get(intent) ?? 0;
+    const room = Math.max(0, p.amountCents - already);
+    reserved.set(intent, already + room);
+    if (room > 0) lines.push({ paymentId: p.id, paymentIntent: intent, amountCents: room });
+  }
+  return { mode: "ok", refundableCents: lines.reduce((s, l) => s + l.amountCents, 0), lines, failedRefunds, pendingRefunds, stripeUnknown };
+}
+
+/** Répartit `amountCents` sur les lignes possibles, la plus récente d'abord. */
+export function allocateRefund(lines: StripeRefundLine[], amountCents: number): StripeRefundLine[] {
+  const out: StripeRefundLine[] = [];
+  let need = amountCents;
+  for (const l of lines) {
+    if (need <= 0) break;
+    const take = Math.min(l.amountCents, need);
+    out.push({ ...l, amountCents: take });
+    need -= take;
+  }
+  return out;
+}
+
 export interface RefundOutcome {
   refundPaymentId: number;
   paymentId: number;
@@ -207,12 +278,14 @@ export interface RefundOutcome {
 /** Les lignes de remboursement sont créées `pending` AVANT l'annulation (une
  *  panne entre les deux laisse des lignes reprenables, jamais une annulation
  *  sans trace). Montant NÉGATIF : `paid_cents` baisse à la réussite. */
-export async function prepareRefunds(db: D1Database, booking: BookingRow, lines: StripeRefundLine[]): Promise<{ rowId: number; line: StripeRefundLine }[]> {
+export async function prepareRefunds(
+  db: D1Database, booking: BookingRow, lines: StripeRefundLine[], origine: "annulation" | "exceptionnel" = "annulation",
+): Promise<{ rowId: number; line: StripeRefundLine }[]> {
   const out: { rowId: number; line: StripeRefundLine }[] = [];
   for (const l of lines) {
     const rowId = await addPayment(db, {
       bookingId: booking.id, kind: "refund", method: "stripe", amountCents: -l.amountCents, status: "pending",
-      stripePaymentIntent: l.paymentIntent, note: `remboursement du paiement #${l.paymentId}`,
+      stripePaymentIntent: l.paymentIntent, note: `${refundLabel(origine)} du paiement #${l.paymentId}`,
     });
     out.push({ rowId, line: l });
   }
@@ -233,10 +306,11 @@ export async function executeRefunds(
   cfg: StripeConfig,
   booking: BookingRow,
   prepared: { rowId: number; line: StripeRefundLine }[],
+  origine: "annulation" | "exceptionnel" = "annulation",
 ): Promise<RefundOutcome[]> {
   const out: RefundOutcome[] = [];
   for (const { rowId, line } of prepared) {
-    out.push(await runRefund(db, cfg, booking.reference, rowId, line.paymentId, line.paymentIntent, line.amountCents));
+    out.push(await runRefund(db, cfg, booking.reference, rowId, line.paymentId, line.paymentIntent, line.amountCents, origine));
   }
   return out;
 }
@@ -246,22 +320,24 @@ export async function executeRefunds(
  *  500), le rejeu réutilise la même clé : Stripe rend le remboursement déjà
  *  créé au lieu d'en ouvrir un second. */
 const keyOf = (rowId: number) => `gp-refund-${rowId}`;
+/** Le mot « exceptionnel » reste dans la note de la ligne : le rejeu retrouve ainsi son origine. */
+const refundLabel = (origine: "annulation" | "exceptionnel") => (origine === "exceptionnel" ? "remboursement exceptionnel" : "remboursement");
 
 async function runRefund(
   db: D1Database, cfg: StripeConfig, reference: string, rowId: number, paymentId: number,
-  intent: string, amountCents: number,
+  intent: string, amountCents: number, origine: "annulation" | "exceptionnel" = "annulation",
 ): Promise<RefundOutcome> {
   try {
-    const r = await createRefund(cfg, { paymentIntent: intent, amountCents, idempotencyKey: keyOf(rowId), reference, refundRowId: rowId });
+    const r = await createRefund(cfg, { paymentIntent: intent, amountCents, idempotencyKey: keyOf(rowId), reference, refundRowId: rowId, origine });
     // Seuls `succeeded` et `pending` (Bancontact : l'argent est en route) comptent.
     const ok = r.status === "succeeded" || r.status === "pending";
     await markPaymentStatus(db, rowId, ok ? "succeeded" : "failed", {
-      receivedAt: sqlNow(), note: `remboursement du paiement #${paymentId} — Stripe ${r.id} (${r.status})`,
+      receivedAt: sqlNow(), note: `${refundLabel(origine)} du paiement #${paymentId} — Stripe ${r.id} (${r.status})`,
     });
     return { refundPaymentId: rowId, paymentId, amountCents, status: ok ? "succeeded" : "failed", stripeRefundId: r.id, ...(ok ? {} : { error: `Stripe : statut ${r.status}` }) };
   } catch (e) {
     const error = e instanceof Error ? e.message.slice(0, 300) : String(e).slice(0, 300);
-    await markPaymentStatus(db, rowId, "failed", { note: `remboursement du paiement #${paymentId} — échec : ${error}` });
+    await markPaymentStatus(db, rowId, "failed", { note: `${refundLabel(origine)} du paiement #${paymentId} — échec : ${error}` });
     return { refundPaymentId: rowId, paymentId, amountCents, status: "failed", error };
   }
 }
@@ -284,6 +360,7 @@ export async function replayRefund(
   const amount = Math.abs(row.amountCents);
   const intent = row.stripePaymentIntent;
   const paymentId = Number(/#(\d+)/.exec(row.note ?? "")?.[1] ?? 0);
+  const origine = /exceptionnel/.test(row.note ?? "") ? "exceptionnel" : "annulation";
   const found = await findRefundForRow(cfg, intent, row.id);
   if (found === "inconnu") throw new Error("Stripe injoignable : impossible de vérifier si ce remboursement existe déjà, on ne rejoue pas");
   if (found && (found.status === "succeeded" || found.status === "pending")) {
@@ -294,10 +371,10 @@ export async function replayRefund(
   }
   const claim = await db
     .prepare("UPDATE payments SET status = 'pending', note = ?3 WHERE id = ?1 AND status = ?2 AND kind = 'refund'")
-    .bind(row.id, row.status, `remboursement du paiement #${paymentId} — rejeu`)
+    .bind(row.id, row.status, `${refundLabel(origine)} du paiement #${paymentId} — rejeu`)
     .run();
   if (claim.meta.changes !== 1) throw new Error("un rejeu de ce remboursement est déjà en cours");
-  const outcome = await runRefund(db, cfg, booking.reference, row.id, paymentId, intent, amount);
+  const outcome = await runRefund(db, cfg, booking.reference, row.id, paymentId, intent, amount, origine);
   await audit(db, "admin", "refund.replay", `booking:${booking.id}`, outcome);
   return outcome;
 }

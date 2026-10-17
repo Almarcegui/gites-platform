@@ -1380,6 +1380,11 @@ msgstr "Minstens {0} nachten op deze data."
 msgid "Au moins combien de jours avant l'arrivée"
 msgstr "Minstens hoeveel dagen voor aankomst"
 
+#. placeholder {0}: eur(plan.refundableCents)
+#: src/booking/BookingPanel.tsx
+msgid "Au plus {0} remboursables par Stripe, sur le moyen de paiement utilisé par le client."
+msgstr "Maximaal {0} terug te betalen via Stripe, op het betaalmiddel dat de klant gebruikte."
+
 #: src/pages/settings/Promotions.tsx
 msgid "Au plus combien de jours avant l'arrivée"
 msgstr "Hoogstens hoeveel dagen voor aankomst"
@@ -1809,6 +1814,11 @@ msgstr "Gelukt. {0} kosten opgehaald bij Stripe."
 msgid "C'est fait. {0} nouvelle(s), {1} modifiée(s), {2} annulée(s)."
 msgstr "Gedaan. {0} nieuw, {1} gewijzigd, {2} geannuleerd."
 
+#. placeholder {0}: eur(cents)
+#: src/booking/BookingPanel.tsx
+msgid "C'est fait. {0} remboursés par Stripe."
+msgstr "Gedaan. {0} terugbetaald via Stripe."
+
 #. placeholder {0}: x.imported
 #: src/pages/settings/Import.tsx
 msgid "C'est fait. {0} réservation(s) importée(s)."
@@ -2213,6 +2223,10 @@ msgstr "Dit is uw account: u kunt uw eigen toegang niet afsluiten of verwijderen
 #: src/pages/settings/ChannelPrices.tsx
 msgid "Calcul"
 msgstr "Berekening"
+
+#: src/booking/BookingPanel.tsx
+msgid "Calcul du montant remboursable…"
+msgstr "Terug te betalen bedrag wordt berekend…"
 
 #: src/sale/SaleFlow.tsx
 msgid "Calcul du prix…"
@@ -4019,6 +4033,10 @@ msgstr "nooit gelezen"
 msgid "jamais ouvert"
 msgstr "nooit geopend"
 
+#: src/booking/BookingPanel.tsx
+msgid "Je confirme : de l'argent réel part vers le client, sans retour possible."
+msgstr "Ik bevestig: er gaat echt geld naar de klant, onomkeerbaar."
+
 #: src/pages/settings/Domain.tsx
 msgid "Jointes à chaque confirmation. Une ligne « Article 1 » seule s'affiche en gras sur le site."
 msgstr "Bij elke bevestiging gevoegd. Een regel « Artikel 1 » alleen verschijnt vet op de site."
@@ -4336,6 +4354,10 @@ msgid "Le {0} est déjà pris pour {1}. Choisissez un jour libre."
 msgstr "{0} is al bezet voor {1}. Kies een vrije dag."
 
 #: src/booking/BookingPanel.tsx
+msgid "Le calcul du montant remboursable a échoué. Réessayez."
+msgstr "Het terug te betalen bedrag kon niet worden berekend. Probeer opnieuw."
+
+#: src/booking/BookingPanel.tsx
 msgid "Le calcul du remboursement a échoué. Réessayez."
 msgstr "De berekening van de terugbetaling is mislukt. Probeer opnieuw."
 
@@ -4553,6 +4575,10 @@ msgstr "De herinnering voor het saldo gaat op de vervaldag vanzelf naar de klant
 #: src/booking/Register.tsx
 msgid "Le registre n'a pas pu être lu."
 msgstr "Het register kon niet gelezen worden."
+
+#: src/booking/BookingPanel.tsx
+msgid "Le remboursement Stripe a échoué : il est à rejouer depuis la liste des paiements."
+msgstr "De Stripe-terugbetaling is mislukt: probeer ze opnieuw vanuit de lijst met betalingen."
 
 #: src/pages/settings/Domain.tsx
 msgid "Le réserver bloque aussi"
@@ -5217,6 +5243,10 @@ msgid "Montant"
 msgstr "Bedrag"
 
 #: src/booking/BookingPanel.tsx
+msgid "Montant à rembourser (€)"
+msgstr "Terug te betalen bedrag (€)"
+
+#: src/booking/BookingPanel.tsx
 msgid "Montant reçu (€)"
 msgstr "Ontvangen bedrag (€)"
 
@@ -5268,6 +5298,10 @@ msgstr "Reden: {0}"
 #: src/booking/BookingPanel.tsx
 msgid "Motif de l'annulation"
 msgstr "Reden van de annulering"
+
+#: src/booking/BookingPanel.tsx
+msgid "Motif du remboursement"
+msgstr "Reden van de terugbetaling"
 
 #: src/pages/Dashboard.tsx
 msgid "Mouvement"
@@ -6345,6 +6379,10 @@ msgstr "Prijs, min. nachten"
 msgid "problème"
 msgstr "probleem"
 
+#: src/booking/BookingPanel.tsx
+msgid "Procéder à un remboursement"
+msgstr "Terugbetaling uitvoeren"
+
 #: src/pages/Cleaning.tsx
 #: src/pages/Dashboard.tsx
 msgid "Prochaine arrivée"
@@ -6661,6 +6699,24 @@ msgstr "Terugbetaling"
 msgid "Remboursement : {0}"
 msgstr "Terugbetaling: {0}"
 
+#: src/booking/BookingPanel.tsx
+msgid "Remboursement à faire sur le canal de la réservation"
+msgstr "Terugbetaling via het kanaal van de boeking"
+
+#: src/booking/BookingPanel.tsx
+msgid "Rembourser"
+msgstr "Terugbetalen"
+
+#. placeholder {0}: b.reference
+#: src/booking/BookingPanel.tsx
+msgid "Rembourser — {0}"
+msgstr "Terugbetalen — {0}"
+
+#. placeholder {0}: eur(cents)
+#: src/booking/BookingPanel.tsx
+msgid "Rembourser {0}"
+msgstr "{0} terugbetalen"
+
 #: src/pages/Messages.tsx
 msgid "Remettre à répondre"
 msgstr "Opnieuw op te beantwoorden zetten"
@@ -6852,6 +6908,10 @@ msgstr "Vroeg boeken"
 #: src/pages/settings/Promotions.tsx
 msgid "Réservation tôt (longtemps avant l'arrivée)"
 msgstr "Vroeg boeken (lang voor aankomst)"
+
+#: src/booking/BookingPanel.tsx
+msgid "Réservation venue d'un canal : le remboursement se fait sur ce canal."
+msgstr "Boeking via een kanaal: de terugbetaling gebeurt via dat kanaal."
 
 #: src/pages/Bookings.tsx
 #: src/pages/settings/Stats.tsx
@@ -7053,6 +7113,10 @@ msgstr "Sleutel « {0} » intrekken?"
 #: src/pages/settings/Channels.tsx
 msgid "Revu"
 msgstr "Opnieuw gezien"
+
+#: src/booking/BookingPanel.tsx
+msgid "Rien à rembourser par Stripe sur cette réservation."
+msgstr "Niets terug te betalen via Stripe voor deze boeking."
 
 #: src/pages/Dashboard.tsx
 msgid "Rien à signaler."
@@ -7367,6 +7431,14 @@ msgstr "Bron"
 msgid "Statut"
 msgstr "Status"
 
+#: src/booking/BookingPanel.tsx
+msgid "Stripe n'est pas configuré pour ce gîte : un remboursement se fait à la main (virement)."
+msgstr "Stripe is niet ingesteld voor deze gîte: een terugbetaling gebeurt manueel (overschrijving)."
+
+#: src/booking/BookingPanel.tsx
+msgid "Stripe ne répond pas : impossible de vérifier ce qui a déjà été remboursé. Réessayez dans quelques minutes."
+msgstr "Stripe antwoordt niet: we kunnen niet nagaan wat al is terugbetaald. Probeer over enkele minuten opnieuw."
+
 #: src/pages/settings/Tarifs.tsx
 msgid "Suggestion"
 msgstr "Suggestie"
@@ -7621,6 +7693,10 @@ msgstr "Alles wat betaald werd, wordt binnen 14 dagen terugbetaald op het gebrui
 msgid "Tout le menu"
 msgstr "Het hele menu"
 
+#: src/booking/BookingPanel.tsx
+msgid "Tout le remboursable"
+msgstr "Alles wat terug kan"
+
 #: src/pages/settings/Ical.tsx
 msgid "Tout relire maintenant"
 msgstr "Nu alles opnieuw lezen"
@@ -7759,6 +7835,10 @@ msgstr "een voornaam volstaat, hij verschijnt op de deellink"
 #: src/pages/settings/Tarifs.tsx
 msgid "Un prix fixé à la main sur ce jour passe avant tout."
 msgstr "Een met de hand vastgelegde prijs op deze dag gaat voor alles."
+
+#: src/booking/BookingPanel.tsx
+msgid "Un remboursement est en cours ou en échec sur cette réservation : rejouez-le depuis la liste des paiements avant d'en lancer un autre."
+msgstr "Er is een terugbetaling bezig of mislukt voor deze boeking: probeer die opnieuw vanuit de lijst met betalingen voor u een nieuwe start."
 
 #. placeholder {0}: p.nights
 #. placeholder {1}: eur(p.stayCents)

@@ -35,6 +35,8 @@ let refundSeq = 0;
 let refundMode: "ok" | "pending" | "http500" | "requires_action" = "ok";
 /** Ligne de remboursement que Stripe dit avoir DÉJÀ créée (métadonnée refund_row) ; sinon seul un remboursement manuel sans rapport existe. */
 let remoteRefundRow: number | null = null;
+/** Montant d'un remboursement fait à la main dans le tableau de bord Stripe (0 = aucun). */
+let remoteManualAmount = 0;
 
 beforeAll(async () => {
   t = await createTestDb();
@@ -53,7 +55,7 @@ beforeAll(async () => {
       return json({ id: `re_test_${refundSeq}`, status: refundMode === "ok" ? "succeeded" : refundMode });
     }
     if (method === "GET" && /\/refunds\?/.test(url)) {
-      return json({ data: remoteRefundRow == null ? [{ id: "re_manuel", status: "succeeded", metadata: {} }] : [{ id: "re_deja", status: "succeeded", metadata: { refund_row: String(remoteRefundRow) } }], has_more: false });
+      return json({ data: remoteRefundRow == null ? [{ id: "re_manuel", status: "succeeded", amount: remoteManualAmount, metadata: {} }] : [{ id: "re_deja", status: "succeeded", metadata: { refund_row: String(remoteRefundRow) } }], has_more: false });
     }
     return json({});
   }) as typeof fetch;
@@ -68,6 +70,7 @@ beforeEach(async () => {
   refundSeq = 0;
   refundMode = "ok";
   remoteRefundRow = null;
+  remoteManualAmount = 0;
 });
 
 async function call(method: string, path: string, body?: unknown) {
@@ -453,5 +456,100 @@ describe("validation", () => {
     const id = await mkBooking();
     expect((await call("POST", `/api/admin/bookings/${id}/cancel`, { par: "voisin" })).status).toBe(400);
     expect((await call("POST", `/api/admin/bookings/99999/cancel`, {})).status).toBe(404);
+  });
+});
+
+describe("remboursement exceptionnel (hors annulation)", () => {
+  it("réservation déjà annulée par le client : les arrhes gardées peuvent être rendues, avec motif et confirmation", async () => {
+    const id = await mkBooking();
+    await stripePay(id, "deposit", 30000, "pi_x1");
+    expect((await call("POST", `/api/admin/bookings/${id}/cancel`, { reason: "essai" })).status).toBe(200);
+    expect(refundCalls()).toHaveLength(0);
+
+    const sim = await call("POST", `/api/admin/bookings/${id}/refund`, { simuler: true });
+    expect(sim.data.plan).toMatchObject({ mode: "ok", refundableCents: 30000, failedRefunds: 0 });
+    expect(refundCalls()).toHaveLength(0); // la simulation lit Stripe, n'ordonne rien
+
+    expect((await call("POST", `/api/admin/bookings/${id}/refund`, { amountCents: 30000, confirmer: true })).status).toBe(400); // pas de motif
+    expect((await call("POST", `/api/admin/bookings/${id}/refund`, { amountCents: 30000, reason: "geste commercial" })).status).toBe(400); // pas de confirmation
+    expect((await call("POST", `/api/admin/bookings/${id}/refund`, { amountCents: 30001, reason: "geste commercial", confirmer: true })).status).toBe(400); // au-delà de l'encaissé
+    expect((await call("POST", `/api/admin/bookings/${id}/refund`, { amountCents: 0, reason: "geste commercial", confirmer: true })).status).toBe(400);
+    expect(refundCalls()).toHaveLength(0);
+
+    const r = await call("POST", `/api/admin/bookings/${id}/refund`, { amountCents: 30000, reason: "geste commercial", confirmer: true });
+    expect(r.status).toBe(200);
+    expect(r.data.ok).toBe(true);
+    const sent = refundCalls();
+    expect(sent).toHaveLength(1);
+    expect(sent[0]!.body.get("payment_intent")).toBe("pi_x1");
+    expect(sent[0]!.body.get("amount")).toBe("30000");
+    expect(sent[0]!.body.get("metadata[origine]")).toBe("exceptionnel");
+    expect((await getBooking(db, id))!.paidCents).toBe(0);
+    const actions = (await db.prepare("SELECT action FROM audit_log").all()).results.map((x: any) => x.action);
+    expect(actions).toEqual(expect.arrayContaining(["refund.exceptional", "refund.done"]));
+
+    // plus rien à rendre : un second remboursement est refusé sans appel à Stripe
+    expect((await call("POST", `/api/admin/bookings/${id}/refund`, { amountCents: 100, reason: "encore", confirmer: true })).status).toBe(400);
+    expect(refundCalls()).toHaveLength(1);
+  });
+
+  it("montant partiel : le paiement le plus récent d'abord, plafonné par paiement", async () => {
+    const id = await mkBooking();
+    await stripePay(id, "deposit", 30000, "pi_x2a");
+    await stripePay(id, "balance", 20000, "pi_x2b");
+    const r = await call("POST", `/api/admin/bookings/${id}/refund`, { amountCents: 25000, reason: "trop-perçu", confirmer: true });
+    expect(r.status).toBe(200);
+    expect(refundCalls().map((c) => [c.body.get("payment_intent"), c.body.get("amount")])).toEqual([["pi_x2b", "20000"], ["pi_x2a", "5000"]]);
+    const sim = await call("POST", `/api/admin/bookings/${id}/refund`, { simuler: true });
+    expect(sim.data.plan.refundableCents).toBe(25000);
+  });
+
+  it("un remboursement en échec réserve sa part : il se rejoue, il ne se double pas", async () => {
+    const id = await mkBooking();
+    await stripePay(id, "deposit", 30000, "pi_x3");
+    refundMode = "http500";
+    const r = await call("POST", `/api/admin/bookings/${id}/refund`, { amountCents: 30000, reason: "panne", confirmer: true });
+    expect(r.status).toBe(200);
+    expect(r.data.ok).toBe(false);
+    const sim = await call("POST", `/api/admin/bookings/${id}/refund`, { simuler: true });
+    expect(sim.data.plan).toMatchObject({ refundableCents: 0, failedRefunds: 1 });
+    // ni un nouveau remboursement, ni une annulation tant que la ligne n'est pas rejouée
+    refundMode = "ok";
+    calls = [];
+    expect((await call("POST", `/api/admin/bookings/${id}/refund`, { amountCents: 100, reason: "encore", confirmer: true })).status).toBe(409);
+    expect((await call("POST", `/api/admin/bookings/${id}/cancel`, { reason: "client", par: "proprietaire", confirmer: true })).status).toBe(409);
+    expect(refundCalls()).toHaveLength(0);
+    expect((await getBooking(db, id))!.status).toBe("confirmed");
+  });
+
+  it("un remboursement fait à la main dans Stripe est déduit du plafond", async () => {
+    const id = await mkBooking();
+    await stripePay(id, "deposit", 30000, "pi_x5");
+    remoteManualAmount = 12000;
+    const sim = await call("POST", `/api/admin/bookings/${id}/refund`, { simuler: true });
+    expect(sim.data.plan.refundableCents).toBe(18000);
+    expect((await call("POST", `/api/admin/bookings/${id}/refund`, { amountCents: 18001, reason: "trop", confirmer: true })).status).toBe(400);
+    expect((await call("POST", `/api/admin/bookings/${id}/refund`, { amountCents: 18000, reason: "le reste", confirmer: true })).status).toBe(200);
+  });
+
+  it("le rejeu d'un remboursement exceptionnel garde son origine chez Stripe", async () => {
+    const id = await mkBooking();
+    await stripePay(id, "deposit", 30000, "pi_x6");
+    refundMode = "http500";
+    await call("POST", `/api/admin/bookings/${id}/refund`, { amountCents: 5000, reason: "geste", confirmer: true });
+    const failed = (await db.prepare("SELECT id FROM payments WHERE kind = 'refund'").first()) as any;
+    refundMode = "ok";
+    calls = [];
+    const retry = await call("POST", `/api/admin/bookings/${id}/refunds/${failed.id}/retry`);
+    expect(retry.data.refund.status).toBe("succeeded");
+    expect(refundCalls()[0]!.body.get("metadata[origine]")).toBe("exceptionnel");
+  });
+
+  it("réservation d'un canal : refusé, aucun appel à Stripe", async () => {
+    const id = await mkBooking({ source: "ical" });
+    await stripePay(id, "full", 50000, "pi_x4");
+    const r = await call("POST", `/api/admin/bookings/${id}/refund`, { amountCents: 100, reason: "canal", confirmer: true });
+    expect(r.status).toBe(409);
+    expect(calls).toHaveLength(0);
   });
 });
