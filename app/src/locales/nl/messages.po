@@ -2755,6 +2755,14 @@ msgstr "bevestiging opnieuw verstuurd"
 msgid "confirmation renvoyée au client"
 msgstr "bevestiging opnieuw naar de klant verstuurd"
 
+#: src/pages/settings/Logs.tsx
+msgid "confirmation renvoyée par le client depuis la page Merci"
+msgstr "bevestiging opnieuw verstuurd door de klant via de bedankpagina"
+
+#: src/booking/BookingPanel.tsx
+msgid "confirmation renvoyée par le client depuis la page Merci (adresse dans les mails envoyés)"
+msgstr "bevestiging opnieuw verstuurd door de klant via de bedankpagina (adres bij de verstuurde mails)"
+
 #: src/pages/settings/Clients.tsx
 msgid "confirmée"
 msgstr "bevestigd"

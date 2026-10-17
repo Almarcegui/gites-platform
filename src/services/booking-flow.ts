@@ -33,6 +33,7 @@ import {
   voidRemotePayment,
 } from "./stripe";
 import { propertyIdOfBooking, resolveStripeConfig } from "./stripe-config";
+import { merciToken } from "./merci-token";
 
 export interface QuoteBody {
   unitId: number;
@@ -167,6 +168,15 @@ export function paymentLabel(booking: BookingRow, kind: PaymentKind): string {
   return `${labelKind} réservation ${booking.reference}${booking.unitName ? ` — ${booking.unitName}` : ""}`;
 }
 
+/** Page Merci d'une réservation : référence, e-mail s'il existe, et jeton `k`
+ *  (merci-token.ts) qui autorise le renvoi de la confirmation — y compris sur
+ *  une réservation sans e-mail. */
+export async function merciUrl(env: Env, booking: { id: number; reference: string; guestEmail?: string | null }): Promise<string> {
+  const emailParam = booking.guestEmail ? `&email=${encodeURIComponent(booking.guestEmail)}` : "";
+  const k = await merciToken(env, booking);
+  return `${env.PUBLIC_BASE_URL}/book/merci.html?ref=${encodeURIComponent(booking.reference)}${emailParam}${k ? `&k=${k}` : ""}`;
+}
+
 /** URLs de retour après paiement.
  *
  *  Le solde se paie sur une réservation DÉJÀ confirmée : le renvoyer vers
@@ -176,12 +186,12 @@ export function paymentLabel(booking: BookingRow, kind: PaymentKind): string {
  *
  *  Ces mêmes URLs servent de `return_url` au Payment Element : Bancontact part
  *  chez la banque du client et le ramène ici. */
-export function paymentReturnUrls(env: Env, booking: BookingRow, kind: PaymentKind): { successUrl: string; cancelUrl: string } {
+export async function paymentReturnUrls(env: Env, booking: BookingRow, kind: PaymentKind): Promise<{ successUrl: string; cancelUrl: string }> {
   const base = env.PUBLIC_BASE_URL;
   const emailParam = booking.guestEmail ? `&email=${encodeURIComponent(booking.guestEmail)}` : "";
   if (kind === "balance") return { successUrl: voucherUrl(env, booking), cancelUrl: voucherUrl(env, booking) };
   return {
-    successUrl: `${base}/book/merci.html?ref=${encodeURIComponent(booking.reference)}${emailParam}`,
+    successUrl: await merciUrl(env, booking),
     cancelUrl: `${base}/book/annule.html?ref=${encodeURIComponent(booking.reference)}${emailParam}`,
   };
 }
@@ -204,7 +214,7 @@ export async function startCheckout(
     status: "pending",
   });
   const label = paymentLabel(booking, kind);
-  const returnUrls = paymentReturnUrls(env, booking, kind);
+  const returnUrls = await paymentReturnUrls(env, booking, kind);
   const session = await createCheckoutSession(cfg, {
     baseUrl: env.PUBLIC_BASE_URL,
     paymentId,
@@ -262,7 +272,7 @@ export async function startPayment(
   amountCents: number,
   actor: "public" | "admin",
 ): Promise<PaymentStart> {
-  const returnUrl = paymentReturnUrls(env, booking, kind).successUrl;
+  const returnUrl = (await paymentReturnUrls(env, booking, kind)).successUrl;
   const cfg = await stripeConfigForBooking(db, env, booking);
   if (!paymentElementEnabled(cfg)) {
     const legacy = await startCheckout(db, env, booking, kind, amountCents, actor);
@@ -481,12 +491,16 @@ export async function sendConfirmation(
   db: D1Database,
   env: Env,
   bookingId: number,
-  opts: { force?: boolean } = {},
+  opts: { force?: boolean; to?: string } = {},
 ): Promise<boolean> {
   const ctx = await loadConfirmationPdfContext(db, bookingId);
-  if (!ctx || !ctx.booking.guestEmail) return false;
+  if (!ctx) return false;
+  // `to` : renvoi demandé par le client depuis la page Merci, à une autre
+  // adresse que celle de sa fiche (faute de frappe). Toujours un renvoi forcé.
+  const to = opts.to ?? ctx.booking.guestEmail;
+  if (!to) return false;
   let claimed = false;
-  if (!opts.force) {
+  if (!opts.force && !opts.to) {
     if (await hasEmailOfKinds(db, bookingId, ["confirmation", "voucher"])) return false;
     // Verrou posé AVANT l'envoi : le SELECT ci-dessus ne protège pas de deux
     // appels simultanés, l'INSERT OR IGNORE si (clé primaire).
@@ -506,7 +520,7 @@ export async function sendConfirmation(
     });
     message = {
       bookingId,
-      to: ctx.booking.guestEmail,
+      to,
       subject: email.subject,
       bodyText: email.bodyText,
       bodyHtml: email.bodyHtml,

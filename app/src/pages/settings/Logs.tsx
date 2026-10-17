@@ -24,6 +24,7 @@ const ACTIONS: Record<string, MessageDescriptor> = {
   "email.balance_reminder": msg`rappel du solde envoyé`,
   "email.voucher_resent": msg`confirmation renvoyée`,
   "email.confirmation_resent": msg`confirmation et conditions générales renvoyées`,
+  "email.confirmation_resent_public": msg`confirmation renvoyée par le client depuis la page Merci`,
   "message.reply": msg`message envoyé à un client`,
   "rate.override": msg`prix fixé à la main`,
   "rate.override_clear": msg`retour au prix de saison`,

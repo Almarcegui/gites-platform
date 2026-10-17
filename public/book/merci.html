@@ -24,6 +24,10 @@ translateStatic();
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 const q = new URLSearchParams(location.search);
 const ref = q.get("ref"), email = q.get("email");
+// Jeton de la réservation (posé par le serveur dans l'URL de retour du
+// paiement) : il autorise le renvoi de la confirmation, y compris sur une
+// réservation sans e-mail. La seule référence ne suffit jamais.
+const k = q.get("k");
 // Retour d'un moyen de paiement à redirection (Bancontact, issue #26). Cet
 // indice ne prouve rien : c'est le webhook qui confirme. Il sert seulement à
 // dire la vérité pendant l'attente, au lieu d'un « Confirmation en cours… »
@@ -31,8 +35,123 @@ const ref = q.get("ref"), email = q.get("email");
 const redirectStatus = q.get("redirect_status");
 const voucherUrl = `/book/voucher.html?ref=${encodeURIComponent(ref || "")}&email=${encodeURIComponent(email || "")}${LANG === "nl" ? "&lang=nl" : ""}`;
 
+// --- adresse de la confirmation, et renvoi à une autre -----------------------
+// L'adresse s'affiche masquée (c•••@example.be) : assez pour repérer une faute
+// de frappe, pas assez pour qu'un tiers qui tombe sur la page la lise.
+const recipientApi = () => `/api/public/bookings/${encodeURIComponent(ref)}/confirmation-email`;
+async function fetchRecipient() {
+  const qs = new URLSearchParams();
+  if (email) qs.set("email", email);
+  if (k) qs.set("k", k);
+  const res = await fetch(`${recipientApi()}?${qs}`, { headers: apiHeaders() });
+  return res.ok ? res.json() : null;
+}
+
+function recipientHtml(info, done) {
+  let line;
+  if (done) line = `<div class="note">${t("C'est envoyé à <b>{adresse}</b>. Pensez à regarder dans vos courriers indésirables.", { adresse: esc(done) })}</div>`;
+  else if (!info.hasEmail) line = `<p class="small">${t("Nous n'avons pas d'adresse e-mail pour cette réservation. Indiquez-en une pour recevoir votre confirmation et vos conditions générales.")}</p>`;
+  else if (info.lastSent?.failed) line = `<div class="note bad">${t("L'envoi à <b>{adresse}</b> n'a pas abouti. Vérifiez l'adresse, ou indiquez-en une autre ci-dessous.", { adresse: esc(info.lastSent.to) })}</div>`;
+  else if (info.lastSent) line = `<p class="small">${t("Confirmation envoyée à <b>{adresse}</b>.", { adresse: esc(info.lastSent.to) })}</p>`;
+  else line = `<p class="small">${t("La confirmation part à <b>{adresse}</b>.", { adresse: esc(info.recipient) })}</p>`;
+  if (info.resendsLeft <= 0) {
+    return `${line}<p class="small muted">${t("Nombre maximal de renvois atteint. Écrivez-nous via le formulaire de contact du site : nous vous répondrons par e-mail.")}</p>`;
+  }
+  const form = `<form id="resendForm" novalidate style="margin-top:8px">
+      <label class="f" for="resendTo">${t("Adresse e-mail")}</label>
+      <input type="email" id="resendTo" autocomplete="email" inputmode="email" required>
+      <p class="field-msg" id="resendMsg" role="alert"></p>
+      <button class="btn o" type="submit" style="margin-top:8px">${info.hasEmail ? t("Envoyer à cette adresse") : t("Recevoir ma confirmation")}</button>
+    </form>`;
+  const summary = info.hasEmail ? t("Ce n'est pas la bonne adresse ? Envoyer la confirmation à une autre adresse") : null;
+  return `${line}${summary ? `<details style="margin-top:6px"${info.lastSent?.failed ? " open" : ""}><summary class="small">${summary}</summary>${form}</details>` : form}`;
+}
+
+async function showRecipient() {
+  const el = document.getElementById("confEmail");
+  if (!el) return;
+  let info = null;
+  try { info = await fetchRecipient(); } catch { /* bloc simplement absent */ }
+  if (!info) return;
+  el.innerHTML = recipientHtml(info);
+  bindResend(el, info);
+}
+
+function bindResend(el, info) {
+  const form = el.querySelector("#resendForm");
+  if (!form) return;
+  form.addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const input = form.querySelector("#resendTo"), msg = form.querySelector("#resendMsg"), btn = form.querySelector("button");
+    const to = input.value.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(to)) {
+      msg.textContent = t("Cette adresse e-mail ne semble pas valide.");
+      input.setAttribute("aria-invalid", "true");
+      return;
+    }
+    input.removeAttribute("aria-invalid");
+    msg.textContent = "";
+    btn.disabled = true;
+    try {
+      const res = await fetch(recipientApi(), {
+        method: "POST",
+        headers: apiHeaders({ "content-type": "application/json" }),
+        body: JSON.stringify({ email: email || undefined, k: k || undefined, to }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        msg.textContent = data.error || t("Envoi impossible pour le moment. Réessayez dans un instant.");
+        btn.disabled = false;
+        return;
+      }
+      el.innerHTML = recipientHtml(data, data.lastSent?.to || to);
+      bindResend(el, data);
+      // Réservation qui n'avait pas d'adresse : elle vient d'être complétée,
+      // le voucher s'ouvre désormais avec elle.
+      if (!info.hasEmail && data.hasEmail) {
+        const v = document.getElementById("voucherBtn");
+        if (v) v.href = `/book/voucher.html?ref=${encodeURIComponent(ref)}&email=${encodeURIComponent(to)}${LANG === "nl" ? "&lang=nl" : ""}`;
+        const wrap = document.getElementById("voucherWrap");
+        if (wrap) wrap.hidden = false;
+      }
+    } catch {
+      msg.textContent = t("Envoi impossible pour le moment. Réessayez dans un instant.");
+      btn.disabled = false;
+    }
+  });
+}
+
+/** Réservation sans e-mail dans l'URL, mais avec son jeton : on suit la
+ *  confirmation par le jeton, et on propose d'indiquer une adresse. */
+async function pollByToken(attempt = 0) {
+  const box = document.getElementById("box");
+  let info = null;
+  try { info = await fetchRecipient(); } catch { /* on repollera */ }
+  if (info && info.status === "confirmed") {
+    try { for (const key of Object.keys(sessionStorage)) if (key.startsWith("gites-hold:")) sessionStorage.removeItem(key); } catch { /* navigation privée */ }
+    box.innerHTML = `<div class="big-check">✅</div>
+      <h3>${t("Réservation confirmée !")}</h3>
+      <p>${t("Référence <b class=\"mono\">{ref}</b>", { ref: esc(ref) })}</p>
+      <div id="confEmail" style="text-align:left;margin-top:12px"></div>
+      <p id="voucherWrap" hidden style="margin-top:14px"><a class="btn" id="voucherBtn" href="#">${t("Voir mon voucher")}</a></p>`;
+    const el = document.getElementById("confEmail");
+    el.innerHTML = recipientHtml(info);
+    bindResend(el, info);
+    return;
+  }
+  if (attempt < 20) setTimeout(() => pollByToken(attempt + 1), 1500);
+  else {
+    box.innerHTML = `<div class="big-check">🕐</div><h3>${t("Paiement en cours de traitement")}</h3>
+      <p class="muted small">${t("La confirmation peut prendre quelques minutes. Rechargez cette page dans un moment.")}</p>`;
+  }
+}
+
 async function poll(attempt = 0) {
   const box = document.getElementById("box");
+  if (ref && !email && k && redirectStatus !== "failed") {
+    pollByToken();
+    return;
+  }
   if (!ref || !email) {
     box.innerHTML = `<div class="big-check">✅</div><h3>${t("Paiement reçu")}</h3>
       <p class="muted small">${t("Votre confirmation arrive par email.")}</p>
@@ -73,8 +192,10 @@ async function poll(attempt = 0) {
           <li>${balance}</li>
           <li>${t("Arrivée dès {arr}, départ avant {dep}.", { arr: esc(hour(data.stay?.checkinTime)), dep: esc(hour(data.stay?.checkoutTime)) })}</li>
           <li>${t("Une question ? Répondez simplement à l'e-mail de confirmation : pas de chat, nous répondons par e-mail.")}</li></ol></div>
+        <div id="confEmail" style="text-align:left;margin-top:12px"></div>
         <p style="margin-top:14px"><a class="btn" href="${voucherUrl}">${t("Voir mon voucher")}</a></p>
         <p class="small muted" style="margin-top:8px">${t("Pas reçu l'e-mail ? Regardez dans vos courriers indésirables, ou retrouvez tout sur votre voucher.")}</p>`;
+      showRecipient();
       return;
     }
   } catch { /* on repollera */ }
