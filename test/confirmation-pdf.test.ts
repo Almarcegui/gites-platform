@@ -268,6 +268,25 @@ describe("le mail", () => {
     expect(pdfStructureProblems(pdf)).toEqual([]);
     expect(pdfText(pdf)).toContain(`Dupont <img src=x> & "Fils" (x) \\ y`);
   });
+
+  it("l'intro personnalisable remplace l'accroche, avec les variables remplacées ; vide = texte d'origine", async () => {
+    const b = await bookAndPay();
+    const ctx = (await loadConfirmationPdfContext(t.db, b.id))!;
+    const intro = `Merci {prenom}, votre séjour à {bien} commence le {arrivee}.\nToute l'équipe de {signature} vous attend.`;
+    const custom = buildConfirmationEmail({ ...ctx, settings: { ...ctx.settings, confirmationIntroFr: intro }, voucherUrl: "http://test.local/x", attachmentName: "Confirmation-X.pdf" });
+    expect(custom.bodyText).toContain("Merci Claire Dubois, votre séjour à");
+    expect(custom.bodyText).toContain("Toute l'équipe de Les Gîtes du Pré Moré vous attend.");
+    expect(custom.bodyText).not.toContain("Votre réservation est confirmée — merci de votre confiance !");
+    // le récapitulatif et le reste du mail restent générés
+    expect(custom.bodyText).toContain("VOTRE SÉJOUR");
+    expect(custom.bodyText).toContain(b.reference);
+    // variable inconnue : visible, pas effacée
+    const unknown = buildConfirmationEmail({ ...ctx, settings: { ...ctx.settings, confirmationIntroFr: "Bonjour {prenom}, le code est {code}." }, voucherUrl: "http://test.local/x", attachmentName: "Confirmation-X.pdf" });
+    expect(unknown.bodyText).toContain("le code est {code}.");
+    // sans réglage : le texte d'origine
+    const orig = buildConfirmationEmail({ ...ctx, voucherUrl: "http://test.local/x", attachmentName: "Confirmation-X.pdf" });
+    expect(orig.bodyText).toContain("Votre réservation est confirmée — merci de votre confiance !");
+  });
 });
 
 describe("le PDF « Confirmation de réservation et conditions générales »", () => {
