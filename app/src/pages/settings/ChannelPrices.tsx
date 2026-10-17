@@ -197,6 +197,10 @@ function PromotionsSection({ propertyId, onDirty }: { propertyId: number; onDirt
             {pctInput("biweeklyPct", t`14 nuits et plus`, 90)}
             {pctInput("monthlyPct", t`28 nuits et plus`, 90)}
           </div>
+          <p className="muted">
+            {t`Les paliers 7, 14 et 28 nuits sont ceux d'Airbnb : Beds24 n'en transmet pas d'autres. Pour une remise dès 5 nuits sur votre site, voyez`}{" "}
+            <Link to="/reglages/promotions">{t`Remises et codes promo`}</Link>.
+          </p>
         </fieldset>
         <fieldset className="fs">
           <legend>{t`Réservation tôt`}</legend>

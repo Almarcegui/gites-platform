@@ -981,6 +981,7 @@ fieldset.wd legend { font-weight: 600; margin-bottom: 8px; padding: 0; }
 }
 .tbl td small .phase { color: var(--pine-ink); font-weight: 600; }
 .tbl td.ref { font-variant-numeric: tabular-nums; color: var(--ink-2); white-space: nowrap; font-size: 13px; }
+.tbl td small.ref-sub { display: block; font-variant-numeric: tabular-nums; color: var(--ink-3); font-size: 12px; font-weight: 400; }
 .show-s-inline { display: none !important; }
 @media (max-width: 63.99em) { .show-s-inline { display: block !important; } .bk td.ref, .bk th:first-child { display: none; } }
 .facts div.wide { grid-column: 1 / -1; }
@@ -1047,6 +1048,7 @@ body:has(.savebar) .amel-fab.amel-B { bottom: calc(156px + env(safe-area-inset-b
   .amel-fab.amel-B > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
   .pill, .src, .dom-txt small, .who-t small, .tbl td small, .tbl td.ref, .side-h, .mcol span { font-size: 14px; }
+  .tbl td small.ref-sub { font-size: 14px; }
   .badge, .tabbar .badge { font-size: 13px; min-width: 22px; height: 22px; }
   .crumbs a { min-height: 44px; }
   .bien ul button, .health li button { min-height: 44px; }

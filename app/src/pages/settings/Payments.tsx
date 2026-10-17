@@ -62,7 +62,6 @@ export function PaymentsPage() {
               <tr>
                 <th scope="col">{t`Client`}</th>
                 <th scope="col">{t`Date`}</th>
-                <th scope="col">{t`Réservation`}</th>
                 <th scope="col">{t`Type`}</th>
                 <th scope="col" className="hide-s">{t`Moyen`}</th>
                 <th scope="col" className="r">{t`Montant`}</th>
@@ -76,10 +75,10 @@ export function PaymentsPage() {
                     <button type="button" className="cell-link" onClick={(e) => (e.stopPropagation(), setOpen(p))}>
                       {p.bookingGuestName || t`—`}
                     </button>
+                    <small className="ref-sub">{p.bookingReference}</small>
                     <small className="show-s-inline">{sqlWhen(p.receivedAt ?? p.createdAt)}</small>
                   </td>
                   <td className="nowrap" data-l={t`Date`}>{sqlWhen(p.receivedAt ?? p.createdAt)}</td>
-                  <td className="ref" data-l={t`Réservation`}>{p.bookingReference}</td>
                   <td>{w.kind(p.kind)}</td>
                   <td className="hide-s" data-l={t`Moyen`}>{w.method(p.method)}</td>
                   <td className="r amt mc-r">{p.kind === "refund" ? `− ${eur(p.amountCents)}` : eur(p.amountCents)}</td>

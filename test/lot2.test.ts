@@ -335,7 +335,13 @@ for (const [backend, create] of [
       it("les quatre modèles du pilote sont là, avec les variables", async () => {
         const r = await call("GET", "/api/admin/message-templates");
         const list = r.data.templates as { name: string; body: string; lang: string }[];
-        expect(list.map((x) => x.name)).toEqual(["Accès et clés", "Horaires", "Rappel du solde", "Après le séjour"]);
+        expect(list.slice(0, 4).map((x) => x.name)).toEqual(["Accès et clés", "Horaires", "Rappel du solde", "Après le séjour"]);
+        // Migration 0037 (demande n° 9) : trois modèles de plus, en FR et en NL.
+        expect(list.slice(4).map((x) => x.name)).toEqual([
+          "Confirmation de réservation", "Bevestiging van de reservering",
+          "Annulation", "Annulering",
+          "Revenez nous voir", "Kom ons nog eens bezoeken",
+        ]);
         expect(list[0]!.body).toContain("{prenom}");
         expect(list[2]!.body).toContain("{solde}");
         expect(list[1]!.body).toContain("L'arrivée");
