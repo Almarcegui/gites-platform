@@ -1125,25 +1125,63 @@ export interface GuestRow {
   createdAt: string;
   bookingsCount?: number;
   totalSpentCents?: number;
+  /** Renseignés par `listGuests` seulement (séjours non annulés). */
+  staysCount?: number;
+  /** Noms des hébergements, séparés par « / ». */
+  gites?: string | null;
+  firstCheckin?: string | null;
+  lastCheckin?: string | null;
+  lastCheckout?: string | null;
+  /** Horodatage de création de la réservation du dernier séjour. */
+  lastBookedAt?: string | null;
+  marketingOptIn?: boolean;
+  marketingOptInAt?: string | null;
 }
 
-export async function listGuests(db: D1Database, search?: string): Promise<GuestRow[]> {
+/** Tris de la liste des clients. Liste blanche : la clause ORDER BY n'est
+ *  jamais construite à partir de la saisie. `stay_desc` = séjour le plus récent
+ *  d'abord (les séjours à venir en tête), `stay_asc` = le plus ancien d'abord ;
+ *  les clients sans séjour valide (tout annulé) restent en fin de liste. */
+export const GUEST_SORTS = ["name", "stay_desc", "stay_asc"] as const;
+export type GuestSort = (typeof GUEST_SORTS)[number];
+const GUEST_ORDER: Record<GuestSort, string> = {
+  name: "g.last_name",
+  stay_desc: "last_checkin IS NULL, last_checkin DESC, g.last_name",
+  stay_asc: "last_checkin IS NULL, last_checkin ASC, g.last_name",
+};
+
+/** Clients avec leurs séjours (hors annulés) : hébergements, premier et dernier
+ *  séjour, date de réservation du dernier séjour, consentement marketing. */
+export async function listGuests(db: D1Database, search?: string, sort: GuestSort = "name"): Promise<GuestRow[]> {
+  const live = "b3.guest_id = g.id AND b3.status != 'cancelled'";
+  const lastStay = `SELECT %COL% FROM bookings b3 WHERE ${live} ORDER BY b3.checkin DESC, b3.id DESC LIMIT 1`;
   const base = `
-    SELECT g.*, COUNT(b.id) AS bookings_count, COALESCE(SUM(CASE WHEN b.status != 'cancelled' THEN b.total_cents ELSE 0 END), 0) AS total_spent
+    SELECT g.*, COUNT(b.id) AS bookings_count, COALESCE(SUM(CASE WHEN b.status != 'cancelled' THEN b.total_cents ELSE 0 END), 0) AS total_spent,
+           COUNT(CASE WHEN b.status != 'cancelled' THEN 1 END) AS stays_count,
+           MIN(CASE WHEN b.status != 'cancelled' THEN b.checkin END) AS first_checkin,
+           MAX(CASE WHEN b.status != 'cancelled' THEN b.checkin END) AS last_checkin,
+           (${lastStay.replace("%COL%", "b3.checkout")}) AS last_checkout,
+           (${lastStay.replace("%COL%", "b3.created_at")}) AS last_booked_at,
+           (SELECT GROUP_CONCAT(n, ' / ') FROM (SELECT DISTINCT u3.name AS n FROM bookings b3 JOIN units u3 ON u3.id = b3.unit_id WHERE ${live} ORDER BY u3.name)) AS gites
       FROM guests g LEFT JOIN bookings b ON b.guest_id = g.id`;
+  const order = GUEST_ORDER[sort] ?? GUEST_ORDER.name;
   const core = search ? phoneCore(search) : null;
   const phone = core ? ` OR ${sqlPhoneDigits("g.phone")} LIKE ?2` : "";
   const stmt = search
     ? db
-        .prepare(`${base} WHERE g.last_name LIKE ?1 OR g.first_name LIKE ?1 OR g.email LIKE ?1${phone} GROUP BY g.id ORDER BY g.last_name`)
+        .prepare(`${base} WHERE g.last_name LIKE ?1 OR g.first_name LIKE ?1 OR g.email LIKE ?1${phone} GROUP BY g.id ORDER BY ${order}`)
         .bind(`%${search}%`, ...(core ? [`%${core}%`] : []))
-    : db.prepare(`${base} GROUP BY g.id ORDER BY g.last_name`);
+    : db.prepare(`${base} GROUP BY g.id ORDER BY ${order}`);
   const { results } = await stmt.all();
   return (results as Raw[]).map((r) => ({
     id: num(r.id), email: strOrNull(r.email), firstName: strOrNull(r.first_name), lastName: str(r.last_name),
     phone: strOrNull(r.phone), address: strOrNull(r.address), country: strOrNull(r.country),
     lang: str(r.lang), notes: strOrNull(r.notes), createdAt: str(r.created_at),
     bookingsCount: num(r.bookings_count), totalSpentCents: num(r.total_spent),
+    staysCount: num(r.stays_count), gites: strOrNull(r.gites),
+    firstCheckin: strOrNull(r.first_checkin), lastCheckin: strOrNull(r.last_checkin),
+    lastCheckout: strOrNull(r.last_checkout), lastBookedAt: strOrNull(r.last_booked_at),
+    marketingOptIn: num(r.marketing_opt_in) === 1, marketingOptInAt: strOrNull(r.marketing_opt_in_at),
   }));
 }
 

@@ -14,21 +14,33 @@ import { api } from "../../api/client";
 import type { Booking } from "../../api/types";
 import type { GuestRow } from "../../api/types2";
 import { ErrorLine, useAction } from "../../lib/action";
-import { stayRange } from "../../lib/dates";
+import { shortDate, stayRange } from "../../lib/dates";
 import { eur } from "../../lib/money";
 import { useOpenBooking } from "../../shell/Shell";
-import { Empty, Fold, Loading, Page, SidePanel } from "../../ui/kit";
+import { DownloadButton, Empty, Fold, Loading, Page, SidePanel } from "../../ui/kit";
 import { ClientHistory } from "./ClientHistory";
 
 function fullName(g: Pick<GuestRow, "firstName" | "lastName">): string {
   return [g.firstName, g.lastName].filter(Boolean).join(" ");
 }
 
+type GuestSort = "name" | "stay_desc" | "stay_asc";
+
+/** Dates de la liste avec l'année : triée par séjour, la liste mélange les années. */
+const stayWithYear = (a: string, b: string) => `${stayRange(a, b)} ${b.slice(0, 4)}`;
+const dayWithYear = (sql: string) => `${shortDate(sql.slice(0, 10))} ${sql.slice(0, 4)}`;
+
 export function ClientsPage() {
   const { t } = useLingui();
   const [search, setSearch] = useState("");
+  const [sort, setSort] = useState<GuestSort>("name");
   const [q] = useDebouncedValue(search.trim(), 250);
-  const list = useQuery({ queryKey: ["guests", q], queryFn: () => api<{ guests: GuestRow[] }>("/guests", { query: { search: q || undefined } }).then((r) => r.guests) });
+  const SORTS: { id: GuestSort; label: string }[] = [
+    { id: "name", label: t`Par nom` },
+    { id: "stay_desc", label: t`Séjour le plus récent` },
+    { id: "stay_asc", label: t`Séjour le plus ancien` },
+  ];
+  const list = useQuery({ queryKey: ["guests", q, sort], queryFn: () => api<{ guests: GuestRow[] }>("/guests", { query: { search: q || undefined, sort } }).then((r) => r.guests) });
   const fromLink = (useSearch({ strict: false }) as { client?: number }).client ?? null;
   const navigate = useNavigate();
   const [open, setOpen] = useState<number | null>(fromLink);
@@ -43,6 +55,16 @@ export function ClientsPage() {
     <Page title={t`Clients`} back lead={t`Tous les clients des deux domaines. La recherche lit le nom et le mail.`}>
       <div className="filters">
         <TextInput className="search" size="md" leftSection={<IconSearch size={20} />} placeholder={t`Nom, mail ou téléphone`} aria-label={t`Rechercher un client`} value={search} onChange={(e) => setSearch(e.currentTarget.value)} />
+        <div className="chips" role="group" aria-label={t`Trier les clients`}>
+          {SORTS.map((o) => (
+            <button key={o.id} type="button" className="chip" aria-pressed={sort === o.id} onClick={() => setSort(o.id)}>
+              {o.label}
+            </button>
+          ))}
+        </div>
+        <DownloadButton path="/guests.csv" query={{ search: search.trim() || undefined, sort }} filename="clients.csv">
+          {t`Exporter`}
+        </DownloadButton>
       </div>
       {list.error ? <ErrorLine text={t`La liste n'a pas pu être lue.`} /> : null}
       {list.isLoading ? <Loading /> : null}
@@ -56,6 +78,9 @@ export function ClientsPage() {
                 <th scope="col">{t`Nom`}</th>
                 <th scope="col" className="hide-s">{t`Mail`}</th>
                 <th scope="col" className="hide-s">{t`Téléphone`}</th>
+                <th scope="col" className="hide-s">{t`Gîte`}</th>
+                <th scope="col" className="hide-s">{t`Dernier séjour`}</th>
+                <th scope="col" className="hide-s">{t`Réservé le`}</th>
                 <th scope="col" className="r">{t`Séjours`}</th>
                 <th scope="col" className="r">{t`Total des séjours`}</th>
               </tr>
@@ -68,9 +93,17 @@ export function ClientsPage() {
                       {fullName(g) || t`Client sans nom`}
                     </button>
                     <small className="show-s-inline">{[g.email, g.phone].filter(Boolean).join(", ")}</small>
+                    {g.gites || g.lastCheckin ? (
+                      <small className="show-s-inline">
+                        {[g.gites, g.lastCheckin && g.lastCheckout ? stayWithYear(g.lastCheckin, g.lastCheckout) : null, g.lastBookedAt ? t`réservé le ${dayWithYear(g.lastBookedAt)}` : null].filter(Boolean).join(", ")}
+                      </small>
+                    ) : null}
                   </td>
                   <td className="hide-s mc-off">{g.email || "—"}</td>
                   <td className="hide-s nowrap mc-off">{g.phone || "—"}</td>
+                  <td className="hide-s mc-off">{g.gites || "—"}</td>
+                  <td className="hide-s mc-off">{g.lastCheckin && g.lastCheckout ? stayWithYear(g.lastCheckin, g.lastCheckout) : "—"}</td>
+                  <td className="hide-s nowrap mc-off">{g.lastBookedAt ? dayWithYear(g.lastBookedAt) : "—"}</td>
                   <td className="r mc-off">{g.bookingsCount ?? 0}</td>
                   <td className="r amt mc-r">{eur(g.totalSpentCents ?? 0)}</td>
                 </tr>

@@ -3067,6 +3067,10 @@ msgstr "Menu uitklappen"
 msgid "Déplier le menu ({keys})"
 msgstr "Menu uitklappen ({keys})"
 
+#: src/pages/settings/Clients.tsx
+msgid "Dernier séjour"
+msgstr "Laatste verblijf"
+
 #: src/pages/settings/ServiceKeys.tsx
 msgid "Dernier usage"
 msgstr "Laatst gebruikt"
@@ -3624,6 +3628,7 @@ msgid "Exemple"
 msgstr "Voorbeeld"
 
 #: src/pages/Bookings.tsx
+#: src/pages/settings/Clients.tsx
 msgid "Exporter"
 msgstr "Exporteren"
 
@@ -3791,6 +3796,10 @@ msgstr "Het seizoen behouden"
 #: src/pages/Login.tsx
 msgid "Gestion des gîtes"
 msgstr "Beheer van de vakantiewoningen"
+
+#: src/pages/settings/Clients.tsx
+msgid "Gîte"
+msgstr "Verblijf"
 
 #: src/pages/settings/Domain.tsx
 msgid "Glissez des photos ici"
@@ -5688,6 +5697,10 @@ msgstr "Bijvoorbeeld: Ontbijtmand"
 msgid "par exemple : panier, séance"
 msgstr "bijvoorbeeld: mand, sessie"
 
+#: src/pages/settings/Clients.tsx
+msgid "Par nom"
+msgstr "Op naam"
+
 #: src/pages/settings/Options.tsx
 msgid "par nuit"
 msgstr "per nacht"
@@ -6403,7 +6416,6 @@ msgstr "Ontvangen ({0})"
 msgid "Réel (vrais paiements)"
 msgstr "Echt (echte betalingen)"
 
-#: src/pages/Bookings.tsx
 #: src/pages/settings/Channels.tsx
 msgid "Réf."
 msgstr "Ref."
@@ -6734,6 +6746,15 @@ msgstr "Geboekt en betaald"
 msgid "Réservé et payé sur {0}."
 msgstr "Geboekt en betaald op {0}."
 
+#: src/pages/settings/Clients.tsx
+msgid "Réservé le"
+msgstr "Geboekt op"
+
+#. placeholder {0}: dayWithYear(g.lastBookedAt)
+#: src/pages/settings/Clients.tsx
+msgid "réservé le {0}"
+msgstr "geboekt op {0}"
+
 #: src/pages/Today.tsx
 msgid "Réservé par téléphone."
 msgstr "Telefonisch geboekt."
@@ -7036,6 +7057,14 @@ msgstr "Gezocht verblijf"
 #: src/pages/settings/Payments.tsx
 msgid "Séjour entier"
 msgstr "Volledig verblijf"
+
+#: src/pages/settings/Clients.tsx
+msgid "Séjour le plus ancien"
+msgstr "Oudste verblijf"
+
+#: src/pages/settings/Clients.tsx
+msgid "Séjour le plus récent"
+msgstr "Recentste verblijf"
 
 #: src/booking/BookingPanel.tsx
 #: src/pages/settings/Logs.tsx
@@ -7460,6 +7489,10 @@ msgstr "Alle platformen krijgen opnieuw dezelfde prijs. De kalenders vertrekken 
 #: src/pages/settings/Stats.tsx
 msgid "Toutes les réservations"
 msgstr "Alle reserveringen"
+
+#: src/pages/settings/Clients.tsx
+msgid "Trier les clients"
+msgstr "Klanten sorteren"
 
 #: src/pages/settings/Improvements.tsx
 msgid "Trier par"
