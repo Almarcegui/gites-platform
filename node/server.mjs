@@ -244,6 +244,24 @@ function clientIp(req) {
   return req.socket.remoteAddress || "";
 }
 
+/** Adresse de bouclage (127.0.0.0/8, ::1, ::ffff:127.x.x.x). */
+function isLoopback(ip) {
+  const v = ip.trim().toLowerCase();
+  return v === "::1" || /^127\./.test(v) || /^::ffff:127\./.test(v);
+}
+
+/** Une seule trace par processus : requêtes reçues du bouclage sans TRUST_PROXY. */
+let loopbackNoted = false;
+function noteLoopbackWithoutProxy() {
+  if (loopbackNoted) return;
+  loopbackNoted = true;
+  console.warn("[gites] ⚠️ requêtes reçues de 127.0.0.1 sans TRUST_PROXY=true : plafonds par adresse IP désactivés (derrière Caddy, poser TRUST_PROXY=true dans .env)");
+  db.prepare("INSERT INTO audit_log (actor, action, entity, detail) VALUES ('cron', 'config.trust_proxy_absent', NULL, ?1)")
+    .bind(JSON.stringify({ message: "requêtes reçues du bouclage sans TRUST_PROXY : plafonds par adresse IP désactivés" }))
+    .run()
+    .catch((e) => console.error("[audit_log indisponible]", e));
+}
+
 /** Fichier de UPLOADS_DIR pour /uploads/<nom>, ou null (nom strict : pas de
  *  sous-dossier, pas de traversée possible). */
 function resolveUpload(pathname) {
@@ -267,9 +285,14 @@ async function toRequest(req, origin) {
     else if (v !== undefined) headers.set(k, v);
   }
   // Le code métier lit l'adresse du client dans cf-connecting-ip (contrat du
-  // Worker) : on y met celle que le serveur a réellement vue.
+  // Worker) : on y met celle que le serveur a réellement vue. Exception : une
+  // adresse de bouclage sans TRUST_PROXY, c'est le proxy (Caddy) qui parle
+  // pour tout le monde ; la poser rendrait les plafonds par adresse communs à
+  // TOUS les visiteurs. On la laisse vide : plafonds par adresse inactifs,
+  // comme avant l'audit, plafonds par compte toujours actifs.
   const ip = clientIp(req);
-  if (ip) headers.set("cf-connecting-ip", ip);
+  if (ip && !TRUST_PROXY && isLoopback(ip)) noteLoopbackWithoutProxy();
+  else if (ip) headers.set("cf-connecting-ip", ip);
   const hasBody = req.method !== "GET" && req.method !== "HEAD";
   let body;
   if (hasBody) {
@@ -480,6 +503,7 @@ server.listen(PORT, () => {
   console.log(`[gites] boîte  : ${env.IMAP_FETCH ? `relève IMAP ${env.IMAP_USER} @ ${env.IMAP_HOST || "imap.gmail.com"}, dossier ${(env.IMAP_FOLDER || "").trim() || "INBOX"} (lecture seule)` : "relève IMAP inactive (IMAP_USER / mot de passe absents)"}`);
   if (!env.ADMIN_TOKEN) console.warn("[gites] ⚠️ ADMIN_TOKEN absent — le back-office refusera tout (garde fail-closed)");
   if (!CRON_KEY) console.warn("[gites] ⚠️ CRON_KEY absente — /internal/cron est désactivé");
+  if (!TRUST_PROXY) console.warn("[gites] ⚠️ TRUST_PROXY ≠ true — derrière un proxy (Caddy), les plafonds par adresse IP seront désactivés (adresse de bouclage ignorée)");
 });
 
 // Filet entre deux passages du cron (15 min) : la boîte de contact est relevée toutes les

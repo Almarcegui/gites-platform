@@ -149,9 +149,17 @@ try {
     headers: { "content-type": "application/json", "cf-connecting-ip": `203.0.113.${i}` },
     body: JSON.stringify({ property: "pre-more", name: "Fumée", email: `fumee${i}@example.com`, message: "Question de fumée" }),
   });
+  // Ce serveur-ci n'a pas TRUST_PROXY et reçoit tout de 127.0.0.1 : c'est le
+  // cas « Caddy sans TRUST_PROXY ». L'adresse de bouclage n'est pas posée, les
+  // plafonds par adresse ne s'appliquent pas (sinon communs à tout le site).
   const asked = [];
   for (let i = 1; i <= 6; i++) asked.push((await ask(i)).status);
-  check("Cf-Connecting-IP forgé ignoré : plafond de contact par adresse réelle", asked.slice(0, 5).every((st) => st === 201) && asked[5] === 429, asked.join(","));
+  check("bouclage sans TRUST_PROXY : pas de plafond commun à tous les visiteurs", asked.every((st) => st === 201), asked.join(","));
+  check("bouclage sans TRUST_PROXY : avertissement au démarrage et à la première requête", srv.log().includes("TRUST_PROXY ≠ true") && srv.log().includes("requêtes reçues de 127.0.0.1 sans TRUST_PROXY"), srv.log().slice(-300));
+  for (let i = 7; i <= 8; i++) await ask(i);
+  const auditRows = await (await fetch(`${base}/api/admin/audit?limit=500`, { headers: auth })).json();
+  const notes = JSON.stringify(auditRows).split("config.trust_proxy_absent").length - 1;
+  check("bouclage sans TRUST_PROXY : une seule ligne d'audit", notes === 1, String(notes));
   const huge = new Uint8Array(10 * 1024 * 1024);
   const tooBig = await fetch(`${base}/api/admin/units/1/photos/upload`, { method: "POST", headers: { ...auth, "content-type": "application/octet-stream" }, body: huge }).catch(() => null);
   check("photo : corps de 10 Mo refusé (413)", !tooBig || tooBig.status === 413, String(tooBig?.status));
@@ -197,6 +205,19 @@ try {
   servers.push(srv3);
   await waitUp(base3);
   const from = (ip) => ({ "x-forwarded-for": ip });
+  // Avec TRUST_PROXY : l'adresse vient de X-Forwarded-For (posé par Caddy) ; un
+  // Cf-Connecting-IP forgé ne change rien. Six questions « depuis six adresses »
+  // viennent de la même : la sixième tombe sur le plafond par adresse.
+  const askVia = (i) => fetch(`${base3}/api/public/contact`, {
+    method: "POST",
+    headers: { "content-type": "application/json", ...from("198.51.100.42"), "cf-connecting-ip": `203.0.113.${i}` },
+    body: JSON.stringify({ property: "pre-more", name: "Fumée", email: `proxy${i}@example.com`, message: "Question de fumée" }),
+  });
+  const askedVia = [];
+  for (let i = 1; i <= 6; i++) askedVia.push((await askVia(i)).status);
+  check("Cf-Connecting-IP forgé ignoré : plafond de contact par adresse réelle", askedVia.slice(0, 5).every((st) => st === 201) && askedVia[5] === 429, askedVia.join(","));
+  const otherVisitor = await fetch(`${base3}/api/public/contact`, { method: "POST", headers: { "content-type": "application/json", ...from("198.51.100.43") }, body: JSON.stringify({ property: "pre-more", name: "Fumée", email: "autre@example.com", message: "Question de fumée" }) });
+  check("TRUST_PROXY : un autre visiteur n'est pas touché par le plafond du premier", otherVisitor.status === 201, String(otherVisitor.status));
   const json = { "content-type": "application/json" };
   const key = await (await fetch(`${base3}/api/admin/service-keys`, { method: "POST", headers: { ...auth, ...from("10.9.9.9"), ...json }, body: JSON.stringify({ name: "fumee-mac" }) })).json();
   check("garde IP : clé de service créée depuis la liste", typeof key.key === "string", JSON.stringify(key).slice(0, 120));
