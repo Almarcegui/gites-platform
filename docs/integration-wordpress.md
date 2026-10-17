@@ -19,7 +19,7 @@ function gites_reservation_shortcode( $atts ) {
         'height'   => '1400',
     ), $atts, 'gites_reservation' );
 
-    $base = 'https://dev1.mdcdy.be/book/'; // à remplacer par le domaine définitif
+    $base = 'https://178-105-145-191.sslip.io/book/'; // à remplacer par le domaine définitif
     $src  = add_query_arg( array(
         'property' => $atts['property'],
         'lang'     => $atts['lang'],
@@ -48,7 +48,7 @@ add_shortcode( 'gites_reservation', 'gites_reservation_shortcode' );
 Dans un bloc **HTML personnalisé** Gutenberg :
 
 ```html
-<iframe src="https://dev1.mdcdy.be/book/?property=pre-more&lang=fr"
+<iframe src="https://178-105-145-191.sslip.io/book/?property=pre-more&lang=fr"
         style="width:100%;height:1400px;border:0;max-width:1100px;margin:0 auto;display:block;"
         loading="lazy" title="Réservation"></iframe>
 ```
@@ -56,7 +56,10 @@ Dans un bloc **HTML personnalisé** Gutenberg :
 ## Notes
 
 - L'URL de base (`$base`) est à remplacer le jour où le domaine définitif
-  remplace `dev1.mdcdy.be` (cf. `docs/mise-en-ligne.md` § 3).
+  remplace l'adresse sslip.io (cf. `docs/mise-en-ligne.md` § 3).
+- ⚠️ Le Caddyfile du serveur ne doit PAS poser `X-Frame-Options` : il
+  écraserait la règle fine de l'application (`DENY` partout, rien sur
+  `/book/`). C'est l'app qui décide, pas le proxy.
 - Les paramètres du deep-link (`checkin`, `checkout`, `adults`, `children`,
   `unit`) passent tels quels : on peut les ajouter à l'attribut `src`.
 - Le tunnel fait ses appels vers `/api/public/*` en relatif : l'iframe n'a
