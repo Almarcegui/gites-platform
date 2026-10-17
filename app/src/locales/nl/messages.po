@@ -2552,6 +2552,10 @@ msgstr "Geheime sleutel (sk_test_… of sk_live_…)"
 msgid "Clés de service, {active} active(s)"
 msgstr "Servicesleutels, {active} actief"
 
+#: src/pages/settings/Domain.tsx
+msgid "Clés, code, parking, chemin… L'adresse et les heures d'arrivée et de départ sont ajoutées toutes seules."
+msgstr "Sleutels, code, parking, route… Het adres en de aankomst- en vertrekuren worden automatisch toegevoegd."
+
 #: src/booking/BookingPanel.tsx
 #: src/pages/Bookings.tsx
 #: src/pages/Dashboard.tsx
@@ -3478,6 +3482,10 @@ msgstr "Deze promoties naar Airbnb versturen?"
 msgid "Envoyer les calendriers maintenant"
 msgstr "De kalenders nu versturen"
 
+#: src/pages/settings/Domain.tsx
+msgid "Envoyer les mails automatiques du séjour"
+msgstr "Automatische e-mails rond het verblijf versturen"
+
 #: src/pages/settings/ChannelPrices.tsx
 msgid "Envoyer les prix par plateforme ?"
 msgstr "De prijzen per platform versturen?"
@@ -3812,6 +3820,10 @@ msgstr "Vergoeding: {0} (gelijk aan het voorschot) met de hand over te schrijven
 msgid "Indiquez le prix d'une nuit en semaine pour chaque bien qui a ses prix de saison."
 msgstr "Geef de prijs van een nacht in de week voor elke woning met seizoensprijzen."
 
+#: src/pages/settings/Domain.tsx
+msgid "Infos d'arrivée (mails une semaine et trois jours avant)"
+msgstr "Aankomstinformatie (e-mails een week en drie dagen vooraf)"
+
 #: src/booking/Register.tsx
 msgid "Inscrire au registre"
 msgstr "In het register inschrijven"
@@ -4107,6 +4119,10 @@ msgstr "De som van de huizen die het groepeert"
 #: src/pages/settings/Help.tsx
 msgid "La vente en trois étapes : dates et maison, voyageurs et prix, client et paiement."
 msgstr "De verkoop in drie stappen: data en huis, gasten en prijs, klant en betaling."
+
+#: src/pages/settings/Domain.tsx
+msgid "Laissez vide : le mail de remerciement part sans demande d'avis."
+msgstr "Leeg laten: de bedankmail vertrekt zonder vraag om een beoordeling."
 
 #: src/pages/settings/StripeAccounts.tsx
 msgid "Laissez vide pour garder la clé actuelle."
@@ -4686,6 +4702,10 @@ msgstr "link verlopen zonder betaling"
 msgid "Lien pour la personne du ménage"
 msgstr "Link voor de schoonmaakhulp"
 
+#: src/pages/settings/Domain.tsx
+msgid "Lien pour laisser un avis (mail d'après séjour)"
+msgstr "Link om een beoordeling te geven (e-mail na het verblijf)"
+
 #: src/pages/settings/Payments.tsx
 msgid "lien remplacé par un autre"
 msgstr "link vervangen door een andere"
@@ -4740,6 +4760,10 @@ msgstr "Mail"
 #: src/pages/settings/Domain.tsx
 msgid "Mail de contact"
 msgstr "Contactmail"
+
+#: src/pages/settings/Domain.tsx
+msgid "Mails automatiques du séjour"
+msgstr "Automatische e-mails rond het verblijf"
 
 #: src/booking/BookingPanel.tsx
 #: src/pages/settings/Logs.tsx
@@ -5863,6 +5887,10 @@ msgstr "Om te beslissen"
 #: src/calendar/Weeks.tsx
 msgid "Pour la famille, des travaux ou une autre raison."
 msgstr "Voor de familie, werken of een andere reden."
+
+#: src/pages/settings/Domain.tsx
+msgid "Pour les réservations faites sur le site ou au téléphone : un mois avant (préparer le séjour), une semaine avant (infos d'arrivée), trois jours avant (rappel), le lendemain du départ (merci et avis), et un mail si un paiement en ligne n'aboutit pas. Jamais pour Airbnb, Booking ni les séjours importés. Chaque mail part une seule fois : activez-les quand l'envoi des mails est ouvert, sinon ils sont seulement préparés (visibles dans Journaux)."
+msgstr "Voor reserveringen via de site of telefonisch: een maand vooraf (verblijf voorbereiden), een week vooraf (aankomstinformatie), drie dagen vooraf (herinnering), de dag na vertrek (bedankt en beoordeling), en een e-mail als een online betaling mislukt. Nooit voor Airbnb, Booking of geïmporteerde verblijven. Elke e-mail vertrekt maar één keer: zet ze aan wanneer het versturen van e-mails open staat, anders worden ze alleen voorbereid (zichtbaar in Logboeken)."
 
 #: src/pages/settings/Ical.tsx
 msgid "Pour les sites qui ne passent pas par Beds24 : chacun lit nos dates, et nous lisons les siennes. Le délai côté Airbnb est d'environ deux heures."

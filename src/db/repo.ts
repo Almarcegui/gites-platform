@@ -428,6 +428,12 @@ export interface PropertySettings {
   autoReplyEnabled: boolean;
   autoReplyText: string;
   emailForwardTo: string;
+  /** Mails automatiques du séjour (J-30, J-7, J-3, après) et relance d'échec de paiement. Coupé par défaut. */
+  stayEmailsEnabled: boolean;
+  /** Lien vers la page d'avis (Google…) cité dans le mail d'après séjour ; vide = phrase omise. */
+  reviewUrl: string;
+  /** Texte libre des mails J-7 et J-3 : clés, code, parking, chemin. */
+  arrivalInfoText: string;
 }
 
 const SETTINGS_DEFAULTS: PropertySettings = {
@@ -445,6 +451,9 @@ const SETTINGS_DEFAULTS: PropertySettings = {
   autoReplyEnabled: false,
   autoReplyText: "",
   emailForwardTo: "",
+  stayEmailsEnabled: false,
+  reviewUrl: "",
+  arrivalInfoText: "",
 };
 
 export async function getSettings(db: D1Database, propertyId: number): Promise<PropertySettings> {
@@ -472,6 +481,9 @@ export async function getSettings(db: D1Database, propertyId: number): Promise<P
     autoReplyEnabled: bool("auto_reply_enabled", D.autoReplyEnabled),
     autoReplyText: text("auto_reply_text", D.autoReplyText),
     emailForwardTo: text("email_forward_to", D.emailForwardTo),
+    stayEmailsEnabled: bool("stay_emails_enabled", D.stayEmailsEnabled),
+    reviewUrl: text("review_url", D.reviewUrl),
+    arrivalInfoText: text("arrival_info_text", D.arrivalInfoText),
   };
 }
 
