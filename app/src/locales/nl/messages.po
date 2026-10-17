@@ -2776,6 +2776,14 @@ msgstr "bevestiging opnieuw verstuurd"
 msgid "confirmation renvoyée au client"
 msgstr "bevestiging opnieuw naar de klant verstuurd"
 
+#: src/pages/settings/Logs.tsx
+msgid "confirmation renvoyée par le client depuis la page Merci"
+msgstr "bevestiging opnieuw verstuurd door de klant via de bedankpagina"
+
+#: src/booking/BookingPanel.tsx
+msgid "confirmation renvoyée par le client depuis la page Merci (adresse dans les mails envoyés)"
+msgstr "bevestiging opnieuw verstuurd door de klant via de bedankpagina (adres bij de verstuurde mails)"
+
 #: src/pages/settings/Clients.tsx
 msgid "confirmée"
 msgstr "bevestigd"
@@ -6741,6 +6749,11 @@ msgstr "De toegang teruggeven"
 #: src/pages/settings/Accounts.tsx
 msgid "Rendre l'accès à {0} ?"
 msgstr "De toegang teruggeven aan {0}?"
+
+#: src/booking/BookingPanel.tsx
+#: src/pages/settings/Logs.tsx
+msgid "renvoi de la confirmation demandé par le client : envoi en échec"
+msgstr "nieuwe verzending van de bevestiging gevraagd door de klant: verzending mislukt"
 
 #: src/pages/settings/ChannelPrices.tsx
 msgid "Renvoyer à Beds24"

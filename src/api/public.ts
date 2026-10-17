@@ -45,8 +45,10 @@ import {
 import { pullBeds24Bookings, pushCalendars, triggerBeds24Push } from "../services/beds24-sync";
 import {
   handlePaymentSuccess,
+  merciUrl,
   MIN_CHECKOUT_CENTS,
   quoteFromContext,
+  sendConfirmation,
   startPayment,
   voucherUrl,
   type PaymentStart,
@@ -56,6 +58,8 @@ import { buildContactAckEmail, queueEmail, realContact, refSubject } from "../se
 import { buildConfirmationPdf, cgvVersionLabel, confirmationFileName, loadConfirmationPdfContext } from "../services/confirmation-pdf";
 import { publicHealth } from "../services/health";
 import { clearHoldCookie, readHoldReference, setHoldCookie } from "../services/hold-session";
+import { verifyMerciToken } from "../services/merci-token";
+import { isDeliverableEmail, maskEmail } from "../core/mask-email";
 import { buildIcs, exportSpansForUnit } from "../services/ical";
 import { availabilityHorizon, NON_CUMUL_NOTE, publicPromotions, weekendAvailability } from "../services/offers";
 import { logSearch } from "../services/search-log";
@@ -1178,13 +1182,13 @@ export function registerPublicRoutes(router: Router): void {
     const result = await handlePaymentSuccess(env.DB, env, session, "pi_stub");
     if (!result.handled) return apiError(404, "session inconnue");
     const booking = result.bookingId != null ? await getBooking(env.DB, result.bookingId) : null;
-    const emailParam = booking?.guestEmail ? `&email=${encodeURIComponent(booking.guestEmail)}` : "";
     // Un solde payé ne « confirme » rien : le client revient sur son voucher,
     // qui affiche le nouveau solde (miroir des URLs de retour Stripe).
-    const redirect =
-      before?.kind === "balance" && booking
+    const redirect = !booking
+      ? `${env.PUBLIC_BASE_URL}/book/merci.html?ref=${encodeURIComponent(result.reference ?? "")}`
+      : before?.kind === "balance"
         ? voucherUrl(env, booking)
-        : `${env.PUBLIC_BASE_URL}/book/merci.html?ref=${encodeURIComponent(result.reference ?? "")}${emailParam}`;
+        : await merciUrl(env, booking);
     return json({ ok: true, reference: result.reference ?? "", redirect });
   });
 
@@ -1346,6 +1350,151 @@ export function registerPublicRoutes(router: Router): void {
   };
   router.get("/api/public/bookings/:reference/confirmation.pdf", confirmationPdf);
   router.get("/api/public/bookings/:reference/contrat.pdf", confirmationPdf);
+
+  // --- page Merci : adresse de la confirmation, et renvoi à une autre ---------
+  //
+  // Le client qui s'est trompé d'adresse au moment de réserver (faute de
+  // frappe) ne reçoit jamais sa confirmation. La page Merci lui montre
+  // l'adresse utilisée, masquée (c•••@example.be), et lui permet de faire
+  // renvoyer la confirmation — mail et PDF, le même que « Renvoyer la
+  // confirmation » du back-office — à une autre adresse.
+  //
+  // Garde-fous : le RENVOI exige le jeton `k` de l'URL de retour du paiement
+  // (jamais la seule référence, devinable, ni le couple référence + e-mail) ;
+  // la LECTURE (adresse masquée) accepte aussi référence + e-mail, comme le
+  // voucher. Réservation confirmée ; trois renvois au plus par réservation ;
+  // chaque renvoi au journal d'audit (historique de la réservation) et dans
+  // `email_log`. Un envoi en échec ne compte pas dans le quota.
+  //
+  // La fiche client n'est COMPLÉTÉE que si elle n'a pas d'adresse ; une adresse
+  // existante n'est jamais remplacée d'ici. La fiche peut porter d'autres
+  // séjours, et la personne qui tient l'URL de la page Merci n'est pas
+  // forcément le client : le propriétaire voit le renvoi dans l'historique et
+  // corrige la fiche s'il s'agit bien d'une faute de frappe.
+
+  const MAX_PUBLIC_RESENDS = 3;
+  const PUBLIC_RESEND_ACTION = "email.confirmation_resent_public";
+  const PUBLIC_RESEND_FAILED = "email.confirmation_resent_public_failed";
+  const MAX_FAILED_PER_HOUR = 5;
+
+  async function merciAccess(db: D1Database, env: Env, reference: string, email: string, k: string | null): Promise<{ booking: BookingRow; token: boolean } | null> {
+    const booking = await getBookingByReference(db, reference);
+    if (!booking) return null;
+    if (await verifyMerciToken(env, booking, k)) return { booking, token: true };
+    if (email && (booking.guestEmail ?? "").toLowerCase() === email.toLowerCase()) return { booking, token: false };
+    return null;
+  }
+
+  async function publicResendsUsed(db: D1Database, bookingId: number): Promise<number> {
+    const row = await db
+      .prepare("SELECT COUNT(*) AS n FROM audit_log WHERE action = ?1 AND entity = ?2")
+      .bind(PUBLIC_RESEND_ACTION, `booking:${bookingId}`)
+      .first<{ n: number }>();
+    return row?.n ?? 0;
+  }
+
+  /** Ce que la page Merci peut dire de l'envoi, adresses masquées. */
+  async function confirmationRecipient(db: D1Database, booking: BookingRow, token: boolean) {
+    const last = await db
+      .prepare("SELECT to_email, status FROM email_log WHERE booking_id = ?1 AND kind IN ('confirmation', 'voucher') ORDER BY id DESC LIMIT 1")
+      .bind(booking.id)
+      .first<{ to_email: string; status: string }>();
+    return {
+      reference: booking.reference,
+      status: booking.status,
+      hasEmail: !!booking.guestEmail,
+      recipient: maskEmail(booking.guestEmail),
+      lastSent: last ? { to: maskEmail(last.to_email), failed: last.status === "failed" } : null,
+      // Le formulaire de renvoi ne s'affiche qu'avec le jeton.
+      canResend: token,
+      resendsLeft: Math.max(0, MAX_PUBLIC_RESENDS - (await publicResendsUsed(db, booking.id))),
+    };
+  }
+
+  router.get("/api/public/bookings/:reference/confirmation-email", async (_req, env, p, url) => {
+    const access = await merciAccess(env.DB, env, p.reference ?? "", (url.searchParams.get("email") ?? "").trim(), url.searchParams.get("k"));
+    if (!access) return apiError(404, "réservation introuvable");
+    return json(await confirmationRecipient(env.DB, access.booking, access.token));
+  });
+
+  router.post("/api/public/bookings/:reference/confirmation-email", async (req, env, p) => {
+    const db = env.DB;
+    const body = await readJson<{ k?: string; to?: string }>(req);
+    const access = await merciAccess(db, env, p.reference ?? "", "", body?.k ? String(body.k) : null);
+    if (!access) return apiError(404, "réservation introuvable");
+    const booking = access.booking;
+    if (booking.status !== "confirmed") return apiError(409, "la confirmation ne part qu'une fois la réservation confirmée");
+    const to = String(body?.to ?? "").trim();
+    if (!isDeliverableEmail(to)) return apiError(400, "email invalide");
+    const previous = booking.guestEmail || null;
+    // Sans fiche client, l'adresse ne serait enregistrée nulle part : le voucher
+    // du mail ne s'ouvrirait pas. Fiche sans adresse PARTAGÉE avec un autre
+    // séjour : l'adresse écrite deviendrait l'accès aux autres réservations
+    // (voucher, messages) — refusé, le propriétaire s'en charge. Les deux cas
+    // sont refusés avant de toucher au quota.
+    if (!previous) {
+      if (booking.guestId == null) return apiError(409, "aucune fiche client sur cette réservation — écrivez-nous via le formulaire de contact");
+      const shared = await db
+        .prepare("SELECT 1 AS x FROM bookings WHERE guest_id = ?1 AND id != ?2 LIMIT 1")
+        .bind(booking.guestId, booking.id)
+        .first<{ x: number }>();
+      if (shared) return apiError(409, "aucune fiche client sur cette réservation — écrivez-nous via le formulaire de contact");
+    }
+
+    // Quota, statut et journal en UNE requête : l'INSERT n'a lieu que sous le
+    // plafond des renvois, sous un plafond d'essais en échec sur l'heure (une
+    // panne du transport ne doit pas ouvrir une boucle sans fin) et sur une
+    // réservation encore confirmée — deux clics simultanés ou une annulation
+    // concurrente ne passent pas.
+    const claim = await db
+      .prepare(
+        `INSERT INTO audit_log (actor, action, entity, detail)
+         SELECT 'public', ?1, ?2, ?3
+          WHERE (SELECT COUNT(*) FROM audit_log WHERE action = ?1 AND entity = ?2) < ?4
+            AND (SELECT COUNT(*) FROM audit_log WHERE action = ?6 AND entity = ?2 AND created_at > datetime('now', '-1 hour')) < ?7
+            AND EXISTS (SELECT 1 FROM bookings WHERE id = ?5 AND status = 'confirmed')`,
+      )
+      .bind(PUBLIC_RESEND_ACTION, `booking:${booking.id}`, JSON.stringify({ to, adresseFiche: previous, ficheCompletee: !previous }), MAX_PUBLIC_RESENDS, booking.id, PUBLIC_RESEND_FAILED, MAX_FAILED_PER_HOUR)
+      .run();
+    if ((claim.meta?.changes ?? 0) === 0) {
+      const now = await getBooking(db, booking.id);
+      if (now?.status !== "confirmed") return apiError(409, "la confirmation ne part qu'une fois la réservation confirmée");
+      return apiError(429, "nombre maximal de renvois atteint — écrivez-nous en répondant à un de nos e-mails ou via le formulaire de contact", { code: "resend_limit" });
+    }
+    const claimId = claim.meta?.last_row_id;
+    // Échec CERTAIN (rien n'est parti) : la ligne reste à l'historique,
+    // renommée, et ne compte plus dans le quota. Une exception, elle, garde le
+    // quota consommé : le transport a pu accepter le mail avant que le journal
+    // échoue, et un envoi réel non compté ouvrirait un quatrième renvoi.
+    const release = () =>
+      db.prepare("UPDATE audit_log SET action = ?2 WHERE id = ?1").bind(claimId, PUBLIC_RESEND_FAILED).run();
+
+    const result: { status?: "stub" | "sent" | "failed" } = {};
+    const queued = await sendConfirmation(db, env, booking.id, { to, result });
+    if (!queued) {
+      // Rien n'a été préparé (réservation annulée entre-temps, contexte disparu).
+      await release();
+      return apiError(409, "la confirmation ne part qu'une fois la réservation confirmée");
+    }
+    if (result.status === "failed") {
+      await release();
+      const info = await confirmationRecipient(db, booking, true);
+      return apiError(502, "l'envoi n'a pas abouti — vérifiez l'adresse, ou réessayez dans un instant", {
+        ...info,
+        lastSent: { to: maskEmail(to), failed: true },
+      });
+    }
+
+    // Envoi réussi, fiche sans adresse : on la complète maintenant (le voucher
+    // et les mails suivants en ont besoin). Une adresse existante reste en
+    // place (voir plus haut). Mise à jour conditionnelle : jamais d'écrasement.
+    if (!previous) {
+      await db.prepare("UPDATE guests SET email = ?2 WHERE id = ?1 AND (email IS NULL OR email = '')").bind(booking.guestId, to).run();
+    }
+    const refreshed = (await getBooking(db, booking.id)) ?? booking;
+    // Le résultat dit l'adresse de CETTE tentative, pas la dernière du journal.
+    return json({ ok: true, ...(await confirmationRecipient(db, refreshed, true)), lastSent: { to: maskEmail(to), failed: false } });
+  });
 
   /** Fil de conversation du client (page voucher). */
   router.get("/api/public/bookings/:reference/messages", async (_req, env, p, url) => {

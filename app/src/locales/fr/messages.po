@@ -2772,6 +2772,14 @@ msgstr "confirmation renvoyée"
 msgid "confirmation renvoyée au client"
 msgstr "confirmation renvoyée au client"
 
+#: src/pages/settings/Logs.tsx
+msgid "confirmation renvoyée par le client depuis la page Merci"
+msgstr "confirmation renvoyée par le client depuis la page Merci"
+
+#: src/booking/BookingPanel.tsx
+msgid "confirmation renvoyée par le client depuis la page Merci (adresse dans les mails envoyés)"
+msgstr "confirmation renvoyée par le client depuis la page Merci (adresse dans les mails envoyés)"
+
 #: src/pages/settings/Clients.tsx
 msgid "confirmée"
 msgstr "confirmée"
@@ -6737,6 +6745,11 @@ msgstr "Rendre l'accès"
 #: src/pages/settings/Accounts.tsx
 msgid "Rendre l'accès à {0} ?"
 msgstr "Rendre l'accès à {0} ?"
+
+#: src/booking/BookingPanel.tsx
+#: src/pages/settings/Logs.tsx
+msgid "renvoi de la confirmation demandé par le client : envoi en échec"
+msgstr "renvoi de la confirmation demandé par le client : envoi en échec"
 
 #: src/pages/settings/ChannelPrices.tsx
 msgid "Renvoyer à Beds24"
