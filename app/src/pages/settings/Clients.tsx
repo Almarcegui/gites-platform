@@ -1,12 +1,14 @@
 // Clients : la liste (recherche par nom ou mail), la fiche en panneau latéral
-// avec coordonnées modifiables et séjours. Un séjour ouvre la fiche de la
-// réservation.
+// avec coordonnées modifiables, séjours et historique des mails et messages.
+// Un séjour ouvre la fiche de la réservation. La fiche ouverte vit dans
+// l'adresse (?client=12) : la fiche d'une réservation y renvoie.
 import { Trans, useLingui } from "@lingui/react/macro";
 import { Textarea, TextInput } from "@mantine/core";
 import { useDebouncedValue } from "@mantine/hooks";
 import { IconMail, IconPhone, IconSearch } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useNavigate, useSearch } from "@tanstack/react-router";
+import { useEffect, useMemo, useState } from "react";
 
 import { api } from "../../api/client";
 import type { Booking } from "../../api/types";
@@ -16,6 +18,7 @@ import { stayRange } from "../../lib/dates";
 import { eur } from "../../lib/money";
 import { useOpenBooking } from "../../shell/Shell";
 import { Empty, Fold, Loading, Page, SidePanel } from "../../ui/kit";
+import { ClientHistory } from "./ClientHistory";
 
 function fullName(g: Pick<GuestRow, "firstName" | "lastName">): string {
   return [g.firstName, g.lastName].filter(Boolean).join(" ");
@@ -26,7 +29,16 @@ export function ClientsPage() {
   const [search, setSearch] = useState("");
   const [q] = useDebouncedValue(search.trim(), 250);
   const list = useQuery({ queryKey: ["guests", q], queryFn: () => api<{ guests: GuestRow[] }>("/guests", { query: { search: q || undefined } }).then((r) => r.guests) });
-  const [open, setOpen] = useState<number | null>(null);
+  const fromLink = (useSearch({ strict: false }) as { client?: number }).client ?? null;
+  const navigate = useNavigate();
+  const [open, setOpen] = useState<number | null>(fromLink);
+  useEffect(() => {
+    if (fromLink != null) setOpen(fromLink);
+  }, [fromLink]);
+  const close = () => {
+    setOpen(null);
+    if (fromLink != null) void navigate({ to: ".", search: (s: object) => ({ ...s, client: undefined }) });
+  };
   return (
     <Page title={t`Clients`} back lead={t`Tous les clients des deux domaines. La recherche lit le nom et le mail.`}>
       <div className="filters">
@@ -67,7 +79,7 @@ export function ClientsPage() {
           </table>
         </div>
       ) : null}
-      {open != null ? <ClientPanel id={open} onClose={() => setOpen(null)} /> : null}
+      {open != null ? <ClientPanel id={open} onClose={close} /> : null}
     </Page>
   );
 }
@@ -156,6 +168,7 @@ function ClientForm({ guest: g, bookings, onClose }: { guest: GuestRow; bookings
           </button>
         ))}
       </div>
+      <ClientHistory guestId={g.id} />
       <Fold title={t`Coordonnées`} open>
         <div className="grid2">
           {field("firstName", t`Prénom`)}

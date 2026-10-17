@@ -168,6 +168,7 @@ import { syncFeed } from "../services/ical";
 import { countDirectBookings, countSearchStages, listSearchLog } from "../services/search-log";
 import { registerLot2AdminRoutes } from "./admin-lot2";
 import { registerImprovementRoutes } from "./admin-ameliorations";
+import { registerHistoryRoutes } from "./admin-historique";
 import { PriceLinkingError, registerLot3AdminRoutes, sendPriceLinking } from "./admin-lot3";
 import { registerStripeAdminRoutes } from "./admin-stripe";
 
@@ -588,6 +589,7 @@ export function registerAdminRoutes(router: Router): void {
   // Lot 3 : promotions Airbnb, prix dérivés par canal, avis (src/api/admin-lot3.ts).
   registerLot3AdminRoutes(router);
   registerImprovementRoutes(router);
+  registerHistoryRoutes(router);
   registerStripeAdminRoutes(router);
 
   // --- connexion --------------------------------------------------------------

@@ -200,6 +200,14 @@ msgstr ", via {0}"
 msgid "« Nouvelle vente », ou glissez sur les jours dans le calendrier."
 msgstr "« Nouvelle vente », ou glissez sur les jours dans le calendrier."
 
+#: src/pages/settings/ClientHistory.tsx
+msgid "(message vide)"
+msgstr "(message vide)"
+
+#: src/pages/settings/ClientHistory.tsx
+msgid "(sans objet)"
+msgstr "(sans objet)"
+
 #. placeholder {0}: nights > 1 ? t`${nights} nuits` : t`1 nuit`
 #. placeholder {1}: eur(sum)
 #: src/calendar/Weeks.tsx
@@ -856,7 +864,9 @@ msgstr "28 nuits et plus"
 msgid "7 nuits et plus"
 msgstr "7 nuits et plus"
 
+#. placeholder {0}: i.address
 #. placeholder {0}: m.toEmail
+#: src/pages/settings/ClientHistory.tsx
 #: src/pages/settings/Logs.tsx
 msgid "à {0}"
 msgstr "à {0}"
@@ -975,6 +985,10 @@ msgstr "Accordées toutes seules quand le séjour remplit la condition."
 msgid "accusé de réception"
 msgstr "accusé de réception"
 
+#: src/pages/settings/ClientHistory.tsx
+msgid "Accusé de réception de votre message"
+msgstr "Accusé de réception de votre message"
+
 #: src/pages/settings/Beds24Property.tsx
 msgid "actif"
 msgstr "actif"
@@ -1035,6 +1049,10 @@ msgstr "Affichage du calendrier"
 #: src/pages/settings/Domain.tsx
 msgid "Affichée"
 msgstr "Affichée"
+
+#: src/pages/settings/ClientHistory.tsx
+msgid "Afficher"
+msgstr "Afficher"
 
 #: src/pages/Settings.tsx
 #: src/shell/nav.tsx
@@ -1125,6 +1143,10 @@ msgstr "anglais"
 #: src/pages/settings/Logs.tsx
 msgid "annulation"
 msgstr "annulation"
+
+#: src/pages/settings/ClientHistory.tsx
+msgid "Annulation"
+msgstr "Annulation"
 
 #: src/pages/settings/Clients.tsx
 msgid "annulée"
@@ -1381,6 +1403,10 @@ msgstr "Aucun départ dans les trois prochaines semaines."
 msgid "Aucun désaccord : tout ce que les plateformes annoncent est repris ici."
 msgstr "Aucun désaccord : tout ce que les plateformes annoncent est repris ici."
 
+#: src/pages/settings/ClientHistory.tsx
+msgid "Aucun échange avec ce client pour l'instant."
+msgstr "Aucun échange avec ce client pour l'instant."
+
 #: src/pages/Today.tsx
 msgid "Aucun en attente."
 msgstr "Aucun en attente."
@@ -1581,6 +1607,10 @@ msgstr "automatique"
 msgid "autre changement"
 msgstr "autre changement"
 
+#: src/pages/settings/ClientHistory.tsx
+msgid "Autre mail"
+msgstr "Autre mail"
+
 #: src/booking/BookingPanel.tsx
 #: src/pages/settings/Payments.tsx
 msgid "autre moyen"
@@ -1605,6 +1635,10 @@ msgstr "Avance moyenne"
 #: src/pages/settings/Startup.tsx
 msgid "Avancement"
 msgstr "Avancement"
+
+#: src/pages/settings/ClientHistory.tsx
+msgid "Avant une réservation, ou sans réservation liée"
+msgstr "Avant une réservation, ou sans réservation liée"
 
 #: src/pages/Reviews.tsx
 #: src/pages/Settings.tsx
@@ -2668,6 +2702,10 @@ msgstr "Conditions de location"
 msgid "confirmation de réservation"
 msgstr "confirmation de réservation"
 
+#: src/pages/settings/ClientHistory.tsx
+msgid "Confirmation de réservation"
+msgstr "Confirmation de réservation"
+
 #: src/pages/settings/Logs.tsx
 msgid "confirmation et conditions générales"
 msgstr "confirmation et conditions générales"
@@ -2966,6 +3004,11 @@ msgstr "Dates fortes : {n} jours fériés ou ponts"
 msgid "Dates fortes : 1 jour férié ou pont"
 msgstr "Dates fortes : 1 jour férié ou pont"
 
+#. placeholder {0}: i.address
+#: src/pages/settings/ClientHistory.tsx
+msgid "de {0}"
+msgstr "de {0}"
+
 #: src/pages/settings/Import.tsx
 msgid "déjà là"
 msgstr "déjà là"
@@ -3235,6 +3278,14 @@ msgstr "E-mail"
 msgid "Écarté"
 msgstr "Écarté"
 
+#: src/pages/settings/ClientHistory.tsx
+msgid "Échanges avec ce client"
+msgstr "Échanges avec ce client"
+
+#: src/pages/settings/ClientHistory.tsx
+msgid "Échanges de mails et messages"
+msgstr "Échanges de mails et messages"
+
 #: src/booking/BookingPanel.tsx
 msgid "Écrire"
 msgstr "Écrire"
@@ -3248,6 +3299,10 @@ msgstr "Écrire à {0}"
 #: src/pages/settings/Clients.tsx
 msgid "Écrire un mail"
 msgstr "Écrire un mail"
+
+#: src/pages/settings/ClientHistory.tsx
+msgid "écrit dans la messagerie"
+msgstr "écrit dans la messagerie"
 
 #: src/pages/settings/Beds24Property.tsx
 msgid "écriture Beds24 coupée sur ce serveur (elle se fait depuis le site en ligne)"
@@ -3446,6 +3501,10 @@ msgstr "Entrée du journal"
 msgid "Envoi {0} sur {1}…"
 msgstr "Envoi {0} sur {1}…"
 
+#: src/pages/settings/ClientHistory.tsx
+msgid "envoyé"
+msgstr "envoyé"
+
 #. placeholder {0}: r.envoye.propriete.join(", ")
 #: src/pages/settings/Beds24Property.tsx
 msgid "Envoyé : {0}."
@@ -3490,6 +3549,11 @@ msgstr "Envoyer un rappel"
 #: src/pages/settings/Channels.tsx
 msgid "envoyés"
 msgstr "envoyés"
+
+#. placeholder {0}: counts.out
+#: src/pages/settings/ClientHistory.tsx
+msgid "Envoyés ({0})"
+msgstr "Envoyés ({0})"
 
 #: src/pages/settings/Import.tsx
 msgid "erreur"
@@ -3743,6 +3807,10 @@ msgstr "Historique"
 msgid "Hors ligne : vous voyez la dernière version gardée sur cet appareil. Rien ne peut être changé avant le retour du réseau."
 msgstr "Hors ligne : vous voyez la dernière version gardée sur cet appareil. Rien ne peut être changé avant le retour du réseau."
 
+#: src/pages/settings/ClientHistory.tsx
+msgid "Hors séjour"
+msgstr "Hors séjour"
+
 #: src/pages/Bookings.tsx
 msgid "iCal"
 msgstr "iCal"
@@ -3807,6 +3875,10 @@ msgstr "Indemnité : {0} (égale aux arrhes) à virer à la main. Le mail demand
 #: src/pages/settings/Tarifs.tsx
 msgid "Indiquez le prix d'une nuit en semaine pour chaque bien qui a ses prix de saison."
 msgstr "Indiquez le prix d'une nuit en semaine pour chaque bien qui a ses prix de saison."
+
+#: src/pages/settings/ClientHistory.tsx
+msgid "Infos d'arrivée (J-7)"
+msgstr "Infos d'arrivée (J-7)"
 
 #: src/booking/Register.tsx
 msgid "Inscrire au registre"
@@ -3971,6 +4043,10 @@ msgstr "L'exploitant"
 #: src/ui/kit.tsx
 msgid "L'export n'a pas pu être préparé."
 msgstr "L'export n'a pas pu être préparé."
+
+#: src/pages/settings/ClientHistory.tsx
+msgid "L'historique n'a pas pu être lu. Fermez la fiche et réessayez."
+msgstr "L'historique n'a pas pu être lu. Fermez la fiche et réessayez."
 
 #: src/pages/settings/Beds24Property.tsx
 msgid "L'identifiant enregistré n'existe pas dans ce compte (ancien compte résilié) : les calendriers ne partent nulle part tant que la propriété n'est pas recréée."
@@ -4663,6 +4739,7 @@ msgid "Lien copié."
 msgstr "Lien copié."
 
 #: src/booking/BookingPanel.tsx
+#: src/pages/settings/ClientHistory.tsx
 msgid "Lien de paiement"
 msgstr "Lien de paiement"
 
@@ -4736,6 +4813,10 @@ msgstr "Mail"
 #: src/pages/settings/Domain.tsx
 msgid "Mail de contact"
 msgstr "Mail de contact"
+
+#: src/pages/settings/ClientHistory.tsx
+msgid "Mail reçu du client"
+msgstr "Mail reçu du client"
 
 #: src/booking/BookingPanel.tsx
 #: src/pages/settings/Logs.tsx
@@ -4819,6 +4900,10 @@ msgstr "Ménage, {0}"
 msgid "Menu principal"
 msgstr "Menu principal"
 
+#: src/pages/settings/ClientHistory.tsx
+msgid "Merci et avis (après le séjour)"
+msgstr "Merci et avis (après le séjour)"
+
 #: src/improvements/SuggestionButton.tsx
 msgid "Merci, c'est noté."
 msgstr "Merci, c'est noté."
@@ -4836,6 +4921,10 @@ msgstr "Message à lire"
 msgid "Message du client : {0}"
 msgstr "Message du client : {0}"
 
+#: src/pages/settings/ClientHistory.tsx
+msgid "Message écrit sur le site"
+msgstr "Message écrit sur le site"
+
 #: src/pages/settings/Logs.tsx
 msgid "message envoyé à un client"
 msgstr "message envoyé à un client"
@@ -4843,6 +4932,10 @@ msgstr "message envoyé à un client"
 #: src/booking/BookingPanel.tsx
 msgid "message envoyé au client"
 msgstr "message envoyé au client"
+
+#: src/pages/settings/ClientHistory.tsx
+msgid "Message reçu de {canal}"
+msgstr "Message reçu de {canal}"
 
 #: src/pages/Dashboard.tsx
 #: src/pages/Messages.tsx
@@ -5482,6 +5575,10 @@ msgstr "paiement en ligne"
 msgid "paiement manuel"
 msgstr "paiement manuel"
 
+#: src/pages/settings/ClientHistory.tsx
+msgid "Paiement non abouti"
+msgstr "Paiement non abouti"
+
 #: src/booking/BookingPanel.tsx
 #: src/pages/settings/Logs.tsx
 msgid "paiement noté à la main"
@@ -5685,6 +5782,7 @@ msgid "Pas envoyé. {0} Votre texte est gardé."
 msgstr "Pas envoyé. {0} Votre texte est gardé."
 
 #: src/booking/BookingPanel.tsx
+#: src/pages/settings/ClientHistory.tsx
 #: src/pages/settings/Logs.tsx
 msgid "pas parti"
 msgstr "pas parti"
@@ -5794,6 +5892,11 @@ msgstr "Pièce jointe : {name} ({kb} Ko), non conservée ici."
 #: src/pages/Messages.tsx
 msgid "Pièce jointe : {name}, non conservée ici."
 msgstr "Pièce jointe : {name}, non conservée ici."
+
+#. placeholder {0}: i.attachments.map((a) => a.name).join(", ")
+#: src/pages/settings/ClientHistory.tsx
+msgid "Pièces jointes : {0}"
+msgstr "Pièces jointes : {0}"
 
 #: src/pages/Reviews.tsx
 #: src/pages/settings/Channels.tsx
@@ -5913,6 +6016,14 @@ msgstr "préparé (envoi coupé)"
 #: src/pages/settings/Logs.tsx
 msgid "préparé, envoi coupé"
 msgstr "préparé, envoi coupé"
+
+#: src/pages/settings/ClientHistory.tsx
+msgid "préparé, non envoyé (envoi coupé)"
+msgstr "préparé, non envoyé (envoi coupé)"
+
+#: src/pages/settings/ClientHistory.tsx
+msgid "Préparer votre séjour (J-30)"
+msgstr "Préparer votre séjour (J-30)"
 
 #: src/pages/settings/Import.tsx
 msgid "prête"
@@ -6159,7 +6270,9 @@ msgstr "Quotidien"
 msgid "Raccourcis"
 msgstr "Raccourcis"
 
+#. placeholder {0}: i.errorDetail
 #. placeholder {0}: m.errorDetail
+#: src/pages/settings/ClientHistory.tsx
 #: src/pages/settings/Logs.tsx
 msgid "Raison : {0}"
 msgstr "Raison : {0}"
@@ -6177,9 +6290,17 @@ msgstr "Ranger selon la règle"
 msgid "Rapatrier les réservations"
 msgstr "Rapatrier les réservations"
 
+#: src/pages/settings/ClientHistory.tsx
+msgid "Rappel avant l'arrivée (J-3)"
+msgstr "Rappel avant l'arrivée (J-3)"
+
 #: src/pages/settings/Logs.tsx
 msgid "rappel du solde"
 msgstr "rappel du solde"
+
+#: src/pages/settings/ClientHistory.tsx
+msgid "Rappel du solde"
+msgstr "Rappel du solde"
 
 #: src/booking/BookingPanel.tsx
 #: src/pages/settings/Logs.tsx
@@ -6211,9 +6332,14 @@ msgid "Recopiez chaque pièce d'identité. Un enregistrement est définitif : un
 msgstr "Recopiez chaque pièce d'identité. Un enregistrement est définitif : une erreur se corrige ensuite par une nouvelle ligne."
 
 #: src/booking/BookingPanel.tsx
+#: src/pages/settings/ClientHistory.tsx
 #: src/pages/settings/Payments.tsx
 msgid "reçu"
 msgstr "reçu"
+
+#: src/pages/settings/ClientHistory.tsx
+msgid "Reçu de paiement"
+msgstr "Reçu de paiement"
 
 #: src/pages/settings/Payments.tsx
 msgid "Reçu le"
@@ -6226,6 +6352,11 @@ msgstr "Reçu par"
 #: src/pages/settings/Payments.tsx
 msgid "Reçus"
 msgstr "Reçus"
+
+#. placeholder {0}: counts.in
+#: src/pages/settings/ClientHistory.tsx
+msgid "Reçus ({0})"
+msgstr "Reçus ({0})"
 
 #: src/pages/settings/StripeAccounts.tsx
 msgid "Réel (vrais paiements)"
@@ -6279,6 +6410,10 @@ msgstr "Régler les promotions et les prix par plateforme"
 #: src/pages/settings/Startup.tsx
 msgid "réglés"
 msgstr "réglés"
+
+#: src/pages/settings/ClientHistory.tsx
+msgid "Relance : réservation commencée"
+msgstr "Relance : réservation commencée"
 
 #: src/pages/settings/Encaissements.tsx
 msgid "Relever les frais manquants ({unknown})"
@@ -6449,6 +6584,14 @@ msgstr "Répondre tout de suite par un accusé de réception"
 #: src/pages/Reviews.tsx
 msgid "Répondu"
 msgstr "Répondu"
+
+#: src/pages/settings/ClientHistory.tsx
+msgid "Réponse de l'équipe"
+msgstr "Réponse de l'équipe"
+
+#: src/pages/settings/ClientHistory.tsx
+msgid "Réponse sur {canal}"
+msgstr "Réponse sur {canal}"
 
 #: src/pages/Settings.tsx
 msgid "Reprendre des réservations d'un fichier"
@@ -6712,6 +6855,10 @@ msgstr "Rien aujourd'hui."
 msgid "Rien d'écrit pour l'instant"
 msgstr "Rien d'écrit pour l'instant"
 
+#: src/pages/settings/ClientHistory.tsx
+msgid "Rien d'envoyé à ce client."
+msgstr "Rien d'envoyé à ce client."
+
 #: src/pages/settings/Tarifs.tsx
 msgid "Rien de fixé à la main"
 msgstr "Rien de fixé à la main"
@@ -6719,6 +6866,10 @@ msgstr "Rien de fixé à la main"
 #: src/pages/Today.tsx
 msgid "Rien de prévu."
 msgstr "Rien de prévu."
+
+#: src/pages/settings/ClientHistory.tsx
+msgid "Rien de reçu de ce client."
+msgstr "Rien de reçu de ce client."
 
 #. placeholder {0}: failures.join(" ")
 #: src/calendar/PricePanel.tsx
@@ -7163,6 +7314,11 @@ msgstr "Touchez une ligne pour ouvrir la réservation : téléphone du client, c
 msgid "Tous"
 msgstr "Tous"
 
+#. placeholder {0}: counts.all
+#: src/pages/settings/ClientHistory.tsx
+msgid "Tous ({0})"
+msgstr "Tous ({0})"
+
 #: src/booking/Register.tsx
 msgid "Tous les champs sont demandés par la loi."
 msgstr "Tous les champs sont demandés par la loi."
@@ -7183,6 +7339,10 @@ msgstr "tous les gîtes"
 #: src/pages/settings/Tarifs.tsx
 msgid "Tous les jours"
 msgstr "Tous les jours"
+
+#: src/booking/BookingPanel.tsx
+msgid "Tous les mails et messages de ce client"
+msgstr "Tous les mails et messages de ce client"
 
 #: src/pages/settings/Help.tsx
 msgid "Tous les messages arrivent au même endroit : ceux du site, les mails des clients, et ceux d'Airbnb et de Booking. Répondez d'ici : la réponse repart par le bon chemin."

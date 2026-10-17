@@ -23,6 +23,7 @@ import {
   IconX,
 } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
+import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useState, type ReactNode } from "react";
 
 import { api, openAdminPdf } from "../api/client";
@@ -89,6 +90,7 @@ function Fiche({ detail, dialog, setDialog }: { detail: BookingDetail; dialog: D
   const { t } = useLingui();
   const b = detail.booking;
   const guest = useGuest(b.guestId).data;
+  const navigate = useNavigate();
   const times = useTimes(b.propertyId).data;
   const state = bookingState(b);
   const today = todayBrussels();
@@ -203,6 +205,12 @@ function Fiche({ detail, dialog, setDialog }: { detail: BookingDetail; dialog: D
             <dd>
               {b.guestName?.trim() || "—"}
               {email || phone ? <small>{[email, phone].filter(Boolean).join(", ")}</small> : null}
+              {b.guestId ? (
+                <button type="button" className="btn" style={{ marginTop: 8 }} onClick={() => void navigate({ to: "/reglages/clients", search: { client: b.guestId! } })}>
+                  <IconMail size={20} />
+                  {t`Tous les mails et messages de ce client`}
+                </button>
+              ) : null}
             </dd>
           </div>
         </dl>
