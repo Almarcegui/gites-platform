@@ -872,7 +872,7 @@ export function registerPublicRoutes(router: Router): void {
     if (stay.adults + stay.children > ctx.unit.capacityMax) {
       return apiError(400, `capacité dépassée (max ${ctx.unit.capacityMax} personnes)`);
     }
-    // Avant toute écriture : sans clés Stripe, le paiement tomberait sur le
+    // Avant de créer client ni réservation : sans clés Stripe, le paiement tomberait sur le
     // simulateur, qui confirme la réservation sans encaisser.
     if (await publicPaymentUnavailable(db, env, ctx.property.id)) {
       return apiError(503, PAYMENT_UNAVAILABLE_MESSAGE, { code: "payment_unavailable" });

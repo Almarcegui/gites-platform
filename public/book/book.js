@@ -328,7 +328,16 @@ async function renderCalendar() {
     // liste = ces jours-là, liste VIDE = aucune arrivée possible. L'agrégat est
     // une UNION : il suffit qu'un hébergement libre accepte le jour.
     const restricted = free.filter((d) => d.checkinDays != null);
+    // Règle de séjour du jour, INDÉPENDANTE de l'occupation : un jour pris
+    // coupait la même règle en autant de segments qu'il y a de réservations, et
+    // la ligne de règles se répétait. Calculée sur tous les hébergements tarifés.
+    const priced = perUnit.filter((d) => d.priceCents != null && !d.past);
+    const pricedRestricted = priced.filter((d) => d.checkinDays != null);
     days.push({
+      ruleMinNights: priced.length ? Math.min(...priced.map((d) => d.minNights || 1)) : null,
+      ruleArrivalDays: priced.length && pricedRestricted.length === priced.length
+        ? [...new Set(pricedRestricted.flatMap((d) => d.checkinDays))].sort((a, b) => a - b)
+        : null,
       date,
       past: perUnit[0].past,
       available: free.length > 0,
@@ -385,14 +394,12 @@ function renderCalRules(days, minLeadDays = 0) {
     : "";
   const segments = [];
   for (const d of days) {
-    // Une règle ne dépend pas de l'occupation : sauter les jours pris coupait la
-    // même règle en autant de segments qu'il y a de réservations, et la ligne
-    // se répétait cinq fois. Seuls les jours passés ou sans tarif sortent.
-    if (d.past || d.minNights == null) continue;
-    const key = `${d.minNights}|${(d.arrivalDays ?? []).join(",")}`;
+    // Une règle ne dépend pas de l'occupation (cf. ruleMinNights plus haut).
+    if (d.past || d.ruleMinNights == null) continue;
+    const key = `${d.ruleMinNights}|${(d.ruleArrivalDays ?? []).join(",")}`;
     const last = segments.at(-1);
     if (last && last.key === key && nightsBetween(last.to, d.date) === 1) last.to = d.date;
-    else segments.push({ key, minNights: d.minNights, arrivalDays: d.arrivalDays, from: d.date, to: d.date });
+    else segments.push({ key, minNights: d.ruleMinNights, arrivalDays: d.ruleArrivalDays, from: d.date, to: d.date });
   }
   const notable = segments.filter((s) => s.minNights > 1 || s.arrivalDays != null);
   if (notable.length === 0) {

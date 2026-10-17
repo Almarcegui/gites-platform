@@ -77,7 +77,10 @@ if (cibles.length || fraisCibles.length) {
         const cents = u.isComposite
           ? units.filter((x) => !x.isComposite).reduce((t, x) => t + x.cleaningFeeCents, 0)
           : u.cleaningFeeCents;
-        if (typeof cents === "number" && cents > 0) cible.textContent = `${Math.round(cents / 100)} €`;
+        if (typeof cents === "number" && cents > 0) {
+          const eur = cents / 100;
+          cible.textContent = `${Number.isInteger(eur) ? eur : eur.toFixed(2).replace(".", ",")} €`;
+        }
       } catch {
         // Repli du HTML conservé.
       }
