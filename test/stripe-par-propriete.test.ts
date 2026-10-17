@@ -279,12 +279,15 @@ describe("les clés ne ressortent jamais", () => {
     expect(calls.find((c) => c.url.endsWith("/payment_intents"))!.headers.get("authorization")).toBe(`Bearer ${P1.sk}`);
   });
 
-  it("refuse une forme inattendue, un mode incohérent, et une clé de service", async () => {
+  it("refuse une forme inattendue, un mélange test/réel, et une clé de service", async () => {
     expect((await call("PUT", "/api/admin/stripe/1", { secretKey: "n_importe_quoi" })).status).toBe(400);
-    const wrong = await call("PUT", "/api/admin/stripe/1", { secretKey: "sk_live_VRAIECLE0001", mode: "test" });
-    expect(wrong.status).toBe(400);
-    expect(wrong.text).not.toContain("VRAIECLE");
-    expect((await call("PUT", "/api/admin/stripe/1", { secretKey: "sk_live_VRAIECLE0001", mode: "live" })).status).toBe(200);
+    // Une clé réelle collée avec le bouton resté sur « Test » passe la propriété en réel.
+    expect((await call("PUT", "/api/admin/stripe/1", { secretKey: "sk_live_VRAIECLE0001", mode: "test" })).status).toBe(200);
+    const state = (await call("GET", "/api/admin/stripe")).data.properties as Record<string, any>[];
+    expect(state.find((p) => p.propertyId === 1)!.mode).toBe("live");
+    const mix = await call("PUT", "/api/admin/stripe/1", { secretKey: "sk_live_VRAIECLE0001", publishableKey: "pk_test_FAUSSECLE001" });
+    expect(mix.status).toBe(400);
+    expect(mix.text).not.toContain("VRAIECLE");
 
     const { key } = await createServiceKey(db, "claude-test", "test");
     const svc = await call("PUT", "/api/admin/stripe/1", { mode: "test" }, { auth: `svc:${key}` });

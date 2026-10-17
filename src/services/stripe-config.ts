@@ -116,9 +116,9 @@ const PUBLISHABLE_RE = /^pk_(test|live)_[A-Za-z0-9]{8,200}$/;
 const WEBHOOK_RE = /^whsec_[A-Za-z0-9]{8,200}$/;
 
 /** Valide un lot de modifications et rend la ligne résultante (pas encore écrite).
- *  Chaque clé doit avoir la bonne forme ET le mode demandé (test ou réel) : une
- *  clé `sk_live_` posée sur une propriété « test » est refusée, pour qu'un
- *  encaissement réel ne parte pas par inadvertance. Les messages n'incluent
+ *  Chaque clé doit avoir la bonne forme. Le mode (test ou réel) suit la clé secrète
+ *  collée dans le lot ; la clé publiable doit être du même mode, sinon refus, pour
+ *  qu'un mélange test/réel ne parte pas par inadvertance. Les messages n'incluent
  *  jamais la valeur saisie. */
 export function applyStripePatch(current: PropertyStripeRow | null, patch: PropertyStripePatch, now: string, by: string): PropertyStripeRow {
   const next: PropertyStripeRow = current
@@ -156,7 +156,10 @@ export function applyStripePatch(current: PropertyStripeRow | null, patch: Prope
   setKey("publishableKey", "publishableSetAt", patch.publishableKey, PUBLISHABLE_RE, "clé publiable", "pk_test_… ou pk_live_…");
   setKey("webhookSecret", "webhookSetAt", patch.webhookSecret, WEBHOOK_RE, "secret du webhook", "whsec_…");
 
+  // Une clé secrète collée fixe le mode : sk_live_/rk_live_ = réel, sk_test_/rk_test_ = test.
+  // Le bouton Test/Réel ne sert plus qu'à défaut de nouvelle clé.
   const secretMode = modeOfSecretKey(next.secretKey);
+  if (secretMode && patch.secretKey !== undefined && patch.secretKey.trim() !== "") next.mode = secretMode;
   if (secretMode && secretMode !== next.mode) {
     throw new StripeKeyError(`la clé secrète est une clé « ${secretMode === "live" ? "réel" : "test"} » mais le mode choisi est « ${next.mode === "live" ? "réel" : "test"} »`);
   }

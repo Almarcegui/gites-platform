@@ -85,7 +85,12 @@ function PropertyStripe({ p, settings }: { p: StripeProperty; settings: StripeSe
         aria-label={t`Mode du compte Stripe`}
       />
       <TextInput label={t`Nom du compte (pour vous y retrouver)`} value={label} onChange={(e) => setLabel(e.currentTarget.value)} maxLength={120} mt="sm" />
-      <PasswordInput label={t`Clé secrète (sk_test_… ou sk_live_…)`} description={p.secret.set ? t`Laissez vide pour garder la clé actuelle.` : undefined} value={secret} onChange={(e) => setSecret(e.currentTarget.value)} autoComplete="off" spellCheck={false} mt="sm" />
+      <PasswordInput label={t`Clé secrète (sk_test_… ou sk_live_…)`} description={p.secret.set ? t`Laissez vide pour garder la clé actuelle.` : undefined} value={secret} onChange={(e) => {
+          const v = e.currentTarget.value;
+          setSecret(v);
+          if (/^\s*(sk|rk)_live_/.test(v)) setMode("live");
+          else if (/^\s*(sk|rk)_test_/.test(v)) setMode("test");
+        }} autoComplete="off" spellCheck={false} mt="sm" />
       <PasswordInput label={t`Clé publiable (pk_test_… ou pk_live_…)`} description={p.publishable.set ? t`Laissez vide pour garder la clé actuelle.` : undefined} value={publishable} onChange={(e) => setPublishable(e.currentTarget.value)} autoComplete="off" spellCheck={false} mt="sm" />
       <PasswordInput label={t`Secret du webhook (whsec_…)`} description={p.webhook.set ? t`Laissez vide pour garder le secret actuel.` : undefined} value={webhook} onChange={(e) => setWebhook(e.currentTarget.value)} autoComplete="off" spellCheck={false} mt="sm" />
 
