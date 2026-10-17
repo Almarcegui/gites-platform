@@ -5,7 +5,7 @@
 // Le lot 2 vit à part pour ne pas toucher au cron des services, entretenu en
 // parallèle sur une autre branche.
 import { todayInZone } from "../core/dates";
-import { runScheduled } from "../services/cron";
+import { inBeds24QuietWindow, runScheduled } from "../services/cron";
 import { audit } from "../db/repo";
 import { syncAllCleaningTasks } from "../db/tasks";
 import { pullChannelReviews } from "../services/beds24-reviews";
@@ -30,11 +30,25 @@ export async function runLot3Scheduled(env: Env, now: Date = new Date()): Promis
   }
 }
 
+/** Un seul passage à la fois par processus : si un passage dure plus que la
+ *  minuterie (panne Beds24 et nouveaux essais), le suivant ne se superpose pas. */
+let passageEnCours = false;
+
 export async function runAllScheduled(env: Env, now: Date = new Date(), fetcher: typeof fetch = fetch): Promise<void> {
+  if (passageEnCours) {
+    await audit(env.DB, "cron", "cron.skipped", null, { raison: "passage précédent encore en cours" }).catch(() => undefined);
+    return;
+  }
+  passageEnCours = true;
   try {
-    await runScheduled(env, now, fetcher);
+    try {
+      await runScheduled(env, now, fetcher);
+    } finally {
+      await runLot2Scheduled(env, now);
+      // Les avis sont aussi des appels Beds24 : même fenêtre calme que le reste.
+      if (!inBeds24QuietWindow(now)) await runLot3Scheduled(env, now);
+    }
   } finally {
-    await runLot2Scheduled(env, now);
-    await runLot3Scheduled(env, now);
+    passageEnCours = false;
   }
 }

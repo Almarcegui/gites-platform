@@ -20,6 +20,63 @@ import { getSetting } from "./settings";
 const BEDS24_API = "https://api.beds24.com/v2";
 const FETCH_TIMEOUT_MS = 30_000;
 
+/** Nouveaux essais sur panne RÉSEAU seulement (fetch failed, ECONNRESET, délai
+ *  dépassé) : audit_log du 17/10 — presque chaque nuit à 00:00 UTC, les appels
+ *  Beds24 échouaient en « fetch failed » alors que les autres passages de la
+ *  journée réussissaient. Une réponse HTTP (4xx comme 5xx) n'est JAMAIS rejouée
+ *  ici : fetch ne lève que sur une panne de transport. */
+export const NETWORK_RETRY_DELAYS_MS: readonly number[] = [30_000, 120_000];
+
+/** Une panne qui a épuisé ses essais coupe les nouveaux essais des appels
+ *  suivants pendant cette durée : sans cela, un Beds24 réellement tombé
+ *  ajouterait 2 min 30 d'attente à CHAQUE appel d'un même passage du cron. */
+const RETRY_PAUSE_AFTER_OUTAGE_MS = 5 * 60_000;
+let outageUntil = 0;
+
+/** Remet à zéro l'état de panne (tests). */
+export function resetBeds24RetryState(): void {
+  outageUntil = 0;
+}
+
+/** Exécute `attempt` ; sur exception jugée `retryable` (par défaut toute
+ *  exception : l'appelant n'enveloppe que le `fetch`, qui ne lève que sur une
+ *  panne de transport, jamais sur un statut HTTP), attend puis réessaie, au plus
+ *  `delays.length` fois. L'état de panne est relu avant CHAQUE nouvel essai :
+ *  si un appel concurrent a déjà constaté la panne, on n'attend plus. Une
+ *  réussite remet l'état à zéro. */
+export async function withNetworkRetry<R>(
+  attempt: () => Promise<R>,
+  enabled: boolean,
+  delays: readonly number[],
+  sleep: (ms: number) => Promise<void>,
+  retryable: (e: unknown) => boolean = () => true,
+): Promise<R> {
+  for (let i = 0; ; i++) {
+    try {
+      const out = await attempt();
+      if (enabled) outageUntil = 0;
+      return out;
+    } catch (e) {
+      const exhausted = i >= delays.length;
+      if (!enabled || !retryable(e) || exhausted || Date.now() < outageUntil) {
+        if (enabled && retryable(e) && exhausted) outageUntil = Date.now() + RETRY_PAUSE_AFTER_OUTAGE_MS;
+        throw e;
+      }
+      await sleep(delays[i] ?? 0);
+      // Un appel concurrent a pu constater la panne pendant l'attente : inutile
+      // de lancer une requête de plus.
+      if (Date.now() < outageUntil) throw e;
+    }
+  }
+}
+
+/** Panne de transport de beds24Fetch (ni réponse HTTP, ni refus de Beds24). */
+export function isBeds24NetworkError(e: unknown): boolean {
+  return e instanceof Beds24Error && e.status === undefined && e.issue === "inconnu";
+}
+
+export const beds24Sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
 /** Refresh token : la base (réglable depuis le back-office, page Canaux OTA)
  *  prime sur le secret d'environnement — le secret reste le repli. */
 async function refreshTokenValue(env: Env): Promise<string> {
@@ -55,14 +112,21 @@ export class Beds24Error extends Error {
   }
 }
 
+
+const defaultSleep = beds24Sleep;
+
 async function accessToken(env: Env): Promise<string> {
   if (cachedToken && Date.now() < cachedToken.expiresAt) return cachedToken.value;
   let res: Response;
   try {
-    res = await fetch(`${BEDS24_API}/authentication/token`, {
-      headers: { refreshToken: await refreshTokenValue(env) },
-      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-    });
+    const refreshToken = await refreshTokenValue(env);
+    // Lecture seule côté Beds24 : toujours rejouable sur panne réseau.
+    res = await withNetworkRetry(
+      () => fetch(`${BEDS24_API}/authentication/token`, { headers: { refreshToken }, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) }),
+      true,
+      NETWORK_RETRY_DELAYS_MS,
+      defaultSleep,
+    );
   } catch (e) {
     throw new Beds24Error(`renouvellement du token Beds24 injoignable (${e instanceof Error ? e.message : String(e)})`);
   }
@@ -237,6 +301,9 @@ export async function beds24Fetch<T>(
     query?: Record<string, string>;
     /** Reçoit les en-têtes de la réponse (quota X-FiveMinCreditLimit…), même en erreur. */
     onHeaders?: (headers: Headers) => void;
+    /** Attentes entre essais (tests). */
+    retryDelaysMs?: readonly number[];
+    sleep?: (ms: number) => Promise<void>;
   } = {},
 ): Promise<T> {
   if (!(await beds24Configured(env))) throw new Beds24Error("Beds24 non configuré (aucun refresh token en base ni en secret)");
@@ -249,16 +316,28 @@ export async function beds24Fetch<T>(
   const token = await accessToken(env);
   const url = new URL(`${BEDS24_API}${path}`);
   for (const [k, v] of Object.entries(init.query ?? {})) url.searchParams.set(k, v);
+  // Requête construite AVANT la boucle d'essais : une erreur de sérialisation
+  // est déterministe, elle ne doit ni être rejouée ni déclencher la pause de panne.
+  const bodyText = init.body ? JSON.stringify(init.body) : undefined;
   let res: Response;
   try {
-    res = await fetch(url, {
-      method,
-      headers: { token, ...(init.body ? { "content-type": "application/json" } : {}) },
-      body: init.body ? JSON.stringify(init.body) : undefined,
-      // Un appel qui pend indéfiniment tiendrait un verrou (création de
-      // propriété) au-delà de son délai : on coupe à 30 s.
-      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-    });
+    res = await withNetworkRetry(
+      () =>
+        fetch(url, {
+          method,
+          headers: { token, ...(init.body ? { "content-type": "application/json" } : {}) },
+          body: bodyText,
+          // Un appel qui pend indéfiniment tiendrait un verrou (création de
+          // propriété) au-delà de son délai : on coupe à 30 s (par essai).
+          signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+        }),
+      // Nouveaux essais sur panne réseau : GET seulement. JAMAIS une écriture (un
+      // POST d'issue inconnue peut avoir été appliqué) ; le push du calendrier a
+      // son propre rejeu (pushCalendars), qui reconstruit l'état avant de renvoyer.
+      method === "GET",
+      init.retryDelaysMs ?? NETWORK_RETRY_DELAYS_MS,
+      init.sleep ?? defaultSleep,
+    );
   } catch (e) {
     // Panne réseau ou délai dépassé : une Beds24Error, pour que l'appelant
     // la journalise et l'affiche en clair au lieu d'un 500 opaque. Pour une
@@ -271,7 +350,20 @@ export async function beds24Fetch<T>(
   }
   init.onHeaders?.(res.headers);
   // Le texte d'abord : un corps qui n'est pas du JSON reste lisible dans l'erreur.
-  const text = await res.text().catch(() => "");
+  // Une coupure PENDANT la lecture du corps d'une réponse 2xx n'est pas un succès :
+  // l'issue est inconnue (jamais de corps vide pris pour `{}`).
+  let text = "";
+  try {
+    text = await res.text();
+  } catch (e) {
+    if (res.ok) {
+      throw new Beds24Error(
+        `Beds24 ${method} ${path} → ${res.status} mais réponse interrompue (${e instanceof Error ? e.message : String(e)})`,
+        res.status,
+        "inconnu",
+      );
+    }
+  }
   let parsed: unknown;
   try {
     parsed = text ? JSON.parse(text) : {};

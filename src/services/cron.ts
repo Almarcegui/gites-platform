@@ -44,8 +44,25 @@ import { setSetting } from "./settings";
  *  encore « en attente » est morte. */
 export const PAYMENT_SESSION_TTL_MINUTES = 35;
 
+/** Les appels Beds24 de la passe de minuit UTC échouaient presque chaque nuit en
+ *  « fetch failed » (audit_log des 12, 13, 14, 15 et 17/10), les autres passages
+ *  de la journée réussissant. La passe de 00:00 saute donc les tâches Beds24 ;
+ *  celle de 00:15 les exécute (le cron tourne toutes les 15 min, rien n'est perdu :
+ *  le pull est incrémental et le push envoie l'état complet). */
+export function inBeds24QuietWindow(now: Date): boolean {
+  return now.getUTCHours() === 0 && now.getUTCMinutes() < 10;
+}
+
+/** Budget d'un passage pour les tâches Beds24 : au-delà, les tâches restantes
+ *  ne sont pas commencées (le prochain passage les reprend). Le service systemd
+ *  coupe curl à 600 s sans annuler le traitement côté Node ; avec les nouveaux
+ *  essais réseau, un Beds24 tombé pourrait sinon faire déborder le passage. */
+export const BEDS24_PASS_BUDGET_MS = 8 * 60_000;
+
 export async function runScheduled(env: Env, now: Date = new Date(), fetcher: typeof fetch = fetch): Promise<void> {
   const db = env.DB;
+  const passStart = Date.now();
+  const overBeds24Budget = () => Date.now() - passStart > BEDS24_PASS_BUDGET_MS;
   const nowSql = sqlNow(now);
 
   // 0. Battement de cœur, EN TÊTE et pas en fin de traitement : il atteste que
@@ -159,10 +176,14 @@ export async function runScheduled(env: Env, now: Date = new Date(), fetcher: ty
   // 4. Beds24 (inactif sans BEDS24_REFRESH_TOKEN) : d'abord rapatrier les résas
   //    des canaux (pull), PUIS pousser les calendriers à jour (push) — l'état
   //    poussé intègre ainsi les résas qui viennent d'arriver.
-  if (await beds24Configured(env)) {
+  if ((await beds24Configured(env)) && !inBeds24QuietWindow(now)) {
     const properties = await listProperties(db);
     for (const p of properties) {
       if (p.beds24PropertyId == null) continue;
+      if (overBeds24Budget()) {
+        await audit(db, "cron", "beds24.budget", `property:${p.id}`, { budgetMs: BEDS24_PASS_BUDGET_MS });
+        break;
+      }
       try {
         await pullBeds24Bookings(db, env, p.id, p.beds24PropertyId, now);
       } catch (e) {
@@ -179,7 +200,7 @@ export async function runScheduled(env: Env, now: Date = new Date(), fetcher: ty
     // le compte, APRÈS le pull des réservations — un message d'une résa qui
     // vient d'arriver trouve ainsi sa réservation. L'échec est déjà journalisé.
     try {
-      await pullChannelMessages(env, now);
+      if (!overBeds24Budget()) await pullChannelMessages(env, now);
     } catch {
       /* beds24.messages.error au journal */
     }

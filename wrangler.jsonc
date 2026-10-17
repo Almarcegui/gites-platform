@@ -1,4 +1,7 @@
 // Configuration wrangler — plateforme de gestion des gîtes.
+// ⚠️ Cloudflare n'est plus utilisé : depuis le 17/10/2026 (décision du propriétaire), seule la
+// version Hetzner existe (https://178-105-145-191.sslip.io). Cette configuration est conservée
+// telle quelle ; sa suppression sera décidée à part.
 // ⚠️ AUCUN déploiement en production sans accord explicite de Julien.
 // Déployer passe par `make livrer` (production) ou `make livrer-essai` (essai),
 // jamais par un `wrangler deploy` à la main : voir le Makefile.

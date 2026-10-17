@@ -49,7 +49,14 @@ import {
   PUSH_CHANNEL_KEY,
 } from "../core/price-guardrails";
 import { beds24UnitScope } from "../core/sync-conflicts";
-import { beds24Configured, beds24Fetch } from "./beds24";
+import {
+  NETWORK_RETRY_DELAYS_MS,
+  beds24Configured,
+  beds24Fetch,
+  beds24Sleep,
+  isBeds24NetworkError,
+  withNetworkRetry,
+} from "./beds24";
 import { parsePriceLinking, PRICE_LINKING_KEY } from "../core/channel-promotions";
 import { closeSeenSyncConflicts, closeUnseenSyncConflicts, noteSyncConflict } from "./sync-conflicts";
 import { getSetting, setSetting } from "./settings";
@@ -187,18 +194,33 @@ export async function pushCalendars(
   env: Env,
   propertyId: number,
   days = 400,
+  /** Attentes entre essais (tests). */
+  opts: { delaysMs?: readonly number[]; sleep?: (ms: number) => Promise<void> } = {},
 ): Promise<{ pushed: { roomId: number; unitName: string; spans: number }[]; markup: PushMarkup }> {
   if (!(await beds24Configured(env))) throw new Error("Beds24 non configuré");
-  const today = todayInZone();
-  const markup = await resolvePushMarkup(db);
-  const rooms = await buildCalendarPush(db, propertyId, today, days, markup);
-  const body = rooms.map((r) => ({ roomId: r.roomId, calendar: r.calendar }));
-  if (body.length > 0) {
-    await beds24Fetch(env, "/inventory/rooms/calendar", { method: "POST", body });
-  }
+  // Panne RÉSEAU : on attend, puis on RECONSTRUIT le calendrier depuis la base
+  // avant de renvoyer. Rejouer l'ancien corps risquerait d'écraser un push plus
+  // récent (réservation prise entre-temps) par un état périmé ; reconstruit, le
+  // corps est l'état absolu courant (disponibilité, prix, séjour minimum par
+  // plage de dates), et deux envois successifs donnent le même résultat.
+  let markup: PushMarkup | undefined;
+  const rooms = await withNetworkRetry(
+    async () => {
+      // Majoration relue à chaque essai : elle peut avoir changé pendant l'attente.
+      markup = await resolvePushMarkup(db);
+      const built = await buildCalendarPush(db, propertyId, todayInZone(), days, markup);
+      const body = built.map((r) => ({ roomId: r.roomId, calendar: r.calendar }));
+      if (body.length > 0) await beds24Fetch(env, "/inventory/rooms/calendar", { method: "POST", body });
+      return built;
+    },
+    true,
+    opts.delaysMs ?? NETWORK_RETRY_DELAYS_MS,
+    opts.sleep ?? beds24Sleep,
+    isBeds24NetworkError,
+  );
   // `markup` est remonté pour que l'écran « Plateformes » puisse dire, après un
   // push manuel, CE QUI a été envoyé — le prix direct ou le prix majoré.
-  return { pushed: rooms.map((r) => ({ roomId: r.roomId, unitName: r.unitName, spans: r.calendar.length })), markup };
+  return { pushed: rooms.map((r) => ({ roomId: r.roomId, unitName: r.unitName, spans: r.calendar.length })), markup: markup as PushMarkup };
 }
 
 // ---------------------------------------------------------------------------
