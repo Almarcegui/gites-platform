@@ -2993,10 +2993,6 @@ msgstr "Date"
 msgid "Date de naissance"
 msgstr "Date de naissance"
 
-#: src/pages/Bookings.tsx
-msgid "Date de soumission"
-msgstr "Date de soumission"
-
 #: src/pages/settings/Logs.tsx
 msgid "dates bloquées"
 msgstr "dates bloquées"
