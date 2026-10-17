@@ -3502,6 +3502,10 @@ msgid "Envoi {0} sur {1}…"
 msgstr "Envoi {0} sur {1}…"
 
 #: src/pages/settings/ClientHistory.tsx
+msgid "envoi non confirmé"
+msgstr "envoi non confirmé"
+
+#: src/pages/settings/ClientHistory.tsx
 msgid "envoyé"
 msgstr "envoyé"
 

@@ -158,7 +158,8 @@ function useLabels() {
     if (i.status === "failed") return t`pas parti`;
     if (i.status === "stub") return t`préparé, non envoyé (envoi coupé)`;
     if (i.status === "aucune") return t`écrit dans la messagerie`;
-    return t`envoyé`;
+    if (i.status === "sent") return t`envoyé`;
+    return t`envoi non confirmé`;
   };
   return { title, state };
 }
