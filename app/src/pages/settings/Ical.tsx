@@ -2,7 +2,7 @@
 // sites, et les calendriers d'autres sites que la plateforme lit toutes les
 // 15 minutes. Un calendrier lu s'ouvre en panneau latéral.
 import { Trans, useLingui } from "@lingui/react/macro";
-import { Select, Switch, TextInput } from "@mantine/core";
+import { Switch, TextInput } from "@mantine/core";
 import { IconCopy, IconPlus } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
@@ -13,6 +13,7 @@ import { ErrorLine, useAction } from "../../lib/action";
 import { useToast } from "../../lib/toasts";
 import { Confirm, Empty, Loading, Page, Section, SidePanel, sqlWhen, useWorkingProperty } from "../../ui/kit";
 import { useUnitsFull } from "./useAdmin";
+import { Choix } from "../../ui/Choix";
 
 function useSyncText() {
   const { t } = useLingui();
@@ -171,7 +172,7 @@ function FeedPanel({ feed, units, onClose, syncText }: { feed: IcalFeed | null; 
     >
       {feed?.lastStatus ? <p className="lead">{t`Dernière lecture : ${feed.lastSyncAt ? sqlWhen(feed.lastSyncAt) : t`jamais`}, ${feed.lastStatus === "ok" ? t`sans problème` : feed.lastStatus}.`}</p> : null}
       {!feed ? (
-        <Select size="md" label={t`Bien concerné`} allowDeselect={false} value={v.unitId} onChange={(x) => setV({ ...v, unitId: x ?? "" })} data={units.map((u) => ({ value: String(u.id), label: u.name }))} />
+        <Choix size="md" label={t`Bien concerné`} allowDeselect={false} value={v.unitId} onChange={(x) => setV({ ...v, unitId: x ?? "" })} data={units.map((u) => ({ value: String(u.id), label: u.name }))} />
       ) : null}
       <TextInput mt="sm" size="md" label={t`Nom`} placeholder={t`Par exemple : Airbnb, le Moulin`} value={v.name} onChange={(e) => setV({ ...v, name: e.currentTarget.value })} />
       <TextInput mt="sm" size="md" label={t`Adresse iCal`} placeholder="https://www.airbnb.com/calendar/ical/…" value={v.url} onChange={(e) => setV({ ...v, url: e.currentTarget.value })} />

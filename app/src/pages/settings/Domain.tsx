@@ -4,7 +4,7 @@
 // Photos d'un bien et ajout d'un bien : en panneau et en boîte, chacun avec
 // son propre bouton (ils n'attendent pas l'enregistrement de la page).
 import { Trans, useLingui } from "@lingui/react/macro";
-import { Checkbox, NumberInput, Select, Switch, Textarea, TextInput } from "@mantine/core";
+import { Checkbox, NumberInput, Switch, Textarea, TextInput } from "@mantine/core";
 import { IconArrowDown, IconArrowUp, IconPhoto, IconPlus, IconUpload } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -17,6 +17,7 @@ import { ErrorLine, useAction } from "../../lib/action";
 import { useToast } from "../../lib/toasts";
 import { Box, Fold, Loading, Page, parseEuros, SaveBar, Section, SidePanel, useWorkingProperty } from "../../ui/kit";
 import { useSettingsFull, useUnitsFull } from "./useAdmin";
+import { Choix } from "../../ui/Choix";
 
 interface UnitForm {
   name: string;
@@ -278,7 +279,7 @@ function DomainForm({ propertyId, init, units, onDirty }: { propertyId: number; 
                 <NumberInput size="md" label={t`Personnes, au plus`} min={1} value={x.capacityMax} onChange={(v) => setU(u.id, { capacityMax: v })} />
                 <NumberInput size="md" label={t`Arrhes propres à ce bien (%)`} description={t`vide = ${f.set.deposit_pct} % comme le domaine`} min={0} max={100} value={x.deposit} onChange={(v) => setU(u.id, { deposit: v })} />
                 {u.isComposite ? (
-                  <Select
+                  <Choix
                     size="md"
                     label={t`Prix de ce bien`}
                     allowDeselect={false}

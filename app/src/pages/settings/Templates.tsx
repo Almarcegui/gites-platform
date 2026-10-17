@@ -4,7 +4,7 @@ import { t } from "@lingui/core/macro";
 import { hourLabel, longDate } from "../../lib/dates";
 import { eur } from "../../lib/money";
 import { Trans, useLingui } from "@lingui/react/macro";
-import { NumberInput, Select, Switch, Textarea, TextInput } from "@mantine/core";
+import { NumberInput, Switch, Textarea, TextInput } from "@mantine/core";
 import { IconPlus } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useRef, useState } from "react";
@@ -15,6 +15,7 @@ import type { MessageTemplate } from "../../api/types";
 import { ErrorLine, useAction } from "../../lib/action";
 import { fillTemplate, templateVariables } from "../../lib/templates";
 import { Confirm, Empty, Loading, Page, Section, SidePanel } from "../../ui/kit";
+import { Choix } from "../../ui/Choix";
 
 const langLabel = (l: MessageTemplate["lang"]): string => (l === "nl" ? t`néerlandais` : l === "en" ? t`anglais` : t`français`);
 
@@ -121,8 +122,8 @@ function TemplatePanel({ template, onClose }: { template: MessageTemplate | null
     >
       <TextInput size="md" label={t`Nom du modèle`} description={t`le mot affiché sur la puce, par exemple : Accès et clés`} maxLength={60} value={v.name} onChange={(e) => setV({ ...v, name: e.currentTarget.value })} />
       <div className="grid2" style={{ marginTop: 12 }}>
-        <Select size="md" label={t`Langue`} allowDeselect={false} value={v.lang} onChange={(x) => setV({ ...v, lang: (x as MessageTemplate["lang"]) ?? "fr" })} data={(["fr", "nl", "en"] as const).map((l) => ({ value: l, label: langLabel(l) }))} />
-        <Select size="md" label={t`Pour quels gîtes`} allowDeselect={false} value={v.pid} onChange={(x) => setV({ ...v, pid: x ?? "all" })} data={[{ value: "all", label: t`Tous mes gîtes` }, ...properties.map((p) => ({ value: String(p.id), label: p.name }))]} />
+        <Choix size="md" label={t`Langue`} allowDeselect={false} value={v.lang} onChange={(x) => setV({ ...v, lang: (x as MessageTemplate["lang"]) ?? "fr" })} data={(["fr", "nl", "en"] as const).map((l) => ({ value: l, label: langLabel(l) }))} />
+        <Choix size="md" label={t`Pour quels gîtes`} allowDeselect={false} value={v.pid} onChange={(x) => setV({ ...v, pid: x ?? "all" })} data={[{ value: "all", label: t`Tous mes gîtes` }, ...properties.map((p) => ({ value: String(p.id), label: p.name }))]} />
       </div>
       <Textarea ref={area} mt="md" size="md" autosize minRows={8} label={t`Texte`} maxLength={4000} value={v.body} onChange={(e) => setV({ ...v, body: e.currentTarget.value })} />
       <p className="tpl" id="vars-l">
