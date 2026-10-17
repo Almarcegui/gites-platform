@@ -6,8 +6,9 @@
 // Ce que le client fait, et rien de plus :
 //   - TLS dès la connexion (993) ; jamais de connexion en clair ;
 //   - LOGIN (mot de passe d'application), refusé si le serveur annonce LOGINDISABLED ;
-//   - EXAMINE INBOX : boîte ouverte en LECTURE SEULE, rien n'y est jamais modifié
-//     (ni \Seen, ni suppression) ; le curseur est un UID gardé en base, côté plateforme ;
+//   - EXAMINE <dossier> (INBOX, ou IMAP_FOLDER : un libellé Gmail) : dossier ouvert en
+//     LECTURE SEULE, rien n'y est jamais modifié (ni \Seen, ni suppression) ; le curseur
+//     est un UID gardé en base, côté plateforme ;
 //   - UID SEARCH puis UID FETCH ... BODY.PEEK[]<0.N> : au plus N octets par mail
 //     (512 Ko par défaut) — un mail de 20 Mo de photos ne descend pas en entier ;
 //   - lecteur de réponses fidèle au protocole : littéraux {n} lus à l'octet près,
@@ -20,7 +21,9 @@ import { connect as tlsConnect } from "node:tls";
 import { isIP } from "node:net";
 
 /** Configuration lue dans l'environnement ; null si IMAP_USER ou le mot de passe manque.
- *  IMAP_PASSWORD retombe sur SMTP_PASSWORD (même mot de passe d'application). */
+ *  IMAP_PASSWORD retombe sur SMTP_PASSWORD (même mot de passe d'application).
+ *  IMAP_FOLDER limite la relève à un dossier (libellé Gmail, ASCII) : indispensable si la
+ *  boîte n'est pas dédiée aux gîtes, sinon toute la boîte de réception remonterait. */
 export function imapConfigFromEnv(e = process.env) {
   const user = (e.IMAP_USER || "").trim();
   const password = e.IMAP_PASSWORD || e.SMTP_PASSWORD || "";
@@ -28,7 +31,8 @@ export function imapConfigFromEnv(e = process.env) {
   const host = (e.IMAP_HOST || "imap.gmail.com").trim();
   const raw = Number(e.IMAP_PORT || 993);
   const port = Number.isInteger(raw) && raw > 0 ? raw : 993;
-  return { host, port, user, password };
+  const folder = (e.IMAP_FOLDER || "").trim() || "INBOX";
+  return { host, port, user, password, folder };
 }
 
 // une ligne peut porter une longue liste d'UID (SEARCH) : 1 Mo en tient plus de 100 000
@@ -132,7 +136,7 @@ export function imapDate(d) {
 }
 
 /**
- * Relève les nouveaux mails de INBOX.
+ * Relève les nouveaux mails du dossier `config.folder` (INBOX par défaut).
  *
  * query : { uidValidity: number|null, lastUid: number|null, sinceDays: number, max: number, maxBytes?: number }
  *   - lastUid connu et uidValidity inchangée : seuls les UID > lastUid ;
@@ -146,6 +150,9 @@ export function imapDate(d) {
  */
 export async function fetchNewMail(config, query, options = {}) {
   const { host, port, user, password } = config;
+  const folder = config.folder || "INBOX";
+  // nom de dossier IMAP non ASCII = UTF-7 modifié, non géré ici : on refuse clairement
+  if (!/^[\x20-\x7e]+$/.test(folder)) throw new Error("IMAP : IMAP_FOLDER doit être en caractères simples (sans accent), ex. Gites");
   const maxBytes = query.maxBytes ?? 512 * 1024;
   const timeoutMs = options.timeoutMs ?? 60_000;
   const tlsOptions = { ...(isIP(host) ? {} : { servername: host }), ...(options.tls || {}) };
@@ -205,7 +212,7 @@ export async function fetchNewMail(config, query, options = {}) {
     }
     await run(`LOGIN ${imapQuote(user)} ${imapQuote(password)}`, "LOGIN", { secret: true });
 
-    const sel = await run("EXAMINE INBOX", "EXAMINE INBOX");
+    const sel = await run(`EXAMINE ${folder === "INBOX" ? "INBOX" : imapQuote(folder)}`, "EXAMINE");
     let uidValidity = null;
     for (const r of sel.untagged) {
       const m = /\[UIDVALIDITY (\d+)\]/i.exec(r.text);

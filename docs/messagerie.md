@@ -141,3 +141,12 @@ Envoi des réponses : `EMAILS_ENABLED=true` et les variables SMTP habituelles (v
 - L'authentification de l'expéditeur ne se lit que pour Gmail (`google.com`) ; avec un autre
   fournisseur IMAP, tout mail portant l'adresse des gîtes est signalé.
 - Un mail illisible reste visible sous « (message illisible) » plutôt que de disparaître.
+
+## Essai sur une boîte non dédiée (IMAP_FOLDER)
+
+La relève lit `INBOX` par défaut. Sur une adresse personnelle, elle ferait remonter tous les mails privés. On limite alors la relève à un libellé Gmail :
+
+1. Dans Gmail, créer un filtre « À : `adresse+gites@gmail.com` » → appliquer le libellé `Gites`, cocher « Ignorer la boîte de réception ».
+2. Dans le `.env` : `IMAP_FOLDER=Gites` (sans accent), avec `IMAP_USER` et le mot de passe d'application de cette adresse.
+3. Au démarrage, le journal affiche « dossier Gites ». Changer de dossier ou de boîte remet le curseur à zéro (UIDVALIDITY différente) : les 14 derniers jours du nouveau dossier sont relus.
+

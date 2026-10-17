@@ -61,6 +61,8 @@ interface Env {
   IMAP_PORT?: string;
   IMAP_USER?: string;
   IMAP_PASSWORD?: string;
+  /** Dossier lu (défaut INBOX) : un libellé Gmail, sans accent, quand la boîte n'est pas dédiée. */
+  IMAP_FOLDER?: string;
   /** Client IMAP injecté par node/server.mjs (node:tls) ; absent sur Workers. */
   IMAP_FETCH?: (query: ImapQuery) => Promise<ImapBatch>;
   /** Instantané complet de la base SQLite (VACUUM INTO), injecté par

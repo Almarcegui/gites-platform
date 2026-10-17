@@ -140,9 +140,10 @@ const mail = (uid: number, body = "Bonjour"): FakeMail => ({
 
 describe("client IMAP : configuration et briques", () => {
   it("IMAP_PASSWORD retombe sur SMTP_PASSWORD ; rien sans utilisateur ou sans mot de passe", () => {
-    expect(imapConfigFromEnv({ IMAP_USER: "g@x.test", SMTP_PASSWORD: "abc" })).toEqual({ host: "imap.gmail.com", port: 993, user: "g@x.test", password: "abc" });
+    expect(imapConfigFromEnv({ IMAP_USER: "g@x.test", SMTP_PASSWORD: "abc" })).toEqual({ host: "imap.gmail.com", port: 993, user: "g@x.test", password: "abc", folder: "INBOX" });
     expect(imapConfigFromEnv({ IMAP_USER: "g@x.test", IMAP_PASSWORD: "p1", SMTP_PASSWORD: "p2", IMAP_HOST: "imap.autre.test", IMAP_PORT: "1993" }))
-      .toEqual({ host: "imap.autre.test", port: 1993, user: "g@x.test", password: "p1" });
+      .toEqual({ host: "imap.autre.test", port: 1993, user: "g@x.test", password: "p1", folder: "INBOX" });
+    expect(imapConfigFromEnv({ IMAP_USER: "g@x.test", IMAP_PASSWORD: "p", IMAP_FOLDER: " Gites " })?.folder).toBe("Gites");
     expect(imapConfigFromEnv({ SMTP_PASSWORD: "abc" })).toBeNull();
     expect(imapConfigFromEnv({ IMAP_USER: "g@x.test" })).toBeNull();
   });
@@ -203,6 +204,20 @@ describe("client IMAP contre un faux serveur TLS", () => {
       expect(joined).toMatch(/UID SEARCH SINCE \d{1,2}-[A-Z][a-z]{2}-\d{4}/);
       expect(joined).not.toMatch(/\bSELECT\b|\bSTORE\b|\bEXPUNGE\b|\bDELETE\b|\bCOPY\b/);
       expect(joined).toContain("BODY.PEEK[]<0.");
+    } finally {
+      await srv.close();
+    }
+  });
+
+  tls("IMAP_FOLDER : seul le libellé choisi est ouvert, en lecture seule ; nom accentué refusé", async () => {
+    const srv = await fakeImap({ mails: [mail(4)] });
+    try {
+      const out = await fetchNewMail({ ...srv.config, folder: "Gites" }, { uidValidity: null, lastUid: null, sinceDays: 14, max: 10 }, OPTS);
+      expect(out.mails.map((m: { uid: number }) => m.uid)).toEqual([4]);
+      const joined = srv.log.join("\n");
+      expect(joined).toContain('EXAMINE "Gites"');
+      expect(joined).not.toContain("EXAMINE INBOX");
+      await expect(fetchNewMail({ ...srv.config, folder: "Gîtes" }, { uidValidity: null, lastUid: null, sinceDays: 14, max: 10 }, OPTS)).rejects.toThrow(/sans accent/);
     } finally {
       await srv.close();
     }
