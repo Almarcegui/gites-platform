@@ -419,7 +419,10 @@ function csvEscape(v: unknown): string {
   // Injection de formule Excel/LibreOffice : un client qui saisit son nom en
   // « =HYPERLINK("http://…"&A1,"Cliquez") » verrait la formule s'exécuter à
   // l'ouverture de l'export. L'apostrophe de tête neutralise la cellule.
-  const s = /^[=+\-@\t\r]/.test(raw) ? `'${raw}` : raw;
+  // Un numéro (« +32 470 00 01 02 », « -12,50 ») ne contient que des chiffres et des
+  // séparateurs : aucune formule possible, et l'apostrophe s'afficherait telle quelle.
+  const numberLike = /^[+-]?\d[\d\s().,/-]*$/.test(raw);
+  const s = /^[=+\-@\t\r]/.test(raw) && !numberLike ? `'${raw}` : raw;
   return /[";\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 

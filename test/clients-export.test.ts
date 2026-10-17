@@ -141,6 +141,16 @@ describe("export CSV des clients", () => {
     expect(filtered).toHaveLength(2);
   });
 
+  it("laisse un numéro de téléphone « +32 … » tel quel, sans apostrophe, mais neutralise « +1+cmd »", async () => {
+    await seed();
+    await t.db.prepare("UPDATE guests SET phone = '+32 470 00 01 02' WHERE last_name = 'Martin'").run();
+    await t.db.prepare("UPDATE guests SET phone = '+1+cmd|calc' WHERE last_name = 'Dupont'").run();
+    const text = (await call("/api/admin/guests.csv")).text;
+    expect(text).toContain(";+32 470 00 01 02;");
+    expect(text).not.toContain("'+32");
+    expect(text).toContain(";'+1+cmd|calc;");
+  });
+
   it("met entre guillemets une valeur contenant un retour chariot", async () => {
     await seed();
     await t.db.prepare("UPDATE guests SET notes = NULL, address = 'a\r=cmd' WHERE last_name = 'Martin'").run();
