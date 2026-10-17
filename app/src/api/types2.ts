@@ -521,3 +521,36 @@ export interface EncaissementsReport {
   months: EncaissementMonth[];
   totals: { count: number; grossCents: number; feeCents: number; netCents: number; unknownFees: number };
 }
+
+/** Historique des échanges d'un client (GET /guests/:id/history). */
+export interface HistoryItem {
+  key: string;
+  source: "mail" | "message";
+  direction: "in" | "out";
+  kind: string;
+  channel: "email" | "form" | "beds24" | null;
+  canal: string | null;
+  subject: string;
+  bodyText: string;
+  status: string | null;
+  errorDetail: string | null;
+  at: string;
+  bookingId: number | null;
+  address: string | null;
+  attachments: { name: string }[];
+}
+
+export interface HistoryStay {
+  bookingId: number;
+  reference: string;
+  unitName: string | null;
+  checkin: string;
+  checkout: string;
+  status: string;
+}
+
+export interface GuestHistory {
+  guest: { id: number; name: string; email: string | null };
+  stays: HistoryStay[];
+  items: HistoryItem[];
+}

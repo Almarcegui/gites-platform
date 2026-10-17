@@ -44,6 +44,8 @@ export interface RootSearch {
   resa?: number;
   /** message à ouvrir dans Messages */
   msg?: number;
+  /** fiche client à ouvrir dans Réglages › Clients */
+  client?: number;
 }
 
 const rootRoute = createRootRoute({
@@ -54,6 +56,8 @@ const rootRoute = createRootRoute({
     if (Number.isInteger(n) && n > 0) out.resa = n;
     const m = Number(s.msg);
     if (Number.isInteger(m) && m > 0) out.msg = m;
+    const c = Number(s.client);
+    if (Number.isInteger(c) && c > 0) out.client = c;
     return out;
   },
 });
