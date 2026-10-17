@@ -296,8 +296,8 @@ export async function listFailedPaymentBookings(db: D1Database, now: Date): Prom
           AND b.status = 'confirmed' AND b.total_cents > b.paid_cents
           AND NOT EXISTS (
             SELECT 1 FROM payments q
-             WHERE q.booking_id = p.booking_id AND q.status IN ('pending', 'succeeded')
-               AND q.created_at > p.created_at)`,
+             WHERE q.booking_id = p.booking_id AND q.created_at > p.created_at
+               AND (q.status IN ('pending', 'succeeded') OR q.created_at > ?2))`,
     )
     .bind(since, until)
     .all();

@@ -200,6 +200,9 @@ describe("relance d'échec de paiement", () => {
   it("pas de relance : échec de moins d'une heure (le client peut encore réessayer), nouvelle tentative, échec ancien, solde payé, option", async () => {
     const fresh = await stay({ checkin: addDays(TODAY, 50), paidCents: 45000 });
     await payment(fresh, "failed", 0.5);
+    const retriedFailing = await stay({ checkin: addDays(TODAY, 55), paidCents: 45000 });
+    await payment(retriedFailing, "failed", 5);
+    await payment(retriedFailing, "failed", 0.3); // second essai raté il y a 20 min : le client est peut-être encore là
     const retried = await stay({ checkin: addDays(TODAY, 40), paidCents: 45000 });
     await payment(retried, "failed", 5);
     await payment(retried, "pending", 1);
