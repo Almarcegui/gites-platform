@@ -47,6 +47,9 @@ export interface FullSettings {
   autoReplyEnabled: boolean;
   autoReplyText: string;
   emailForwardTo: string;
+  stayEmailsEnabled: boolean;
+  reviewUrl: string;
+  arrivalInfoText: string;
 }
 
 export interface Season {

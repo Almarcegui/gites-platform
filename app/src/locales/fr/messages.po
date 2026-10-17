@@ -2582,6 +2582,10 @@ msgstr "Clé secrète (sk_test_… ou sk_live_…)"
 msgid "Clés de service, {active} active(s)"
 msgstr "Clés de service, {active} active(s)"
 
+#: src/pages/settings/Domain.tsx
+msgid "Clés, code, parking, chemin… L'adresse et les heures d'arrivée et de départ sont ajoutées toutes seules."
+msgstr "Clés, code, parking, chemin… L'adresse et les heures d'arrivée et de départ sont ajoutées toutes seules."
+
 #: src/booking/BookingPanel.tsx
 #: src/pages/Bookings.tsx
 #: src/pages/Dashboard.tsx
@@ -3537,6 +3541,10 @@ msgstr "Envoyer ces promotions à Airbnb ?"
 msgid "Envoyer les calendriers maintenant"
 msgstr "Envoyer les calendriers maintenant"
 
+#: src/pages/settings/Domain.tsx
+msgid "Envoyer les mails automatiques du séjour"
+msgstr "Envoyer les mails automatiques du séjour"
+
 #: src/pages/settings/ChannelPrices.tsx
 msgid "Envoyer les prix par plateforme ?"
 msgstr "Envoyer les prix par plateforme ?"
@@ -3884,6 +3892,10 @@ msgstr "Indiquez le prix d'une nuit en semaine pour chaque bien qui a ses prix d
 msgid "Infos d'arrivée (J-7)"
 msgstr "Infos d'arrivée (J-7)"
 
+#: src/pages/settings/Domain.tsx
+msgid "Infos d'arrivée (mails une semaine et trois jours avant)"
+msgstr "Infos d'arrivée (mails une semaine et trois jours avant)"
+
 #: src/booking/Register.tsx
 msgid "Inscrire au registre"
 msgstr "Inscrire au registre"
@@ -4183,6 +4195,10 @@ msgstr "La somme des maisons qu'il regroupe"
 #: src/pages/settings/Help.tsx
 msgid "La vente en trois étapes : dates et maison, voyageurs et prix, client et paiement."
 msgstr "La vente en trois étapes : dates et maison, voyageurs et prix, client et paiement."
+
+#: src/pages/settings/Domain.tsx
+msgid "Laissez vide : le mail de remerciement part sans demande d'avis."
+msgstr "Laissez vide : le mail de remerciement part sans demande d'avis."
 
 #: src/pages/settings/StripeAccounts.tsx
 msgid "Laissez vide pour garder la clé actuelle."
@@ -4763,6 +4779,10 @@ msgstr "lien expiré sans paiement"
 msgid "Lien pour la personne du ménage"
 msgstr "Lien pour la personne du ménage"
 
+#: src/pages/settings/Domain.tsx
+msgid "Lien pour laisser un avis (mail d'après séjour)"
+msgstr "Lien pour laisser un avis (mail d'après séjour)"
+
 #: src/pages/settings/Payments.tsx
 msgid "lien remplacé par un autre"
 msgstr "lien remplacé par un autre"
@@ -4821,6 +4841,10 @@ msgstr "Mail de contact"
 #: src/pages/settings/ClientHistory.tsx
 msgid "Mail reçu du client"
 msgstr "Mail reçu du client"
+
+#: src/pages/settings/Domain.tsx
+msgid "Mails automatiques du séjour"
+msgstr "Mails automatiques du séjour"
 
 #: src/booking/BookingPanel.tsx
 #: src/pages/settings/Logs.tsx
@@ -5966,6 +5990,10 @@ msgstr "Pour décider"
 #: src/calendar/Weeks.tsx
 msgid "Pour la famille, des travaux ou une autre raison."
 msgstr "Pour la famille, des travaux ou une autre raison."
+
+#: src/pages/settings/Domain.tsx
+msgid "Pour les réservations faites sur le site ou au téléphone : un mois avant (préparer le séjour), une semaine avant (infos d'arrivée), trois jours avant (rappel), le lendemain du départ (merci et avis), et un mail si un paiement en ligne n'aboutit pas. Jamais pour Airbnb, Booking ni les séjours importés. Chaque mail part une seule fois : activez-les quand l'envoi des mails est ouvert, sinon ils sont seulement préparés (visibles dans Journaux)."
+msgstr "Pour les réservations faites sur le site ou au téléphone : un mois avant (préparer le séjour), une semaine avant (infos d'arrivée), trois jours avant (rappel), le lendemain du départ (merci et avis), et un mail si un paiement en ligne n'aboutit pas. Jamais pour Airbnb, Booking ni les séjours importés. Chaque mail part une seule fois : activez-les quand l'envoi des mails est ouvert, sinon ils sont seulement préparés (visibles dans Journaux)."
 
 #: src/pages/settings/Ical.tsx
 msgid "Pour les sites qui ne passent pas par Beds24 : chacun lit nos dates, et nous lisons les siennes. Le délai côté Airbnb est d'environ deux heures."

@@ -1,7 +1,8 @@
 // Tâches planifiées (cron */15 min) :
 //  1. expiration des holds périmés (filet de sécurité — la dispo n'en dépend pas)
 //  2. import des flux iCal actifs
-//  3. rappels de solde à l'échéance (une seule fois par résa, mode stub par défaut)
+//  3. rappels de solde à l'échéance (une seule fois par résa, mode stub par défaut),
+//     puis mails du séjour J-30 / J-7 / J-3 / après et relance d'échec de paiement
 //  4. push Beds24 des calendriers mappés (dispo + prix — inactif sans token),
 //     puis relève des messages des canaux (services/beds24-messages.ts)
 //     et de la boîte de contact des gîtes (services/mailbox.ts, IMAP, Node seulement)
@@ -35,6 +36,7 @@ import { CRON_HEARTBEAT_KEY } from "./health";
 import { syncFeed } from "./ical";
 import { runDailyReconcile } from "./reconcile";
 import { runAbandonedReminders } from "./relance";
+import { runStayEmailJobs } from "./sejour-emails";
 import { setSetting } from "./settings";
 
 /** Durée de vie d'une session de checkout (`stripe.ts` pose expires_at à +30
@@ -127,6 +129,18 @@ export async function runScheduled(env: Env, now: Date = new Date(), fetcher: ty
       kind: "balance_reminder",
     });
     await audit(db, "cron", "email.balance_reminder", `booking:${b.id}`);
+  }
+
+  // 3 ter. Mails du séjour (J-30, J-7, J-3, après le départ) et relance des paiements
+  //    en ligne qui n'ont pas abouti — réservations faites ici seulement, interrupteur
+  //    par domaine coupé par défaut (services/sejour-emails.ts).
+  try {
+    const stay = await runStayEmailJobs(env, now);
+    if (Object.keys(stay.queued).length > 0 || stay.paymentFailed > 0) {
+      await audit(db, "cron", "stay.emails", undefined, { ...stay.queued, payment_failed: stay.paymentFailed });
+    }
+  } catch (e) {
+    await audit(db, "cron", "stay.emails.error", undefined, { error: e instanceof Error ? e.message : String(e) });
   }
 
   // 3 bis. Relance des réservations abandonnées (issue #37) — uniquement les

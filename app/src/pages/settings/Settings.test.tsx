@@ -9,7 +9,7 @@ import { renderApp } from "../../test/render";
 import { setWide } from "../../test/setup";
 
 const PROPERTY = { id: 1, slug: "pre-more", name: "Les Gîtes du Pré Moré", address: "Hameau", commune: "Daverdisse", contactEmail: "a@example.com", contactPhone: "0470 00 00 01", beds24PropertyId: null };
-const SETTINGS = { depositPct: 30, balanceDueDays: 30, holdMinutes: 30, touristTaxCentsPerPersonNight: 0, touristTaxIncludeChildren: true, cautionCents: 0, checkinTime: "16:00", checkoutTime: "10:00", cgvText: "Article 1", allowDeposit: true, allowFullPayment: true, autoReplyEnabled: false, autoReplyText: "", emailForwardTo: "" };
+const SETTINGS = { depositPct: 30, balanceDueDays: 30, holdMinutes: 30, touristTaxCentsPerPersonNight: 0, touristTaxIncludeChildren: true, cautionCents: 0, checkinTime: "16:00", checkoutTime: "10:00", cgvText: "Article 1", allowDeposit: true, allowFullPayment: true, autoReplyEnabled: false, autoReplyText: "", emailForwardTo: "", stayEmailsEnabled: false, reviewUrl: "", arrivalInfoText: "" };
 const FULL_UNITS = UNITS.map((u) => ({ ...u, description: "", photoUrl: null, beds24RoomId: null, priceMinCents: null, priceMaxCents: null, depositPct: null }));
 
 beforeEach(() => {
