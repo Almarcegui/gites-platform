@@ -20,6 +20,10 @@ interface Jwk extends JsonWebKey {
 
 const CERTS_TTL_MS = 60 * 60_000;
 const CLOCK_SKEW_S = 60;
+/** Relecture forcée (clé inconnue) au plus toutes les 5 minutes : un jeton
+ *  inventé avec un `kid` neuf à chaque requête ne doit pas faire une requête
+ *  vers Cloudflare à chaque appel. */
+const FORCED_REFRESH_MIN_MS = 5 * 60_000;
 let certsCache: { url: string; at: number; keys: Jwk[] } | null = null;
 
 /** Pour les tests : oublie les clés mises en cache. */
@@ -49,7 +53,10 @@ function teamDomain(raw: string | undefined): string | null {
 
 async function teamKeys(domain: string, refresh: boolean): Promise<Jwk[]> {
   const url = `https://${domain}/cdn-cgi/access/certs`;
-  if (!refresh && certsCache && certsCache.url === url && Date.now() - certsCache.at < CERTS_TTL_MS) return certsCache.keys;
+  if (certsCache && certsCache.url === url) {
+    const age = Date.now() - certsCache.at;
+    if (age < (refresh ? FORCED_REFRESH_MIN_MS : CERTS_TTL_MS)) return certsCache.keys;
+  }
   const res = await fetch(url);
   if (!res.ok) throw new Error(`certificats Cloudflare Access indisponibles (${res.status})`);
   const body = (await res.json()) as { keys?: Jwk[] };

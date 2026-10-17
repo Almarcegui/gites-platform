@@ -300,6 +300,13 @@ export function guard(inner: Handler): Handler {
     //    ou mot de passe nu pour verify-deploy et les sessions historiques).
     const raw = env.ADMIN_TOKEN?.trim();
     if (raw) {
+      // Même frein que la page de connexion (revue Codex du 17/10) : sans lui,
+      // `Bearer identifiant:motdepasse` sur n'importe quelle route gardée
+      // permettait d'essayer des mots de passe sans limite ni trace.
+      const ip = req.headers.get("cf-connecting-ip")?.trim() || null;
+      if (presented && ip && (await guardFailures(env.DB, ip)) >= LOGIN_MAX_FAILURES_PER_IP) {
+        return apiError(429, "trop d'essais d'authentification — réessayez dans un quart d'heure", { code: "login_throttled" });
+      }
       const sep = presented.indexOf(":");
       let ok = false;
       if (sep > 0) {
@@ -329,6 +336,13 @@ export function guard(inner: Handler): Handler {
         if (ok) REQUEST_KIND.set(req, "nu");
       }
       if (ok) return handler(req, env, params, url, ctx);
+      // Un jeton présenté et faux est un essai : il compte (par adresse).
+      if (presented && ip) {
+        const who = sep > 0 ? presented.slice(0, sep).slice(0, 40) : "(jeton)";
+        await env.DB.prepare("INSERT INTO audit_log (actor, action, entity, detail) VALUES ('admin', 'login.failed', ?1, ?2)")
+          .bind(`bearer:${who}`, JSON.stringify({ ip }))
+          .run();
+      }
       return apiError(401, "non autorisé");
     }
     // 3) Cloudflare Access : le jeton n'ouvre la porte que s'il est AUTHENTIQUE
@@ -363,6 +377,15 @@ export const LOGIN_MAX_FAILURES_PER_USER_IP = 10;
 export const LOGIN_MAX_FAILURES_PER_IP = 30;
 export const LOGIN_MAX_FAILURES_PER_USER = 100;
 
+/** Échecs récents depuis une adresse (connexions et jetons Bearer confondus). */
+async function guardFailures(db: D1Database, ip: string): Promise<number> {
+  const row = await db
+    .prepare("SELECT COUNT(*) AS n FROM audit_log WHERE action = 'login.failed' AND created_at > datetime('now', '-15 minutes') AND json_extract(detail, '$.ip') = ?1")
+    .bind(ip)
+    .first<{ n: number }>();
+  return Number(row?.n ?? 0);
+}
+
 /** Inscrit l'essai (login.failed par défaut) puis compte les échecs récents,
  *  l'essai compris. */
 async function startLoginAttempt(db: D1Database, entity: string, ip: string | null): Promise<{ id: number; throttled: boolean }> {
@@ -384,8 +407,20 @@ async function startLoginAttempt(db: D1Database, entity: string, ip: string | nu
   const byIp = Number(row?.by_ip ?? 0);
   // Sans adresse connue (cas théorique), l'identifiant seul sert de couple.
   const byPair = ip ? Number(row?.by_pair ?? 0) : byUser;
-  const throttled = byPair > LOGIN_MAX_FAILURES_PER_USER_IP || byIp > LOGIN_MAX_FAILURES_PER_IP || byUser > LOGIN_MAX_FAILURES_PER_USER;
-  return { id, throttled };
+  if (byPair > LOGIN_MAX_FAILURES_PER_USER_IP || byIp > LOGIN_MAX_FAILURES_PER_IP) return { id, throttled: true };
+  if (byUser > LOGIN_MAX_FAILURES_PER_USER) {
+    // Attaque répartie sur l'identifiant : seule une adresse où ce compte
+    // s'est déjà connecté (30 derniers jours) passe encore — le propriétaire
+    // chez lui n'est pas verrouillé dehors par l'attaquant.
+    const known = ip
+      ? await db
+          .prepare("SELECT 1 AS k FROM audit_log WHERE action = 'login.ok' AND entity = ?1 AND json_extract(detail, '$.ip') = ?2 AND created_at > datetime('now', '-30 days') LIMIT 1")
+          .bind(entity, ip)
+          .first()
+      : null;
+    if (!known) return { id, throttled: true };
+  }
+  return { id, throttled: false };
 }
 
 /** Pourcentage de remise borné à [0,100] — une saisie « 150 » au lieu de « 15 »

@@ -80,6 +80,20 @@ describe("connexion : frein aux essais en série", () => {
       await t.db.prepare("INSERT INTO audit_log (actor, action, entity, detail) VALUES ('admin', 'login.failed', 'user:secours', ?1)").bind(JSON.stringify({ ip: `10.2.${i >> 8}.${i & 255}` })).run();
     }
     expect((await post("/api/admin/login", { user: "secours", password: "mdp-secours" }, "10.3.3.3")).status).toBe(429);
+    // Une adresse où le compte s'est déjà connecté passe encore : l'attaquant
+    // ne verrouille pas le propriétaire dehors.
+    await t.db.prepare("INSERT INTO audit_log (actor, action, entity, detail, created_at) VALUES ('admin', 'login.ok', 'user:secours', ?1, datetime('now', '-2 days'))").bind(JSON.stringify({ ip: "10.8.8.8" })).run();
+    expect((await post("/api/admin/login", { user: "secours", password: "mdp-secours" }, "10.8.8.8")).status).toBe(200);
+  });
+
+  it("le même frein vaut pour un mot de passe présenté en Bearer sur une route gardée", async () => {
+    const get = async (auth: string) =>
+      (await router.handle(new Request("http://test.local/api/admin/users", { headers: { authorization: auth, "cf-connecting-ip": "10.7.7.7" } }), env))!.status;
+    for (let i = 0; i < LOGIN_MAX_FAILURES_PER_IP; i++) expect(await get(`Bearer secours:essai-${i}`)).toBe(401);
+    expect(await get("Bearer secours:mdp-secours")).toBe(429);
+    expect(await get("Bearer jeton-nu-au-hasard")).toBe(429);
+    // Le bon secret depuis une autre adresse passe.
+    expect((await router.handle(new Request("http://test.local/api/admin/users", { headers: { authorization: "Bearer secours:mdp-secours", "cf-connecting-ip": "10.7.7.8" } }), env))!.status).toBe(200);
   });
 
   it("une rafale parallèle ne passe pas sous le compteur", async () => {
