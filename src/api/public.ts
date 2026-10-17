@@ -151,8 +151,14 @@ function safeEqualKey(a: string, b: string): boolean {
 }
 
 function isEmailish(s: string): boolean {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(s);
+  return s.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(s);
 }
+
+/** Longueurs maximales des champs libres du formulaire public. Sans plafond, un
+ *  nom de 5 000 caractères était accepté, bloquait les dates et cassait la mise
+ *  en page du PDF et des mails. Très au-dessus de tout usage réel. */
+const MAX_FIELD = { name: 120, phone: 40, address: 300, country: 80, notes: 2000 } as const;
+const FIELD_TOO_LONG = "un des champs est trop long";
 
 /** Forme publique d'un démarrage de paiement (issue #26).
  *
@@ -741,6 +747,16 @@ export function registerPublicRoutes(router: Router): void {
     const email = String(guest.email ?? "").trim();
     if (lastName.length < 2) return apiError(400, "nom du client requis");
     if (!isEmailish(email)) return apiError(400, "email invalide");
+    if (
+      lastName.length > MAX_FIELD.name ||
+      String(guest.firstName ?? "").trim().length > MAX_FIELD.name ||
+      String(guest.phone ?? "").trim().length > MAX_FIELD.phone ||
+      String(guest.address ?? "").trim().length > MAX_FIELD.address ||
+      String(guest.country ?? "").trim().length > MAX_FIELD.country ||
+      String(body.notes ?? "").trim().length > MAX_FIELD.notes
+    ) {
+      return apiError(400, FIELD_TOO_LONG);
+    }
     if (body.cgvAccepted !== true) return apiError(400, "l'acceptation des conditions générales est requise");
 
     // --- anti-robot Turnstile (issue #6, second volet) ----------------------
@@ -1218,6 +1234,7 @@ export function registerPublicRoutes(router: Router): void {
     const email = String(body.email ?? "").trim().toLowerCase();
     const message = String(body.message ?? "").trim();
     if (name.length < 2) return apiError(400, "nom requis");
+    if (name.length > MAX_FIELD.name) return apiError(400, FIELD_TOO_LONG);
     if (!isEmailish(email)) return apiError(400, "email invalide");
     if (message.length < 5 || message.length > 4000) return apiError(400, "message trop court ou trop long");
     const property = await getProperty(db, body.property ?? "");

@@ -33,6 +33,7 @@ const EXACT: Record<string, string> = {
   "corps JSON attendu": "ongeldige aanvraag",
   "nom du client requis": "naam van de klant vereist",
   "email invalide": "ongeldig e-mailadres",
+  "un des champs est trop long": "een van de velden is te lang",
   "l'acceptation des conditions générales est requise": "u moet de algemene voorwaarden aanvaarden",
   "code promo invalide ou expiré": "promotiecode ongeldig of verlopen",
   "séjour impossible à ces conditions": "verblijf niet mogelijk onder deze voorwaarden",
