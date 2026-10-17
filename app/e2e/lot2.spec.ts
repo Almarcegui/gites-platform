@@ -89,7 +89,10 @@ test("ménage : case « fait » en base, personne et note, lien de partage coch�
 test("modèles : créé dans Réglages, proposé dans Messages, supprimé", async ({ page }) => {
   await page.goto("/admin/#/reglages/modeles");
   await expect(page.getByRole("heading", { name: "Modèles de réponse" })).toBeVisible();
-  await expect(page.locator(".list-row")).toHaveCount(4);
+  // Les migrations posent un nombre de modèles de départ (4, puis 10 avec la 0037) : on compte, on ne devine pas.
+  await expect(page.locator(".list-row").first()).toBeVisible();
+  const before = await page.locator(".list-row").count();
+  expect(before).toBeGreaterThanOrEqual(10); // 4 modèles d'origine + 6 de la migration 0037
   await page.getByRole("button", { name: "Nouveau modèle" }).click();
   const d = drawer(page);
   await d.getByLabel("Nom du modèle").fill("Code wifi");
@@ -98,7 +101,7 @@ test("modèles : créé dans Réglages, proposé dans Messages, supprimé", asyn
   await page.screenshot({ path: shot("1280-reglages-modele") });
   await d.getByRole("button", { name: "Créer" }).click();
   await expect(page.getByText("C'est fait. Modèle créé.").first()).toBeVisible();
-  await expect(page.locator(".list-row")).toHaveCount(5);
+  await expect(page.locator(".list-row")).toHaveCount(before + 1);
   await page.screenshot({ path: shot("1280-reglages-modeles") });
 
   await page.goto("/admin/#/messages");
@@ -113,7 +116,7 @@ test("modèles : créé dans Réglages, proposé dans Messages, supprimé", asyn
   await drawer(page).getByRole("button", { name: "Plus" }).click();
   await page.getByRole("menuitem", { name: "Supprimer le modèle" }).click();
   await page.getByRole("button", { name: "Supprimer le modèle" }).last().click();
-  await expect(page.locator(".list-row")).toHaveCount(4);
+  await expect(page.locator(".list-row")).toHaveCount(before);
 });
 
 test("recherche par téléphone dans les réservations et les clients", async ({ page }) => {

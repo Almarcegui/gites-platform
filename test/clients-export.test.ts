@@ -70,6 +70,16 @@ describe("liste des clients", () => {
     expect(durand.staysCount).toBe(0);
   });
 
+  it("trie par nom sans tenir compte de la casse ni des accents (de Vries entre Dupont et Martin)", async () => {
+    const units = (await t.db.prepare("SELECT id FROM units ORDER BY id LIMIT 1").all()).results as { id: number }[];
+    await book(units[0].id, D1, D2, { firstName: "Zoé", lastName: "Zimmer", email: "zoe@exemple.test" });
+    await book(units[0].id, D3, D4, { firstName: "Éva", lastName: "Étienne", email: "eva@exemple.test" });
+    await book(units[0].id, addDays(D4, 10), addDays(D4, 12), { firstName: "Dirk", lastName: "de Vries", email: "dirk@exemple.test" });
+    await book(units[0].id, addDays(D4, 20), addDays(D4, 22), { firstName: "Alix", lastName: "Dupont", email: "alix@exemple.test" });
+    const names = (JSON.parse((await call("/api/admin/guests")).text).guests as { lastName: string }[]).map((g) => g.lastName);
+    expect(names).toEqual(["de Vries", "Dupont", "Étienne", "Zimmer"]);
+  });
+
   it("trie par séjour : récent d'abord, ancien d'abord, sans séjour en fin", async () => {
     await seed();
     const names = async (sort: string) => (JSON.parse((await call(`/api/admin/guests?sort=${sort}`)).text).guests as { lastName: string }[]).map((g) => g.lastName);
@@ -129,6 +139,27 @@ describe("export CSV des clients", () => {
     expect(all).not.toMatch(/(^|;|")=HYPERLINK/m);
     const filtered = (await call("/api/admin/guests.csv?search=Martin")).text.replace(/^\ufeff/, "").split("\r\n");
     expect(filtered).toHaveLength(2);
+  });
+
+  it("laisse un numéro de téléphone « +32 … » tel quel, sans apostrophe, mais neutralise « +1+cmd »", async () => {
+    await seed();
+    await t.db.prepare("UPDATE guests SET phone = '+32 470 00 01 02' WHERE last_name = 'Martin'").run();
+    await t.db.prepare("UPDATE guests SET phone = '+1+cmd|calc' WHERE last_name = 'Dupont'").run();
+    const text = (await call("/api/admin/guests.csv")).text;
+    expect(text).toContain(";+32 470 00 01 02;");
+    expect(text).not.toContain("'+32");
+    expect(text).toContain(";'+1+cmd|calc;");
+    // Une arithmétique n'est pas un numéro : elle reste neutralisée.
+    await t.db.prepare("UPDATE guests SET phone = '+1/1' WHERE last_name = 'Martin'").run();
+    await t.db.prepare("UPDATE guests SET phone = '-1+1' WHERE last_name = 'Dupont'").run();
+    const text2 = (await call("/api/admin/guests.csv")).text;
+    expect(text2).toContain(";'+1/1;");
+    expect(text2).toContain(";'-1+1;");
+    // Collé, sans espace : un tableur le lirait comme un nombre, il reste neutralisé.
+    await t.db.prepare("UPDATE guests SET phone = '+32470000102' WHERE last_name = 'Martin'").run();
+    expect((await call("/api/admin/guests.csv")).text).toContain(";'+32470000102;");
+    await t.db.prepare("UPDATE guests SET phone = '+32 (0)470 00 01 02' WHERE last_name = 'Martin'").run();
+    expect((await call("/api/admin/guests.csv")).text).toContain(";+32 (0)470 00 01 02;");
   });
 
   it("met entre guillemets une valeur contenant un retour chariot", async () => {

@@ -1194,7 +1194,7 @@ export async function listGuests(db: D1Database, search?: string, sort: GuestSor
         .bind(`%${search}%`, ...(core ? [`%${core}%`] : []))
     : db.prepare(`${base} GROUP BY g.id ORDER BY ${order}`);
   const { results } = await stmt.all();
-  return (results as Raw[]).map((r) => ({
+  const guests = (results as Raw[]).map((r) => ({
     id: num(r.id), email: strOrNull(r.email), firstName: strOrNull(r.first_name), lastName: str(r.last_name),
     phone: strOrNull(r.phone), address: strOrNull(r.address), country: strOrNull(r.country),
     lang: str(r.lang), notes: strOrNull(r.notes), createdAt: str(r.created_at),
@@ -1204,6 +1204,13 @@ export async function listGuests(db: D1Database, search?: string, sort: GuestSor
     lastCheckout: strOrNull(r.last_checkout), lastBookedAt: strOrNull(r.last_booked_at),
     marketingOptIn: num(r.marketing_opt_in) === 1, marketingOptInAt: strOrNull(r.marketing_opt_in_at),
   }));
+  // Tri par nom : l'ordre binaire de SQLite range « de Vries » après « Zimmer » et
+  // « Étienne » après « Zwart ». On trie à la française, sans tenir compte de la casse.
+  if (sort === "name") {
+    const collator = new Intl.Collator("fr", { sensitivity: "base" });
+    guests.sort((a, b) => collator.compare(a.lastName, b.lastName) || collator.compare(a.firstName ?? "", b.firstName ?? "") || a.id - b.id);
+  }
+  return guests;
 }
 
 export async function getGuest(db: D1Database, id: number): Promise<GuestRow | null> {

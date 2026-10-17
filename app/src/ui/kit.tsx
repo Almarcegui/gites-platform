@@ -14,6 +14,8 @@ import { Link, useBlocker, useRouterState } from "@tanstack/react-router";
 import { useEffect, useState, type ReactNode } from "react";
 
 import { authHeader, errorText } from "../api/client";
+import { i18n } from "../i18n";
+import { sqlToBrussels } from "../lib/dates";
 import { useProperties } from "../api/hooks";
 import type { Property } from "../api/types";
 import { ErrorLine } from "../lib/action";
@@ -366,10 +368,15 @@ export function centsToEuros(c: number | null | undefined): number | string {
   return c == null ? "" : c / 100;
 }
 
-/** Date et heure SQL (« 2026-10-10 14:32:00 ») → « 10/10/2026 à 14 h 32 ». */
+/** Date et heure SQL, écrites en UTC par la base (« 2026-10-10 12:32:00 »), dites à l'heure
+ *  de Belgique : « 10/10/2026 à 14 h 32 » (en néerlandais « 10/10/2026 om 14.32 u »). */
 export function sqlWhen(s: string | null | undefined): string {
   if (!s) return "";
-  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/);
-  if (!m) return s.slice(0, 10);
-  return `${m[3]}/${m[2]}/${m[1]} à ${Number(m[4])} h ${m[5]}`;
+  const b = sqlToBrussels(s);
+  if (!b) return s.slice(0, 10);
+  const [y, mo, d] = b.day.split("-");
+  const date = `${d}/${mo}/${y}`;
+  const [hh, mm] = b.time.split(":");
+  const h = Number(hh);
+  return i18n.locale === "nl" ? `${date} om ${h}.${mm} u` : `${date} à ${h} h ${mm}`;
 }

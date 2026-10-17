@@ -14,7 +14,7 @@ import { useRefresh } from "../../api/hooks";
 import type { DayRate, IsoDate } from "../../api/types";
 import type { RateRule, Season, UnitFull } from "../../api/types2";
 import { ErrorLine, useAction } from "../../lib/action";
-import { addDays, diffDays, longDate, monthShort, stayRange, todayBrussels } from "../../lib/dates";
+import { addDays, diffDays, longDate, monthShort, stayRange, todayBrussels, weekdayShortOfIndex } from "../../lib/dates";
 import { eur } from "../../lib/money";
 import { overlapsOf, overrideRuns, prioritiesToFix, priceLevels, seasonNights, wrongOverlaps, type OverrideRun } from "../../lib/seasons";
 import { buildSuggestions, soldNights, type Suggestion } from "../../lib/suggestions";
@@ -23,7 +23,6 @@ import { usePlanning, useRateCalendar, useRules, useSeasons, useUnitsFull } from
 
 type Tab = "saisons" | "base" | "main" | "annee" | "idees";
 
-const WEEKDAYS = ["dim.", "lun.", "mar.", "mer.", "jeu.", "ven.", "sam."];
 const WEEK_ORDER = [1, 2, 3, 4, 5, 6, 0];
 
 /** Un bien qui a ses propres prix (un « Domaine entier » en somme des maisons n'en a pas). */
@@ -38,10 +37,12 @@ function useRuleText(): (r: RateRule) => string {
     if (r.holidayPct) parts.push(t`fériés + ${r.holidayPct} %`);
     parts.push(r.minNights > 1 ? t`au moins ${r.minNights} nuits` : t`dès 1 nuit`);
     if (r.checkinDays && r.checkinDays.length && r.checkinDays.length < 7) {
-      const days = WEEK_ORDER.filter((d) => r.checkinDays!.includes(d)).map((d) => WEEKDAYS[d]).join(", ");
+      const days = WEEK_ORDER.filter((d) => r.checkinDays!.includes(d)).map((d) => weekdayShortOfIndex(d)).join(", ");
       parts.push(t`arrivée le ${days}`);
     }
-    return parts.join(", ") + ".";
+    const sentence = parts.join(", ");
+    // Un jour abrégé (« sam. ») finit déjà par un point.
+    return sentence.endsWith(".") ? sentence : sentence + ".";
   };
 }
 
@@ -177,7 +178,7 @@ function RuleFields({ f, set, idPrefix }: { f: RuleForm; set: (f: RuleForm) => v
                   set({ ...f, days: next.length === 0 || next.length === 7 ? null : next });
                 }}
               >
-                {WEEKDAYS[d]}
+                {weekdayShortOfIndex(d)}
               </button>
             );
           })}

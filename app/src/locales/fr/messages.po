@@ -34,11 +34,11 @@ msgstr " (échéance {0})"
 msgid " (existante)"
 msgstr " (existante)"
 
-#. placeholder {0}: longDate(h.holdExpiresAt.slice(0, 10))
-#. placeholder {1}: h.holdExpiresAt.slice(11, 16)
+#. placeholder {0}: longDate(b.day)
+#. placeholder {1}: hourLabel(b.time)
 #: src/pages/Dashboard.tsx
-msgid " (expire le {0} à {1} UTC)"
-msgstr " (expire le {0} à {1} UTC)"
+msgid " (expire le {0} à {1})"
+msgstr " (expire le {0} à {1})"
 
 #. placeholder {0}: sqlWhen(s.sentAt)
 #: src/pages/settings/ChannelPrices.tsx
@@ -241,7 +241,7 @@ msgstr "{0} : trop lourde (8 Mo au plus)."
 msgid "{0} {1} % par rapport à {2}"
 msgstr "{0} {1} % par rapport à {2}"
 
-#. placeholder {0}: MONTHS[i]
+#. placeholder {0}: monthShortOfIndex(i)
 #. placeholder {1}: fr(m.occupancyPct, 1)
 #. placeholder {2}: m.occupiedNights
 #. placeholder {3}: m.capacityNights
@@ -758,7 +758,7 @@ msgstr "{where}{0} message(s) client à traiter"
 
 #. placeholder {0}: h.reference
 #. placeholder {1}: h.unitName
-#. placeholder {2}: h.holdExpiresAt ? t` (expire le ${longDate(h.holdExpiresAt.slice(0, 10))} à ${h.holdExpiresAt.slice(11, 16)} UTC)` : ""
+#. placeholder {2}: h.holdExpiresAt ? holdText(h.holdExpiresAt) : ""
 #: src/pages/Dashboard.tsx
 msgid "{where}{0}, {1}{2}"
 msgstr "{where}{0}, {1}{2}"
@@ -896,6 +896,11 @@ msgstr "À cocher pour un agenda tenu à la main qui bloque aussi le jour du dé
 #: src/pages/settings/Ical.tsx
 msgid "À coller dans Airbnb (« Importer un calendrier ») ou ailleurs. Si les deux maisons sont réservées ensemble, chacune y apparaît prise."
 msgstr "À coller dans Airbnb (« Importer un calendrier ») ou ailleurs. Si les deux maisons sont réservées ensemble, chacune y apparaît prise."
+
+#. placeholder {0}: unfilled.join(" ")
+#: src/pages/Messages.tsx
+msgid "À compléter avant d'envoyer : {0}"
+msgstr "À compléter avant d'envoyer : {0}"
 
 #: src/pages/settings/Beds24Property.tsx
 msgid "À compléter dans Beds24"
@@ -1139,6 +1144,10 @@ msgstr "Alertes"
 #: src/improvements/SuggestionButton.tsx
 msgid "Amélioration ?"
 msgstr "Amélioration ?"
+
+#: src/pages/settings/Logs.tsx
+msgid "amélioration proposée"
+msgstr "amélioration proposée"
 
 #: src/improvements/SuggestionButton.tsx
 msgid "Amélioration souhaitée"
@@ -2246,6 +2255,18 @@ msgstr "Calendrier"
 msgid "Calendrier relié"
 msgstr "Calendrier relié"
 
+#: src/pages/settings/Logs.tsx
+msgid "calendrier relié ajouté"
+msgstr "calendrier relié ajouté"
+
+#: src/pages/settings/Logs.tsx
+msgid "calendrier relié modifié"
+msgstr "calendrier relié modifié"
+
+#: src/pages/settings/Logs.tsx
+msgid "calendrier relié supprimé"
+msgstr "calendrier relié supprimé"
+
 #: src/pages/settings/Ical.tsx
 msgid "Calendrier sans nom"
 msgstr "Calendrier sans nom"
@@ -2292,6 +2313,10 @@ msgstr "Ce bien se vend"
 #: src/booking/BookingPanel.tsx
 msgid "ce client"
 msgstr "ce client"
+
+#: src/sale/QuoteWarnings.tsx
+msgid "Ce code de réduction n'est pas valable : il n'est pas appliqué au prix."
+msgstr "Ce code de réduction n'est pas valable : il n'est pas appliqué au prix."
 
 #: src/pages/settings/MyAccount.tsx
 msgid "Ce compte est aussi ouvert sur {others} autre(s) appareil(s). Changer le mot de passe les déconnecte."
@@ -2430,6 +2455,10 @@ msgstr "chambres"
 #: src/calendar/PricePanel.tsx
 msgid "Changé en partie : {applied} nuit(s) modifiées, le reste non. {0} Vérifiez la grille."
 msgstr "Changé en partie : {applied} nuit(s) modifiées, le reste non. {0} Vérifiez la grille."
+
+#: src/pages/settings/Logs.tsx
+msgid "changement de séjour refusé : dates déjà prises"
+msgstr "changement de séjour refusé : dates déjà prises"
 
 #: src/pages/settings/Tarifs.tsx
 msgid "Changer"
@@ -2600,6 +2629,14 @@ msgstr "Clé « {name} », affichée une seule fois. À coller dans ~/.config/gi
 #: src/pages/settings/ServiceKeys.tsx
 msgid "Clé créée"
 msgstr "Clé créée"
+
+#: src/pages/settings/Logs.tsx
+msgid "clé de service créée"
+msgstr "clé de service créée"
+
+#: src/pages/settings/Logs.tsx
+msgid "clé de service révoquée"
+msgstr "clé de service révoquée"
 
 #: src/pages/settings/StripeAccounts.tsx
 msgid "Clé publiable"
@@ -2774,6 +2811,10 @@ msgstr "Confirmation ouverte dans un nouvel onglet."
 msgid "Confirmation PDF"
 msgstr "Confirmation PDF"
 
+#: src/pages/settings/Logs.tsx
+msgid "confirmation refusée : dates déjà prises"
+msgstr "confirmation refusée : dates déjà prises"
+
 #: src/booking/BookingPanel.tsx
 msgid "confirmation refusée : dates reprises entre-temps"
 msgstr "confirmation refusée : dates reprises entre-temps"
@@ -2830,6 +2871,14 @@ msgstr "Connectez-vous avec le même identifiant que d'habitude."
 #: src/pages/settings/Channels.tsx
 msgid "Connectez-vous sur beds24.com."
 msgstr "Connectez-vous sur beds24.com."
+
+#: src/pages/settings/Logs.tsx
+msgid "connexion refusée"
+msgstr "connexion refusée"
+
+#: src/pages/settings/Logs.tsx
+msgid "connexion réussie"
+msgstr "connexion réussie"
 
 #: src/pages/settings/Import.tsx
 msgid "Contenu du fichier elloha"
@@ -3255,6 +3304,10 @@ msgstr "Détail technique"
 msgid "Devis"
 msgstr "Devis"
 
+#: src/pages/settings/Stats.tsx
+msgid "Devis affichés"
+msgstr "Devis affichés"
+
 #: src/calendar/PricePanel.tsx
 msgid "Dimanche à jeudi"
 msgstr "Dimanche à jeudi"
@@ -3266,6 +3319,10 @@ msgstr "Domaine"
 #: src/calendar/Weeks.tsx
 msgid "Domaine : une des maisons est prise"
 msgstr "Domaine : une des maisons est prise"
+
+#: src/pages/settings/Logs.tsx
+msgid "domaine modifié"
+msgstr "domaine modifié"
 
 #: src/pages/settings/Device.tsx
 msgid "Domaine montré par l'écran"
@@ -4588,6 +4645,14 @@ msgstr "Le serveur n'a pas pu le faire. Rien n'a été changé ; réessayez dans
 msgid "Le shortcode"
 msgstr "Le shortcode"
 
+#: src/sale/QuoteWarnings.tsx
+msgid "Le site public refuserait cette arrivée : il faut réserver au moins {n} jours avant. Vous pouvez l'enregistrer quand même, la vente sera notée au journal."
+msgstr "Le site public refuserait cette arrivée : il faut réserver au moins {n} jours avant. Vous pouvez l'enregistrer quand même, la vente sera notée au journal."
+
+#: src/sale/QuoteWarnings.tsx
+msgid "Le site public refuserait cette arrivée : il faut réserver au plus tard la veille. Vous pouvez l'enregistrer quand même, la vente sera notée au journal."
+msgstr "Le site public refuserait cette arrivée : il faut réserver au plus tard la veille. Vous pouvez l'enregistrer quand même, la vente sera notée au journal."
+
 #. placeholder {0}: longDate(o.balanceDueDate)
 #: src/pages/Today.tsx
 msgid "Le solde était attendu le {0}."
@@ -4907,7 +4972,7 @@ msgstr "liaisons d'un bien changées"
 msgid "liaisons de {0}"
 msgstr "liaisons de {0}"
 
-#. placeholder {0}: longDate(h.holdExpiresAt.slice(0, 10))
+#. placeholder {0}: longDate(sqlToBrussels(h.holdExpiresAt)?.day ?? h.holdExpiresAt.slice(0, 10))
 #: src/pages/Today.tsx
 msgid "libérée le {0} sans arrhes"
 msgstr "libérée le {0} sans arrhes"
@@ -4929,6 +4994,18 @@ msgstr "Lien de paiement des arrhes"
 #: src/booking/BookingPanel.tsx
 msgid "Lien de paiement du solde"
 msgstr "Lien de paiement du solde"
+
+#: src/pages/settings/Logs.tsx
+msgid "lien de paiement expiré"
+msgstr "lien de paiement expiré"
+
+#: src/pages/settings/Logs.tsx
+msgid "lien du ménage coupé"
+msgstr "lien du ménage coupé"
+
+#: src/pages/settings/Logs.tsx
+msgid "lien du ménage créé"
+msgstr "lien du ménage créé"
 
 #: src/pages/settings/Payments.tsx
 msgid "lien expiré sans paiement"
@@ -4953,6 +5030,10 @@ msgstr "Lien vers la réservation du client :"
 #: src/pages/settings/Import.tsx
 msgid "Ligne"
 msgstr "Ligne"
+
+#: src/pages/settings/Logs.tsx
+msgid "liste des clients exportée"
+msgstr "liste des clients exportée"
 
 #: src/pages/settings/Promotions.tsx
 msgid "Long séjour"
@@ -5182,6 +5263,18 @@ msgstr "Mode du compte Stripe"
 msgid "Modèle de réponse"
 msgstr "Modèle de réponse"
 
+#: src/pages/settings/Logs.tsx
+msgid "modèle de réponse créé"
+msgstr "modèle de réponse créé"
+
+#: src/pages/settings/Logs.tsx
+msgid "modèle de réponse modifié"
+msgstr "modèle de réponse modifié"
+
+#: src/pages/settings/Logs.tsx
+msgid "modèle de réponse supprimé"
+msgstr "modèle de réponse supprimé"
+
 #: src/pages/settings/Templates.tsx
 #: src/shell/nav.tsx
 msgid "Modèles"
@@ -5258,6 +5351,10 @@ msgstr "Mot de passe"
 #: src/pages/settings/MyAccount.tsx
 msgid "Mot de passe actuel"
 msgstr "Mot de passe actuel"
+
+#: src/pages/settings/Logs.tsx
+msgid "mot de passe changé"
+msgstr "mot de passe changé"
 
 #: src/pages/settings/Accounts.tsx
 #: src/pages/settings/MyAccount.tsx
@@ -5661,6 +5758,10 @@ msgid "Option en cours"
 msgstr "Option en cours"
 
 #: src/pages/settings/Logs.tsx
+msgid "option libérée"
+msgstr "option libérée"
+
+#: src/pages/settings/Logs.tsx
 msgid "option modifiée"
 msgstr "option modifiée"
 
@@ -5690,6 +5791,10 @@ msgstr "Options"
 #: src/pages/Bookings.tsx
 msgid "Options en cours"
 msgstr "Options en cours"
+
+#: src/pages/settings/Logs.tsx
+msgid "options expirées libérées"
+msgstr "options expirées libérées"
 
 #: src/pages/Settings.tsx
 #: src/pages/settings/Options.tsx
@@ -5799,6 +5904,14 @@ msgstr "paiement noté à la main"
 #: src/pages/settings/Payments.tsx
 msgid "Paiement noté à la main"
 msgstr "Paiement noté à la main"
+
+#: src/pages/settings/Logs.tsx
+msgid "paiement reçu"
+msgstr "paiement reçu"
+
+#: src/pages/settings/Logs.tsx
+msgid "paiement refusé"
+msgstr "paiement refusé"
 
 #: src/booking/BookingPanel.tsx
 #: src/pages/settings/Encaissements.tsx
@@ -6550,6 +6663,10 @@ msgstr "Rechercher un client"
 msgid "Rechercher une réservation"
 msgstr "Rechercher une réservation"
 
+#: src/pages/settings/Stats.tsx
+msgid "Recherches"
+msgstr "Recherches"
+
 #: src/calendar/Weeks.tsx
 msgid "Recommencer"
 msgstr "Recommencer"
@@ -6695,9 +6812,25 @@ msgstr "Remboursement"
 msgid "Remboursement : {0}"
 msgstr "Remboursement : {0}"
 
+#: src/pages/settings/Logs.tsx
+msgid "remboursement à faire à la main"
+msgstr "remboursement à faire à la main"
+
 #: src/booking/BookingPanel.tsx
 msgid "Remboursement à faire sur le canal de la réservation"
 msgstr "Remboursement à faire sur le canal de la réservation"
+
+#: src/pages/settings/Logs.tsx
+msgid "remboursement effectué"
+msgstr "remboursement effectué"
+
+#: src/pages/settings/Logs.tsx
+msgid "remboursement en échec"
+msgstr "remboursement en échec"
+
+#: src/pages/settings/Logs.tsx
+msgid "remboursement exceptionnel"
+msgstr "remboursement exceptionnel"
 
 #: src/booking/BookingPanel.tsx
 msgid "Rembourser"
@@ -6883,6 +7016,14 @@ msgstr "Réservation annulée."
 msgid "réservation confirmée"
 msgstr "réservation confirmée"
 
+#: src/pages/settings/Logs.tsx
+msgid "réservation confirmée par le paiement"
+msgstr "réservation confirmée par le paiement"
+
+#: src/pages/settings/Logs.tsx
+msgid "réservation créée"
+msgstr "réservation créée"
+
 #: src/pages/settings/Channels.tsx
 msgid "Réservation d'ici"
 msgstr "Réservation d'ici"
@@ -6914,6 +7055,14 @@ msgstr "Réservation venue d'un canal : le remboursement se fait sur ce canal."
 #: src/shell/nav.tsx
 msgid "Réservations"
 msgstr "Réservations"
+
+#: src/pages/settings/Stats.tsx
+msgid "Réservations confirmées"
+msgstr "Réservations confirmées"
+
+#: src/pages/settings/Stats.tsx
+msgid "Réservations démarrées"
+msgstr "Réservations démarrées"
 
 #: src/pages/settings/Channels.tsx
 msgid "réservations rapatriées"
@@ -7196,7 +7345,7 @@ msgstr "Saisons"
 msgid "Saisons passées"
 msgstr "Saisons passées"
 
-#. placeholder {0}: longDate(b.holdExpiresAt.slice(0, 10))
+#. placeholder {0}: longDate(sqlToBrussels(b.holdExpiresAt)?.day ?? b.holdExpiresAt.slice(0, 10))
 #: src/booking/BookingPanel.tsx
 msgid "Sans arrhes reçues, les dates se libèrent le {0}."
 msgstr "Sans arrhes reçues, les dates se libèrent le {0}."

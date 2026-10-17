@@ -17,6 +17,7 @@ import { eur } from "../lib/money";
 import { useToast } from "../lib/toasts";
 import { useLayout } from "../lib/useLayout";
 import { Choix } from "../ui/Choix";
+import { QuoteWarnings } from "./QuoteWarnings";
 
 export interface SalePrefill {
   unitId?: number;
@@ -254,6 +255,7 @@ export function SaleFlow({ prefill, onClose }: { prefill: SalePrefill | null; on
             </ul>
           ) : null}
           {reasons.length ? <ErrorLine text={reasons.join(" ")} /> : null}
+          <QuoteWarnings quote={q} />
           <TextInput size="md" label={t`Code de réduction (facultatif)`} value={promo} onChange={(e) => setPromo(e.currentTarget.value)} />
           <div className="acts" style={{ marginTop: 16 }}>
             <button type="button" className="btn pri" disabled={!sellable || tooMany} onClick={() => setStep(3)}>

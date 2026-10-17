@@ -357,8 +357,17 @@ function pctOrNull(v: unknown): number | null {
 /** Vrai si la valeur fournie est un pourcentage hors bornes (refus en 400). */
 function badPct(v: unknown): boolean {
   if (v == null) return false;
+  if (typeof v === "string" && v.trim() === "") return true; // champ vidé : jamais « 0 % »
   const n = Number(v);
   return !Number.isFinite(n) || n < 0 || n > 100;
+}
+
+/** Vrai si une valeur fournie n'est pas un entier ≥ min (champ vidé, lettres, décimale, négatif). */
+function badWhole(v: unknown, min: number, max = Number.MAX_SAFE_INTEGER): boolean {
+  if (v == null) return false;
+  if (typeof v === "string" && v.trim() === "") return true;
+  const n = Number(v);
+  return !Number.isInteger(n) || n < min || n > max;
 }
 
 function intParam(v: string | null | undefined, fallback: number): number {
@@ -419,7 +428,12 @@ function csvEscape(v: unknown): string {
   // Injection de formule Excel/LibreOffice : un client qui saisit son nom en
   // « =HYPERLINK("http://…"&A1,"Cliquez") » verrait la formule s'exécuter à
   // l'ouverture de l'export. L'apostrophe de tête neutralise la cellule.
-  const s = /^[=+\-@\t\r]/.test(raw) ? `'${raw}` : raw;
+  // Un numéro de téléphone international écrit à la belge (« +32 470 00 01 02 », « +32 (0)470 … ») :
+  // « + », l'indicatif, puis des groupes de chiffres séparés par UNE espace. Aucun opérateur,
+  // aucune fonction : ce n'est pas une formule, et l'apostrophe s'afficherait telle quelle.
+  // Un numéro collé (« +32470000102 ») reste neutralisé : un tableur le lirait comme un nombre.
+  const numberLike = /^\+\d{1,3}(?: \(\d+\)\d*| \d+)+$/.test(raw);
+  const s = /^[=+\-@\t\r]/.test(raw) && !numberLike ? `'${raw}` : raw;
   return /[";\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
@@ -755,11 +769,31 @@ export function registerAdminRoutes(router: Router): void {
       if (!ok.ok) return apiError(400, ok.message);
     }
 
+    // Un champ vidé au clavier arrive en 0 ou en chaîne vide : le refuser ici plutôt
+    // que d'enregistrer un bien sans nom, sans capacité ou avec un ménage négatif.
+    if (typeof body.name === "string" && !body.name.trim()) return apiError(400, "nom du bien requis");
+    const wholeFrom = (v: unknown): number | undefined | "bad" => {
+      if (v == null) return undefined;
+      const n = Number(v);
+      return Number.isInteger(n) && n >= 1 ? n : "bad";
+    };
+    const capBase = wholeFrom(body.capacityBase);
+    const capMax = wholeFrom(body.capacityMax);
+    if (capBase === "bad" || capMax === "bad") return apiError(400, "capacité : un nombre entier de personnes, au moins 1");
+    if (capBase !== undefined || capMax !== undefined) {
+      const unit = await getUnit(env.DB, id);
+      if (!unit) return apiError(404, "hébergement inconnu");
+      if ((capBase ?? unit.capacityBase) > (capMax ?? unit.capacityMax)) return apiError(400, "capacité : le maximum ne peut pas être inférieur au nombre de personnes en temps normal");
+    }
+    if (body.cleaningFeeCents != null && (String(body.cleaningFeeCents).trim() === "" || !(Number.isFinite(Number(body.cleaningFeeCents)) && Number(body.cleaningFeeCents) >= 0))) {
+      return apiError(400, "frais de ménage : un montant positif ou nul");
+    }
+
     await updateUnit(env.DB, id, {
       priceMinCents,
       priceMaxCents,
       depositPct,
-      name: typeof body.name === "string" ? body.name : undefined,
+      name: typeof body.name === "string" ? body.name.trim() : undefined,
       description: typeof body.description === "string" ? body.description : undefined,
       capacityBase: body.capacityBase != null ? Number(body.capacityBase) : undefined,
       capacityMax: body.capacityMax != null ? Number(body.capacityMax) : undefined,
@@ -2385,8 +2419,14 @@ export function registerAdminRoutes(router: Router): void {
     if (!id || !body) return apiError(400, "requête invalide");
     if (body.dateStart !== undefined && !isIsoDate(String(body.dateStart))) return apiError(400, "dateStart invalide");
     if (body.dateEnd !== undefined && !isIsoDate(String(body.dateEnd))) return apiError(400, "dateEnd invalide");
+    if (body.name !== undefined && !String(body.name).trim()) return apiError(400, "nom de la saison requis");
+    if (body.dateStart !== undefined || body.dateEnd !== undefined) {
+      const cur = await env.DB.prepare("SELECT date_start, date_end FROM seasons WHERE id = ?1").bind(id).first<{ date_start: string; date_end: string }>();
+      if (!cur) return apiError(404, "saison inconnue");
+      if (String(body.dateStart ?? cur.date_start) > String(body.dateEnd ?? cur.date_end)) return apiError(400, "la saison doit commencer avant sa fin (début ≤ fin)");
+    }
     await updateSeason(env.DB, id, {
-      name: body.name !== undefined ? String(body.name) : undefined,
+      name: body.name !== undefined ? String(body.name).trim() : undefined,
       dateStart: body.dateStart !== undefined ? String(body.dateStart) : undefined,
       dateEnd: body.dateEnd !== undefined ? String(body.dateEnd) : undefined,
       priority: body.priority !== undefined ? Math.floor(Number(body.priority)) : undefined,
@@ -2415,6 +2455,7 @@ export function registerAdminRoutes(router: Router): void {
     if (!body || !body.unitId) return apiError(400, "unitId requis");
     // Garde-fou : prix strictement positif ET dans les bornes de l'hébergement
     // (issue #50 / #31). Même règle qu'au PATCH, appliquée au même endroit.
+    if (badWhole(body.holidayPct, 0, 200)) return apiError(400, "majoration des fériés : un pourcentage entier de 0 à 200");
     const bounds = await boundsForUnit(env.DB, Number(body.unitId));
     const week = checkPrice(body.priceWeekCents, bounds, "prix semaine");
     if (!week.ok) return apiError(400, week.message);
@@ -2451,6 +2492,7 @@ export function registerAdminRoutes(router: Router): void {
     // sur Airbnb et Booking. Le trou se ferme ici, avant toute écriture.
     const rule = await getRateRule(env.DB, id);
     if (!rule) return apiError(404, "règle tarifaire inconnue");
+    if (badWhole(body.holidayPct, 0, 200)) return apiError(400, "majoration des fériés : un pourcentage entier de 0 à 200");
     const bounds = await boundsForUnit(env.DB, rule.unitId);
     let priceWeek: number | undefined;
     let priceWeekend: number | undefined;
@@ -2505,6 +2547,7 @@ export function registerAdminRoutes(router: Router): void {
     if (kind !== "code" && body.threshold == null) return apiError(400, "seuil requis pour une remise automatique");
     if (body.discountPct == null && body.discountCents == null) return apiError(400, "remise % ou montant requis");
     if (badPct(body.discountPct)) return apiError(400, "remise en % hors bornes (0 à 100)");
+    if (badWhole(body.threshold, 0)) return apiError(400, "seuil : un nombre entier, au moins 0");
     const id = await createPromotion(env.DB, propertyId, {
       kind: kind as PromotionInput["kind"],
       code: kind === "code" ? String(body.code).trim() : null,
@@ -2526,6 +2569,7 @@ export function registerAdminRoutes(router: Router): void {
     const body = await readJson<Partial<PromotionInput>>(req);
     if (!id || !body) return apiError(400, "requête invalide");
     if (badPct(body.discountPct)) return apiError(400, "remise en % hors bornes (0 à 100)");
+    if (badWhole(body.threshold, 0)) return apiError(400, "seuil : un nombre entier, au moins 0");
     await updatePromotion(env.DB, id, {
       code: body.code !== undefined ? String(body.code).trim() : undefined,
       label: body.label !== undefined ? String(body.label).trim() : undefined,
@@ -2581,6 +2625,11 @@ export function registerAdminRoutes(router: Router): void {
     const id = intParam(p.id, 0);
     const body = await readJson<Partial<OptionInput>>(req);
     if (!id || !body) return apiError(400, "requête invalide");
+    if (body.name !== undefined && !String(body.name).trim()) return apiError(400, "nom de l'option requis");
+    if (body.priceCents != null) {
+      const blank = String(body.priceCents).trim() === "";
+      if (blank || !Number.isFinite(Number(body.priceCents)) || Number(body.priceCents) < 0) return apiError(400, "prix de l'option : un montant positif ou nul");
+    }
     await updateOption(env.DB, id, {
       name: body.name !== undefined ? String(body.name).trim() : undefined,
       pricingMode: body.pricingMode,
@@ -2739,6 +2788,15 @@ export function registerAdminRoutes(router: Router): void {
     "min_lead_days",
   ]);
 
+  // Bornes des réglages numériques (celles des champs de Réglages › Domaine).
+  const SETTING_RANGES: Record<string, { min: number; max: number; whole: boolean; label: string }> = {
+    deposit_pct: { min: 0, max: 100, whole: false, label: "arrhes à la réservation (%)" },
+    balance_due_days: { min: 0, max: 365, whole: true, label: "solde à payer, jours avant l'arrivée" },
+    hold_minutes: { min: 5, max: 43200, whole: true, label: "durée de garde des dates par une option (minutes)" },
+    tourist_tax_cents_per_person_night: { min: 0, max: 100000, whole: true, label: "taxe de séjour (centimes)" },
+    caution_cents: { min: 0, max: 10000000, whole: true, label: "caution (centimes)" },
+  };
+
   router.get("/api/admin/settings", guard(async (_req, env, _p, url) => {
     const propertyId = intParam(url.searchParams.get("property"), 1);
     const property = await getProperty(env.DB, propertyId);
@@ -2759,9 +2817,21 @@ export function registerAdminRoutes(router: Router): void {
       if (!SETTING_KEYS.has(key)) return apiError(400, `clé inconnue : ${key}`);
       if (key === "min_lead_days") {
         const n = Number(value);
-        if (!Number.isInteger(n) || n < 0 || n > 365) {
+        if (String(value ?? "").trim() === "" || !Number.isInteger(n) || n < 0 || n > 365) {
           return apiError(400, "délai minimum de réservation : un nombre entier de jours, de 0 à 365");
         }
+      }
+      // Un champ vidé au clavier arrive en chaîne vide (lue comme 0 : arrhes à 0 %,
+      // option qui expire aussitôt) ; une valeur absurde ne doit pas non plus passer.
+      const rule = SETTING_RANGES[key];
+      if (rule) {
+        const n = typeof value === "string" ? (value.trim() === "" ? NaN : Number(value)) : typeof value === "number" ? value : NaN;
+        if (!Number.isFinite(n) || n < rule.min || n > rule.max || (rule.whole && !Number.isInteger(n))) {
+          return apiError(400, `${rule.label} : ${rule.whole ? "un nombre entier" : "un nombre"} de ${rule.min} à ${rule.max}`);
+        }
+      }
+      if ((key === "checkin_time" || key === "checkout_time") && !/^([01]\d|2[0-3]):[0-5]\d$/.test(String(value))) {
+        return apiError(400, "heure attendue au format HH:MM, de 00:00 à 23:59");
       }
       entries[key] = String(value);
     }
