@@ -30,12 +30,25 @@ export async function runLot3Scheduled(env: Env, now: Date = new Date()): Promis
   }
 }
 
+/** Un seul passage à la fois par processus : si un passage dure plus que la
+ *  minuterie (panne Beds24 et nouveaux essais), le suivant ne se superpose pas. */
+let passageEnCours = false;
+
 export async function runAllScheduled(env: Env, now: Date = new Date(), fetcher: typeof fetch = fetch): Promise<void> {
+  if (passageEnCours) {
+    await audit(env.DB, "cron", "cron.skipped", null, { raison: "passage précédent encore en cours" }).catch(() => undefined);
+    return;
+  }
+  passageEnCours = true;
   try {
-    await runScheduled(env, now, fetcher);
+    try {
+      await runScheduled(env, now, fetcher);
+    } finally {
+      await runLot2Scheduled(env, now);
+      // Les avis sont aussi des appels Beds24 : même fenêtre calme que le reste.
+      if (!inBeds24QuietWindow(now)) await runLot3Scheduled(env, now);
+    }
   } finally {
-    await runLot2Scheduled(env, now);
-    // Les avis sont aussi des appels Beds24 : même fenêtre calme que le reste.
-    if (!inBeds24QuietWindow(now)) await runLot3Scheduled(env, now);
+    passageEnCours = false;
   }
 }

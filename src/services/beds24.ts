@@ -63,6 +63,9 @@ export async function withNetworkRetry<R>(
         throw e;
       }
       await sleep(delays[i] ?? 0);
+      // Un appel concurrent a pu constater la panne pendant l'attente : inutile
+      // de lancer une requête de plus.
+      if (Date.now() < outageUntil) throw e;
     }
   }
 }
@@ -298,11 +301,6 @@ export async function beds24Fetch<T>(
     query?: Record<string, string>;
     /** Reçoit les en-têtes de la réponse (quota X-FiveMinCreditLimit…), même en erreur. */
     onHeaders?: (headers: Headers) => void;
-    /** Nouveaux essais sur panne réseau : oui pour un GET, JAMAIS pour une
-     *  écriture (un POST dont l'issue est inconnue peut avoir été appliqué ; le
-     *  rejouer à l'identique n'est pas sûr). Le push du calendrier a son propre
-     *  rejeu (pushCalendars), qui reconstruit l'état avant de renvoyer. */
-    retryNetwork?: boolean;
     /** Attentes entre essais (tests). */
     retryDelaysMs?: readonly number[];
     sleep?: (ms: number) => Promise<void>;
@@ -333,7 +331,10 @@ export async function beds24Fetch<T>(
           // propriété) au-delà de son délai : on coupe à 30 s (par essai).
           signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
         }),
-      init.retryNetwork ?? method === "GET",
+      // Nouveaux essais sur panne réseau : GET seulement. JAMAIS une écriture (un
+      // POST d'issue inconnue peut avoir été appliqué) ; le push du calendrier a
+      // son propre rejeu (pushCalendars), qui reconstruit l'état avant de renvoyer.
+      method === "GET",
       init.retryDelaysMs ?? NETWORK_RETRY_DELAYS_MS,
       init.sleep ?? defaultSleep,
     );

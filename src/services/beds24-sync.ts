@@ -198,14 +198,16 @@ export async function pushCalendars(
   opts: { delaysMs?: readonly number[]; sleep?: (ms: number) => Promise<void> } = {},
 ): Promise<{ pushed: { roomId: number; unitName: string; spans: number }[]; markup: PushMarkup }> {
   if (!(await beds24Configured(env))) throw new Error("Beds24 non configuré");
-  const markup = await resolvePushMarkup(db);
   // Panne RÉSEAU : on attend, puis on RECONSTRUIT le calendrier depuis la base
   // avant de renvoyer. Rejouer l'ancien corps risquerait d'écraser un push plus
   // récent (réservation prise entre-temps) par un état périmé ; reconstruit, le
   // corps est l'état absolu courant (disponibilité, prix, séjour minimum par
   // plage de dates), et deux envois successifs donnent le même résultat.
+  let markup: PushMarkup | undefined;
   const rooms = await withNetworkRetry(
     async () => {
+      // Majoration relue à chaque essai : elle peut avoir changé pendant l'attente.
+      markup = await resolvePushMarkup(db);
       const built = await buildCalendarPush(db, propertyId, todayInZone(), days, markup);
       const body = built.map((r) => ({ roomId: r.roomId, calendar: r.calendar }));
       if (body.length > 0) await beds24Fetch(env, "/inventory/rooms/calendar", { method: "POST", body });
@@ -218,7 +220,7 @@ export async function pushCalendars(
   );
   // `markup` est remonté pour que l'écran « Plateformes » puisse dire, après un
   // push manuel, CE QUI a été envoyé — le prix direct ou le prix majoré.
-  return { pushed: rooms.map((r) => ({ roomId: r.roomId, unitName: r.unitName, spans: r.calendar.length })), markup };
+  return { pushed: rooms.map((r) => ({ roomId: r.roomId, unitName: r.unitName, spans: r.calendar.length })), markup: markup as PushMarkup };
 }
 
 // ---------------------------------------------------------------------------

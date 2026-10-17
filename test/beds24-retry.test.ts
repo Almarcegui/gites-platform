@@ -86,6 +86,21 @@ describe("beds24Fetch — nouveaux essais sur panne réseau", () => {
     expect(waits).toEqual([]);
   });
 
+  it("un appel endormi n'envoie pas de requête de plus si un appel concurrent a constaté la panne pendant son attente", async () => {
+    stub(() => down());
+    let liberer: () => void = () => {};
+    const bloque = new Promise<void>((r) => { liberer = r; });
+    const a = beds24Fetch(env(), "/bookings", { sleep: () => bloque, retryDelaysMs: [1] }).catch((x) => x);
+    await new Promise((r) => setTimeout(r, 50));
+    await beds24Fetch(env(), "/bookings/messages", { sleep: async () => {}, retryDelaysMs: [1] }).catch(() => {});
+    const avant = calls.length; // A : 1 essai, B : 2 essais
+    liberer();
+    const e = await a;
+    expect(e).toBeInstanceOf(Beds24Error);
+    expect(calls).toHaveLength(avant);
+    expect(avant).toBe(3);
+  });
+
   it("une réussite referme la pause : les essais reprennent", async () => {
     stub(() => down());
     await beds24Fetch(env(), "/bookings", { sleep }).catch(() => {});
