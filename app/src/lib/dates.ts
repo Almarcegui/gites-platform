@@ -73,6 +73,10 @@ export function monthName(d: IsoDate): string {
 export function monthShort(d: IsoDate): string {
   return names().moisCourts[Number(d.slice(5, 7)) - 1] ?? "";
 }
+/** Mois abrégé d'après son rang 0 = janvier … 11 = décembre (« janv. », « jan. »). */
+export function monthShortOfIndex(i: number): string {
+  return names().moisCourts[i] ?? "";
+}
 export function weekdayShort(d: IsoDate): string {
   return names().joursCourts[weekdayMon(d)] ?? "";
 }

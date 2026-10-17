@@ -245,7 +245,7 @@ msgstr "{0}: te zwaar (maximaal 8 MB)."
 msgid "{0} {1} % par rapport à {2}"
 msgstr "{0} {1} % ten opzichte van {2}"
 
-#. placeholder {0}: MONTHS[i]
+#. placeholder {0}: monthShortOfIndex(i)
 #. placeholder {1}: fr(m.occupancyPct, 1)
 #. placeholder {2}: m.occupiedNights
 #. placeholder {3}: m.capacityNights
@@ -3267,6 +3267,10 @@ msgstr "Technisch detail"
 #: src/booking/BookingPanel.tsx
 msgid "Devis"
 msgstr "Offerte"
+
+#: src/pages/settings/Stats.tsx
+msgid "Devis affichés"
+msgstr "Getoonde offertes"
 
 #: src/calendar/PricePanel.tsx
 msgid "Dimanche à jeudi"
@@ -6571,6 +6575,10 @@ msgstr "Een klant zoeken"
 msgid "Rechercher une réservation"
 msgstr "Een reservering zoeken"
 
+#: src/pages/settings/Stats.tsx
+msgid "Recherches"
+msgstr "Zoekopdrachten"
+
 #: src/calendar/Weeks.tsx
 msgid "Recommencer"
 msgstr "Opnieuw beginnen"
@@ -6935,6 +6943,14 @@ msgstr "Boeking via een kanaal: de terugbetaling gebeurt via dat kanaal."
 #: src/shell/nav.tsx
 msgid "Réservations"
 msgstr "Reserveringen"
+
+#: src/pages/settings/Stats.tsx
+msgid "Réservations confirmées"
+msgstr "Bevestigde reserveringen"
+
+#: src/pages/settings/Stats.tsx
+msgid "Réservations démarrées"
+msgstr "Gestarte reserveringen"
 
 #: src/pages/settings/Channels.tsx
 msgid "réservations rapatriées"

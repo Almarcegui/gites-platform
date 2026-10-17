@@ -241,7 +241,7 @@ msgstr "{0} : trop lourde (8 Mo au plus)."
 msgid "{0} {1} % par rapport à {2}"
 msgstr "{0} {1} % par rapport à {2}"
 
-#. placeholder {0}: MONTHS[i]
+#. placeholder {0}: monthShortOfIndex(i)
 #. placeholder {1}: fr(m.occupancyPct, 1)
 #. placeholder {2}: m.occupiedNights
 #. placeholder {3}: m.capacityNights
@@ -3263,6 +3263,10 @@ msgstr "Détail technique"
 #: src/booking/BookingPanel.tsx
 msgid "Devis"
 msgstr "Devis"
+
+#: src/pages/settings/Stats.tsx
+msgid "Devis affichés"
+msgstr "Devis affichés"
 
 #: src/calendar/PricePanel.tsx
 msgid "Dimanche à jeudi"
@@ -6567,6 +6571,10 @@ msgstr "Rechercher un client"
 msgid "Rechercher une réservation"
 msgstr "Rechercher une réservation"
 
+#: src/pages/settings/Stats.tsx
+msgid "Recherches"
+msgstr "Recherches"
+
 #: src/calendar/Weeks.tsx
 msgid "Recommencer"
 msgstr "Recommencer"
@@ -6931,6 +6939,14 @@ msgstr "Réservation venue d'un canal : le remboursement se fait sur ce canal."
 #: src/shell/nav.tsx
 msgid "Réservations"
 msgstr "Réservations"
+
+#: src/pages/settings/Stats.tsx
+msgid "Réservations confirmées"
+msgstr "Réservations confirmées"
+
+#: src/pages/settings/Stats.tsx
+msgid "Réservations démarrées"
+msgstr "Réservations démarrées"
 
 #: src/pages/settings/Channels.tsx
 msgid "réservations rapatriées"
