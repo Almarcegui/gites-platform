@@ -114,8 +114,18 @@ describe("cache", () => {
     expect(res.headers.get("cache-control")).toBe("no-cache");
   });
 
+  it("fait revalider les scripts à nom fixe (un déploiement est vu tout de suite)", async () => {
+    const res = await call("https://test.local/book/book.js", assetsReturning("//js", "text/javascript"));
+    expect(res.headers.get("cache-control")).toBe("no-cache");
+  });
+
+  it("garde le cache long sur les fichiers hachés de l'écran", async () => {
+    const res = await call("https://test.local/admin/assets/index-Dq53UfpH.js", assetsReturning("//js", "text/javascript"));
+    expect(res.headers.get("cache-control")).toBe("public, max-age=31536000, immutable");
+  });
+
   it("laisse un cache d'un jour aux autres fichiers statiques", async () => {
-    const res = await call("https://test.local/admin/app.js", assetsReturning("//js", "text/javascript"));
+    const res = await call("https://test.local/fonts/x.woff2", assetsReturning("bin", "font/woff2"));
     expect(res.headers.get("cache-control")).toBe("public, max-age=86400");
   });
 
@@ -128,7 +138,9 @@ describe("cache", () => {
     expect(cacheControlFor("/img/x.png", null)).toContain("immutable");
     expect(cacheControlFor("/media/x.png", "image/png")).toContain("immutable");
     expect(cacheControlFor("/", "text/html; charset=utf-8")).toBe("no-cache");
-    expect(cacheControlFor("/style.css", "text/css")).toBe("public, max-age=86400");
+    expect(cacheControlFor("/style.css", "text/css")).toBe("no-cache");
+    expect(cacheControlFor("/admin/assets/index-a1.css", "text/css")).toContain("immutable");
+    expect(cacheControlFor("/robots.txt", "text/plain")).toBe("public, max-age=86400");
   });
 
   it("ne casse pas une réponse sans corps (304)", () => {

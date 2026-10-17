@@ -208,11 +208,15 @@ function staticHeaders(file) {
     ...(file.startsWith(join(PUBLIC_DIR, "book")) ? {} : { "x-frame-options": "DENY" }),
     "referrer-policy": "strict-origin-when-cross-origin",
   };
-  if (file.startsWith(join(PUBLIC_DIR, "img"))) {
+  if (file.startsWith(join(PUBLIC_DIR, "img")) || file.startsWith(join(PUBLIC_DIR, "admin", "assets"))) {
+    // Images, et fichiers hachés par le build de l'écran : le nom change avec
+    // le contenu, cache long sans risque.
     headers["cache-control"] = "public, max-age=31536000, immutable";
-  } else if (ext === ".html" || file.endsWith("/sw.js")) {
-    // Le service worker de /admin/ doit être relu à chaque visite, sinon une
-    // nouvelle version de l'écran ne s'installe pas.
+  } else if (ext === ".html" || ext === ".js" || ext === ".mjs" || ext === ".css") {
+    // Pages, et scripts ou styles à nom fixe (book.js, site.css, sw.js…) :
+    // revalidés à chaque visite (304 grâce à l'ETag). Avec un jour de cache,
+    // un visiteur déjà passé gardait l'ancien tunnel après un déploiement
+    // (17/10, PR #156) ; le service worker de /admin/, lui, ne s'installait pas.
     headers["cache-control"] = "no-cache";
   } else {
     headers["cache-control"] = "public, max-age=86400";
@@ -376,6 +380,23 @@ const server = createServer(async (req, res) => {
     const file = resolveStatic(url.pathname);
     if (file) {
       const headers = staticHeaders(file);
+      // Validateurs pour la revalidation (no-cache) : taille + date du fichier,
+      // qui changent à chaque déploiement qui touche le fichier.
+      const st = statSync(file);
+      const etag = `W/"${st.size.toString(16)}-${Math.floor(st.mtimeMs).toString(16)}"`;
+      headers["etag"] = etag;
+      headers["last-modified"] = st.mtime.toUTCString();
+      // Caddy (encode zstd gzip) peut réécrire l'ETag (préfixe W/, suffixe
+      // -gzip/-zstd) : on compare la valeur nue.
+      const bare = (t) => t.trim().replace(/^W\//, "").replace(/"/g, "").replace(/-(gzip|zstd|br)$/, "");
+      const inm = String(req.headers["if-none-match"] || "");
+      const readOnly = req.method === "GET" || req.method === "HEAD";
+      if (readOnly && inm && inm.split(",").some((t) => bare(t) === bare(etag))) {
+        delete headers["content-type"];
+        res.writeHead(304, headers).end();
+        return;
+      }
+      headers["content-length"] = String(st.size);
       res.writeHead(200, headers);
       res.end(req.method === "HEAD" ? undefined : readFileSync(file));
       return;
