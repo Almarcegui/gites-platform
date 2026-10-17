@@ -8,8 +8,8 @@
 // caches qu'on ne peut pas purger. La règle d'activation est donc factuelle et
 // ne demande aucun réglage : les redirections ne s'appliquent QUE lorsque le
 // Worker répond sur l'un des hôtes de FINAL_HOSTS, c'est-à-dire les hôtes de
-// l'ancien WordPress lui-même. Tant que le site vit sur workers.dev ou en
-// local, `resolveWpRedirect` peut renvoyer une cible, `wpRedirect` ne renvoie
+// l'ancien WordPress lui-même. Tant que le site vit sur l'adresse Hetzner
+// (178-105-145-191.sslip.io) ou en local, `resolveWpRedirect` peut renvoyer une cible, `wpRedirect` ne renvoie
 // rien.
 //
 // C'est aussi la seule situation où ces redirections ont un sens : une ancienne

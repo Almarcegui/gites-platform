@@ -194,7 +194,9 @@ export async function pushCalendars(
   const rooms = await buildCalendarPush(db, propertyId, today, days, markup);
   const body = rooms.map((r) => ({ roomId: r.roomId, calendar: r.calendar }));
   if (body.length > 0) {
-    await beds24Fetch(env, "/inventory/rooms/calendar", { method: "POST", body });
+    // Rejouable sur panne réseau : le corps est un état ABSOLU du calendrier
+    // (disponibilité, prix, séjour minimum par plage de dates), pas un delta.
+    await beds24Fetch(env, "/inventory/rooms/calendar", { method: "POST", body, retryNetwork: true });
   }
   // `markup` est remonté pour que l'écran « Plateformes » puisse dire, après un
   // push manuel, CE QUI a été envoyé — le prix direct ou le prix majoré.

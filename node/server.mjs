@@ -371,7 +371,19 @@ const server = createServer(async (req, res) => {
     }
 
     // 5. Fichiers statiques.
-    const file = resolveStatic(url.pathname);
+    //    Une adresse mal encodée (`/%c0`) fait lever URIError à decodeURIComponent :
+    //    c'est une erreur du visiteur (400), pas un incident du serveur — ni 500,
+    //    ni ligne `unhandled.error` dans le journal.
+    let file;
+    try {
+      file = resolveStatic(url.pathname);
+    } catch (e) {
+      if (e instanceof URIError) {
+        res.writeHead(400, { "content-type": "text/plain; charset=utf-8" }).end("adresse invalide");
+        return;
+      }
+      throw e;
+    }
     if (file) {
       const headers = staticHeaders(file);
       res.writeHead(200, headers);

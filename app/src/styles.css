@@ -807,6 +807,15 @@ fieldset.wd legend { font-weight: 600; margin-bottom: 8px; padding: 0; }
 .mantine-Drawer-content, .mantine-Modal-content { background: var(--surface); }
 .mantine-Drawer-header, .mantine-Modal-header { background: var(--surface); }
 .mantine-Tooltip-tooltip { font-size: 13px; }
+/* Menus déroulants au téléphone (retour du 13/10 : « je n'arrive pas à
+   sélectionner les gîtes »). À l'ouverture d'un Select, le menu s'affiche une
+   fraction de seconde avec une largeur calculée avant la mise en page (1468 px
+   mesurés sur un écran de 375 px) : il dépasse de l'écran, le navigateur mobile
+   élargit alors toute la page (530 px) et le menu se retrouve décalé, la moitié
+   hors de la vue. Plafonner la largeur à l'écran empêche ce débordement. Vérifié
+   à 375 px : sans la règle la fenêtre passe à 530 px à l'ouverture, avec elle
+   elle reste à 375 px et le menu s'aligne sur le champ. */
+.mantine-Popover-dropdown { max-width: calc(100vw - 16px); }
 
 @media (min-width: 64em) {
   /* titres et textes */

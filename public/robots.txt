@@ -23,5 +23,6 @@ Disallow: /
 # Disallow: /ical/
 # Disallow: /api/
 #
-# Sitemap: https://gites-platform.j-decartier.workers.dev/sitemap.xml
+# Sitemap: https://178-105-145-191.sslip.io/sitemap.xml
 # ⚠️ à remplacer par le domaine définitif quand il sera tranché (issue #12).
+# (Adresse actuelle : la version Hetzner, seule en service depuis le 17/10/2026.)

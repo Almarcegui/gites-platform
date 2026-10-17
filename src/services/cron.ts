@@ -44,6 +44,15 @@ import { setSetting } from "./settings";
  *  encore « en attente » est morte. */
 export const PAYMENT_SESSION_TTL_MINUTES = 35;
 
+/** Les appels Beds24 de la passe de minuit UTC échouaient presque chaque nuit en
+ *  « fetch failed » (audit_log des 12, 13, 14, 15 et 17/10), les autres passages
+ *  de la journée réussissant. La passe de 00:00 saute donc les tâches Beds24 ;
+ *  celle de 00:15 les exécute (le cron tourne toutes les 15 min, rien n'est perdu :
+ *  le pull est incrémental et le push envoie l'état complet). */
+export function inBeds24QuietWindow(now: Date): boolean {
+  return now.getUTCHours() === 0 && now.getUTCMinutes() < 10;
+}
+
 export async function runScheduled(env: Env, now: Date = new Date(), fetcher: typeof fetch = fetch): Promise<void> {
   const db = env.DB;
   const nowSql = sqlNow(now);
@@ -159,7 +168,7 @@ export async function runScheduled(env: Env, now: Date = new Date(), fetcher: ty
   // 4. Beds24 (inactif sans BEDS24_REFRESH_TOKEN) : d'abord rapatrier les résas
   //    des canaux (pull), PUIS pousser les calendriers à jour (push) — l'état
   //    poussé intègre ainsi les résas qui viennent d'arriver.
-  if (await beds24Configured(env)) {
+  if ((await beds24Configured(env)) && !inBeds24QuietWindow(now)) {
     const properties = await listProperties(db);
     for (const p of properties) {
       if (p.beds24PropertyId == null) continue;

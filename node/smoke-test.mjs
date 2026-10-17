@@ -113,6 +113,9 @@ try {
     check("photo : servie sous /uploads/", served.status === 200 && served.headers.get("content-type") === "image/png");
   }
   check("photo : traversée refusée", (await fetch(`${base}/uploads/..%2Fsmoke.db`)).status === 404);
+  const malformed = await fetch(`${base}/%c0`);
+  check("adresse mal encodée (/%c0) : 400 « adresse invalide »", malformed.status === 400 && (await malformed.text()) === "adresse invalide", String(malformed.status));
+  check("adresse mal encodée : rien dans unhandled.error", !srv.log().includes("[erreur]"), srv.log().slice(-200));
   const huge = new Uint8Array(10 * 1024 * 1024);
   const tooBig = await fetch(`${base}/api/admin/units/1/photos/upload`, { method: "POST", headers: { ...auth, "content-type": "application/octet-stream" }, body: huge }).catch(() => null);
   check("photo : corps de 10 Mo refusé (413)", !tooBig || tooBig.status === 413, String(tooBig?.status));
