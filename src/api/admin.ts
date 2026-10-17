@@ -152,7 +152,7 @@ import {
   type QuoteBody,
 } from "../services/booking-flow";
 import { dropPreparedRefunds, executeRefunds, planCancellation, prepareRefunds, replayRefund } from "../services/annulation";
-import { buildBalanceReminderEmail, buildCancellationEmail, buildPaymentLinkEmail, queueEmail, queueEmailDetailed } from "../services/email";
+import { buildBalanceReminderEmail, buildCancellationEmail, buildPaymentLinkEmail, isNl, queueEmail, queueEmailDetailed } from "../services/email";
 import { buildConfirmationPdf, confirmationFileName, loadConfirmationPdfContext } from "../services/confirmation-pdf";
 import { importElloha } from "../services/elloha-import";
 import { importAgendaGoogle, MAX_AGENDA_EVENTS } from "../services/agenda-import";
@@ -1932,7 +1932,8 @@ export function registerAdminRoutes(router: Router): void {
       if (plan.mode !== "canal" && concerned && booking.guestEmail && booking.propertyId != null && !(await hasEmailOfKinds(env.DB, id, ["cancellation"]))) {
         const property = await getProperty(env.DB, booking.propertyId);
         if (property) {
-          const email = buildCancellationEmail(booking, property, plan);
+          const settings = await getSettings(env.DB, booking.propertyId);
+          const email = buildCancellationEmail(booking, property, plan, isNl(booking) ? settings.cancellationIntroNl : settings.cancellationIntroFr);
           mail = await queueEmail(env.DB, env, { bookingId: id, to: booking.guestEmail, subject: email.subject, bodyText: email.bodyText, kind: "cancellation" });
         }
       }
@@ -2642,6 +2643,9 @@ export function registerAdminRoutes(router: Router): void {
     "allow_deposit", "allow_full_payment",
     "auto_reply_enabled", "auto_reply_text", "email_forward_to",
     "stay_emails_enabled", "review_url", "arrival_info_text",
+    "confirmation_intro_fr", "confirmation_intro_nl",
+    "cancellation_intro_fr", "cancellation_intro_nl",
+    "abandon_intro_fr",
   ]);
 
   router.get("/api/admin/settings", guard(async (_req, env, _p, url) => {
