@@ -369,15 +369,20 @@ async function renderCalendar() {
   $("calGrid").querySelectorAll(".pday[data-date]").forEach((cell) => {
     cell.addEventListener("click", () => onDayClick(cell.dataset.date, cell));
   });
-  renderCalRules(days);
+  renderCalRules(days, data.minLeadDays);
 }
 
 /** Règles de séjour du mois affiché, regroupées par période contiguë (#66).
  *  « Séjour minimum : 7 nuits du 01/07 au 31/07 » — la règle existe depuis
  *  toujours côté moteur ; elle n'était écrite nulle part. */
-function renderCalRules(days) {
+function renderCalRules(days, minLeadDays = 0) {
   const zone = $("calRules");
   if (!zone) return;
+  // Délai minimum de réservation (demande n° 15) : les jours trop proches sont
+  // grisés comme des jours passés — la règle doit être écrite, pas devinée.
+  const lead = minLeadDays > 0
+    ? `<span class="rule">${esc(t("Réservation en ligne au plus tard {jours} avant l'arrivée", { jours: pl(minLeadDays, "jour", "jours") }))}</span>`
+    : "";
   const segments = [];
   for (const d of days) {
     if (d.past || !d.available || d.minNights == null) continue;
@@ -388,11 +393,11 @@ function renderCalRules(days) {
   }
   const notable = segments.filter((s) => s.minNights > 1 || s.arrivalDays != null);
   if (notable.length === 0) {
-    zone.innerHTML = "";
+    zone.innerHTML = lead;
     return;
   }
   const period = (s) => (s.from === s.to ? t("le {date}", { date: dfr(s.from) }) : t("du {du} au {au}", { du: dfr(s.from), au: dfr(s.to) }));
-  zone.innerHTML = notable
+  zone.innerHTML = (lead ? lead + " · " : "") + notable
     .map((s) => {
       const parts = [];
       if (s.minNights > 1) parts.push(`<b>${t("{n} nuits minimum", { n: s.minNights })}</b>`);
@@ -486,6 +491,9 @@ function unavailableReason(u, nights, units = []) {
     return jours
       ? t("Arrivée possible uniquement {jours} à ces dates", { jours })
       : t("Aucun jour d'arrivée n'est autorisé à ces dates");
+  }
+  if (q && !q.ok && q.errors.includes("lead_time")) {
+    return t("Réservation en ligne au plus tard {jours} avant l'arrivée", { jours: pl(q.minLeadDays, "jour", "jours") });
   }
   if (q && !q.ok && q.errors.includes("no_rate")) return t("Tarifs pas encore publiés pour ces dates");
   if (q && !q.ok) return t("Non réservable en ligne sur ces dates");
@@ -915,7 +923,12 @@ async function refreshQuote() {
     if (seq !== quoteSeq) return; // une saisie plus récente a relancé un devis
     QUOTE = quote;
     if (!quote.ok) {
-      zone.innerHTML = `<div class="note bad">${quote.errors.includes("min_nights") ? t("Minimum {n} nuits sur ces dates.", { n: quote.minNights }) : t("Séjour impossible à ces conditions.")}</div>`;
+      const why = quote.errors.includes("lead_time")
+        ? t("Réservation en ligne au plus tard {jours} avant l'arrivée. Contactez-nous : nous verrons si c'est possible.", { jours: pl(quote.minLeadDays, "jour", "jours") })
+        : quote.errors.includes("min_nights")
+          ? t("Minimum {n} nuits sur ces dates.", { n: quote.minNights })
+          : t("Séjour impossible à ces conditions.");
+      zone.innerHTML = `<div class="note bad">${esc(why)}</div>`;
       payButtonRefresh();
       return;
     }

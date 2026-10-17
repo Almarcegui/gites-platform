@@ -644,8 +644,8 @@ msgstr "{0}, nouveaux voyageurs le jour même"
 
 #. placeholder {0}: property.name
 #: src/pages/settings/Stats.tsx
-msgid "{0}. Seules les réservations confirmées comptent ; une réservation du Domaine entier occupe ses deux maisons."
-msgstr "{0}. Seules les réservations confirmées comptent ; une réservation du Domaine entier occupe ses deux maisons."
+msgid "{0}. Seules les réservations confirmées comptent ; une réservation des deux maisons ensemble les occupe toutes les deux."
+msgstr "{0}. Seules les réservations confirmées comptent ; une réservation des deux maisons ensemble les occupe toutes les deux."
 
 #. placeholder {0}: occ(overviews[0]!).d >= 0 ? "+" : ""
 #. placeholder {1}: fr1(occ(overviews[0]!).d)
@@ -797,6 +797,10 @@ msgstr "− {0} %"
 msgid "− {LAST_MINUTE_PCT} % sur chacune de ces nuits libres, par exemple {0} → {1}. Au-delà, vous vendriez moins cher que votre prix de base. Les nuits déjà vendues ne bougent pas."
 msgstr "− {LAST_MINUTE_PCT} % sur chacune de ces nuits libres, par exemple {0} → {1}. Au-delà, vous vendriez moins cher que votre prix de base. Les nuits déjà vendues ne bougent pas."
 
+#: src/pages/settings/Domain.tsx
+msgid "0 = on peut réserver sur le site jusqu'au jour même"
+msgstr "0 = on peut réserver sur le site jusqu'au jour même"
+
 #: src/pages/settings/Options.tsx
 msgid "1 = en premier sur le site"
 msgstr "1 = en premier sur le site"
@@ -890,8 +894,8 @@ msgid "À cocher pour un agenda tenu à la main qui bloque aussi le jour du dép
 msgstr "À cocher pour un agenda tenu à la main qui bloque aussi le jour du départ (du 22 au 26 = départ le 26). Airbnb, Booking et Beds24 laissent le jour du départ libre : pour eux, ne pas cocher."
 
 #: src/pages/settings/Ical.tsx
-msgid "À coller dans Airbnb (« Importer un calendrier ») ou ailleurs. Si le Domaine entier est réservé, les deux maisons y apparaissent prises."
-msgstr "À coller dans Airbnb (« Importer un calendrier ») ou ailleurs. Si le Domaine entier est réservé, les deux maisons y apparaissent prises."
+msgid "À coller dans Airbnb (« Importer un calendrier ») ou ailleurs. Si les deux maisons sont réservées ensemble, chacune y apparaît prise."
+msgstr "À coller dans Airbnb (« Importer un calendrier ») ou ailleurs. Si les deux maisons sont réservées ensemble, chacune y apparaît prise."
 
 #: src/pages/settings/Beds24Property.tsx
 msgid "À compléter dans Beds24"
@@ -3047,6 +3051,10 @@ msgstr "déjà là"
 msgid "Déjà payé"
 msgstr "Déjà payé"
 
+#: src/pages/settings/Domain.tsx
+msgid "Délai minimum de réservation (jours)"
+msgstr "Délai minimum de réservation (jours)"
+
 #: src/pages/settings/Startup.tsx
 msgid "Démarche"
 msgstr "Démarche"
@@ -4726,6 +4734,10 @@ msgstr "Les options non payées se libèrent toutes seules à la fin du délai."
 #: src/pages/settings/Payments.tsx
 msgid "Les paiements n'ont pas pu être lus."
 msgstr "Les paiements n'ont pas pu être lus."
+
+#: src/pages/settings/ChannelPrices.tsx
+msgid "Les paliers 7, 14 et 28 nuits sont ceux d'Airbnb : Beds24 n'en transmet pas d'autres. Pour une remise dès 5 nuits sur votre site, voyez"
+msgstr "Les paliers 7, 14 et 28 nuits sont ceux d'Airbnb : Beds24 n'en transmet pas d'autres. Pour une remise dès 5 nuits sur votre site, voyez"
 
 #: src/pages/settings/Domain.tsx
 msgid "Les photos n'ont pas pu être lues."
@@ -6687,6 +6699,7 @@ msgid "Remises automatiques"
 msgstr "Remises automatiques"
 
 #: src/pages/Settings.tsx
+#: src/pages/settings/ChannelPrices.tsx
 #: src/pages/settings/Promotions.tsx
 msgid "Remises et codes promo"
 msgstr "Remises et codes promo"
@@ -7395,6 +7408,15 @@ msgstr "Sur"
 msgid "sur {0}"
 msgstr "sur {0}"
 
+#. placeholder {0}: Number(f.set.min_lead_days)
+#: src/pages/settings/Domain.tsx
+msgid "sur le site, une arrivée se réserve au plus tard {0} jours avant. Vous pouvez passer outre en vente manuelle."
+msgstr "sur le site, une arrivée se réserve au plus tard {0} jours avant. Vous pouvez passer outre en vente manuelle."
+
+#: src/pages/settings/Domain.tsx
+msgid "sur le site, une arrivée se réserve au plus tard la veille. Vous pouvez passer outre en vente manuelle."
+msgstr "sur le site, une arrivée se réserve au plus tard la veille. Vous pouvez passer outre en vente manuelle."
+
 #: src/pages/settings/StripeAccounts.tsx
 msgid "Tableau de bord Stripe, Développeurs, Webhooks, Ajouter un point de terminaison. Collez cette adresse, cochez ces événements, puis copiez le « secret de signature » (whsec_…) dans le champ ci-dessus."
 msgstr "Tableau de bord Stripe, Développeurs, Webhooks, Ajouter un point de terminaison. Collez cette adresse, cochez ces événements, puis copiez le « secret de signature » (whsec_…) dans le champ ci-dessus."
@@ -7761,8 +7783,8 @@ msgid "Une maison est prise"
 msgstr "Une maison est prise"
 
 #: src/pages/settings/Domain.tsx
-msgid "Une nouvelle maison, ou un ensemble vendu d'un bloc comme le Domaine entier."
-msgstr "Une nouvelle maison, ou un ensemble vendu d'un bloc comme le Domaine entier."
+msgid "Une nouvelle maison, ou un ensemble vendu d'un bloc comme « Les deux maisons du Pré Moré »."
+msgstr "Une nouvelle maison, ou un ensemble vendu d'un bloc comme « Les deux maisons du Pré Moré »."
 
 #. placeholder {0}: eur(s.exampleDirectCents)
 #: src/pages/settings/ChannelPrices.tsx

@@ -11,6 +11,7 @@ import { addDays, isIsoDate, sqlNow, todayInZone, type IsoDate } from "../core/d
 import type { UnitLink } from "../core/availability";
 import type { GuestIdType, GuestRegisterEntry } from "../core/guest-register";
 import type { OptionDef, Promotion, RateOverride, RateRule, Season, UnitPricingInfo } from "../core/pricing";
+import { normalizeLeadDays } from "../core/pricing";
 import {
   MESSAGE_UNANSWERED_HOURS,
   RATE_HORIZON_DAYS,
@@ -439,6 +440,9 @@ export interface PropertySettings {
   cancellationIntroFr: string;
   cancellationIntroNl: string;
   abandonIntroFr: string;
+  /** Délai minimum de réservation en ligne, en jours avant l'arrivée (demande
+   *  n° 15). 0 = aucun. Le back-office peut passer outre, avec avertissement. */
+  minLeadDays: number;
 }
 
 const SETTINGS_DEFAULTS: PropertySettings = {
@@ -464,6 +468,7 @@ const SETTINGS_DEFAULTS: PropertySettings = {
   cancellationIntroFr: "",
   cancellationIntroNl: "",
   abandonIntroFr: "",
+  minLeadDays: 0,
 };
 
 export async function getSettings(db: D1Database, propertyId: number): Promise<PropertySettings> {
@@ -499,6 +504,7 @@ export async function getSettings(db: D1Database, propertyId: number): Promise<P
     cancellationIntroFr: text("cancellation_intro_fr", D.cancellationIntroFr),
     cancellationIntroNl: text("cancellation_intro_nl", D.cancellationIntroNl),
     abandonIntroFr: text("abandon_intro_fr", D.abandonIntroFr),
+    minLeadDays: normalizeLeadDays(kv.get("min_lead_days") ?? D.minLeadDays),
   };
 }
 
@@ -2021,12 +2027,16 @@ export async function updateRateRule(db: D1Database, id: number, r: Partial<Rate
          price_weekend_cents = COALESCE(?3, price_weekend_cents),
          holiday_pct = COALESCE(?4, holiday_pct),
          min_nights = COALESCE(?5, min_nights),
-         checkin_days = ?6
+         checkin_days = CASE WHEN ?7 = 1 THEN ?6 ELSE checkin_days END
         WHERE id = ?1`,
     )
     .bind(
       id, r.priceWeekCents ?? null, r.priceWeekendCents ?? null, r.holidayPct ?? null, r.minNights ?? null,
-      r.checkinDays === undefined ? null : r.checkinDays && r.checkinDays.length > 0 ? r.checkinDays.join(",") : null,
+      r.checkinDays && r.checkinDays.length > 0 ? r.checkinDays.join(",") : null,
+      // `checkinDays` absent du PATCH = jours d'arrivée INCHANGÉS. Avant le
+      // 17/10/2026, un PATCH des seuls prix par l'API effaçait la règle en
+      // silence (null écrit d'office). `null` ou [] explicite = aucune contrainte.
+      r.checkinDays === undefined ? 0 : 1,
     )
     .run();
 }

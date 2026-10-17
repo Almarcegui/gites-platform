@@ -99,6 +99,11 @@ export const NL = {
   "Message": "Bericht",
   "Message envoyé — nous vous répondons vite.": "Bericht verstuurd — wij antwoorden u snel.",
   "Minimum {n} nuits sur ces dates.": "Minimum {n} nachten op deze data.",
+  "Réservation en ligne au plus tard {jours} avant l'arrivée": "Online reserveren kan tot {jours} voor de aankomst",
+  "Réservation en ligne au plus tard {jours} avant l'arrivée. Contactez-nous : nous verrons si c'est possible.":
+    "Online reserveren kan tot {jours} voor de aankomst. Neem contact met ons op: wij bekijken wat mogelijk is.",
+  "jour": "dag",
+  "jours": "dagen",
   "Mois précédent": "Vorige maand",
   "Mois suivant": "Volgende maand",
   "Montant à payer maintenant": "Nu te betalen bedrag",

@@ -39,7 +39,7 @@ export function IcalPage() {
       {q.isLoading ? <Loading /> : null}
       {q.data ? (
         <>
-          <Section title={t`Nos calendriers, à donner aux autres sites`} hint={t`À coller dans Airbnb (« Importer un calendrier ») ou ailleurs. Si le Domaine entier est réservé, les deux maisons y apparaissent prises.`}>
+          <Section title={t`Nos calendriers, à donner aux autres sites`} hint={t`À coller dans Airbnb (« Importer un calendrier ») ou ailleurs. Si les deux maisons sont réservées ensemble, chacune y apparaît prise.`}>
             <div className="panel">
               {q.data.exports.map((e) => (
                 <div key={e.unitId} className="list-row two static">

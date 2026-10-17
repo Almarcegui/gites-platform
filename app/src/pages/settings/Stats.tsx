@@ -51,7 +51,7 @@ export function StatsPage() {
           </button>
         </>
       }
-      lead={property ? t`${property.name}. Seules les réservations confirmées comptent ; une réservation du Domaine entier occupe ses deux maisons.` : undefined}
+      lead={property ? t`${property.name}. Seules les réservations confirmées comptent ; une réservation des deux maisons ensemble les occupe toutes les deux.` : undefined}
     >
       {q.error ? <ErrorLine text={t`Les chiffres n'ont pas pu être lus.`} /> : null}
       {q.isLoading ? <Loading /> : null}
