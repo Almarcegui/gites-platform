@@ -36,7 +36,7 @@ import { CRON_HEARTBEAT_KEY } from "./health";
 import { syncFeed } from "./ical";
 import { runDailyReconcile } from "./reconcile";
 import { runAbandonedReminders } from "./relance";
-import { runPaymentFailedReminders, runStayEmails } from "./sejour-emails";
+import { runStayEmailJobs } from "./sejour-emails";
 import { setSetting } from "./settings";
 
 /** Durée de vie d'une session de checkout (`stripe.ts` pose expires_at à +30
@@ -135,10 +135,9 @@ export async function runScheduled(env: Env, now: Date = new Date(), fetcher: ty
   //    en ligne qui n'ont pas abouti — réservations faites ici seulement, interrupteur
   //    par domaine coupé par défaut (services/sejour-emails.ts).
   try {
-    const stay = await runStayEmails(env, now);
-    const failed = await runPaymentFailedReminders(env, now);
-    if (Object.keys(stay.queued).length > 0 || failed > 0) {
-      await audit(db, "cron", "stay.emails", undefined, { ...stay.queued, payment_failed: failed });
+    const stay = await runStayEmailJobs(env, now);
+    if (Object.keys(stay.queued).length > 0 || stay.paymentFailed > 0) {
+      await audit(db, "cron", "stay.emails", undefined, { ...stay.queued, payment_failed: stay.paymentFailed });
     }
   } catch (e) {
     await audit(db, "cron", "stay.emails.error", undefined, { error: e instanceof Error ? e.message : String(e) });

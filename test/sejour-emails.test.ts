@@ -11,7 +11,9 @@ import { updateSettings } from "../src/db/repo";
 import { runScheduled } from "../src/services/cron";
 import {
   PAYMENT_FAILED_KIND,
+  STAY_EMAILS_LEASE_KEY,
   runPaymentFailedReminders,
+  runStayEmailJobs,
   runStayEmails,
   stayKindFor,
 } from "../src/services/sejour-emails";
@@ -35,6 +37,7 @@ beforeEach(async () => {
   for (const table of ["payments", "email_log", "audit_log", "bookings", "guests"]) {
     await db.prepare(`DELETE FROM ${table}`).run();
   }
+  await db.prepare("DELETE FROM app_settings WHERE key = ?1").bind(STAY_EMAILS_LEASE_KEY).run();
   await updateSettings(db, 1, { stay_emails_enabled: "true", review_url: "", arrival_info_text: "Clés dans la boîte à code." });
 });
 
@@ -156,6 +159,17 @@ describe("runStayEmails", () => {
     expect(String(m.body_text)).toMatch(/Aankomst vanaf/);
   });
 
+  it("verrou : un passage qui chevauche un autre ne fait rien ; le verrou est rendu ensuite", async () => {
+    await stay({ checkin: addDays(TODAY, 20) });
+    const until = `${new Date(NOW.getTime() + 60_000).toISOString()}|autre`;
+    await db.prepare("INSERT INTO app_settings (key, value, updated_at) VALUES (?1, ?2, datetime('now'))").bind(STAY_EMAILS_LEASE_KEY, until).run();
+    expect(await runStayEmailJobs(env, NOW)).toEqual({ ran: false, queued: {}, paymentFailed: 0 });
+    expect(await mails()).toHaveLength(0);
+    await db.prepare("DELETE FROM app_settings WHERE key = ?1").bind(STAY_EMAILS_LEASE_KEY).run();
+    expect(await runStayEmailJobs(env, NOW)).toMatchObject({ ran: true, queued: { stay_j30: 1 } });
+    expect(await runStayEmailJobs(env, NOW)).toMatchObject({ ran: true, queued: {} });
+  });
+
   it("le traitement planifié l'exécute et le journalise", async () => {
     await stay({ checkin: addDays(TODAY, 20) });
     await runScheduled(env, NOW, (async () => new Response("", { status: 404 })) as typeof fetch);
@@ -183,7 +197,9 @@ describe("relance d'échec de paiement", () => {
     expect(String(m.body_text)).toMatch(/Reste à régler : 450,00 €/);
   });
 
-  it("pas de relance : nouvelle tentative en cours ou réussie, échec ancien, solde payé, arrhes d'une option", async () => {
+  it("pas de relance : échec de moins d'une heure (le client peut encore réessayer), nouvelle tentative, échec ancien, solde payé, option", async () => {
+    const fresh = await stay({ checkin: addDays(TODAY, 50), paidCents: 45000 });
+    await payment(fresh, "failed", 0.5);
     const retried = await stay({ checkin: addDays(TODAY, 40), paidCents: 45000 });
     await payment(retried, "failed", 5);
     await payment(retried, "pending", 1);

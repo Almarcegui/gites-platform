@@ -34,8 +34,15 @@ export const STAY_WINDOWS: { kind: StayKind; before?: [number, number]; after?: 
 /** Sources dont les clients ont réservé chez nous. */
 const OWN_SOURCES = new Set(["direct", "manual"]);
 
-/** Une relance de paiement ne regarde que les échecs récents (48 h). */
+/** Une relance de paiement ne regarde que les échecs récents (48 h), et pas avant une
+ *  heure : un refus de carte peut être suivi d'un nouvel essai réussi sur la même
+ *  session Stripe (30 min de vie) ; passé ce délai, la session est morte. */
 const PAYMENT_FAILED_LOOKBACK_HOURS = 48;
+const PAYMENT_FAILED_GRACE_MINUTES = 60;
+
+/** Verrou de passage : deux exécutions du cron qui se chevauchent n'envoient pas deux fois. */
+export const STAY_EMAILS_LEASE_KEY = "stay_emails_lease";
+const LEASE_MINUTES = 5;
 
 export function stayKindFor(b: Pick<BookingRow, "checkin" | "checkout">, today: string): StayKind | null {
   const until = diffDays(today, b.checkin);
@@ -256,8 +263,9 @@ export async function runStayEmails(env: Env, now: Date = new Date()): Promise<S
   const today = todayInZone(now);
   const result: StayEmailsResult = { queued: {} };
   const load = await contextLoader(db);
-  // séjours dont le départ est au plus tard dans 7 jours passés, l'arrivée au plus dans 30 jours
-  const bookings = await listBookings(db, { status: "confirmed", from: addDays(today, -8), to: addDays(today, 31), limit: 2000 });
+  // séjours partis depuis 8 jours au plus et arrivant dans 31 jours au plus ; listBookings
+  // plafonne à 1000 lignes, très au-delà de ce que deux domaines comptent sur 39 jours
+  const bookings = await listBookings(db, { status: "confirmed", from: addDays(today, -8), to: addDays(today, 31), limit: 1000 });
   for (const b of bookings) {
     if (!eligible(b)) continue;
     const kind = stayKindFor(b, today);
@@ -277,20 +285,21 @@ export async function runStayEmails(env: Env, now: Date = new Date()): Promise<S
  *  sans paiement plus récent en cours ou réussi, et un solde encore dû. */
 export async function listFailedPaymentBookings(db: D1Database, now: Date): Promise<number[]> {
   const since = sqlNow(new Date(now.getTime() - PAYMENT_FAILED_LOOKBACK_HOURS * 3_600_000));
+  const until = sqlNow(new Date(now.getTime() - PAYMENT_FAILED_GRACE_MINUTES * 60_000));
   const { results } = await db
     .prepare(
       `SELECT DISTINCT p.booking_id AS id
          FROM payments p
          JOIN bookings b ON b.id = p.booking_id
         WHERE p.status = 'failed' AND p.method = 'stripe' AND p.kind IN ('balance', 'full')
-          AND p.created_at >= ?1
+          AND p.created_at >= ?1 AND p.created_at <= ?2
           AND b.status = 'confirmed' AND b.total_cents > b.paid_cents
           AND NOT EXISTS (
             SELECT 1 FROM payments q
              WHERE q.booking_id = p.booking_id AND q.status IN ('pending', 'succeeded')
                AND q.created_at > p.created_at)`,
     )
-    .bind(since)
+    .bind(since, until)
     .all();
   return (results as { id: number }[]).map((r) => Number(r.id));
 }
@@ -311,4 +320,42 @@ export async function runPaymentFailedReminders(env: Env, now: Date = new Date()
     sent += 1;
   }
   return sent;
+}
+
+async function acquireLease(db: D1Database, now: Date): Promise<string | null> {
+  const token = Array.from(crypto.getRandomValues(new Uint8Array(8)), (b) => b.toString(16).padStart(2, "0")).join("");
+  const until = `${new Date(now.getTime() + LEASE_MINUTES * 60_000).toISOString()}|${token}`;
+  const res = await db
+    .prepare(
+      `INSERT INTO app_settings (key, value, updated_at) VALUES (?1, ?2, datetime('now'))
+       ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = datetime('now')
+        WHERE app_settings.value < ?3`,
+    )
+    .bind(STAY_EMAILS_LEASE_KEY, until, now.toISOString())
+    .run();
+  return res.meta.changes === 1 ? until : null;
+}
+
+async function releaseLease(db: D1Database, lease: string): Promise<void> {
+  await db
+    .prepare("UPDATE app_settings SET value = '' WHERE key = ?1 AND value = ?2")
+    .bind(STAY_EMAILS_LEASE_KEY, lease)
+    .run()
+    .catch(() => undefined);
+}
+
+/** Le passage du cron : mails du séjour puis relances de paiement, sous verrou. */
+export async function runStayEmailJobs(
+  env: Env,
+  now: Date = new Date(),
+): Promise<{ ran: boolean; queued: Record<string, number>; paymentFailed: number }> {
+  const lease = await acquireLease(env.DB, now);
+  if (!lease) return { ran: false, queued: {}, paymentFailed: 0 };
+  try {
+    const stay = await runStayEmails(env, now);
+    const paymentFailed = await runPaymentFailedReminders(env, now);
+    return { ran: true, queued: stay.queued, paymentFailed };
+  } finally {
+    await releaseLease(env.DB, lease);
+  }
 }
