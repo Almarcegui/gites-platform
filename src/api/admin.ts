@@ -758,11 +758,31 @@ export function registerAdminRoutes(router: Router): void {
       if (!ok.ok) return apiError(400, ok.message);
     }
 
+    // Un champ vidé au clavier arrive en 0 ou en chaîne vide : le refuser ici plutôt
+    // que d'enregistrer un bien sans nom, sans capacité ou avec un ménage négatif.
+    if (typeof body.name === "string" && !body.name.trim()) return apiError(400, "nom du bien requis");
+    const wholeFrom = (v: unknown): number | undefined | "bad" => {
+      if (v == null) return undefined;
+      const n = Number(v);
+      return Number.isInteger(n) && n >= 1 ? n : "bad";
+    };
+    const capBase = wholeFrom(body.capacityBase);
+    const capMax = wholeFrom(body.capacityMax);
+    if (capBase === "bad" || capMax === "bad") return apiError(400, "capacité : un nombre entier de personnes, au moins 1");
+    if (capBase !== undefined || capMax !== undefined) {
+      const unit = await getUnit(env.DB, id);
+      if (!unit) return apiError(404, "hébergement inconnu");
+      if ((capBase ?? unit.capacityBase) > (capMax ?? unit.capacityMax)) return apiError(400, "capacité : le maximum ne peut pas être inférieur au nombre de personnes en temps normal");
+    }
+    if (body.cleaningFeeCents != null && !(Number.isFinite(Number(body.cleaningFeeCents)) && Number(body.cleaningFeeCents) >= 0)) {
+      return apiError(400, "frais de ménage : un montant positif ou nul");
+    }
+
     await updateUnit(env.DB, id, {
       priceMinCents,
       priceMaxCents,
       depositPct,
-      name: typeof body.name === "string" ? body.name : undefined,
+      name: typeof body.name === "string" ? body.name.trim() : undefined,
       description: typeof body.description === "string" ? body.description : undefined,
       capacityBase: body.capacityBase != null ? Number(body.capacityBase) : undefined,
       capacityMax: body.capacityMax != null ? Number(body.capacityMax) : undefined,
@@ -2742,6 +2762,15 @@ export function registerAdminRoutes(router: Router): void {
     "min_lead_days",
   ]);
 
+  // Bornes des réglages numériques (celles des champs de Réglages › Domaine).
+  const SETTING_RANGES: Record<string, { min: number; max: number; whole: boolean; label: string }> = {
+    deposit_pct: { min: 0, max: 100, whole: false, label: "arrhes à la réservation (%)" },
+    balance_due_days: { min: 0, max: 365, whole: true, label: "solde à payer, jours avant l'arrivée" },
+    hold_minutes: { min: 5, max: 43200, whole: true, label: "durée de garde des dates par une option (minutes)" },
+    tourist_tax_cents_per_person_night: { min: 0, max: 100000, whole: true, label: "taxe de séjour (centimes)" },
+    caution_cents: { min: 0, max: 10000000, whole: true, label: "caution (centimes)" },
+  };
+
   router.get("/api/admin/settings", guard(async (_req, env, _p, url) => {
     const propertyId = intParam(url.searchParams.get("property"), 1);
     const property = await getProperty(env.DB, propertyId);
@@ -2765,6 +2794,18 @@ export function registerAdminRoutes(router: Router): void {
         if (!Number.isInteger(n) || n < 0 || n > 365) {
           return apiError(400, "délai minimum de réservation : un nombre entier de jours, de 0 à 365");
         }
+      }
+      // Un champ vidé au clavier arrive en chaîne vide (lue comme 0 : arrhes à 0 %,
+      // option qui expire aussitôt) ; une valeur absurde ne doit pas non plus passer.
+      const rule = SETTING_RANGES[key];
+      if (rule) {
+        const n = typeof value === "string" ? (value.trim() === "" ? NaN : Number(value)) : typeof value === "number" ? value : NaN;
+        if (!Number.isFinite(n) || n < rule.min || n > rule.max || (rule.whole && !Number.isInteger(n))) {
+          return apiError(400, `${rule.label} : ${rule.whole ? "un nombre entier" : "un nombre"} de ${rule.min} à ${rule.max}`);
+        }
+      }
+      if ((key === "checkin_time" || key === "checkout_time") && !/^([01]\d|2[0-3]):[0-5]\d$/.test(String(value))) {
+        return apiError(400, "heure attendue au format HH:MM, de 00:00 à 23:59");
       }
       entries[key] = String(value);
     }
