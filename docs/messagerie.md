@@ -74,7 +74,7 @@ message sortant apparaît dans le fil (origine e-mail) et garde le Message-ID SM
 client y retombe. Le message d'origine passe en « traité ».
 
 Pour que la réponse parte de la même adresse que celle qui reçoit, régler SMTP sur Gmail
-(`smtp.gmail.com`, 465, même adresse, même mot de passe d'application). Si SMTP reste sur
+(`smtp.gmail.com`, port 587 — Hetzner bloque le 465 —, même adresse, même mot de passe d'application). Si SMTP reste sur
 Infomaniak (`reservations@`), tout fonctionne, la réponse vient simplement de cette adresse.
 
 Pas d'accusé de réception automatique sur ce chemin : seule une personne répond.
