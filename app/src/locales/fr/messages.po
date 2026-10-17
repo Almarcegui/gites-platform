@@ -1145,6 +1145,10 @@ msgstr "Alertes"
 msgid "Amélioration ?"
 msgstr "Amélioration ?"
 
+#: src/pages/settings/Logs.tsx
+msgid "amélioration proposée"
+msgstr "amélioration proposée"
+
 #: src/improvements/SuggestionButton.tsx
 msgid "Amélioration souhaitée"
 msgstr "Amélioration souhaitée"
@@ -2251,6 +2255,18 @@ msgstr "Calendrier"
 msgid "Calendrier relié"
 msgstr "Calendrier relié"
 
+#: src/pages/settings/Logs.tsx
+msgid "calendrier relié ajouté"
+msgstr "calendrier relié ajouté"
+
+#: src/pages/settings/Logs.tsx
+msgid "calendrier relié modifié"
+msgstr "calendrier relié modifié"
+
+#: src/pages/settings/Logs.tsx
+msgid "calendrier relié supprimé"
+msgstr "calendrier relié supprimé"
+
 #: src/pages/settings/Ical.tsx
 msgid "Calendrier sans nom"
 msgstr "Calendrier sans nom"
@@ -2440,6 +2456,10 @@ msgstr "chambres"
 msgid "Changé en partie : {applied} nuit(s) modifiées, le reste non. {0} Vérifiez la grille."
 msgstr "Changé en partie : {applied} nuit(s) modifiées, le reste non. {0} Vérifiez la grille."
 
+#: src/pages/settings/Logs.tsx
+msgid "changement de séjour refusé : dates déjà prises"
+msgstr "changement de séjour refusé : dates déjà prises"
+
 #: src/pages/settings/Tarifs.tsx
 msgid "Changer"
 msgstr "Changer"
@@ -2609,6 +2629,14 @@ msgstr "Clé « {name} », affichée une seule fois. À coller dans ~/.config/gi
 #: src/pages/settings/ServiceKeys.tsx
 msgid "Clé créée"
 msgstr "Clé créée"
+
+#: src/pages/settings/Logs.tsx
+msgid "clé de service créée"
+msgstr "clé de service créée"
+
+#: src/pages/settings/Logs.tsx
+msgid "clé de service révoquée"
+msgstr "clé de service révoquée"
 
 #: src/pages/settings/StripeAccounts.tsx
 msgid "Clé publiable"
@@ -2783,6 +2811,10 @@ msgstr "Confirmation ouverte dans un nouvel onglet."
 msgid "Confirmation PDF"
 msgstr "Confirmation PDF"
 
+#: src/pages/settings/Logs.tsx
+msgid "confirmation refusée : dates déjà prises"
+msgstr "confirmation refusée : dates déjà prises"
+
 #: src/booking/BookingPanel.tsx
 msgid "confirmation refusée : dates reprises entre-temps"
 msgstr "confirmation refusée : dates reprises entre-temps"
@@ -2839,6 +2871,14 @@ msgstr "Connectez-vous avec le même identifiant que d'habitude."
 #: src/pages/settings/Channels.tsx
 msgid "Connectez-vous sur beds24.com."
 msgstr "Connectez-vous sur beds24.com."
+
+#: src/pages/settings/Logs.tsx
+msgid "connexion refusée"
+msgstr "connexion refusée"
+
+#: src/pages/settings/Logs.tsx
+msgid "connexion réussie"
+msgstr "connexion réussie"
 
 #: src/pages/settings/Import.tsx
 msgid "Contenu du fichier elloha"
@@ -3279,6 +3319,10 @@ msgstr "Domaine"
 #: src/calendar/Weeks.tsx
 msgid "Domaine : une des maisons est prise"
 msgstr "Domaine : une des maisons est prise"
+
+#: src/pages/settings/Logs.tsx
+msgid "domaine modifié"
+msgstr "domaine modifié"
 
 #: src/pages/settings/Device.tsx
 msgid "Domaine montré par l'écran"
@@ -4951,6 +4995,18 @@ msgstr "Lien de paiement des arrhes"
 msgid "Lien de paiement du solde"
 msgstr "Lien de paiement du solde"
 
+#: src/pages/settings/Logs.tsx
+msgid "lien de paiement expiré"
+msgstr "lien de paiement expiré"
+
+#: src/pages/settings/Logs.tsx
+msgid "lien du ménage coupé"
+msgstr "lien du ménage coupé"
+
+#: src/pages/settings/Logs.tsx
+msgid "lien du ménage créé"
+msgstr "lien du ménage créé"
+
 #: src/pages/settings/Payments.tsx
 msgid "lien expiré sans paiement"
 msgstr "lien expiré sans paiement"
@@ -4974,6 +5030,10 @@ msgstr "Lien vers la réservation du client :"
 #: src/pages/settings/Import.tsx
 msgid "Ligne"
 msgstr "Ligne"
+
+#: src/pages/settings/Logs.tsx
+msgid "liste des clients exportée"
+msgstr "liste des clients exportée"
 
 #: src/pages/settings/Promotions.tsx
 msgid "Long séjour"
@@ -5203,6 +5263,18 @@ msgstr "Mode du compte Stripe"
 msgid "Modèle de réponse"
 msgstr "Modèle de réponse"
 
+#: src/pages/settings/Logs.tsx
+msgid "modèle de réponse créé"
+msgstr "modèle de réponse créé"
+
+#: src/pages/settings/Logs.tsx
+msgid "modèle de réponse modifié"
+msgstr "modèle de réponse modifié"
+
+#: src/pages/settings/Logs.tsx
+msgid "modèle de réponse supprimé"
+msgstr "modèle de réponse supprimé"
+
 #: src/pages/settings/Templates.tsx
 #: src/shell/nav.tsx
 msgid "Modèles"
@@ -5279,6 +5351,10 @@ msgstr "Mot de passe"
 #: src/pages/settings/MyAccount.tsx
 msgid "Mot de passe actuel"
 msgstr "Mot de passe actuel"
+
+#: src/pages/settings/Logs.tsx
+msgid "mot de passe changé"
+msgstr "mot de passe changé"
 
 #: src/pages/settings/Accounts.tsx
 #: src/pages/settings/MyAccount.tsx
@@ -5682,6 +5758,10 @@ msgid "Option en cours"
 msgstr "Option en cours"
 
 #: src/pages/settings/Logs.tsx
+msgid "option libérée"
+msgstr "option libérée"
+
+#: src/pages/settings/Logs.tsx
 msgid "option modifiée"
 msgstr "option modifiée"
 
@@ -5711,6 +5791,10 @@ msgstr "Options"
 #: src/pages/Bookings.tsx
 msgid "Options en cours"
 msgstr "Options en cours"
+
+#: src/pages/settings/Logs.tsx
+msgid "options expirées libérées"
+msgstr "options expirées libérées"
 
 #: src/pages/Settings.tsx
 #: src/pages/settings/Options.tsx
@@ -5820,6 +5904,14 @@ msgstr "paiement noté à la main"
 #: src/pages/settings/Payments.tsx
 msgid "Paiement noté à la main"
 msgstr "Paiement noté à la main"
+
+#: src/pages/settings/Logs.tsx
+msgid "paiement reçu"
+msgstr "paiement reçu"
+
+#: src/pages/settings/Logs.tsx
+msgid "paiement refusé"
+msgstr "paiement refusé"
 
 #: src/booking/BookingPanel.tsx
 #: src/pages/settings/Encaissements.tsx
@@ -6720,9 +6812,25 @@ msgstr "Remboursement"
 msgid "Remboursement : {0}"
 msgstr "Remboursement : {0}"
 
+#: src/pages/settings/Logs.tsx
+msgid "remboursement à faire à la main"
+msgstr "remboursement à faire à la main"
+
 #: src/booking/BookingPanel.tsx
 msgid "Remboursement à faire sur le canal de la réservation"
 msgstr "Remboursement à faire sur le canal de la réservation"
+
+#: src/pages/settings/Logs.tsx
+msgid "remboursement effectué"
+msgstr "remboursement effectué"
+
+#: src/pages/settings/Logs.tsx
+msgid "remboursement en échec"
+msgstr "remboursement en échec"
+
+#: src/pages/settings/Logs.tsx
+msgid "remboursement exceptionnel"
+msgstr "remboursement exceptionnel"
 
 #: src/booking/BookingPanel.tsx
 msgid "Rembourser"
@@ -6907,6 +7015,14 @@ msgstr "Réservation annulée."
 #: src/pages/settings/Logs.tsx
 msgid "réservation confirmée"
 msgstr "réservation confirmée"
+
+#: src/pages/settings/Logs.tsx
+msgid "réservation confirmée par le paiement"
+msgstr "réservation confirmée par le paiement"
+
+#: src/pages/settings/Logs.tsx
+msgid "réservation créée"
+msgstr "réservation créée"
 
 #: src/pages/settings/Channels.tsx
 msgid "Réservation d'ici"

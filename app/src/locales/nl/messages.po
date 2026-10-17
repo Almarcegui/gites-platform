@@ -1149,6 +1149,10 @@ msgstr "Waarschuwingen"
 msgid "Amélioration ?"
 msgstr "Verbetering?"
 
+#: src/pages/settings/Logs.tsx
+msgid "amélioration proposée"
+msgstr "verbetering voorgesteld"
+
 #: src/improvements/SuggestionButton.tsx
 msgid "Amélioration souhaitée"
 msgstr "Gewenste verbetering"
@@ -2255,6 +2259,18 @@ msgstr "Kalender"
 msgid "Calendrier relié"
 msgstr "Gekoppelde kalender"
 
+#: src/pages/settings/Logs.tsx
+msgid "calendrier relié ajouté"
+msgstr "gekoppelde kalender toegevoegd"
+
+#: src/pages/settings/Logs.tsx
+msgid "calendrier relié modifié"
+msgstr "gekoppelde kalender gewijzigd"
+
+#: src/pages/settings/Logs.tsx
+msgid "calendrier relié supprimé"
+msgstr "gekoppelde kalender verwijderd"
+
 #: src/pages/settings/Ical.tsx
 msgid "Calendrier sans nom"
 msgstr "Kalender zonder naam"
@@ -2444,6 +2460,10 @@ msgstr "kamers"
 msgid "Changé en partie : {applied} nuit(s) modifiées, le reste non. {0} Vérifiez la grille."
 msgstr "Gedeeltelijk gewijzigd: {applied} nacht(en) aangepast, de rest niet. {0} Kijk het rooster na."
 
+#: src/pages/settings/Logs.tsx
+msgid "changement de séjour refusé : dates déjà prises"
+msgstr "verblijfswijziging geweigerd: data al bezet"
+
 #: src/pages/settings/Tarifs.tsx
 msgid "Changer"
 msgstr "Wijzigen"
@@ -2613,6 +2633,14 @@ msgstr "Sleutel « {name} », slechts één keer getoond. Te plakken in ~/.confi
 #: src/pages/settings/ServiceKeys.tsx
 msgid "Clé créée"
 msgstr "Sleutel aangemaakt"
+
+#: src/pages/settings/Logs.tsx
+msgid "clé de service créée"
+msgstr "servicesleutel aangemaakt"
+
+#: src/pages/settings/Logs.tsx
+msgid "clé de service révoquée"
+msgstr "servicesleutel ingetrokken"
 
 #: src/pages/settings/StripeAccounts.tsx
 msgid "Clé publiable"
@@ -2787,6 +2815,10 @@ msgstr "Bevestiging geopend in een nieuw tabblad."
 msgid "Confirmation PDF"
 msgstr "Bevestiging (PDF)"
 
+#: src/pages/settings/Logs.tsx
+msgid "confirmation refusée : dates déjà prises"
+msgstr "bevestiging geweigerd: data al bezet"
+
 #: src/booking/BookingPanel.tsx
 msgid "confirmation refusée : dates reprises entre-temps"
 msgstr "bevestiging geweigerd: data intussen ingenomen"
@@ -2843,6 +2875,14 @@ msgstr "Meld u aan met dezelfde gebruikersnaam als gewoonlijk."
 #: src/pages/settings/Channels.tsx
 msgid "Connectez-vous sur beds24.com."
 msgstr "Meld u aan op beds24.com."
+
+#: src/pages/settings/Logs.tsx
+msgid "connexion refusée"
+msgstr "aanmelding geweigerd"
+
+#: src/pages/settings/Logs.tsx
+msgid "connexion réussie"
+msgstr "aanmelding gelukt"
 
 #: src/pages/settings/Import.tsx
 msgid "Contenu du fichier elloha"
@@ -3283,6 +3323,10 @@ msgstr "Domein"
 #: src/calendar/Weeks.tsx
 msgid "Domaine : une des maisons est prise"
 msgstr "Domein: een van de huizen is bezet"
+
+#: src/pages/settings/Logs.tsx
+msgid "domaine modifié"
+msgstr "domein gewijzigd"
 
 #: src/pages/settings/Device.tsx
 msgid "Domaine montré par l'écran"
@@ -4955,6 +4999,18 @@ msgstr "Betaallink voor het voorschot"
 msgid "Lien de paiement du solde"
 msgstr "Betaallink voor het saldo"
 
+#: src/pages/settings/Logs.tsx
+msgid "lien de paiement expiré"
+msgstr "betaallink verlopen"
+
+#: src/pages/settings/Logs.tsx
+msgid "lien du ménage coupé"
+msgstr "link voor de schoonmaak afgesloten"
+
+#: src/pages/settings/Logs.tsx
+msgid "lien du ménage créé"
+msgstr "link voor de schoonmaak aangemaakt"
+
 #: src/pages/settings/Payments.tsx
 msgid "lien expiré sans paiement"
 msgstr "link verlopen zonder betaling"
@@ -4978,6 +5034,10 @@ msgstr "Link naar de reservering van de klant:"
 #: src/pages/settings/Import.tsx
 msgid "Ligne"
 msgstr "Regel"
+
+#: src/pages/settings/Logs.tsx
+msgid "liste des clients exportée"
+msgstr "klantenlijst geëxporteerd"
 
 #: src/pages/settings/Promotions.tsx
 msgid "Long séjour"
@@ -5207,6 +5267,18 @@ msgstr "Modus van de Stripe-rekening"
 msgid "Modèle de réponse"
 msgstr "Antwoordsjabloon"
 
+#: src/pages/settings/Logs.tsx
+msgid "modèle de réponse créé"
+msgstr "antwoordmodel aangemaakt"
+
+#: src/pages/settings/Logs.tsx
+msgid "modèle de réponse modifié"
+msgstr "antwoordmodel gewijzigd"
+
+#: src/pages/settings/Logs.tsx
+msgid "modèle de réponse supprimé"
+msgstr "antwoordmodel verwijderd"
+
 #: src/pages/settings/Templates.tsx
 #: src/shell/nav.tsx
 msgid "Modèles"
@@ -5283,6 +5355,10 @@ msgstr "Wachtwoord"
 #: src/pages/settings/MyAccount.tsx
 msgid "Mot de passe actuel"
 msgstr "Huidig wachtwoord"
+
+#: src/pages/settings/Logs.tsx
+msgid "mot de passe changé"
+msgstr "wachtwoord gewijzigd"
 
 #: src/pages/settings/Accounts.tsx
 #: src/pages/settings/MyAccount.tsx
@@ -5686,6 +5762,10 @@ msgid "Option en cours"
 msgstr "Lopende optie"
 
 #: src/pages/settings/Logs.tsx
+msgid "option libérée"
+msgstr "optie vrijgegeven"
+
+#: src/pages/settings/Logs.tsx
 msgid "option modifiée"
 msgstr "optie gewijzigd"
 
@@ -5715,6 +5795,10 @@ msgstr "Opties"
 #: src/pages/Bookings.tsx
 msgid "Options en cours"
 msgstr "Lopende opties"
+
+#: src/pages/settings/Logs.tsx
+msgid "options expirées libérées"
+msgstr "verlopen opties vrijgegeven"
 
 #: src/pages/Settings.tsx
 #: src/pages/settings/Options.tsx
@@ -5824,6 +5908,14 @@ msgstr "betaling met de hand genoteerd"
 #: src/pages/settings/Payments.tsx
 msgid "Paiement noté à la main"
 msgstr "Betaling met de hand genoteerd"
+
+#: src/pages/settings/Logs.tsx
+msgid "paiement reçu"
+msgstr "betaling ontvangen"
+
+#: src/pages/settings/Logs.tsx
+msgid "paiement refusé"
+msgstr "betaling geweigerd"
 
 #: src/booking/BookingPanel.tsx
 #: src/pages/settings/Encaissements.tsx
@@ -6724,9 +6816,25 @@ msgstr "Terugbetaling"
 msgid "Remboursement : {0}"
 msgstr "Terugbetaling: {0}"
 
+#: src/pages/settings/Logs.tsx
+msgid "remboursement à faire à la main"
+msgstr "terugbetaling met de hand te doen"
+
 #: src/booking/BookingPanel.tsx
 msgid "Remboursement à faire sur le canal de la réservation"
 msgstr "Terugbetaling via het kanaal van de boeking"
+
+#: src/pages/settings/Logs.tsx
+msgid "remboursement effectué"
+msgstr "terugbetaling uitgevoerd"
+
+#: src/pages/settings/Logs.tsx
+msgid "remboursement en échec"
+msgstr "terugbetaling mislukt"
+
+#: src/pages/settings/Logs.tsx
+msgid "remboursement exceptionnel"
+msgstr "uitzonderlijke terugbetaling"
 
 #: src/booking/BookingPanel.tsx
 msgid "Rembourser"
@@ -6911,6 +7019,14 @@ msgstr "Reservering geannuleerd."
 #: src/pages/settings/Logs.tsx
 msgid "réservation confirmée"
 msgstr "reservering bevestigd"
+
+#: src/pages/settings/Logs.tsx
+msgid "réservation confirmée par le paiement"
+msgstr "reservering bevestigd door de betaling"
+
+#: src/pages/settings/Logs.tsx
+msgid "réservation créée"
+msgstr "reservering aangemaakt"
 
 #: src/pages/settings/Channels.tsx
 msgid "Réservation d'ici"
