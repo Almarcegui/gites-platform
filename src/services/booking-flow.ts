@@ -191,10 +191,11 @@ export async function merciUrl(env: Env, booking: { id: number; reference: strin
 export async function paymentReturnUrls(env: Env, booking: BookingRow, kind: PaymentKind): Promise<{ successUrl: string; cancelUrl: string }> {
   const base = env.PUBLIC_BASE_URL;
   const emailParam = booking.guestEmail ? `&email=${encodeURIComponent(booking.guestEmail)}` : "";
+  const lang = booking.guestLang === "nl" ? "&lang=nl" : "";
   if (kind === "balance") return { successUrl: voucherUrl(env, booking), cancelUrl: voucherUrl(env, booking) };
   return {
     successUrl: await merciUrl(env, booking),
-    cancelUrl: `${base}/book/annule.html?ref=${encodeURIComponent(booking.reference)}${emailParam}`,
+    cancelUrl: `${base}/book/annule.html?ref=${encodeURIComponent(booking.reference)}${emailParam}${lang}`,
   };
 }
 
@@ -493,7 +494,7 @@ export async function sendConfirmation(
   db: D1Database,
   env: Env,
   bookingId: number,
-  opts: { force?: boolean; to?: string } = {},
+  opts: { force?: boolean; to?: string; result?: { status?: "stub" | "sent" | "failed" } } = {},
 ): Promise<boolean> {
   const ctx = await loadConfirmationPdfContext(db, bookingId);
   if (!ctx) return false;
@@ -519,7 +520,10 @@ export async function sendConfirmation(
       booking: ctx.booking,
       property: ctx.property,
       settings: ctx.settings,
-      voucherUrl: voucherUrl(env, ctx.booking),
+      // Fiche sans adresse (renvoi depuis la page Merci) : le lien du voucher
+      // s'ouvre avec l'adresse de destination, que la route n'écrit sur la
+      // fiche qu'après un envoi réussi.
+      voucherUrl: voucherUrl(env, { ...ctx.booking, guestEmail: ctx.booking.guestEmail || to }),
       attachmentName: filename,
     });
     message = {
@@ -541,6 +545,7 @@ export async function sendConfirmation(
   // est pire qu'une confirmation à renvoyer à la main (bouton « Renvoyer »).
   // Seul un échec CONSTATÉ (statut `failed`) rend le verrou.
   const status = await queueEmail(db, env, message);
+  if (opts.result) opts.result.status = status;
   if (status === "failed" && claimed) await db.prepare("DELETE FROM confirmation_claims WHERE booking_id = ?1").bind(bookingId).run();
   return true;
 }

@@ -232,6 +232,31 @@ describe("échecs : rien n'est annoncé comme envoyé, le quota n'est pas consom
     expect((await mails(b.id)).at(-1)).toMatchObject({ to_email: "claire@example.org", status: "failed" });
   });
 
+  it("sans e-mail et envoi en échec : la fiche reste vide ; cinq échecs en une heure, puis plus d'essai", async () => {
+    const b = await bookAndPay();
+    await t.db.prepare("UPDATE guests SET email = NULL WHERE id = (SELECT guest_id FROM bookings WHERE id = ?1)").bind(b.id).run();
+    const failing: Env = { ...env, EMAILS_ENABLED: "true", SMTP_HOST: "h", SMTP_USER: "u", SMTP_PASSWORD: "p", MAIL_FROM: "r@example.be", SMTP_SEND: async () => { throw new Error("SMTP 451"); } };
+    for (let i = 0; i < 5; i += 1) {
+      expect((await call("POST", api(b.reference), { k: b.k, to: `essai${i}@example.org` }, {}, failing)).status).toBe(502);
+    }
+    expect(await guestEmail(b.id)).toBeNull();
+    const capped = await call("POST", api(b.reference), { k: b.k, to: "essai9@example.org" }, {}, failing);
+    expect(capped.status).toBe(429);
+    expect(await mails(b.id).then((m) => m.filter((x) => x.status === "failed"))).toHaveLength(5);
+  });
+
+  it("fiche sans adresse partagée avec un autre séjour : refusée (l'adresse ouvrirait les autres réservations)", async () => {
+    const b = await bookAndPay();
+    const guestId = (await t.db.prepare("SELECT guest_id FROM bookings WHERE id = ?1").bind(b.id).first<{ guest_id: number }>())!.guest_id;
+    const other = await createBooking("autre@example.be", 30);
+    await t.db.prepare("UPDATE bookings SET guest_id = ?1 WHERE id = ?2").bind(guestId, other.id).run();
+    await t.db.prepare("UPDATE guests SET email = NULL WHERE id = ?1").bind(guestId).run();
+    const r = await call("POST", api(b.reference), { k: b.k, to: "intrus@example.org" });
+    expect(r.status).toBe(409);
+    expect(await guestEmail(b.id)).toBeNull();
+    expect(await audits(b.id)).toHaveLength(0);
+  });
+
   it("réservation sans fiche client : refusée avant le quota", async () => {
     const b = await bookAndPay();
     await t.db.prepare("UPDATE bookings SET guest_id = NULL WHERE id = ?1").bind(b.id).run();
