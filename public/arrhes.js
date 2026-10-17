@@ -22,8 +22,9 @@
 // l'hébergement ».
 
 const cibles = [...document.querySelectorAll("[data-deposit-unit]")];
+const fraisCibles = [...document.querySelectorAll("[data-frais-unit]")];
 
-if (cibles.length) {
+if (cibles.length || fraisCibles.length) {
   const fiches = new Map(); // slug → promesse de fiche domaine, une seule requête par domaine
 
   const fiche = (slug) => {
@@ -55,6 +56,30 @@ if (cibles.length) {
       } catch {
         // Repli du HTML conservé tel quel — mieux vaut « selon l'hébergement »
         // qu'un pourcentage inventé.
+      }
+    })();
+  }
+
+  // Frais généraux (ménage et charges), même principe : le montant écrit en dur
+  // dans les pages (120 / 90 / 210 €) ne suivait plus le moteur (170 / 140 /
+  // 310 €) — le visiteur voyait un chiffre sur la page et en payait un autre.
+  // L'unité composite (« les deux maisons ») a un ménage nul en base : le
+  // moteur le calcule en additionnant ses maisons, la page fait de même.
+  //   data-frais-property  slug du domaine
+  //   data-frais-unit      id de l'hébergement
+  // Le HTML garde un repli sans montant (« voir le devis ») si l'appel échoue.
+  for (const cible of fraisCibles) {
+    (async () => {
+      try {
+        const { units } = await fiche(cible.dataset.fraisProperty);
+        const u = units.find((x) => x.id === Number(cible.dataset.fraisUnit));
+        if (!u) return;
+        const cents = u.isComposite
+          ? units.filter((x) => !x.isComposite).reduce((t, x) => t + x.cleaningFeeCents, 0)
+          : u.cleaningFeeCents;
+        if (typeof cents === "number" && cents > 0) cible.textContent = `${Math.round(cents / 100)} €`;
+      } catch {
+        // Repli du HTML conservé.
       }
     })();
   }
