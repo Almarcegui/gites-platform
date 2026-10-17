@@ -38,7 +38,7 @@ const MAX_MAIL_BYTES = 512 * 1024;
 export interface MailboxState {
   uidValidity?: number | null;
   lastUid?: number | null;
-  /** « adresse|dossier » relevé : un autre compte ou un autre dossier remet le curseur à zéro
+  /** « adresse|serveur:port|dossier » relevé : un autre compte, serveur ou dossier remet le curseur à zéro
    *  (deux dossiers peuvent partager la même UIDVALIDITY). */
   source?: string;
   at?: string;
@@ -286,7 +286,8 @@ export async function pullMailbox(env: Env, now: Date = new Date()): Promise<Mai
   }
   result.ran = true;
   try {
-    const source = `${(env.IMAP_USER ?? "").trim().toLowerCase()}|${(env.IMAP_FOLDER ?? "").trim() || "INBOX"}`;
+    const host = `${(env.IMAP_HOST ?? "").trim().toLowerCase() || "imap.gmail.com"}:${(env.IMAP_PORT ?? "").trim() || "993"}`;
+    const source = `${(env.IMAP_USER ?? "").trim().toLowerCase()}|${host}|${(env.IMAP_FOLDER ?? "").trim() || "INBOX"}`;
     if (state.source !== source) {
       // autre boîte ou autre dossier : l'ancien curseur ne vaut rien ici (le Message-ID évite les doublons)
       state = { ...state, source, uidValidity: null, lastUid: null };
