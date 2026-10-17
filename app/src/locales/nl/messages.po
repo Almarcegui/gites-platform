@@ -61,6 +61,10 @@ msgstr " (u)"
 msgid " et "
 msgstr " en "
 
+#: src/pages/settings/Payments.tsx
+msgid "—"
+msgstr "—"
+
 #. placeholder {0}: eur(b.balanceCents)
 #: src/calendar/Weeks.tsx
 msgid ", {0} à encaisser"
@@ -2595,6 +2599,7 @@ msgstr "Sleutels, code, parking, route… Het adres en de aankomst- en vertrekur
 #: src/pages/Dashboard.tsx
 #: src/pages/settings/Channels.tsx
 #: src/pages/settings/Clients.tsx
+#: src/pages/settings/Payments.tsx
 msgid "Client"
 msgstr "Klant"
 
