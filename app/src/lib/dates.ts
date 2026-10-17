@@ -113,6 +113,20 @@ export function hourLabel(hhmm: string | undefined | null): string {
   return m && m !== "00" ? `${hh} h ${m}` : `${hh} h`;
 }
 
+/** Date-heure de la base (UTC, « 2026-10-10 12:32:00 » ou ISO) → jour et heure de Belgique :
+ *  { day: "2026-10-10", time: "14:32" }. Rend null si le texte n'est pas une date-heure. */
+export function sqlToBrussels(s: string | null | undefined): { day: IsoDate; time: string } | null {
+  const m = (s ?? "").match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/);
+  if (!m) return null;
+  const utc = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Number(m[4]), Number(m[5])));
+  const p = Object.fromEntries(
+    new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Brussels", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" })
+      .formatToParts(utc)
+      .map((x) => [x.type, x.value]),
+  ) as Record<string, string>;
+  return { day: `${p.year}-${p.month}-${p.day}`, time: `${p.hour}:${p.minute}` };
+}
+
 /** Date-heure SQL « 2026-10-10 08:42:00 » (UTC) → « 8 h 42 », « hier », « jeudi », « 8 oct. » */
 export function whenLabel(sql: string, today: IsoDate): string {
   const iso = sql.includes("T") ? sql : sql.replace(" ", "T") + "Z";

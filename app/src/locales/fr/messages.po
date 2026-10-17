@@ -34,11 +34,11 @@ msgstr " (échéance {0})"
 msgid " (existante)"
 msgstr " (existante)"
 
-#. placeholder {0}: longDate(h.holdExpiresAt.slice(0, 10))
-#. placeholder {1}: h.holdExpiresAt.slice(11, 16)
+#. placeholder {0}: longDate(b.day)
+#. placeholder {1}: hourLabel(b.time)
 #: src/pages/Dashboard.tsx
-msgid " (expire le {0} à {1} UTC)"
-msgstr " (expire le {0} à {1} UTC)"
+msgid " (expire le {0} à {1})"
+msgstr " (expire le {0} à {1})"
 
 #. placeholder {0}: sqlWhen(s.sentAt)
 #: src/pages/settings/ChannelPrices.tsx
@@ -758,7 +758,7 @@ msgstr "{where}{0} message(s) client à traiter"
 
 #. placeholder {0}: h.reference
 #. placeholder {1}: h.unitName
-#. placeholder {2}: h.holdExpiresAt ? t` (expire le ${longDate(h.holdExpiresAt.slice(0, 10))} à ${h.holdExpiresAt.slice(11, 16)} UTC)` : ""
+#. placeholder {2}: h.holdExpiresAt ? holdText(h.holdExpiresAt) : ""
 #: src/pages/Dashboard.tsx
 msgid "{where}{0}, {1}{2}"
 msgstr "{where}{0}, {1}{2}"
@@ -4924,7 +4924,7 @@ msgstr "liaisons d'un bien changées"
 msgid "liaisons de {0}"
 msgstr "liaisons de {0}"
 
-#. placeholder {0}: longDate(h.holdExpiresAt.slice(0, 10))
+#. placeholder {0}: longDate(sqlToBrussels(h.holdExpiresAt)?.day ?? h.holdExpiresAt.slice(0, 10))
 #: src/pages/Today.tsx
 msgid "libérée le {0} sans arrhes"
 msgstr "libérée le {0} sans arrhes"
@@ -7213,7 +7213,7 @@ msgstr "Saisons"
 msgid "Saisons passées"
 msgstr "Saisons passées"
 
-#. placeholder {0}: longDate(b.holdExpiresAt.slice(0, 10))
+#. placeholder {0}: longDate(sqlToBrussels(b.holdExpiresAt)?.day ?? b.holdExpiresAt.slice(0, 10))
 #: src/booking/BookingPanel.tsx
 msgid "Sans arrhes reçues, les dates se libèrent le {0}."
 msgstr "Sans arrhes reçues, les dates se libèrent le {0}."

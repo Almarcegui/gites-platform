@@ -28,3 +28,15 @@ describe("sqlWhen", () => {
     expect(sqlWhen("hier")).toBe("hier");
   });
 });
+
+import { sqlToBrussels } from "../lib/dates";
+
+describe("sqlToBrussels (échéance d'une option)", () => {
+  it("23 h 30 UTC l'été : déjà le lendemain en Belgique", () => {
+    expect(sqlToBrussels("2026-10-20 22:30:00")).toEqual({ day: "2026-10-21", time: "00:30" });
+  });
+  it("ce qui n'est pas une date-heure : null", () => {
+    expect(sqlToBrussels("2026-10-20")).toBeNull();
+    expect(sqlToBrussels(null)).toBeNull();
+  });
+});

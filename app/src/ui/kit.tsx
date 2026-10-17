@@ -15,6 +15,7 @@ import { useEffect, useState, type ReactNode } from "react";
 
 import { authHeader, errorText } from "../api/client";
 import { i18n } from "../i18n";
+import { sqlToBrussels } from "../lib/dates";
 import { useProperties } from "../api/hooks";
 import type { Property } from "../api/types";
 import { ErrorLine } from "../lib/action";
@@ -371,15 +372,11 @@ export function centsToEuros(c: number | null | undefined): number | string {
  *  de Belgique : « 10/10/2026 à 14 h 32 » (en néerlandais « 10/10/2026 om 14.32 u »). */
 export function sqlWhen(s: string | null | undefined): string {
   if (!s) return "";
-  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/);
-  if (!m) return s.slice(0, 10);
-  const utc = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Number(m[4]), Number(m[5])));
-  const p = Object.fromEntries(
-    new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Brussels", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" })
-      .formatToParts(utc)
-      .map((x) => [x.type, x.value]),
-  ) as Record<string, string>;
-  const date = `${p.day}/${p.month}/${p.year}`;
-  const h = Number(p.hour);
-  return i18n.locale === "nl" ? `${date} om ${h}.${p.minute} u` : `${date} à ${h} h ${p.minute}`;
+  const b = sqlToBrussels(s);
+  if (!b) return s.slice(0, 10);
+  const [y, mo, d] = b.day.split("-");
+  const date = `${d}/${mo}/${y}`;
+  const [hh, mm] = b.time.split(":");
+  const h = Number(hh);
+  return i18n.locale === "nl" ? `${date} om ${h}.${mm} u` : `${date} à ${h} h ${mm}`;
 }

@@ -30,7 +30,7 @@ import { api, openAdminPdf } from "../api/client";
 import { useBooking, useGuest, useProperties } from "../api/hooks";
 import type { AuditEntry, Booking, BookingDetail, Guest, QuoteResponse } from "../api/types";
 import { ErrorLine, useAction } from "../lib/action";
-import { diffDays, hourLabel, longDate, todayBrussels } from "../lib/dates";
+import { diffDays, hourLabel, longDate, sqlToBrussels, todayBrussels } from "../lib/dates";
 import { channelName, isChannel } from "../lib/derive";
 import { eur } from "../lib/money";
 import { TemplateChips } from "../messages/TemplateChips";
@@ -262,7 +262,7 @@ function Fiche({ detail, dialog, setDialog }: { detail: BookingDetail; dialog: D
               </span>
             ) : null}
             {b.status === "pending" && b.holdExpiresAt ? (
-              <span className="late">{t`Sans arrhes reçues, les dates se libèrent le ${longDate(b.holdExpiresAt.slice(0, 10))}.`}</span>
+              <span className="late">{t`Sans arrhes reçues, les dates se libèrent le ${longDate(sqlToBrussels(b.holdExpiresAt)?.day ?? b.holdExpiresAt.slice(0, 10))}.`}</span>
             ) : null}
           </div>
         )}
