@@ -121,3 +121,16 @@ export async function deleteUserSessions(db: D1Database, userId: number): Promis
 export async function purgeExpiredSessions(db: D1Database): Promise<void> {
   await db.prepare("DELETE FROM admin_sessions WHERE expires_at <= datetime('now')").run();
 }
+
+/** Adresses IP des journaux de connexion et du formulaire de contact : utiles
+ *  pour freiner une attaque (15 min à 1 h), sans objet au-delà de 30 jours.
+ *  Le cron les efface, la ligne de journal reste (audit du 17/10, RGPD). */
+export async function purgeAuditIps(db: D1Database): Promise<void> {
+  await db
+    .prepare(
+      "UPDATE audit_log SET detail = json_remove(detail, '$.ip') " +
+        "WHERE action IN ('login.failed', 'login.ok', 'message.contact') AND created_at < datetime('now', '-30 days') " +
+        "AND json_valid(detail) AND json_extract(detail, '$.ip') IS NOT NULL",
+    )
+    .run();
+}

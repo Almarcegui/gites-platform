@@ -19,6 +19,9 @@ interface Env {
   RESEND_API_KEY?: string;
   RESEND_FROM?: string;
   ADMIN_TOKEN?: string;
+  /** Cloudflare Access (src/services/cf-access.ts) : sans les deux, l'en-tête Cf-Access-Jwt-Assertion est ignoré. */
+  CF_ACCESS_TEAM_DOMAIN?: string;
+  CF_ACCESS_AUD?: string;
   /** Refresh token API v2 Beds24 (canal OTA) — absent = intégration OFF. */
   BEDS24_REFRESH_TOKEN?: string;
   /** Clé secrète du webhook entrant Beds24 (/api/webhooks/beds24?key=…). */

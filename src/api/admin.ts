@@ -173,6 +173,7 @@ import { registerImprovementRoutes } from "./admin-ameliorations";
 import { registerHistoryRoutes } from "./admin-historique";
 import { PriceLinkingError, registerLot3AdminRoutes, sendPriceLinking } from "./admin-lot3";
 import { registerStripeAdminRoutes } from "./admin-stripe";
+import { verifyCfAccessJwt } from "../services/cf-access";
 
 // --- garde d'authentification -------------------------------------------------
 
@@ -330,12 +331,20 @@ export function guard(inner: Handler): Handler {
       if (ok) return handler(req, env, params, url, ctx);
       return apiError(401, "non autorisé");
     }
-    if (req.headers.get("cf-access-jwt-assertion")) {
-      REQUEST_KIND.set(req, "access");
-      return handler(req, env, params, url, ctx);
+    // 3) Cloudflare Access : le jeton n'ouvre la porte que s'il est AUTHENTIQUE
+    //    (signature, émetteur, audience, expiration — src/services/cf-access.ts).
+    //    Avant l'audit du 17/10, la simple présence de l'en-tête suffisait.
+    const accessJwt = req.headers.get("cf-access-jwt-assertion");
+    if (accessJwt) {
+      const who = await verifyCfAccessJwt(env, accessJwt);
+      if (who) {
+        REQUEST_USER.set(req, `access:${who.slice(0, 80)}`);
+        REQUEST_KIND.set(req, "access");
+        return handler(req, env, params, url, ctx);
+      }
     }
 
-    // 3) Sans secret : fail-closed tant qu'aucun compte n'existe en base ;
+    // 4) Sans secret : fail-closed tant qu'aucun compte n'existe en base ;
     //    401 (→ page de login) dès que le verrou vit en base.
     const hasUsers = await env.DB.prepare("SELECT 1 FROM admin_users WHERE active = 1 LIMIT 1").first();
     if (hasUsers) return apiError(401, "non autorisé");
@@ -343,23 +352,40 @@ export function guard(inner: Handler): Handler {
   };
 }
 
-/** Échecs de connexion tolérés sur 15 minutes avant le blocage (429). Par
- *  identifiant : assez pour quelques fautes de frappe, trop peu pour deviner
- *  un mot de passe. Par adresse : plus large (plusieurs personnes derrière une
- *  même box), il arrête l'essai d'identifiants en série. */
-export const LOGIN_MAX_FAILURES_PER_USER = 10;
+/** Essais de connexion tolérés sur 15 minutes avant le blocage (429).
+ *  - par identifiant ET adresse : assez pour quelques fautes de frappe ;
+ *  - par adresse : plus large (une box partagée), il arrête l'essai
+ *    d'identifiants en série ;
+ *  - par identifiant, toutes adresses confondues : très large, il borne une
+ *    attaque répartie sur beaucoup d'adresses sans laisser un inconnu verrouiller
+ *    le compte de quelqu'un avec dix essais. */
+export const LOGIN_MAX_FAILURES_PER_USER_IP = 10;
 export const LOGIN_MAX_FAILURES_PER_IP = 30;
+export const LOGIN_MAX_FAILURES_PER_USER = 100;
 
-async function loginFailures(db: D1Database, entity: string, ip: string | null): Promise<{ user: number; ip: number }> {
+/** Inscrit l'essai (login.failed par défaut) puis compte les échecs récents,
+ *  l'essai compris. */
+async function startLoginAttempt(db: D1Database, entity: string, ip: string | null): Promise<{ id: number; throttled: boolean }> {
+  const ins = await db
+    .prepare("INSERT INTO audit_log (actor, action, entity, detail) VALUES ('admin', 'login.failed', ?1, ?2)")
+    .bind(entity, JSON.stringify({ ip }))
+    .run();
+  const id = Number(ins.meta.last_row_id);
   const row = await db
     .prepare(
       "SELECT COALESCE(SUM(CASE WHEN entity = ?1 THEN 1 ELSE 0 END), 0) AS by_user, " +
-        "COALESCE(SUM(CASE WHEN ?2 IS NOT NULL AND json_extract(detail, '$.ip') = ?2 THEN 1 ELSE 0 END), 0) AS by_ip " +
+        "COALESCE(SUM(CASE WHEN ?2 IS NOT NULL AND json_extract(detail, '$.ip') = ?2 THEN 1 ELSE 0 END), 0) AS by_ip, " +
+        "COALESCE(SUM(CASE WHEN entity = ?1 AND ?2 IS NOT NULL AND json_extract(detail, '$.ip') = ?2 THEN 1 ELSE 0 END), 0) AS by_pair " +
         "FROM audit_log WHERE action = 'login.failed' AND created_at > datetime('now', '-15 minutes')",
     )
     .bind(entity, ip)
-    .first<{ by_user: number; by_ip: number }>();
-  return { user: Number(row?.by_user ?? 0), ip: Number(row?.by_ip ?? 0) };
+    .first<{ by_user: number; by_ip: number; by_pair: number }>();
+  const byUser = Number(row?.by_user ?? 0);
+  const byIp = Number(row?.by_ip ?? 0);
+  // Sans adresse connue (cas théorique), l'identifiant seul sert de couple.
+  const byPair = ip ? Number(row?.by_pair ?? 0) : byUser;
+  const throttled = byPair > LOGIN_MAX_FAILURES_PER_USER_IP || byIp > LOGIN_MAX_FAILURES_PER_IP || byUser > LOGIN_MAX_FAILURES_PER_USER;
+  return { id, throttled };
 }
 
 /** Pourcentage de remise borné à [0,100] — une saisie « 150 » au lieu de « 15 »
@@ -632,15 +658,19 @@ export function registerAdminRoutes(router: Router): void {
 
     // Frein aux essais en série (audit de sécurité du 17/10) : sans lui, rien
     // n'empêchait de tenter des milliers de mots de passe sur un identifiant
-    // connu. Les échecs sont déjà journalisés (login.failed) : on les compte
-    // sur 15 minutes, par identifiant et par adresse, AVANT de vérifier le mot
-    // de passe — pendant le blocage, même le bon mot de passe attend.
+    // connu. L'essai est inscrit AVANT la vérification (login.failed, rectifié
+    // en login.ok s'il réussit) puis compté : une rafale parallèle se voit
+    // elle-même et ne passe pas sous le compteur. Pendant le blocage, même le
+    // bon mot de passe attend ; l'essai refusé n'est pas gardé (pas de journal
+    // qui grossit sans fin sous une attaque).
     const ip = req.headers.get("cf-connecting-ip")?.trim() || null;
-    const failures = await loginFailures(env.DB, `user:${user.slice(0, 40)}`, ip);
-    if (failures.user >= LOGIN_MAX_FAILURES_PER_USER || failures.ip >= LOGIN_MAX_FAILURES_PER_IP) {
-      await audit(env.DB, "admin", "login.throttled", `user:${user.slice(0, 40)}`, { ip, failuresUser: failures.user, failuresIp: failures.ip });
+    const entity = `user:${user.slice(0, 40)}`;
+    const attempt = await startLoginAttempt(env.DB, entity, ip);
+    if (attempt.throttled) {
+      await env.DB.prepare("DELETE FROM audit_log WHERE id = ?1").bind(attempt.id).run();
       return apiError(429, "trop d'essais de connexion — réessayez dans un quart d'heure", { code: "login_throttled" });
     }
+    const succeeded = () => env.DB.prepare("UPDATE audit_log SET action = 'login.ok' WHERE id = ?1").bind(attempt.id).run();
 
     // 1) Comptes en base (gérés par la page Utilisateurs) → session de 30 jours.
     const row = await env.DB.prepare("SELECT id, username, password_hash, active FROM admin_users WHERE username = ?")
@@ -649,23 +679,24 @@ export function registerAdminRoutes(router: Router): void {
     if (row) {
       if (!row.active) return apiError(401, "compte désactivé");
       if (!(await verifyPassword(password, row.password_hash))) {
-        await audit(env.DB, "admin", "login.failed", `user:${row.username}`, { ip });
         return apiError(401, "identifiant ou mot de passe incorrect");
       }
       const session = await createSession(env.DB, row.id);
-      await audit(env.DB, "admin", "login.ok", `user:${row.username}`);
+      await succeeded();
       return json({ ok: true, user: row.username, session });
     }
 
     // 2) Accès de secours : secret ADMIN_TOKEN (pas de session — le navigateur
     //    conserve id:mdp et la garde le revérifie à chaque requête).
     const raw = env.ADMIN_TOKEN?.trim();
-    if (raw && checkCredentials(raw, user, password)) return json({ ok: true, user });
+    if (raw && checkCredentials(raw, user, password)) {
+      await succeeded();
+      return json({ ok: true, user });
+    }
     if (!raw) {
       const hasUsers = await env.DB.prepare("SELECT 1 FROM admin_users LIMIT 1").first();
       if (!hasUsers) return apiError(503, "ADMIN_TOKEN non configuré — accès refusé (fail-closed)");
     }
-    await audit(env.DB, "admin", "login.failed", `user:${user.slice(0, 40)}`, { ip });
     return apiError(401, "identifiant ou mot de passe incorrect");
   });
 

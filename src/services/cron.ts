@@ -24,7 +24,7 @@ import {
   listProperties,
 } from "../db/repo";
 import { beds24Configured } from "./beds24";
-import { purgeExpiredSessions } from "./admin-auth";
+import { purgeAuditIps, purgeExpiredSessions } from "./admin-auth";
 import { pullChannelMessages } from "./beds24-messages";
 import { pullMailbox } from "./mailbox";
 import { pullBeds24Bookings, pushCalendars } from "./beds24-sync";
@@ -110,6 +110,7 @@ export async function runScheduled(env: Env, now: Date = new Date(), fetcher: ty
   // 1 ter. Sessions du back-office expirées — simple ménage.
   try {
     await purgeExpiredSessions(db);
+    await purgeAuditIps(db);
   } catch (e) {
     await audit(db, "cron", "sessions.purge.error", undefined, { error: e instanceof Error ? e.message : String(e) });
   }
