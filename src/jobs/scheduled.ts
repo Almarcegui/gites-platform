@@ -5,7 +5,7 @@
 // Le lot 2 vit à part pour ne pas toucher au cron des services, entretenu en
 // parallèle sur une autre branche.
 import { todayInZone } from "../core/dates";
-import { runScheduled } from "../services/cron";
+import { inBeds24QuietWindow, runScheduled } from "../services/cron";
 import { audit } from "../db/repo";
 import { syncAllCleaningTasks } from "../db/tasks";
 import { pullChannelReviews } from "../services/beds24-reviews";
@@ -35,6 +35,7 @@ export async function runAllScheduled(env: Env, now: Date = new Date(), fetcher:
     await runScheduled(env, now, fetcher);
   } finally {
     await runLot2Scheduled(env, now);
-    await runLot3Scheduled(env, now);
+    // Les avis sont aussi des appels Beds24 : même fenêtre calme que le reste.
+    if (!inBeds24QuietWindow(now)) await runLot3Scheduled(env, now);
   }
 }

@@ -4,6 +4,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 import { createTestDb, type TestDb } from "./helpers/d1";
 import { Beds24Error, beds24Fetch, resetBeds24RetryState, resetBeds24TokenCache } from "../src/services/beds24";
 import { inBeds24QuietWindow } from "../src/services/cron";
+import { pushCalendars } from "../src/services/beds24-sync";
 
 let t: TestDb;
 beforeAll(async () => { t = await createTestDb(); });
@@ -69,23 +70,63 @@ describe("beds24Fetch — nouveaux essais sur panne réseau", () => {
     expect(waits).toEqual([]);
   });
 
-  it("POST par défaut : aucun nouvel essai (issue inconnue, peut avoir été appliqué)", async () => {
+  it("POST : aucun nouvel essai (issue inconnue, peut avoir été appliqué)", async () => {
     stub(() => down());
     const e = await beds24Fetch(env(), "/properties", { method: "POST", body: [{}], sleep }).catch((x) => x);
     expect(e).toMatchObject({ issue: "inconnu" });
     expect(calls).toHaveLength(1);
   });
 
-  it("POST avec retryNetwork (calendrier, état absolu) : rejoué sur panne réseau, jamais sur un 4xx", async () => {
+  it("un appel concurrent qui a épuisé ses essais coupe les attentes des autres", async () => {
+    stub(() => down());
+    await beds24Fetch(env(), "/bookings", { sleep }).catch(() => {});
+    waits.length = 0;
+    stub((n) => (n < 1 ? down() : ok()));
+    await beds24Fetch(env(), "/bookings", { sleep }).catch(() => {});
+    expect(waits).toEqual([]);
+  });
+
+  it("une réussite referme la pause : les essais reprennent", async () => {
+    stub(() => down());
+    await beds24Fetch(env(), "/bookings", { sleep }).catch(() => {});
+    resetBeds24RetryState();
+    stub((n) => (n < 1 ? down() : ok()));
+    await expect(beds24Fetch(env(), "/bookings", { sleep })).resolves.toEqual({ data: [] });
+    expect(waits.at(-1)).toBe(30_000);
+  });
+
+  it("corps non sérialisable : erreur immédiate, jamais rejouée, pas de pause de panne", async () => {
+    stub(() => ok());
+    const circulaire: Record<string, unknown> = {};
+    circulaire.self = circulaire;
+    await expect(beds24Fetch(env(), "/bookings", { method: "POST", body: circulaire, sleep })).rejects.toThrow();
+    expect(calls).toHaveLength(0);
+    stub((n) => (n < 1 ? down() : ok()));
+    await beds24Fetch(env(), "/bookings", { sleep });
+    expect(waits).toEqual([30_000]);
+  });
+
+  it("réponse 200 coupée pendant la lecture du corps : issue inconnue, jamais prise pour un succès", async () => {
+    const coupee = new ReadableStream({ start(c) { c.error(new TypeError("terminated")); } });
+    stub(() => new Response(coupee, { status: 200 }));
+    await expect(beds24Fetch(env(), "/bookings", { sleep })).rejects.toMatchObject({ issue: "inconnu", status: 200 });
+  });
+});
+
+describe("pushCalendars — rejeu sur panne réseau avec calendrier reconstruit", () => {
+  it("panne puis succès : deux POST, attente de 30 s, calendrier reconstruit à chaque essai", async () => {
     stub((n) => (n < 1 ? down() : new Response(JSON.stringify([{ modified: {} }]), { status: 200 })));
-    await beds24Fetch(env(), "/inventory/rooms/calendar", { method: "POST", body: [{ roomId: 1, calendar: [] }], retryNetwork: true, sleep });
+    const out = await pushCalendars(t.db, env(), 1, 7, { sleep });
     expect(calls.map((c) => c.method)).toEqual(["POST", "POST"]);
-    calls = [];
+    expect(waits).toEqual([30_000]);
+    expect(out.pushed.length).toBeGreaterThan(0);
+  });
+
+  it("refus 400 de Beds24 : un seul POST, aucun rejeu", async () => {
     stub(() => new Response(JSON.stringify({ error: "non" }), { status: 400 }));
-    await expect(
-      beds24Fetch(env(), "/inventory/rooms/calendar", { method: "POST", body: [{ roomId: 1, calendar: [] }], retryNetwork: true, sleep }),
-    ).rejects.toMatchObject({ status: 400 });
+    await expect(pushCalendars(t.db, env(), 1, 7, { sleep })).rejects.toMatchObject({ status: 400 });
     expect(calls).toHaveLength(1);
+    expect(waits).toEqual([]);
   });
 });
 

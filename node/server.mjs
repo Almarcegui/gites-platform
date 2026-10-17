@@ -371,19 +371,7 @@ const server = createServer(async (req, res) => {
     }
 
     // 5. Fichiers statiques.
-    //    Une adresse mal encodée (`/%c0`) fait lever URIError à decodeURIComponent :
-    //    c'est une erreur du visiteur (400), pas un incident du serveur — ni 500,
-    //    ni ligne `unhandled.error` dans le journal.
-    let file;
-    try {
-      file = resolveStatic(url.pathname);
-    } catch (e) {
-      if (e instanceof URIError) {
-        res.writeHead(400, { "content-type": "text/plain; charset=utf-8" }).end("adresse invalide");
-        return;
-      }
-      throw e;
-    }
+    const file = resolveStatic(url.pathname);
     if (file) {
       const headers = staticHeaders(file);
       res.writeHead(200, headers);
@@ -397,6 +385,14 @@ const server = createServer(async (req, res) => {
     }
     res.writeHead(404, { "content-type": "text/html; charset=utf-8" }).end("<h1>Page introuvable</h1>");
   } catch (e) {
+    // Une adresse mal encodée (`/%c0`, `/ical/%c0`) fait lever URIError à
+    // decodeURIComponent, dans le service des fichiers comme dans le routeur :
+    // c'est une erreur du visiteur (400), pas un incident du serveur — ni 500,
+    // ni ligne `unhandled.error` dans le journal.
+    if (e instanceof URIError) {
+      if (!res.headersSent) res.writeHead(400, { "content-type": "text/plain; charset=utf-8" }).end("adresse invalide");
+      return;
+    }
     console.error("[erreur]", req.method, url?.pathname, e instanceof Error ? e.stack : e);
     // Même filet qu'en Worker : la trace persiste en base, les logs d'un
     // hébergement mutualisé n'étant pas toujours consultables après coup.
