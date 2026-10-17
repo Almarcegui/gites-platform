@@ -134,6 +134,21 @@ describe("pullMailbox : import, curseur, idempotence", () => {
     expect(await listMessages(db, {})).toHaveLength(3);
   });
 
+  it("changement de dossier (IMAP_FOLDER) ou de boîte, même UIDVALIDITY : curseur remis à zéro", async () => {
+    const box = fakeMailbox([{ uid: 10, raw: simple(1) }, { uid: 11, raw: simple(2) }]);
+    await pullMailbox(envWith(box.fetch), NOW);
+    expect(await getMailboxState(db)).toMatchObject({ source: "lesgitesdupremore@gmail.com|INBOX", lastUid: 11 });
+    // un autre dossier, numéroté de 1, avec la même UIDVALIDITY : rien ne doit être sauté
+    box.state.mails = [{ uid: 1, raw: simple(5) }, { uid: 2, raw: simple(6) }];
+    const r = await pullMailbox(envWith(box.fetch, { IMAP_FOLDER: "Gites" }), NOW);
+    expect(box.state.calls[1]).toMatchObject({ uidValidity: null, lastUid: null, sinceDays: 14 });
+    expect(r).toMatchObject({ fetched: 2, imported: 2 });
+    expect(await getMailboxState(db)).toMatchObject({ source: "lesgitesdupremore@gmail.com|Gites", uidValidity: 1, lastUid: 2 });
+    // autre boîte : de même
+    await pullMailbox(envWith(box.fetch, { IMAP_USER: "autre+gites@gmail.com", IMAP_FOLDER: "Gites" }), NOW);
+    expect(box.state.calls[2]).toMatchObject({ uidValidity: null, lastUid: null });
+  });
+
   it("lots : trois lots de 40 au plus par passage, le reste au passage suivant", async () => {
     const mails = Array.from({ length: 130 }, (_, i) => ({ uid: i + 1, raw: simple(i + 1) }));
     const box = fakeMailbox(mails);
