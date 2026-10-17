@@ -76,6 +76,8 @@ function PropertyStripe({ p, settings }: { p: StripeProperty; settings: StripeSe
       </ul>
 
       <SegmentedControl
+        fullWidth
+        styles={{ label: { whiteSpace: "normal", lineHeight: 1.25 } }}
         value={mode}
         onChange={(v) => setMode(v === "live" ? "live" : "test")}
         data={[
