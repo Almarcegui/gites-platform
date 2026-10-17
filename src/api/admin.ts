@@ -357,8 +357,17 @@ function pctOrNull(v: unknown): number | null {
 /** Vrai si la valeur fournie est un pourcentage hors bornes (refus en 400). */
 function badPct(v: unknown): boolean {
   if (v == null) return false;
+  if (typeof v === "string" && v.trim() === "") return true; // champ vidé : jamais « 0 % »
   const n = Number(v);
   return !Number.isFinite(n) || n < 0 || n > 100;
+}
+
+/** Vrai si une valeur fournie n'est pas un entier ≥ min (champ vidé, lettres, décimale, négatif). */
+function badWhole(v: unknown, min: number, max = Number.MAX_SAFE_INTEGER): boolean {
+  if (v == null) return false;
+  if (typeof v === "string" && v.trim() === "") return true;
+  const n = Number(v);
+  return !Number.isInteger(n) || n < min || n > max;
 }
 
 function intParam(v: string | null | undefined, fallback: number): number {
@@ -2408,8 +2417,14 @@ export function registerAdminRoutes(router: Router): void {
     if (!id || !body) return apiError(400, "requête invalide");
     if (body.dateStart !== undefined && !isIsoDate(String(body.dateStart))) return apiError(400, "dateStart invalide");
     if (body.dateEnd !== undefined && !isIsoDate(String(body.dateEnd))) return apiError(400, "dateEnd invalide");
+    if (body.name !== undefined && !String(body.name).trim()) return apiError(400, "nom de la saison requis");
+    if (body.dateStart !== undefined || body.dateEnd !== undefined) {
+      const cur = await env.DB.prepare("SELECT date_start, date_end FROM seasons WHERE id = ?1").bind(id).first<{ date_start: string; date_end: string }>();
+      if (!cur) return apiError(404, "saison inconnue");
+      if (String(body.dateStart ?? cur.date_start) > String(body.dateEnd ?? cur.date_end)) return apiError(400, "la saison doit commencer avant sa fin (début ≤ fin)");
+    }
     await updateSeason(env.DB, id, {
-      name: body.name !== undefined ? String(body.name) : undefined,
+      name: body.name !== undefined ? String(body.name).trim() : undefined,
       dateStart: body.dateStart !== undefined ? String(body.dateStart) : undefined,
       dateEnd: body.dateEnd !== undefined ? String(body.dateEnd) : undefined,
       priority: body.priority !== undefined ? Math.floor(Number(body.priority)) : undefined,
@@ -2438,6 +2453,7 @@ export function registerAdminRoutes(router: Router): void {
     if (!body || !body.unitId) return apiError(400, "unitId requis");
     // Garde-fou : prix strictement positif ET dans les bornes de l'hébergement
     // (issue #50 / #31). Même règle qu'au PATCH, appliquée au même endroit.
+    if (badWhole(body.holidayPct, 0, 200)) return apiError(400, "majoration des fériés : un pourcentage entier de 0 à 200");
     const bounds = await boundsForUnit(env.DB, Number(body.unitId));
     const week = checkPrice(body.priceWeekCents, bounds, "prix semaine");
     if (!week.ok) return apiError(400, week.message);
@@ -2474,6 +2490,7 @@ export function registerAdminRoutes(router: Router): void {
     // sur Airbnb et Booking. Le trou se ferme ici, avant toute écriture.
     const rule = await getRateRule(env.DB, id);
     if (!rule) return apiError(404, "règle tarifaire inconnue");
+    if (badWhole(body.holidayPct, 0, 200)) return apiError(400, "majoration des fériés : un pourcentage entier de 0 à 200");
     const bounds = await boundsForUnit(env.DB, rule.unitId);
     let priceWeek: number | undefined;
     let priceWeekend: number | undefined;
@@ -2528,6 +2545,7 @@ export function registerAdminRoutes(router: Router): void {
     if (kind !== "code" && body.threshold == null) return apiError(400, "seuil requis pour une remise automatique");
     if (body.discountPct == null && body.discountCents == null) return apiError(400, "remise % ou montant requis");
     if (badPct(body.discountPct)) return apiError(400, "remise en % hors bornes (0 à 100)");
+    if (badWhole(body.threshold, 0)) return apiError(400, "seuil : un nombre entier, au moins 0");
     const id = await createPromotion(env.DB, propertyId, {
       kind: kind as PromotionInput["kind"],
       code: kind === "code" ? String(body.code).trim() : null,
@@ -2549,6 +2567,7 @@ export function registerAdminRoutes(router: Router): void {
     const body = await readJson<Partial<PromotionInput>>(req);
     if (!id || !body) return apiError(400, "requête invalide");
     if (badPct(body.discountPct)) return apiError(400, "remise en % hors bornes (0 à 100)");
+    if (badWhole(body.threshold, 0)) return apiError(400, "seuil : un nombre entier, au moins 0");
     await updatePromotion(env.DB, id, {
       code: body.code !== undefined ? String(body.code).trim() : undefined,
       label: body.label !== undefined ? String(body.label).trim() : undefined,
@@ -2604,6 +2623,11 @@ export function registerAdminRoutes(router: Router): void {
     const id = intParam(p.id, 0);
     const body = await readJson<Partial<OptionInput>>(req);
     if (!id || !body) return apiError(400, "requête invalide");
+    if (body.name !== undefined && !String(body.name).trim()) return apiError(400, "nom de l'option requis");
+    if (body.priceCents != null) {
+      const blank = String(body.priceCents).trim() === "";
+      if (blank || !Number.isFinite(Number(body.priceCents)) || Number(body.priceCents) < 0) return apiError(400, "prix de l'option : un montant positif ou nul");
+    }
     await updateOption(env.DB, id, {
       name: body.name !== undefined ? String(body.name).trim() : undefined,
       pricingMode: body.pricingMode,

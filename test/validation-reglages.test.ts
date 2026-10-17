@@ -83,3 +83,42 @@ describe("PATCH /api/admin/units/:id : un bien garde un nom, une capacité, un m
     expect(after.capacityMax).toBe(u.capacityMax + 1);
   });
 });
+
+describe("saisons, règles, remises, options : un champ vidé ou absurde est refusé", () => {
+  const first = async (path: string, key: string) => (await call("GET", path)).data[key][0];
+
+  it("saison : nom vidé et dates à l'envers refusés, la saison reste intacte", async () => {
+    const before = await first("/api/admin/seasons?property=1", "seasons");
+    expect((await call("PATCH", `/api/admin/seasons/${before.id}`, { name: " " })).status).toBe(400);
+    expect((await call("PATCH", `/api/admin/seasons/${before.id}`, { dateStart: "2099-01-01" })).status).toBe(400);
+    expect((await call("PATCH", `/api/admin/seasons/${before.id}`, { dateEnd: "1999-01-01" })).status).toBe(400);
+    expect(await first("/api/admin/seasons?property=1", "seasons")).toEqual(before);
+    expect((await call("PATCH", `/api/admin/seasons/${before.id}`, { name: ` ${before.name} ` })).status).toBe(200);
+  });
+
+  it("règle tarifaire : majoration des fériés négative ou vidée refusée", async () => {
+    const before = await first("/api/admin/rate-rules?property=1", "rules");
+    for (const holidayPct of [-50, "", 250, 2.5]) {
+      expect((await call("PATCH", `/api/admin/rate-rules/${before.id}`, { holidayPct })).status).toBe(400);
+    }
+    expect(await first("/api/admin/rate-rules?property=1", "rules")).toEqual(before);
+    expect((await call("PATCH", `/api/admin/rate-rules/${before.id}`, { holidayPct: 15 })).status).toBe(200);
+  });
+
+  it("remise : pourcentage vidé et seuil négatif refusés", async () => {
+    const before = await first("/api/admin/promotions?property=1", "promotions");
+    expect((await call("PATCH", `/api/admin/promotions/${before.id}`, { discountPct: "" })).status).toBe(400);
+    expect((await call("PATCH", `/api/admin/promotions/${before.id}`, { threshold: -4 })).status).toBe(400);
+    expect(await first("/api/admin/promotions?property=1", "promotions")).toEqual(before);
+    expect((await call("PATCH", `/api/admin/promotions/${before.id}`, { discountPct: before.discountPct })).status).toBe(200);
+  });
+
+  it("option : nom vidé, prix vidé ou négatif refusés", async () => {
+    const before = await first("/api/admin/options?property=1", "options");
+    for (const body of [{ name: "" }, { priceCents: "" }, { priceCents: "abc" }, { priceCents: -100 }]) {
+      expect((await call("PATCH", `/api/admin/options/${before.id}`, body)).status).toBe(400);
+    }
+    expect(await first("/api/admin/options?property=1", "options")).toEqual(before);
+    expect((await call("PATCH", `/api/admin/options/${before.id}`, { priceCents: before.priceCents })).status).toBe(200);
+  });
+});
