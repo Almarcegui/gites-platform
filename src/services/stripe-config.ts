@@ -14,7 +14,7 @@
 // par nature, montre ses quatre derniers caractères. Les sauvegardes (export SQL et
 // SQLite) en omettent les secrets.
 
-import { modeOfSecretKey, stripeConfigFromEnv, type StripeConfig } from "./stripe";
+import { modeOfSecretKey, stripeConfigFromEnv, stripeEnabled, type StripeConfig } from "./stripe";
 
 export interface PropertyStripeRow {
   propertyId: number;
@@ -238,3 +238,20 @@ export async function anyStripeConfigured(db: D1Database, env: Env): Promise<boo
   const r = await db.prepare("SELECT 1 AS x FROM property_stripe WHERE secret_key IS NOT NULL AND secret_key <> '' LIMIT 1").first();
   return !!r;
 }
+
+/** Le simulateur de paiement (`stub_…`, page /book/dev-pay.html) confirme une
+ *  réservation sans encaisser un centime. Il n'a sa place qu'en développement :
+ *  sur un site en https, il reste fermé sauf `ALLOW_STUB_PAYMENTS=true`. */
+export function stubPaymentsAllowed(env: Env): boolean {
+  return !/^https:/i.test(env.PUBLIC_BASE_URL ?? "") || env.ALLOW_STUB_PAYMENTS === "true";
+}
+
+/** Vrai quand le public ne peut PAS payer en ligne cette propriété : pas de clés
+ *  Stripe (ni propres, ni de repli) et simulateur fermé. */
+export async function publicPaymentUnavailable(db: D1Database, env: Env, propertyId: number | null | undefined): Promise<boolean> {
+  if (stubPaymentsAllowed(env)) return false;
+  return !stripeEnabled(await resolveStripeConfig(db, env, propertyId));
+}
+
+export const PAYMENT_UNAVAILABLE_MESSAGE =
+  "Le paiement en ligne n'est pas encore ouvert pour ce domaine. Contactez-nous pour réserver : nous finalisons votre réservation avec vous.";

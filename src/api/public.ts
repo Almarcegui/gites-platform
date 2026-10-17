@@ -71,7 +71,14 @@ import {
   stripePublishableKey,
   verifyStripeSignature,
 } from "../services/stripe";
-import { anyStripeConfigured, propertyIdOfPayment, resolveStripeConfig } from "../services/stripe-config";
+import {
+  anyStripeConfigured,
+  PAYMENT_UNAVAILABLE_MESSAGE,
+  propertyIdOfPayment,
+  publicPaymentUnavailable,
+  resolveStripeConfig,
+  stubPaymentsAllowed,
+} from "../services/stripe-config";
 import { processStripeEvent } from "../services/stripe-webhook";
 import { turnstileSiteKey, verifyTurnstile } from "../services/turnstile";
 import { registerTaskShareRoutes } from "./tasks-public";
@@ -144,8 +151,14 @@ function safeEqualKey(a: string, b: string): boolean {
 }
 
 function isEmailish(s: string): boolean {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(s);
+  return s.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(s);
 }
+
+/** Longueurs maximales des champs libres du formulaire public. Sans plafond, un
+ *  nom de 5 000 caractères était accepté, bloquait les dates et cassait la mise
+ *  en page du PDF et des mails. Très au-dessus de tout usage réel. */
+const MAX_FIELD = { name: 120, phone: 40, address: 300, country: 80, notes: 2000 } as const;
+const FIELD_TOO_LONG = "un des champs est trop long";
 
 /** Forme publique d'un démarrage de paiement (issue #26).
  *
@@ -734,6 +747,16 @@ export function registerPublicRoutes(router: Router): void {
     const email = String(guest.email ?? "").trim();
     if (lastName.length < 2) return apiError(400, "nom du client requis");
     if (!isEmailish(email)) return apiError(400, "email invalide");
+    if (
+      lastName.length > MAX_FIELD.name ||
+      String(guest.firstName ?? "").trim().length > MAX_FIELD.name ||
+      String(guest.phone ?? "").trim().length > MAX_FIELD.phone ||
+      String(guest.address ?? "").trim().length > MAX_FIELD.address ||
+      String(guest.country ?? "").trim().length > MAX_FIELD.country ||
+      String(body.notes ?? "").trim().length > MAX_FIELD.notes
+    ) {
+      return apiError(400, FIELD_TOO_LONG);
+    }
     if (body.cgvAccepted !== true) return apiError(400, "l'acceptation des conditions générales est requise");
 
     // --- anti-robot Turnstile (issue #6, second volet) ----------------------
@@ -848,6 +871,11 @@ export function registerPublicRoutes(router: Router): void {
     if (!ctx || !ctx.unit.active || !ctx.property.active) return apiError(404, "hébergement inconnu");
     if (stay.adults + stay.children > ctx.unit.capacityMax) {
       return apiError(400, `capacité dépassée (max ${ctx.unit.capacityMax} personnes)`);
+    }
+    // Avant de créer client ni réservation : sans clés Stripe, le paiement tomberait sur le
+    // simulateur, qui confirme la réservation sans encaisser.
+    if (await publicPaymentUnavailable(db, env, ctx.property.id)) {
+      return apiError(503, PAYMENT_UNAVAILABLE_MESSAGE, { code: "payment_unavailable" });
     }
 
     const quote = quoteFromContext(ctx, { ...body, ...stay }, today);
@@ -1149,6 +1177,7 @@ export function registerPublicRoutes(router: Router): void {
   // --- simulateur de paiement — MODE STUB UNIQUEMENT (pas de clé Stripe) -----
   router.get("/api/public/dev-pay/info", async (_req, env, _p, url) => {
     const session = url.searchParams.get("session") ?? "";
+    if (!stubPaymentsAllowed(env)) return apiError(404, "indisponible");
     const payment = await findPaymentBySession(env.DB, session);
     if (!payment) return apiError(404, "session inconnue");
     // Le simulateur n'existe que pour une propriété SANS compte Stripe.
@@ -1172,6 +1201,7 @@ export function registerPublicRoutes(router: Router): void {
     const body = await readJson<{ session?: string }>(req);
     const session = String(body?.session ?? "");
     if (!session.startsWith("stub_")) return apiError(400, "session invalide");
+    if (!stubPaymentsAllowed(env)) return apiError(404, "indisponible");
     const stubbed = await findPaymentBySession(env.DB, session);
     if (stubbed && stripeEnabled(await resolveStripeConfig(env.DB, env, await propertyIdOfPayment(env.DB, stubbed.id)))) {
       return apiError(404, "indisponible");
@@ -1204,6 +1234,7 @@ export function registerPublicRoutes(router: Router): void {
     const email = String(body.email ?? "").trim().toLowerCase();
     const message = String(body.message ?? "").trim();
     if (name.length < 2) return apiError(400, "nom requis");
+    if (name.length > MAX_FIELD.name) return apiError(400, FIELD_TOO_LONG);
     if (!isEmailish(email)) return apiError(400, "email invalide");
     if (message.length < 5 || message.length > 4000) return apiError(400, "message trop court ou trop long");
     const property = await getProperty(db, body.property ?? "");
@@ -1289,6 +1320,9 @@ export function registerPublicRoutes(router: Router): void {
     const body = await readJson<{ email?: string; cgvAccepted?: boolean }>(req);
     const booking = await authedBooking(db, p.reference ?? "", String(body?.email ?? "").trim());
     if (!booking) return apiError(404, "réservation introuvable");
+    if (await publicPaymentUnavailable(db, env, booking.propertyId)) {
+      return apiError(503, PAYMENT_UNAVAILABLE_MESSAGE, { code: "payment_unavailable" });
+    }
 
     const balance = booking.totalCents - booking.paidCents;
     if (booking.status === "confirmed") {
