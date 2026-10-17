@@ -679,6 +679,10 @@ msgstr "{dueCount} dossiers"
 msgid "{free} nuits libres"
 msgstr "{free} nuits libres"
 
+#: src/pages/settings/Shortcode.tsx
+msgid "{label} copié."
+msgstr "{label} copié."
+
 #: src/pages/settings/Tarifs.tsx
 msgid "{missing} nuits sans prix en {year} : elles ne se vendent pas."
 msgstr "{missing} nuits sans prix en {year} : elles ne se vendent pas."
@@ -952,6 +956,10 @@ msgstr "À répondre ({0})"
 msgid "à trancher"
 msgstr "à trancher"
 
+#: src/pages/settings/Shortcode.tsx
+msgid "À utiliser dans une page ou un article WordPress, une fois la fonction PHP collée dans le thème (voir la doc)."
+msgstr "À utiliser dans une page ou un article WordPress, une fois la fonction PHP collée dans le thème (voir la doc)."
+
 #: src/pages/Bookings.tsx
 msgid "À venir"
 msgstr "À venir"
@@ -1009,6 +1017,7 @@ msgstr "active"
 #: src/pages/settings/Clients.tsx
 #: src/pages/settings/Domain.tsx
 #: src/pages/settings/Improvements.tsx
+#: src/pages/settings/Shortcode.tsx
 msgid "Adresse"
 msgstr "Adresse"
 
@@ -3005,6 +3014,10 @@ msgstr "Dates bloquées"
 msgid "Dates cherchées sans réponse"
 msgstr "Dates cherchées sans réponse"
 
+#: src/pages/settings/Shortcode.tsx
+msgid "Dates d'arrivée et de départ proposées d'avance (AAAA-MM-JJ)."
+msgstr "Dates d'arrivée et de départ proposées d'avance (AAAA-MM-JJ)."
+
 #: src/pages/settings/Import.tsx
 msgid "dates déjà prises"
 msgstr "dates déjà prises"
@@ -3336,6 +3349,10 @@ msgstr "Elles apparaîtront ici, dans le calendrier et dans Réservations dès q
 #: src/pages/settings/ChannelPrices.tsx
 msgid "Elles s'appliquent à toutes les annonces Airbnb de ce domaine, par Beds24, dès réception."
 msgstr "Elles s'appliquent à toutes les annonces Airbnb de ce domaine, par Beds24, dès réception."
+
+#: src/pages/settings/Shortcode.tsx
+msgid "Elles se collent dans le shortcode, séparées par des espaces : [gites_reservation option=\"valeur\"]."
+msgstr "Elles se collent dans le shortcode, séparées par des espaces : [gites_reservation option=\"valeur\"]."
 
 #. placeholder {0}: year - 1
 #: src/pages/settings/Stats.tsx
@@ -3780,6 +3797,10 @@ msgstr "Frais Stripe"
 msgid "français"
 msgstr "français"
 
+#: src/pages/settings/Shortcode.tsx
+msgid "Français"
+msgstr "Français"
+
 #: src/pages/settings/Tarifs.tsx
 msgid "garde son prix de base."
 msgstr "garde son prix de base."
@@ -4028,6 +4049,10 @@ msgstr "Julien : l'écran, les prix, les accès, Airbnb, Booking et Beds24."
 msgid "jusqu'au {0}"
 msgstr "jusqu'au {0}"
 
+#: src/pages/settings/Shortcode.tsx
+msgid "L'adresse du tunnel"
+msgstr "L'adresse du tunnel"
+
 #: src/pages/settings/Ical.tsx
 msgid "L'adresse n'a pas pu être copiée : sélectionnez-la et copiez-la à la main."
 msgstr "L'adresse n'a pas pu être copiée : sélectionnez-la et copiez-la à la main."
@@ -4089,6 +4114,10 @@ msgstr "L'exploitant"
 msgid "L'export n'a pas pu être préparé."
 msgstr "L'export n'a pas pu être préparé."
 
+#: src/pages/settings/Shortcode.tsx
+msgid "L'hébergement présélectionné quand il y en a plusieurs."
+msgstr "L'hébergement présélectionné quand il y en a plusieurs."
+
 #: src/pages/settings/ClientHistory.tsx
 msgid "L'historique n'a pas pu être lu. Fermez la fiche et réessayez."
 msgstr "L'historique n'a pas pu être lu. Fermez la fiche et réessayez."
@@ -4134,9 +4163,17 @@ msgstr "La fiche n'a pas pu être lue. Fermez-la et réessayez."
 msgid "La fin doit venir après le début."
 msgstr "La fin doit venir après le début."
 
+#: src/pages/settings/Shortcode.tsx
+msgid "La hauteur de l'iframe en pixels (1400 par défaut). À agrandir si le tunnel déborde."
+msgstr "La hauteur de l'iframe en pixels (1400 par défaut). À agrandir si le tunnel déborde."
+
 #: src/pages/Today.tsx
 msgid "La journée"
 msgstr "La journée"
+
+#: src/pages/settings/Shortcode.tsx
+msgid "La langue du tunnel : fr ou nl. Sans elle, la langue de l'appareil du visiteur."
+msgstr "La langue du tunnel : fr ou nl. Sans elle, la langue de l'appareil du visiteur."
 
 #: src/pages/settings/ChannelPrices.tsx
 msgid "La liaison avec Beds24 n'est pas en place : rétablissez-la d'abord sur l'écran Plateformes."
@@ -4250,6 +4287,10 @@ msgstr "Langue"
 msgid "Langue de l'écran"
 msgstr "Langue de l'écran"
 
+#: src/pages/settings/Shortcode.tsx
+msgid "Langue du tunnel"
+msgstr "Langue du tunnel"
+
 #: src/pages/settings/Improvements.tsx
 msgid "Largeur d'écran"
 msgstr "Largeur d'écran"
@@ -4328,6 +4369,10 @@ msgstr "Le code d'invitation ne semble pas autoriser l'écriture des propriété
 msgid "Le code n'a pas été accepté ({0}) Vérifiez qu'il est complet et qu'il n'a pas déjà servi, ou créez-en un nouveau."
 msgstr "Le code n'a pas été accepté ({0}) Vérifiez qu'il est complet et qu'il n'a pas déjà servi, ou créez-en un nouveau."
 
+#: src/pages/settings/Shortcode.tsx
+msgid "Le code n'a pas pu être copié : sélectionnez-le et copiez-le à la main."
+msgstr "Le code n'a pas pu être copié : sélectionnez-le et copiez-le à la main."
+
 #: src/pages/settings/Channels.tsx
 msgid "Le code ne sert qu'une fois : il est échangé contre un accès durable, gardé par le serveur. Il n'y a rien d'autre à faire."
 msgstr "Le code ne sert qu'une fois : il est échangé contre un accès durable, gardé par le serveur. Il n'y a rien d'autre à faire."
@@ -4354,6 +4399,11 @@ msgstr "Le domaine"
 #: src/pages/settings/Domain.tsx
 msgid "Le domaine et les biens"
 msgstr "Le domaine et les biens"
+
+#. placeholder {0}: property?.name ?? "—"
+#: src/pages/settings/Shortcode.tsx
+msgid "Le domaine qui reçoit la réservation (ici : {0})."
+msgstr "Le domaine qui reçoit la réservation (ici : {0})."
 
 #: src/pages/Messages.tsx
 msgid "Le fil de la conversation n'a pas pu être lu. Rechargez la page avant de répondre."
@@ -4416,6 +4466,14 @@ msgstr "Le mois en chiffres"
 msgid "le mot affiché sur la puce, par exemple : Accès et clés"
 msgstr "le mot affiché sur la puce, par exemple : Accès et clés"
 
+#: src/pages/Settings.tsx
+msgid "Le moteur de réservation à intégrer dans une page WordPress, avec ses options"
+msgstr "Le moteur de réservation à intégrer dans une page WordPress, avec ses options"
+
+#: src/pages/settings/Shortcode.tsx
+msgid "Le moteur de réservation de votre site, à intégrer dans une page WordPress. Copiez le code ci-dessous ; la marche à suivre complète est dans docs/integration-wordpress.md."
+msgstr "Le moteur de réservation de votre site, à intégrer dans une page WordPress. Copiez le code ci-dessous ; la marche à suivre complète est dans docs/integration-wordpress.md."
+
 #: src/sale/SaleFlow.tsx
 msgid "Le nom du client est nécessaire."
 msgstr "Le nom du client est nécessaire."
@@ -4474,6 +4532,10 @@ msgstr "Le réserver bloque aussi"
 #: src/api/client.ts
 msgid "Le serveur n'a pas pu le faire. Rien n'a été changé ; réessayez dans un instant."
 msgstr "Le serveur n'a pas pu le faire. Rien n'a été changé ; réessayez dans un instant."
+
+#: src/pages/settings/Shortcode.tsx
+msgid "Le shortcode"
+msgstr "Le shortcode"
 
 #. placeholder {0}: longDate(o.balanceDueDate)
 #: src/pages/Today.tsx
@@ -4639,6 +4701,10 @@ msgstr "Les modèles n'ont pas pu être lus."
 #: src/messages/TemplateChips.tsx
 msgid "Les modèles n'ont pas pu être lus. Vous pouvez écrire sans."
 msgstr "Les modèles n'ont pas pu être lus. Vous pouvez écrire sans."
+
+#: src/pages/settings/Shortcode.tsx
+msgid "Les options"
+msgstr "Les options"
 
 #: src/pages/settings/Options.tsx
 msgid "Les options n'ont pas pu être lues."
@@ -5216,6 +5282,10 @@ msgstr "né(e) le {0}, {1}, {2} {3}"
 msgid "néerlandais"
 msgstr "néerlandais"
 
+#: src/pages/settings/Shortcode.tsx
+msgid "Néerlandais"
+msgstr "Néerlandais"
+
 #: src/pages/settings/Encaissements.tsx
 msgid "Net"
 msgstr "Net"
@@ -5270,6 +5340,10 @@ msgstr "Nom, mail, téléphone ou référence"
 #: src/pages/settings/Stats.tsx
 msgid "Nombre"
 msgstr "Nombre"
+
+#: src/pages/settings/Shortcode.tsx
+msgid "Nombre d'adultes et d'enfants proposés d'avance."
+msgstr "Nombre d'adultes et d'enfants proposés d'avance."
 
 #: src/pages/settings/Promotions.tsx
 msgid "Nombre d'utilisations au plus"
@@ -6056,6 +6130,10 @@ msgstr "Pour qui"
 #: src/pages/settings/Logs.tsx
 msgid "Pour retrouver qui a fait quoi, et ce qui a été écrit aux clients."
 msgstr "Pour retrouver qui a fait quoi, et ce qui a été écrit aux clients."
+
+#: src/pages/settings/Shortcode.tsx
+msgid "Pour un bloc HTML WordPress sans PHP, ou tout autre site : cette adresse s'incruste dans une iframe. Elle accepte les mêmes options."
+msgstr "Pour un bloc HTML WordPress sans PHP, ou tout autre site : cette adresse s'incruste dans une iframe. Elle accepte les mêmes options."
 
 #: src/pages/settings/Domain.tsx
 msgid "Pour un fichier déjà sur le site (dossier des images, préparé par le script d'optimisation)."
@@ -7131,6 +7209,15 @@ msgstr "Ses prix disparaissent pour tous les biens ; ces jours-là reviennent au
 #: src/pages/settings/Domain.tsx
 msgid "Ses propres prix"
 msgstr "Ses propres prix"
+
+#: src/pages/settings/Shortcode.tsx
+msgid "Shortcode"
+msgstr "Shortcode"
+
+#: src/pages/Settings.tsx
+#: src/pages/settings/Shortcode.tsx
+msgid "Shortcode WordPress"
+msgstr "Shortcode WordPress"
 
 #: src/pages/settings/Help.tsx
 msgid "Si une bande rouge apparaît en haut d'Aujourd'hui, quelque chose ne passe plus : lisez-la, elle dit quoi faire."
