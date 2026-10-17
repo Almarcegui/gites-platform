@@ -3,7 +3,7 @@
 // Le registre est un journal : une correction ajoute une ligne qui remplace
 // la précédente, rien ne s'efface à la main.
 import { Trans, useLingui } from "@lingui/react/macro";
-import { NumberInput, Select, TextInput } from "@mantine/core";
+import { NumberInput, TextInput } from "@mantine/core";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 
@@ -12,6 +12,7 @@ import type { Booking } from "../api/types";
 import type { RegisterEntry, RegisterResponse } from "../api/types2";
 import { ErrorLine, useAction } from "../lib/action";
 import { Box } from "../ui/kit";
+import { Choix } from "../ui/Choix";
 
 type Draft = Omit<RegisterEntry, "id" | "recordedBy" | "recordedAt" | "supersedesId" | "supersededById">;
 
@@ -94,7 +95,7 @@ function EntryBox({ b, r, count, fix, firstPrefill, onClose }: { b: Booking; r: 
             <TextInput size="md" label={t`Prénom`} value={x.firstName} onChange={(e) => set(i, { firstName: e.currentTarget.value })} />
             <TextInput size="md" type="date" label={t`Date de naissance`} value={x.birthDate} onChange={(e) => set(i, { birthDate: e.currentTarget.value })} />
             <TextInput size="md" label={t`Nationalité`} value={x.nationality} onChange={(e) => set(i, { nationality: e.currentTarget.value })} />
-            <Select size="md" label={t`Pièce d'identité`} allowDeselect={false} value={x.idType} onChange={(v) => set(i, { idType: v ?? x.idType })} data={r.idTypes} />
+            <Choix size="md" label={t`Pièce d'identité`} allowDeselect={false} value={x.idType} onChange={(v) => set(i, { idType: v ?? x.idType })} data={r.idTypes} />
             <TextInput size="md" label={t`Numéro de la pièce`} value={x.idNumber} onChange={(e) => set(i, { idNumber: e.currentTarget.value })} />
             <TextInput size="md" type="date" label={t`Arrivée`} value={x.arrivalDate} onChange={(e) => set(i, { arrivalDate: e.currentTarget.value })} />
             <TextInput size="md" type="date" label={t`Départ`} value={x.departureDate} onChange={(e) => set(i, { departureDate: e.currentTarget.value })} />

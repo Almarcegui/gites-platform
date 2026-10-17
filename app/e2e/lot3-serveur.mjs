@@ -110,7 +110,7 @@ try {
 
   // Les ménages se dérivent des départs au passage du cron.
   await fetch(`${BASE}/internal/cron?key=cle-du-parcours-lot3`);
-  const args = ["playwright", "test", "e2e/lot3.spec.ts", ...process.argv.slice(2)];
+  const args = ["playwright", "test", process.env.SPEC ?? "e2e/lot3.spec.ts", ...process.argv.slice(2)];
   const r = spawnSync("npx", args, { cwd: APP, stdio: "inherit", env: { ...process.env, GITES_URL: BASE, PILOTE_PASSWORD: u.password } });
   code = r.status ?? 1;
 } catch (e) {

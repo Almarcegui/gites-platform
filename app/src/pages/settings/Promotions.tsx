@@ -1,7 +1,7 @@
 // Remises et codes promo — l'ancien « Promotions », en phrases. Une ligne
 // ouvre sa fiche en panneau latéral ; un panneau en saisie ne se ferme pas seul.
 import { Trans, useLingui } from "@lingui/react/macro";
-import { NumberInput, Select, Switch, TextInput } from "@mantine/core";
+import { NumberInput, Switch, TextInput } from "@mantine/core";
 import { IconPlus } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
@@ -12,6 +12,7 @@ import { ErrorLine, useAction } from "../../lib/action";
 import { longDate } from "../../lib/dates";
 import { eur } from "../../lib/money";
 import { Confirm, Empty, Loading, Page, parseEuros, Section, SidePanel, useWorkingProperty } from "../../ui/kit";
+import { Choix } from "../../ui/Choix";
 
 type Kind = Promotion["kind"];
 
@@ -158,7 +159,7 @@ function PromoPanel({ propertyId, promo, kind: kind0, onClose }: { propertyId: n
       more={promo ? [{ label: t`Supprimer`, danger: true, onClick: () => setAsking(true) }] : []}
     >
       {!promo && !isCode ? (
-        <Select
+        <Choix
           size="md"
           label={t`Type de remise`}
           allowDeselect={false}

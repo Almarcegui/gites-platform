@@ -1,7 +1,7 @@
 // Options payantes (sauna, bain chaud, linge…) : une ligne par option, sa
 // fiche en panneau latéral.
 import { Trans, useLingui } from "@lingui/react/macro";
-import { NumberInput, Select, Switch, TextInput } from "@mantine/core";
+import { NumberInput, Switch, TextInput } from "@mantine/core";
 import { IconPlus } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
@@ -11,6 +11,7 @@ import type { OptionRow, PricingMode } from "../../api/types2";
 import { ErrorLine, useAction } from "../../lib/action";
 import { eur } from "../../lib/money";
 import { Confirm, Empty, Loading, Page, parseEuros, Section, SidePanel, useWorkingProperty } from "../../ui/kit";
+import { Choix } from "../../ui/Choix";
 
 function useModeName() {
   const { t } = useLingui();
@@ -109,7 +110,7 @@ function OptionPanel({ propertyId, option, onClose }: { propertyId: number; opti
       <TextInput size="md" label={t`Nom`} placeholder={t`Par exemple : Panier petit-déjeuner`} value={v.name} onChange={(e) => setV({ ...v, name: e.currentTarget.value })} />
       <div className="grid2" style={{ marginTop: 12 }}>
         <NumberInput size="md" label={t`Prix (€)`} min={0} decimalScale={2} decimalSeparator="," value={v.price} onChange={(x) => setV({ ...v, price: x })} />
-        <Select
+        <Choix
           size="md"
           label={t`Compté`}
           allowDeselect={false}

@@ -2,7 +2,7 @@
 // avec où on en est. Changer l'état d'une ligne s'enregistre tout de suite ;
 // une ligne s'ouvre en panneau pour y ajouter une remarque.
 import { useLingui } from "@lingui/react/macro";
-import { Select, Textarea } from "@mantine/core";
+import { Textarea } from "@mantine/core";
 import { IconExternalLink } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
@@ -11,6 +11,7 @@ import { api } from "../../api/client";
 import type { ChecklistItem } from "../../api/types2";
 import { ErrorLine, useAction } from "../../lib/action";
 import { Loading, Page, Section, SidePanel } from "../../ui/kit";
+import { Choix } from "../../ui/Choix";
 
 type Status = ChecklistItem["status"];
 const DONE: Status[] = ["fait", "verifie", "n_a"];
@@ -113,7 +114,7 @@ function ItemPanel({ item, onClose }: { item: ChecklistItem; onClose: () => void
           {t`Ouvrir la page de la démarche`}
         </a>
       ) : null}
-      <Select
+      <Choix
         size="md"
         label={t`Où on en est`}
         allowDeselect={false}

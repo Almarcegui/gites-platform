@@ -2,7 +2,7 @@
 // présent sur toutes les pages). Liste triable, filtre par statut, fiche en
 // panneau latéral (statut, note interne, page d'origine), export CSV.
 import { Trans, useLingui } from "@lingui/react/macro";
-import { Select, Textarea } from "@mantine/core";
+import { Textarea } from "@mantine/core";
 import { IconDownload } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
@@ -13,6 +13,7 @@ import { ErrorLine, useAction } from "../../lib/action";
 import { improvementsCsv } from "../../improvements/csv";
 import { NOTE_MAX, type Improvement, type ImprovementList, type ImprovementStatus } from "../../improvements/types";
 import { Empty, Loading, Page, SidePanel, sqlWhen } from "../../ui/kit";
+import { Choix } from "../../ui/Choix";
 
 export function useStatusLabel() {
   const { t } = useLingui();
@@ -88,7 +89,7 @@ export function ImprovementsPage() {
                 </button>
               ))}
             </div>
-            <Select
+            <Choix
               style={{ marginLeft: "auto", minWidth: 200 }}
               size="md"
               allowDeselect={false}
@@ -172,7 +173,7 @@ function ImprovementPanel({ item, onClose }: { item: Improvement; onClose: () =>
           <Trans>Largeur de la fenêtre : {item.viewportWidth} px</Trans>
         </p>
       ) : null}
-      <Select
+      <Choix
         mt="md"
         size="md"
         allowDeselect={false}

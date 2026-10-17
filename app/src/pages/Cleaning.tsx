@@ -3,7 +3,7 @@
 // serveur (migration 0022) : « fait » se voit sur tous les appareils, et la
 // personne du ménage coche depuis son propre lien, sans compte.
 import { Trans, useLingui } from "@lingui/react/macro";
-import { Select, Textarea, TextInput } from "@mantine/core";
+import { Textarea, TextInput } from "@mantine/core";
 import { IconCopy, IconLink, IconPencil } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
@@ -15,6 +15,7 @@ import { ErrorLine, useAction } from "../lib/action";
 import { addDays, hourLabel, longDate, titleDate, todayBrussels } from "../lib/dates";
 import { toCleaningItem, type CleaningItem } from "../lib/tasks";
 import { Box, Confirm, sqlWhen } from "../ui/kit";
+import { Choix } from "../ui/Choix";
 
 const HORIZON = 21;
 
@@ -215,7 +216,7 @@ function ShareLinks() {
       ) : null}
       <div className="grid2" style={{ marginTop: 12 }}>
         <TextInput size="md" label={t`Pour qui`} placeholder={t`Par exemple : Martine`} maxLength={60} value={label} onChange={(e) => setLabel(e.currentTarget.value)} />
-        <Select size="md" label={t`Quels gîtes`} allowDeselect={false} value={pid} onChange={(v) => setPid(v ?? "all")} data={[{ value: "all", label: t`Tous mes gîtes` }, ...properties.map((p) => ({ value: String(p.id), label: p.name }))]} />
+        <Choix size="md" label={t`Quels gîtes`} allowDeselect={false} value={pid} onChange={(v) => setPid(v ?? "all")} data={[{ value: "all", label: t`Tous mes gîtes` }, ...properties.map((p) => ({ value: String(p.id), label: p.name }))]} />
       </div>
       <button
         type="button"
