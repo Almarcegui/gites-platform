@@ -395,11 +395,17 @@ describe("frais généraux : forfait + supplément de charges par nuit (règle d
     expectLinesSumToTotal(q);
   });
 
-  it("le supplément s'ajoute au total sans être remisé", () => {
-    const sans = computeQuote(baseRequest({ unit: forfait({ chargesExtraNightCents: 0 }) }));
-    const avec = computeQuote(baseRequest({ unit: forfait() }));
-    expect(avec.totalCents - sans.totalCents).toBe(5000);
+  it("le supplément s'ajoute au total sans être remisé (long séjour −10 % sur l'hébergement seul)", () => {
+    // 7 nuits : la remise long séjour s'applique ; elle porte sur l'hébergement seul.
+    const sans = computeQuote(baseRequest({ unit: forfait({ chargesExtraNightCents: 0 }), checkout: "2026-03-09" }));
+    const avec = computeQuote(baseRequest({ unit: forfait(), checkout: "2026-03-09" }));
+    expect(avec.nights).toBe(7);
+    expect(avec.discountCents).toBeGreaterThan(0);
+    expect(avec.discountCents).toBe(Math.round(avec.accommodationCents * 0.1));
     expect(avec.discountCents).toBe(sans.discountCents);
+    expect(avec.cleaningFeeCents - sans.cleaningFeeCents).toBe(5 * 2500);
+    expect(avec.totalCents - sans.totalCents).toBe(5 * 2500);
+    expectLinesSumToTotal(avec);
   });
 
   it("supplément à 0 : comportement inchangé, quel que soit le nombre de nuits", () => {

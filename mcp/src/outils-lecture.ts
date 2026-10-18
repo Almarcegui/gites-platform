@@ -34,7 +34,11 @@ function quoteSummary(q: Quote): string {
   const parts = [`total ${euros(q.totalCents)} pour ${q.nights} nuit${q.nights > 1 ? "s" : ""}`];
   const detail = [`hébergement ${euros(q.accommodationCents)}`];
   if (q.discountCents) detail.push(`remises −${euros(q.discountCents)}`);
-  if (q.cleaningFeeCents) detail.push(`ménage ${euros(q.cleaningFeeCents)}`);
+  if (q.cleaningFeeCents) {
+    // Forfait + supplément par nuit : la ligne du devis dit la règle (« 2 nuits incluses, +25 €/nuit »).
+    const regle = q.lines.find((l) => l.kind === "fee")?.label.match(/\(([^)]*)\)/)?.[1];
+    detail.push(`frais généraux ${euros(q.cleaningFeeCents)}${regle ? ` (${regle})` : ""}`);
+  }
   if (q.optionsCents) detail.push(`options ${euros(q.optionsCents)}`);
   if (q.taxCents) detail.push(`taxe ${euros(q.taxCents)}`);
   parts.push(`(${detail.join(", ")})`);

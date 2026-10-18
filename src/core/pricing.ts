@@ -137,7 +137,7 @@ export interface UnitPricingInfo {
   id: number;
   name: string;
   compositePricing: "own" | "sum";
-  /** frais de ménage fixes par séjour (0 = aucun) */
+  /** forfait de frais généraux (ménage et charges), couvre `feeIncludedNights` nuits (0 = aucun) */
   cleaningFeeCents: number;
   /** supplément de charges par nuit au-delà des nuits incluses (0 = aucun) */
   chargesExtraNightCents?: number;
@@ -204,7 +204,7 @@ export interface Quote {
   lines: QuoteLine[];
   accommodationCents: number; // hébergement avant remises (majoration comprise)
   discountCents: number;      // remise auto + code promo (positif)
-  cleaningFeeCents: number;   // frais de ménage (fixes par séjour)
+  cleaningFeeCents: number;   // frais généraux : forfait + supplément de charges par nuit au-delà des nuits incluses
   optionsCents: number;
   taxCents: number;
   totalCents: number;

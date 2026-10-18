@@ -3877,13 +3877,13 @@ msgstr "Flux iCal"
 msgid "Fois"
 msgstr "Fois"
 
+#: src/pages/settings/Domain.tsx
+msgid "Forfait frais généraux (€)"
+msgstr "Forfait frais généraux (€)"
+
 #: src/pages/settings/Encaissements.tsx
 msgid "Frais"
 msgstr "Frais"
-
-#: src/pages/settings/Domain.tsx
-msgid "Frais de ménage (€)"
-msgstr "Frais de ménage (€)"
 
 #: src/pages/settings/Encaissements.tsx
 msgid "Frais Stripe"

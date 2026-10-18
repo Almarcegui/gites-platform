@@ -3881,13 +3881,13 @@ msgstr "iCal-feed"
 msgid "Fois"
 msgstr "Keer"
 
+#: src/pages/settings/Domain.tsx
+msgid "Forfait frais généraux (€)"
+msgstr "Forfait algemene kosten (€)"
+
 #: src/pages/settings/Encaissements.tsx
 msgid "Frais"
 msgstr "Kosten"
-
-#: src/pages/settings/Domain.tsx
-msgid "Frais de ménage (€)"
-msgstr "Schoonmaakkosten (€)"
 
 #: src/pages/settings/Encaissements.tsx
 msgid "Frais Stripe"

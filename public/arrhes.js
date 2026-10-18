@@ -75,19 +75,25 @@ if (cibles.length || fraisCibles.length) {
         const u = units.find((x) => x.id === Number(cible.dataset.fraisUnit));
         if (!u) return;
         // Forfait + supplément par nuit au-delà des nuits incluses (migration
-        // 0038). L'unité composite additionne ses maisons, comme le moteur ;
-        // la précision « +X €/nuit » n'est ajoutée que si les maisons ont la
-        // même règle de nuits incluses (sinon le devis détaille).
-        const parts = u.isComposite ? units.filter((x) => !x.isComposite) : [u];
+        // 0038), calculés comme le moteur de devis : un bien composite en mode
+        // « somme » additionne les maisons qu'il bloque (unit_links), pas toutes
+        // celles du domaine. Le texte n'a pas de parenthèse : le HTML ajoute
+        // déjà « (ménage et charges) » derrière.
+        const parts = u.isComposite && u.compositePricing === "sum"
+          ? (u.componentIds || []).map((id) => units.find((x) => x.id === id)).filter(Boolean)
+          : [u];
         const cents = parts.reduce((t, x) => t + x.cleaningFeeCents, 0);
-        const extra = parts.reduce((t, x) => t + (x.chargesExtraNightCents || 0), 0);
+        const avecSupplement = parts.filter((x) => (x.chargesExtraNightCents || 0) > 0);
+        const extra = avecSupplement.reduce((t, x) => t + x.chargesExtraNightCents, 0);
         const inclus = parts[0]?.feeIncludedNights ?? 2;
         const memeRegle = parts.every((x) => (x.feeIncludedNights ?? 2) === inclus);
         const fmt = (c) => { const e = c / 100; return `${Number.isInteger(e) ? e : e.toFixed(2).replace(".", ",")} €`; };
         if (typeof cents === "number" && cents > 0) {
-          cible.textContent = extra > 0 && memeRegle
-            ? `${fmt(cents)} (${inclus} nuit${inclus > 1 ? "s" : ""} incluse${inclus > 1 ? "s" : ""}, +${fmt(extra)}/nuit ensuite)`
-            : fmt(cents);
+          cible.textContent = avecSupplement.length === 0
+            ? fmt(cents)
+            : memeRegle
+              ? `${fmt(cents)} pour ${inclus} nuit${inclus > 1 ? "s" : ""}, +${fmt(extra)}/nuit ensuite`
+              : `${fmt(cents)} + charges par nuit au-delà, selon la maison`;
         }
       } catch {
         // Repli du HTML conservé.

@@ -89,6 +89,33 @@ describe("le domaine et les biens", () => {
   });
 });
 
+describe("frais généraux d'un bien : forfait, nuits incluses, supplément par nuit", () => {
+  const handler = (c: { path: string; method: string }) => (c.path === "/settings" && c.method === "GET" ? { body: { property: PROPERTY, settings: SETTINGS, units: FULL_UNITS.map((u) => ({ ...u, chargesExtraNightCents: 2500, feeIncludedNights: 2 })) } } : undefined);
+
+  it("un champ « Nuits incluses » vidé part en chaîne vide (le serveur refuse), jamais en 0", async () => {
+    const user = userEvent.setup();
+    const { calls } = renderApp("/reglages/domaine", [handler]);
+    const champ = (await screen.findAllByLabelText("Nuits incluses"))[0]!;
+    expect(champ).toHaveValue("2");
+    await user.clear(champ);
+    await user.click(screen.getByRole("button", { name: "Enregistrer" }));
+    await waitFor(() => expect(calls.find((c) => c.method === "PATCH" && c.path === "/units/1")).toBeTruthy());
+    const body = calls.find((c) => c.method === "PATCH" && c.path === "/units/1")!.body as Record<string, unknown>;
+    expect(body.feeIncludedNights).toBe("");
+    expect(body.chargesExtraNightCents).toBe(2500);
+  });
+
+  it("un supplément vidé part lui aussi en chaîne vide", async () => {
+    const user = userEvent.setup();
+    const { calls } = renderApp("/reglages/domaine", [handler]);
+    const champ = (await screen.findAllByLabelText("Supplément par nuit au-delà (€)"))[0]!;
+    await user.clear(champ);
+    await user.click(screen.getByRole("button", { name: "Enregistrer" }));
+    await waitFor(() => expect(calls.find((c) => c.method === "PATCH" && c.path === "/units/1")).toBeTruthy());
+    expect((calls.find((c) => c.method === "PATCH" && c.path === "/units/1")!.body as Record<string, unknown>).chargesExtraNightCents).toBe("");
+  });
+});
+
 describe("plateformes", () => {
   const overview = { configured: false, webhookUrl: null, property: { id: 1, name: "x", beds24PropertyId: null }, units: [], channelBookings: [], lastPull: null, events: [], conflicts: [{ id: 5, source: "beds24", kind: "x", status: "open", unitId: 1, unitName: "La Maison du Scieur", checkin: "2026-11-01", checkout: "2026-11-03", bookingReference: null, channelLabel: "Airbnb", label: "Dates prises sur Airbnb", firstSeenAt: "2026-10-01 10:00:00", lastSeenAt: "2026-10-09 10:00:00", ignoreReason: null }] };
   const markups = { channels: [{ channel: "airbnb", label: "Airbnb", markupPct: 18 }], examples: [{ channel: "airbnb", label: "Airbnb", markupPct: 18, suggestedCents: 23600 }], formula: "", maxPct: 50, pushChannel: null, pushMarkupPct: 0, example: { directCents: 20000, pushedCents: 20000 } };
