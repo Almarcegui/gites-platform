@@ -29,16 +29,15 @@ function htmlFiles(dir: string): string[] {
 
 describe("page /reserver/pre-more/", () => {
   it("fixe le domaine par une seule ligne de configuration", () => {
-    const lignes = PAGE.split("\n").filter((l) => l.includes("GP_PROPERTY"));
-    expect(lignes.filter((l) => /window\.GP_PROPERTY\s*=/.test(l))).toHaveLength(1);
-    expect(PAGE).toContain('window.GP_PROPERTY = "pre-more"');
+    expect([...PAGE.matchAll(/data-property="/g)]).toHaveLength(1);
+    expect(PAGE).toContain('<body data-property="pre-more">');
   });
 
   it("réutilise book.js et book.css par chemin absolu, sans dupliquer de code", () => {
     expect(PAGE).toContain('<script type="module" src="/book/book.js"></script>');
     expect(PAGE).toContain('href="/book/book.css"');
-    // Les seuls scripts : la ligne de configuration et book.js.
-    expect([...PAGE.matchAll(/<script\b/g)]).toHaveLength(2);
+    // Le seul script est book.js : rien en ligne (compatible avec une CSP bloquante).
+    expect([...PAGE.matchAll(/<script\b/g)]).toHaveLength(1);
   });
 
   it("ne montre ni accueil multi-domaines ni choix de domaine", () => {
@@ -63,7 +62,7 @@ describe("page /reserver/pre-more/", () => {
   it("book.js : le domaine fixé par la page prime sur ?property=", () => {
     const js = read("book/book.js");
     expect(js).toContain("const PROPERTY = FIXED_PROPERTY ?? params.get(\"property\");");
-    expect(js).toContain("window.GP_PROPERTY");
+    expect(js).toContain("document.body.dataset.property");
     // La clé de reprise locale est par domaine : un autre ?property= ne lit pas celle du Pré Moré.
     expect(js).toContain("gites-book:${PROPERTY}");
   });
@@ -175,6 +174,6 @@ describe("iframe et en-têtes", () => {
     expect(res.status).toBe(200);
     expect(res.headers.get("x-frame-options")).toBeNull();
     expect(res.headers.get("cache-control")).toBe("no-cache");
-    expect(await res.text()).toContain('window.GP_PROPERTY = "pre-more"');
+    expect(await res.text()).toContain('data-property="pre-more"');
   });
 });

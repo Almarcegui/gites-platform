@@ -520,7 +520,7 @@ proprement vers « sur demande » et « Calendrier momentanément indisponible �
 ```
 
 `/reserver/pre-more/` est la page dédiée du Pré Moré : même `book.js` que
-`/book/`, mais le domaine est fixé par une ligne du HTML (`window.GP_PROPERTY`)
+`/book/`, mais le domaine est fixé par une ligne du HTML (`data-property` sur `<body>`)
 et un `?property=` y est ignoré. Les anciens liens `/book/?property=pre-more…`
 continuent de fonctionner. Dupliquer pour un autre domaine :
 `docs/page-reservation-par-domaine.md`.

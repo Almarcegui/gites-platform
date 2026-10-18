@@ -7,10 +7,10 @@ celle du Pré Moré (`public/reserver/pre-more/index.html`). Le tunnel génériq
 ## Créer la page d'un domaine
 
 Copier le fichier vers `public/reserver/<slug>/index.html` et changer **une
-ligne**, en tête du `<body>` :
+ligne**, l'ouverture du `<body>` :
 
 ```html
-<script>window.GP_PROPERTY = "pre-more";</script>   <!-- → le slug du domaine -->
+<body data-property="pre-more">   <!-- → le slug du domaine -->
 ```
 
 Le slug est celui de la table `properties` (`pre-more`, `moulin-braives`).

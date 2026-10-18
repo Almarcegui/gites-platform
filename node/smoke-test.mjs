@@ -146,7 +146,7 @@ try {
   // (et seulement elles : le reste du site reste en DENY).
   const reserver = await fetch(`${base}/reserver/pre-more/`);
   const reserverHtml = await reserver.text();
-  check("réservation Pré Moré : /reserver/pre-more/ servie", reserver.status === 200 && reserverHtml.includes('window.GP_PROPERTY = "pre-more"'), String(reserver.status));
+  check("réservation Pré Moré : /reserver/pre-more/ servie", reserver.status === 200 && reserverHtml.includes('<body data-property="pre-more">'), String(reserver.status));
   check("réservation Pré Moré : sans slash final, servie aussi", (await fetch(`${base}/reserver/pre-more`)).status === 200);
   check("réservation Pré Moré : iframe autorisée (pas de x-frame-options)", reserver.headers.get("x-frame-options") === null);
   check("réservation Pré Moré : le reste du site refuse l'iframe", (await fetch(`${base}/`)).headers.get("x-frame-options") === "DENY" && (await fetch(`${base}/la-scierie/`)).headers.get("x-frame-options") === "DENY");

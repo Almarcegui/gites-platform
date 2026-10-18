@@ -17,10 +17,10 @@ import { apiHeaders, CGV_NOTE_NL, eur, hour, LANG, LOCALE, mountLangSwitch, pl, 
 
 const params = new URLSearchParams(location.search);
 // Page dédiée à un domaine (/reserver/<slug>/) : le domaine est posé par la page
-// elle-même (`window.GP_PROPERTY`, une ligne dans son HTML) et prime sur
+// elle-même (`data-property` sur <body>, une ligne dans son HTML) et prime sur
 // l'adresse. Un `?property=` différent est ignoré, jamais obéi. Sans cette
 // ligne (/book/), le comportement historique reste : le domaine vient de l'URL.
-const FIXED_PROPERTY = typeof window.GP_PROPERTY === "string" && window.GP_PROPERTY ? window.GP_PROPERTY : null;
+const FIXED_PROPERTY = document.body.dataset.property || null;
 const PROPERTY = FIXED_PROPERTY ?? params.get("property");
 if (FIXED_PROPERTY && params.has("property")) {
   // Adresse nettoyée : le paramètre ignoré ne doit pas survivre dans un favori.

@@ -8,11 +8,11 @@
 <meta name="description" content="Réservation directe des Gîtes du Pré Moré : choisissez vos dates, payez en ligne en toute sécurité, sans création de compte.">
 <link rel="stylesheet" href="/book/book.css">
 </head>
-<body>
 <!-- SEULE LIGNE À CHANGER pour dupliquer cette page vers un autre domaine
-     (docs/page-reservation-par-domaine.md). Le domaine est fixé ici : le
-     paramètre ?property= de l'adresse est ignoré. -->
-<script>window.GP_PROPERTY = "pre-more";</script>
+     (docs/page-reservation-par-domaine.md) : data-property sur <body>. Le
+     domaine est fixé ici, le paramètre ?property= de l'adresse est ignoré.
+     Pas de script en ligne : compatible avec une CSP bloquante. -->
+<body data-property="pre-more">
 <div class="pub">
   <div class="brand">
     <a class="back-site" id="backSite" href="/" data-i18n>← Retour au site</a>
