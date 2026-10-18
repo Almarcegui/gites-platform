@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex">
+<title>Réserver — Les Gîtes du Pré Moré</title>
+<meta name="description" content="Réservation directe des Gîtes du Pré Moré : choisissez vos dates, payez en ligne en toute sécurité, sans création de compte.">
+<link rel="stylesheet" href="/book/book.css">
+</head>
+<body>
+<!-- SEULE LIGNE À CHANGER pour dupliquer cette page vers un autre domaine
+     (docs/page-reservation-par-domaine.md). Le domaine est fixé ici : le
+     paramètre ?property= de l'adresse est ignoré. -->
+<script>window.GP_PROPERTY = "pre-more";</script>
+<div class="pub">
+  <div class="brand">
+    <a class="back-site" id="backSite" href="/" data-i18n>← Retour au site</a>
+    <nav class="lang-switch" id="langSwitch"></nav>
+    <h1 id="propName" data-i18n>Réservation</h1>
+    <p id="propSub" data-i18n>Réservation directe — paiement sécurisé, sans création de compte</p>
+  </div>
+
+  <!-- Décompte du blocage de créneau : visible dès qu'une option est posée,
+       et jusqu'à son expiration (issue #16). -->
+  <div id="holdBanner" class="holdbar" aria-live="polite" aria-atomic="true" hidden></div>
+
+  <!-- Parcours de réservation -->
+  <div id="flow" style="display:none">
+    <div class="steps" id="steps">
+      <span data-step="1" class="on" data-i18n>1. Dates</span>
+      <span data-step="2" data-i18n>2. Hébergement</span>
+      <span data-step="3" data-i18n>3. Coordonnées</span>
+      <span data-step="4" data-i18n>4. Paiement</span>
+    </div>
+
+    <!-- Remises actives et disponibilité CALCULÉE (issue #35).
+         Uniquement du factuel : les remises viennent du moteur de devis, le
+         chiffre de disponibilité est recompté à chaque chargement sur les
+         vraies réservations et porte toujours son dénominateur. Aucune
+         formulation d'urgence, aucun compte à rebours. -->
+    <section id="offersCard" class="card offers" hidden aria-labelledby="offersTitle">
+      <h3 id="offersTitle" data-i18n>Remises et disponibilité</h3>
+      <div id="offersBody"></div>
+    </section>
+
+    <!-- Étape 1 : calendrier des disponibilités et prix -->
+    <div class="card" id="searchCard">
+      <!-- Voyageurs AVANT le calendrier (issue #47-1) : la capacité conditionne
+           les hébergements proposés, elle doit se choisir avant les dates. -->
+      <div class="pax pax-top">
+        <span class="pax-title" id="paxTitle" data-i18n>Voyageurs</span>
+        <label class="f" for="qAd" data-i18n>Adultes</label>
+        <select id="qAd"></select>
+        <label class="f" for="qCh" data-i18n>Enfants</label>
+        <select id="qCh"></select>
+      </div>
+      <div class="pcal-head">
+        <button class="pcal-nav" id="calPrev" aria-label="Mois précédent" data-i18n-attr="aria-label">◀</button>
+        <b id="calLabel">…</b>
+        <button class="pcal-nav" id="calNext" aria-label="Mois suivant" data-i18n-attr="aria-label">▶</button>
+      </div>
+      <div class="pcal" id="calGrid"></div>
+      <p class="pcal-hint" data-i18n>Choisissez votre jour d'<b>arrivée</b> puis votre jour de <b>départ</b> — les hébergements disponibles s'affichent aussitôt. Prix « à partir de » par nuit.</p>
+      <!-- Règles de séjour du mois affiché (minimum de nuits, jours d'arrivée
+           imposés) : visibles AVANT le choix des dates, issue #66. -->
+      <p class="pcal-rules" id="calRules" aria-live="polite"></p>
+      <div class="stay-bar">
+        <div id="staySummary" aria-live="polite" aria-atomic="true"></div>
+      </div>
+      <div id="searchMsg" role="alert" aria-live="assertive"></div>
+    </div>
+
+    <!-- Étape 2 : hébergements disponibles (mises à jour annoncées) -->
+    <div id="results" aria-live="polite" aria-busy="false"></div>
+
+    <!-- Étape 3 : coordonnées (gauche) + récap sticky (droite) -->
+    <div id="bookingPanel"></div>
+
+    <!-- Une question avant de réserver ? (message direct dans la plateforme) -->
+    <details class="card qcard" id="contactCard">
+      <summary data-i18n>Une question avant de réserver ?</summary>
+      <p class="contact-where" id="cWhere"></p>
+      <div class="row" style="margin-top:12px">
+        <div><label class="f" for="cName" data-i18n>Nom</label><input id="cName" autocomplete="name"></div>
+        <div><label class="f" for="cEmail" data-i18n>Email</label><input id="cEmail" type="email" inputmode="email" autocomplete="email"></div>
+      </div>
+      <div style="margin-top:10px"><label class="f" for="cMsg" data-i18n>Message</label><textarea id="cMsg" rows="3" placeholder="Disponibilités, équipements, accès…" data-i18n-attr="placeholder"></textarea></div>
+      <input id="cWebsite" tabindex="-1" autocomplete="off" style="position:absolute;left:-9999px" aria-hidden="true">
+      <p style="margin-top:10px"><button class="btn o" id="cSend" data-i18n>Envoyer la question</button></p>
+      <p id="cNote" class="small" role="alert"></p>
+      <div id="cOk" class="contact-ok" role="status" hidden></div>
+    </details>
+  </div>
+
+  <p class="footer-note"><span class="badge-secure" data-i18n>🔒 Paiement sécurisé Stripe</span> <span data-i18n>· Bancontact, Visa, Mastercard · sans création de compte</span><br>
+  <span id="contactLine"></span></p>
+  <p class="footer-note legal-links" data-i18n><a href="/mentions-legales/">Mentions légales</a> · <a href="/confidentialite/">Confidentialité</a> · <a href="/conditions-generales/">Conditions générales</a></p>
+</div>
+
+<!-- Barre mobile : total + payer (visible à l'étape 3) -->
+<div class="mobilebar" id="mobileBar" style="display:none">
+  <div class="mb-total"><span class="small muted" id="mbLabel" data-i18n>Total</span><b id="mbAmount">—</b></div>
+  <button class="btn" id="mbPay" data-i18n>Payer et réserver</button>
+</div>
+
+<script type="module" src="/book/book.js"></script>
+</body>
+</html>

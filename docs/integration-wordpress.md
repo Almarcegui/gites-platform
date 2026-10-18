@@ -1,8 +1,9 @@
 # Intégration WordPress — moteur de réservation en iframe
 
-Le tunnel de réservation (`/book/`) est la **seule** page du site intégrable
-dans une iframe : `x-frame-options: DENY` est levé uniquement pour elle
-(`src/services/http-headers.ts` côté Worker, `staticHeaders` de
+Le tunnel de réservation (`/book/`) et les pages de réservation par domaine
+(`/reserver/<slug>/`, cf. `docs/page-reservation-par-domaine.md`) sont les
+**seules** pages du site intégrables dans une iframe : `x-frame-options: DENY` est levé uniquement pour
+elles (`isEmbeddablePath` dans `src/services/http-headers.ts` côté Worker, `staticHeaders` de
 `node/server.mjs` côté Node). Toutes les autres pages refusent l'intégration.
 
 ## 1. Shortcode à coller dans `functions.php` du thème (ou dans un plugin)
@@ -48,13 +49,15 @@ add_shortcode( 'gites_reservation', 'gites_reservation_shortcode' );
 Dans un bloc **HTML personnalisé** Gutenberg :
 
 ```html
-<iframe src="https://178-105-145-191.sslip.io/book/?property=pre-more&lang=fr"
+<iframe src="https://178-105-145-191.sslip.io/reserver/pre-more/?lang=fr"
         style="width:100%;height:1400px;border:0;max-width:1100px;margin:0 auto;display:block;"
         loading="lazy" title="Réservation"></iframe>
 ```
 
 ## Notes
 
+- Pour le Pré Moré, préférer `/reserver/pre-more/` (le domaine est fixé par la
+  page) ; l'ancienne adresse `/book/?property=pre-more` continue de fonctionner.
 - L'URL de base (`$base`) est à remplacer le jour où le domaine définitif
   remplace l'adresse sslip.io (cf. `docs/mise-en-ligne.md` § 3).
 - ⚠️ Le Caddyfile du serveur ne doit PAS poser `X-Frame-Options` : il

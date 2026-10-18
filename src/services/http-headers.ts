@@ -106,6 +106,14 @@ export function cspHeaderFor(pathname: string): Record<string, string> {
   return { "content-security-policy-report-only": CSP_REPORT_ONLY };
 }
 
+/** Pages intégrables en iframe (WordPress) : le tunnel /book/ et les pages de
+ *  réservation par domaine /reserver/<slug>/ — et rien d'autre. Partagé avec le
+ *  serveur Node. Le test porte sur le préfixe AVEC son slash : « /booking » ou
+ *  « /reserver-x » ne passent pas. */
+export function isEmbeddablePath(pathname: string): boolean {
+  return pathname.startsWith("/book/") || pathname.startsWith("/reserver/");
+}
+
 /** Permissions-Policy volontairement minimale : on coupe les trois capteurs
  *  qu'aucune page du site n'utilise. Rien de plus — une liste exhaustive se
  *  périme et finit par bloquer une fonctionnalité légitime. */
@@ -143,9 +151,10 @@ export function withStandardHeaders(response: Response, url: URL): Response {
   const h = out.headers;
 
   h.set("x-content-type-options", "nosniff");
-  // Le tunnel de réservation /book/ est la seule page intégrable en iframe
-  // (WordPress) ; partout ailleurs, l'intégration reste interdite.
-  if (!url.pathname.startsWith("/book/")) h.set("x-frame-options", "DENY");
+  // Le tunnel /book/ et les pages /reserver/<slug>/ sont les seules pages
+  // intégrables en iframe (WordPress) ; partout ailleurs, l'intégration reste
+  // interdite.
+  if (!isEmbeddablePath(url.pathname)) h.set("x-frame-options", "DENY");
   h.set("referrer-policy", "strict-origin-when-cross-origin");
   h.set("permissions-policy", PERMISSIONS_POLICY);
   for (const [k, v] of Object.entries(cspHeaderFor(url.pathname))) h.set(k, v);

@@ -74,15 +74,15 @@ function updateCta() {
   if (!cta) return;
   if (selIn && selOut) {
     cta.textContent = `Réserver du ${dfr(selIn)} au ${dfr(selOut)} →`;
-    cta.href = `/book/?property=${PROPERTY}&checkin=${selIn}&checkout=${selOut}`;
+    cta.href = `/reserver/${PROPERTY}/?checkin=${selIn}&checkout=${selOut}`;
     cta.classList.add("pulse");
   } else if (selIn) {
     cta.textContent = `Arrivée le ${dfr(selIn)} — choisissez le départ`;
-    cta.href = `/book/?property=${PROPERTY}`;
+    cta.href = `/reserver/${PROPERTY}/`;
     cta.classList.remove("pulse");
   } else {
     cta.textContent = "Vérifier mes dates & réserver";
-    cta.href = `/book/?property=${PROPERTY}`;
+    cta.href = `/reserver/${PROPERTY}/`;
     cta.classList.remove("pulse");
   }
 }

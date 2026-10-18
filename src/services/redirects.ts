@@ -33,7 +33,7 @@ export const FINAL_HOSTS: readonly string[] = ["lesgitesdupremore.be", "www.lesg
 /** Chemins jamais redirigés, quoi qu'il arrive : l'application elle-même.
  *  Ceinture et bretelles — aucune correspondance ci-dessous ne les vise, mais
  *  une future entrée mal collée ne doit pas pouvoir casser le tunnel. */
-const NEVER_REDIRECT = ["/api/", "/ical/", "/book/", "/admin/", "/img/"];
+const NEVER_REDIRECT = ["/api/", "/ical/", "/book/", "/reserver/", "/admin/", "/img/"];
 
 /** Correspondances exactes, en chemin NORMALISÉ (minuscules, sans slash final).
  *  Clé = ancienne adresse WordPress · valeur = adresse actuelle. */

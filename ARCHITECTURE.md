@@ -514,10 +514,16 @@ proprement vers « sur demande » et « Calendrier momentanément indisponible �
 **Le passage vitrine → tunnel se fait uniquement par deep-link** :
 
 ```
-/book/?property=pre-more
-/book/?property=pre-more&unit=maison-du-scieur
-/book/?property=pre-more&checkin=2026-08-12&checkout=2026-08-15
+/reserver/pre-more/
+/reserver/pre-more/?unit=maison-du-scieur
+/reserver/pre-more/?checkin=2026-08-12&checkout=2026-08-15
 ```
+
+`/reserver/pre-more/` est la page dédiée du Pré Moré : même `book.js` que
+`/book/`, mais le domaine est fixé par une ligne du HTML (`window.GP_PROPERTY`)
+et un `?property=` y est ignoré. Les anciens liens `/book/?property=pre-more…`
+continuent de fonctionner. Dupliquer pour un autre domaine :
+`docs/page-reservation-par-domaine.md`.
 
 Le calendrier de l'accueil construit dynamiquement le CTA (« Réserver du X au Y »).
 

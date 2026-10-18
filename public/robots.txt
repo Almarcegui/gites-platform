@@ -20,6 +20,7 @@ Disallow: /
 # Allow: /
 # Disallow: /admin/
 # Disallow: /book/
+# Disallow: /reserver/
 # Disallow: /ical/
 # Disallow: /api/
 #

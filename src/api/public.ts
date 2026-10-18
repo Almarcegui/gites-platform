@@ -1052,6 +1052,9 @@ export function registerPublicRoutes(router: Router): void {
         status: booking.status,
         unitName: booking.unitName,
         propertyName: property?.name ?? "",
+        // Sert aux liens de retour (« Relancer une réservation ») : ils doivent
+        // rouvrir le parcours du bon domaine, pas la page d'accueil de /book/.
+        propertySlug: property?.slug ?? "",
         checkin: booking.checkin,
         checkout: booking.checkout,
         adults: booking.adults,
