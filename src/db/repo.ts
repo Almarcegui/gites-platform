@@ -119,6 +119,10 @@ export interface UnitRow {
   sortOrder: number;
   icalToken: string;
   cleaningFeeCents: number;
+  /** supplément de charges par nuit au-delà des nuits incluses au forfait */
+  chargesExtraNightCents: number;
+  /** nuits couvertes par le forfait de frais généraux */
+  feeIncludedNights: number;
   photoUrl: string | null;
   beds24RoomId: number | null;
   /** garde-fous de prix par nuit (issue #31) — null = aucune borne configurée */
@@ -137,7 +141,10 @@ function mapUnit(r: Raw): UnitRow {
     isComposite: num(r.is_composite) === 1,
     compositePricing: str(r.composite_pricing) === "sum" ? "sum" : "own",
     active: num(r.active) === 1, sortOrder: num(r.sort_order), icalToken: str(r.ical_token),
-    cleaningFeeCents: num(r.cleaning_fee_cents), photoUrl: strOrNull(r.photo_url),
+    cleaningFeeCents: num(r.cleaning_fee_cents),
+    chargesExtraNightCents: num(r.charges_extra_night_cents),
+    feeIncludedNights: r.fee_included_nights == null ? 2 : num(r.fee_included_nights),
+    photoUrl: strOrNull(r.photo_url),
     beds24RoomId: r.beds24_room_id == null ? null : num(r.beds24_room_id),
     priceMinCents: numOrNull(r.price_min_cents),
     priceMaxCents: numOrNull(r.price_max_cents),
@@ -170,7 +177,7 @@ export async function updateUnit(
     Pick<
       UnitRow,
       | "name" | "description" | "capacityBase" | "capacityMax" | "active" | "compositePricing"
-      | "cleaningFeeCents" | "photoUrl" | "priceMinCents" | "priceMaxCents" | "depositPct"
+      | "cleaningFeeCents" | "chargesExtraNightCents" | "feeIncludedNights" | "photoUrl" | "priceMinCents" | "priceMaxCents" | "depositPct"
     >
   >,
 ): Promise<void> {
@@ -191,7 +198,9 @@ export async function updateUnit(
          photo_url = COALESCE(?9, photo_url),
          price_min_cents = CASE WHEN ?10 = 1 THEN ?11 ELSE price_min_cents END,
          price_max_cents = CASE WHEN ?12 = 1 THEN ?13 ELSE price_max_cents END,
-         deposit_pct = CASE WHEN ?14 = 1 THEN ?15 ELSE deposit_pct END
+         deposit_pct = CASE WHEN ?14 = 1 THEN ?15 ELSE deposit_pct END,
+         charges_extra_night_cents = COALESCE(?16, charges_extra_night_cents),
+         fee_included_nights = COALESCE(?17, fee_included_nights)
        WHERE id = ?1`,
     )
     .bind(
@@ -210,6 +219,8 @@ export async function updateUnit(
       fields.priceMaxCents ?? null,
       fields.depositPct === undefined ? 0 : 1,
       fields.depositPct ?? null,
+      fields.chargesExtraNightCents ?? null,
+      fields.feeIncludedNights ?? null,
     )
     .run();
 }
@@ -227,6 +238,8 @@ export async function createUnit(
     isComposite?: boolean;
     compositePricing?: "own" | "sum";
     cleaningFeeCents?: number;
+    chargesExtraNightCents?: number;
+    feeIncludedNights?: number;
     photoUrl?: string | null;
     sortOrder?: number;
   },
@@ -242,13 +255,15 @@ export async function createUnit(
   const res = await db
     .prepare(
       `INSERT INTO units (property_id, slug, name, description, capacity_base, capacity_max,
-                          is_composite, composite_pricing, sort_order, ical_token, cleaning_fee_cents, photo_url)
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)`,
+                          is_composite, composite_pricing, sort_order, ical_token, cleaning_fee_cents, photo_url,
+                          charges_extra_night_cents, fee_included_nights)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)`,
     )
     .bind(
       u.propertyId, slug, u.name, u.description ?? null, u.capacityBase, u.capacityMax,
       u.isComposite ? 1 : 0, u.compositePricing ?? "own", u.sortOrder ?? 99, token,
       u.cleaningFeeCents ?? 0, u.photoUrl ?? null,
+      u.chargesExtraNightCents ?? 0, u.feeIncludedNights ?? 2,
     )
     .run();
   return res.meta.last_row_id;
@@ -583,7 +598,7 @@ export async function getQuoteContext(
   // Composantes d'une unité composite = unités physiques qu'elle bloque.
   const { results: compRows } = await db
     .prepare(
-      `SELECT u.id, u.name, u.cleaning_fee_cents FROM unit_links ul
+      `SELECT u.id, u.name, u.cleaning_fee_cents, u.charges_extra_night_cents, u.fee_included_nights FROM unit_links ul
          JOIN units u ON u.id = ul.blocks_unit_id
         WHERE ul.unit_id = ?1 AND u.is_composite = 0
         ORDER BY u.sort_order, u.id`,
@@ -594,6 +609,8 @@ export async function getQuoteContext(
     id: num(r.id),
     name: str(r.name),
     cleaningFeeCents: num(r.cleaning_fee_cents),
+    chargesExtraNightCents: num(r.charges_extra_night_cents),
+    feeIncludedNights: r.fee_included_nights == null ? 2 : num(r.fee_included_nights),
   }));
 
   const unitIds = [unitId, ...components.map((c) => c.id)];
@@ -622,6 +639,8 @@ export async function getQuoteContext(
       name: unit.name,
       compositePricing: unit.isComposite ? unit.compositePricing : "own",
       cleaningFeeCents: unit.cleaningFeeCents,
+      chargesExtraNightCents: unit.chargesExtraNightCents,
+      feeIncludedNights: unit.feeIncludedNights,
       depositPct: unit.depositPct,
       components: unit.isComposite ? components : [],
     },
@@ -2995,12 +3014,14 @@ export async function collectDriftInput(
       name: u.name,
       compositePricing: u.isComposite ? u.compositePricing : "own",
       cleaningFeeCents: u.cleaningFeeCents,
+      chargesExtraNightCents: u.chargesExtraNightCents,
+      feeIncludedNights: u.feeIncludedNights,
       components: u.isComposite
         ? links
             .filter((l) => l.unitId === u.id && units.some((x) => x.id === l.blocksUnitId && !x.isComposite))
             .map((l) => {
               const c = units.find((x) => x.id === l.blocksUnitId);
-              return { id: l.blocksUnitId, name: c?.name ?? "", cleaningFeeCents: c?.cleaningFeeCents ?? 0 };
+              return { id: l.blocksUnitId, name: c?.name ?? "", cleaningFeeCents: c?.cleaningFeeCents ?? 0, chargesExtraNightCents: c?.chargesExtraNightCents ?? 0, feeIncludedNights: c?.feeIncludedNights ?? 2 };
             })
         : [],
     } satisfies UnitPricingInfo,

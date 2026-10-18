@@ -25,6 +25,8 @@ export interface UnitFull {
   active: boolean;
   sortOrder: number;
   cleaningFeeCents: number;
+  chargesExtraNightCents: number;
+  feeIncludedNights: number;
   photoUrl: string | null;
   beds24RoomId: number | null;
   priceMinCents: number | null;

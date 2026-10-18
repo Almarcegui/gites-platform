@@ -153,12 +153,14 @@ export async function buildCalendarPush(
     name: u.name,
     compositePricing: u.isComposite ? u.compositePricing : "own",
     cleaningFeeCents: u.cleaningFeeCents,
+    chargesExtraNightCents: u.chargesExtraNightCents,
+    feeIncludedNights: u.feeIncludedNights,
     components: u.isComposite
       ? links
           .filter((l) => l.unitId === u.id && physicalIds.has(l.blocksUnitId))
           .map((l) => {
             const c = active.find((x) => x.id === l.blocksUnitId);
-            return { id: l.blocksUnitId, name: c?.name ?? "", cleaningFeeCents: c?.cleaningFeeCents ?? 0 };
+            return { id: l.blocksUnitId, name: c?.name ?? "", cleaningFeeCents: c?.cleaningFeeCents ?? 0, chargesExtraNightCents: c?.chargesExtraNightCents ?? 0, feeIncludedNights: c?.feeIncludedNights ?? 2 };
           })
       : [],
   });

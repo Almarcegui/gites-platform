@@ -107,14 +107,47 @@ export interface PricingSettings {
   minLeadDays?: number;
 }
 
+const FRAIS_GENERAUX = "Frais généraux — ménage et charges";
+
+type FeeSource = { cleaningFeeCents: number; chargesExtraNightCents?: number; feeIncludedNights?: number };
+
+/** Frais généraux d'un hébergement pour `nights` nuits :
+ *  forfait + max(0, nuits − nuits incluses) × supplément par nuit. */
+function generalFeeCents(u: FeeSource, nights: number): number {
+  const included = u.feeIncludedNights ?? 2;
+  const extra = u.chargesExtraNightCents ?? 0;
+  return u.cleaningFeeCents + Math.max(0, nights - included) * extra;
+}
+
+/** Libellé de la ligne. Sans supplément : le libellé historique. Avec supplément :
+ *  nuits incluses et tarif par nuit. Si plusieurs composantes ont des règles
+ *  différentes, le libellé reste générique (le montant, lui, est exact). */
+function generalFeeLabel(parts: FeeSource[]): string {
+  const withExtra = parts.filter((c) => (c.chargesExtraNightCents ?? 0) > 0);
+  if (withExtra.length === 0) return FRAIS_GENERAUX;
+  const included = withExtra[0]!.feeIncludedNights ?? 2;
+  if (parts.some((c) => (c.feeIncludedNights ?? 2) !== included)) return FRAIS_GENERAUX;
+  const extra = withExtra.reduce((s, c) => s + (c.chargesExtraNightCents ?? 0), 0);
+  const eur = extra / 100;
+  const eurTxt = Number.isInteger(eur) ? String(eur) : eur.toFixed(2).replace(".", ",");
+  return `${FRAIS_GENERAUX} (${included} nuit${included > 1 ? "s" : ""} incluse${included > 1 ? "s" : ""}, +${eurTxt} €/nuit)`;
+}
+
 export interface UnitPricingInfo {
   id: number;
   name: string;
   compositePricing: "own" | "sum";
-  /** frais de ménage fixes par séjour (0 = aucun) */
+  /** forfait de frais généraux (ménage et charges), couvre `feeIncludedNights` nuits (0 = aucun) */
   cleaningFeeCents: number;
+  /** supplément de charges par nuit au-delà des nuits incluses (0 = aucun) */
+  chargesExtraNightCents?: number;
+  /** nombre de nuits couvertes par le forfait (défaut 2) */
+  feeIncludedNights?: number;
   /** composantes d'une unité composite en mode 'sum' (dérivées de unit_links) */
-  components: { id: number; name: string; cleaningFeeCents: number }[];
+  components: {
+    id: number; name: string; cleaningFeeCents: number;
+    chargesExtraNightCents?: number; feeIncludedNights?: number;
+  }[];
   /** pourcentage d'arrhes propre à l'hébergement (issue #75).
    *  null ou absent = repli sur `settings.depositPct` du domaine. */
   depositPct?: number | null;
@@ -171,7 +204,7 @@ export interface Quote {
   lines: QuoteLine[];
   accommodationCents: number; // hébergement avant remises (majoration comprise)
   discountCents: number;      // remise auto + code promo (positif)
-  cleaningFeeCents: number;   // frais de ménage (fixes par séjour)
+  cleaningFeeCents: number;   // frais généraux : forfait + supplément de charges par nuit au-delà des nuits incluses
   optionsCents: number;
   taxCents: number;
   totalCents: number;
@@ -640,13 +673,13 @@ export function computeQuote(req: QuoteRequest): Quote {
   }
   const discountCents = autoDiscount + promoDiscount;
 
-  // --- frais de ménage (fixes par séjour, jamais remisés)
-  //     composite « somme » = addition des ménages des composantes
-  const cleaningFeeCents = isSum
-    ? req.unit.components.reduce((s, c) => s + c.cleaningFeeCents, 0)
-    : req.unit.cleaningFeeCents;
+  // --- frais généraux (jamais remisés) : forfait couvrant `feeIncludedNights`
+  //     nuits, plus un supplément de charges par nuit au-delà.
+  //     composite « somme » = même calcul sur chaque composante, additionné.
+  const feeParts = isSum ? req.unit.components : [req.unit];
+  const cleaningFeeCents = feeParts.reduce((s, c) => s + generalFeeCents(c, nights), 0);
   if (cleaningFeeCents > 0) {
-    lines.push({ kind: "fee", label: "Frais généraux — ménage et charges", amountCents: cleaningFeeCents });
+    lines.push({ kind: "fee", label: generalFeeLabel(feeParts), amountCents: cleaningFeeCents });
   }
 
   // --- options

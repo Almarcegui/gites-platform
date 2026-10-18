@@ -19,8 +19,8 @@ const days = (from: string, n: number) =>
   });
 
 export const UNITS = [
-  { id: 1, propertyId: 1, name: "La Maison du Scieur", capacityBase: 10, capacityMax: 11, isComposite: false, compositePricing: "own", active: true, sortOrder: 1, cleaningFeeCents: 12000 },
-  { id: 2, propertyId: 1, name: "La Scierie", capacityBase: 6, capacityMax: 8, isComposite: false, compositePricing: "own", active: true, sortOrder: 2, cleaningFeeCents: 9000 },
+  { id: 1, propertyId: 1, name: "La Maison du Scieur", capacityBase: 10, capacityMax: 11, isComposite: false, compositePricing: "own", active: true, sortOrder: 1, cleaningFeeCents: 12000, chargesExtraNightCents: 0, feeIncludedNights: 2 },
+  { id: 2, propertyId: 1, name: "La Scierie", capacityBase: 6, capacityMax: 8, isComposite: false, compositePricing: "own", active: true, sortOrder: 2, cleaningFeeCents: 9000, chargesExtraNightCents: 0, feeIncludedNights: 2 },
 ];
 
 export const BOOKING = {

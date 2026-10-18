@@ -76,6 +76,7 @@ const PATTERNS: Array<[RegExp, (...m: string[]) => string]> = [
   [/^(\d+) nuits? (weekend|semaine)( — (.+))?$/, (_, n, k, _s, unit) => `${nuits(n)} ${k === "weekend" ? "weekend" : "week"}${unit ? ` — ${unit}` : ""}`],
   [/^(\d+) nuits? (weekend|semaine) · (.+?)( — (.+))?$/, (_, n, k, season, _s, unit) => `${nuits(n)} ${k === "weekend" ? "weekend" : "week"} · ${SEASON[season!] ?? season}${unit ? ` — ${unit}` : ""}`],
   [/^Majoration jours fériés & ponts \((\d+) nuits?\)$/, (_, n) => `Toeslag feestdagen en brugdagen (${nuits(n)})`],
+  [/^Frais généraux — ménage et charges \((\d+) nuits? incluses?, \+(.+) €\/nuit\)$/, (_, n, x) => `Algemene kosten — schoonmaak en lasten (${nuits(n)} inbegrepen, +${x} €/nacht)`],
   [/^Code promo (.+)$/, (_, c) => `Promotiecode ${c}`],
   [/^Taxe de séjour \((\d+) pers\. × (\d+) nuits?\)$/, (_, p, n) => `Verblijfsbelasting (${p} pers. × ${nuits(n)})`],
   [/^À partir de (\d+) nuits? : (.+)$/, (_, n, a) => `Vanaf ${nuits(n)}: ${a}`],

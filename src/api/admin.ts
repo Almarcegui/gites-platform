@@ -228,6 +228,20 @@ function checkCredentials(raw: string, user: string, password: string): boolean 
 
 /** Identité authentifiée de la requête (posée par guard, lue par la page
  *  Utilisateurs pour interdire l'auto-verrouillage et tracer l'audit). */
+const MAX_INCLUDED_NIGHTS = 365;
+const MAX_EXTRA_NIGHT_CENTS = 100_000_000;
+
+/** Entier de 0 à `max`. Absent (null/undefined) → undefined ; tout ce qui n'est
+ *  pas un nombre ou une chaîne numérique (vide, texte, booléen, tableau, décimal,
+ *  négatif, démesuré) → "bad". Un champ vidé ne doit jamais passer pour 0. */
+function wholeNumber(v: unknown, max: number): number | undefined | "bad" {
+  if (v == null) return undefined;
+  if (typeof v !== "number" && typeof v !== "string") return "bad";
+  if (typeof v === "string" && v.trim() === "") return "bad";
+  const n = Number(v);
+  return Number.isInteger(n) && n >= 0 && n <= max ? n : "bad";
+}
+
 const REQUEST_USER = new WeakMap<Request, string>();
 
 export function currentUser(req: Request): string {
@@ -885,6 +899,10 @@ export function registerAdminRoutes(router: Router): void {
     if (body.cleaningFeeCents != null && (String(body.cleaningFeeCents).trim() === "" || !(Number.isFinite(Number(body.cleaningFeeCents)) && Number(body.cleaningFeeCents) >= 0))) {
       return apiError(400, "frais de ménage : un montant positif ou nul");
     }
+    const extraNight = wholeNumber(body.chargesExtraNightCents, MAX_EXTRA_NIGHT_CENTS);
+    if (extraNight === "bad") return apiError(400, "supplément de charges par nuit : un montant en centimes, entier, positif ou nul");
+    const includedNights = wholeNumber(body.feeIncludedNights, MAX_INCLUDED_NIGHTS);
+    if (includedNights === "bad") return apiError(400, "nuits incluses dans le forfait : un nombre entier de 0 à 365");
 
     await updateUnit(env.DB, id, {
       priceMinCents,
@@ -897,6 +915,8 @@ export function registerAdminRoutes(router: Router): void {
       active: typeof body.active === "boolean" ? body.active : undefined,
       compositePricing: body.compositePricing === "own" || body.compositePricing === "sum" ? body.compositePricing : undefined,
       cleaningFeeCents: body.cleaningFeeCents != null ? Math.round(Number(body.cleaningFeeCents)) : undefined,
+      chargesExtraNightCents: extraNight,
+      feeIncludedNights: includedNights,
       photoUrl: typeof body.photoUrl === "string" ? body.photoUrl.trim() : undefined,
     });
     await audit(env.DB, "admin", "unit.update", `unit:${id}`, { ...body, par: currentUser(req) });
@@ -911,6 +931,10 @@ export function registerAdminRoutes(router: Router): void {
     if (!body || !name || !propertyId) return apiError(400, "propertyId et name requis");
     const capacityBase = Math.max(1, Math.floor(Number(body.capacityBase ?? 2)));
     const capacityMax = Math.max(capacityBase, Math.floor(Number(body.capacityMax ?? capacityBase)));
+    const extraNightNew = wholeNumber(body.chargesExtraNightCents, MAX_EXTRA_NIGHT_CENTS);
+    if (extraNightNew === "bad") return apiError(400, "supplément de charges par nuit : un montant en centimes, entier, positif ou nul");
+    const includedNightsNew = wholeNumber(body.feeIncludedNights, MAX_INCLUDED_NIGHTS);
+    if (includedNightsNew === "bad") return apiError(400, "nuits incluses dans le forfait : un nombre entier de 0 à 365");
     const id = await createUnit(env.DB, {
       propertyId,
       name,
@@ -920,6 +944,8 @@ export function registerAdminRoutes(router: Router): void {
       isComposite: body.isComposite === true,
       compositePricing: body.compositePricing === "sum" ? "sum" : "own",
       cleaningFeeCents: body.cleaningFeeCents != null ? Math.round(Number(body.cleaningFeeCents)) : 0,
+      chargesExtraNightCents: extraNightNew ?? 0,
+      feeIncludedNights: includedNightsNew ?? 2,
       photoUrl: typeof body.photoUrl === "string" ? body.photoUrl.trim() || null : null,
     });
     if (Array.isArray(body.linkedUnitIds) && body.linkedUnitIds.length > 0) {
@@ -1135,13 +1161,15 @@ export function registerAdminRoutes(router: Router): void {
         name: u.name,
         compositePricing: u.isComposite ? u.compositePricing : "own",
         cleaningFeeCents: u.cleaningFeeCents,
+        chargesExtraNightCents: u.chargesExtraNightCents,
+        feeIncludedNights: u.feeIncludedNights,
         depositPct: u.depositPct,
         components: u.isComposite
           ? links
               .filter((l) => l.unitId === u.id && physicalIds.has(l.blocksUnitId))
               .map((l) => {
                 const c = units.find((x) => x.id === l.blocksUnitId);
-                return { id: l.blocksUnitId, name: c?.name ?? "", cleaningFeeCents: c?.cleaningFeeCents ?? 0 };
+                return { id: l.blocksUnitId, name: c?.name ?? "", cleaningFeeCents: c?.cleaningFeeCents ?? 0, chargesExtraNightCents: c?.chargesExtraNightCents ?? 0, feeIncludedNights: c?.feeIncludedNights ?? 2 };
               })
           : [],
       };

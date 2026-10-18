@@ -204,7 +204,7 @@ const KEYS: Record<string, string> = {
   dateEnd: "fin", label: "libellé", code: "code", discountPct: "remise (%)", discountCents: "remise", threshold: "seuil",
   active: "actif", occupants: "voyageurs", lignes: "lignes", property: "domaine", channel: "plateforme", markupPct: "majoration (%)",
   amountCents: "montant", method: "moyen", unitId: "bien", seasonId: "saison", partnerIds: "biens liés", capacityBase: "personnes",
-  capacityMax: "personnes au plus", cleaningFeeCents: "ménage", depositPct: "arrhes (%)", note: "note", corrections: "corrections",
+  capacityMax: "personnes au plus", cleaningFeeCents: "ménage", chargesExtraNightCents: "charges par nuit", feeIncludedNights: "nuits incluses", depositPct: "arrhes (%)", note: "note", corrections: "corrections",
 };
 const HIDDEN = new Set(["par", "rooms", "pushed", "updated", "created"]);
 

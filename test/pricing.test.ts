@@ -14,6 +14,7 @@ import {
   type UnitPricingInfo,
 } from "../src/core/pricing";
 import { addDays } from "../src/core/dates";
+import { nlText } from "../src/core/public-i18n";
 
 // --- Fixtures : miroir du seed Pré Moré -------------------------------------
 const SEASONS: Season[] = [
@@ -370,6 +371,86 @@ describe("unité composite (Domaine entier)", () => {
     }));
     expect(q.accommodationCents).toBe(120000);
     expectLinesSumToTotal(q);
+  });
+});
+
+describe("frais généraux : forfait + supplément de charges par nuit (règle du 18/10/2026)", () => {
+  const forfait = (over: Partial<UnitPricingInfo> = {}): UnitPricingInfo => ({
+    ...SCIERIE, cleaningFeeCents: 24000, chargesExtraNightCents: 2500, feeIncludedNights: 2, ...over,
+  });
+  const fee = (q: ReturnType<typeof computeQuote>) => q.lines.find((l) => l.kind === "fee");
+
+  it("2 nuits : le forfait seul, la règle reste annoncée dans le libellé", () => {
+    const q = computeQuote(baseRequest({ unit: forfait(), checkout: "2026-03-04" }));
+    expect(q.cleaningFeeCents).toBe(24000);
+    expect(fee(q)?.label).toBe("Frais généraux — ménage et charges (2 nuits incluses, +25 €/nuit)");
+    expectLinesSumToTotal(q);
+  });
+
+  it("4 nuits : forfait + 2 × 25 € = 290 €, libellé avec nuits incluses et tarif", () => {
+    const q = computeQuote(baseRequest({ unit: forfait() }));
+    expect(q.cleaningFeeCents).toBe(29000);
+    expect(fee(q)?.amountCents).toBe(29000);
+    expect(fee(q)?.label).toBe("Frais généraux — ménage et charges (2 nuits incluses, +25 €/nuit)");
+    expectLinesSumToTotal(q);
+  });
+
+  it("le supplément s'ajoute au total sans être remisé (long séjour −10 % sur l'hébergement seul)", () => {
+    // 7 nuits : la remise long séjour s'applique ; elle porte sur l'hébergement seul.
+    const sans = computeQuote(baseRequest({ unit: forfait({ chargesExtraNightCents: 0 }), checkout: "2026-03-09" }));
+    const avec = computeQuote(baseRequest({ unit: forfait(), checkout: "2026-03-09" }));
+    expect(avec.nights).toBe(7);
+    expect(avec.discountCents).toBeGreaterThan(0);
+    expect(avec.discountCents).toBe(Math.round(avec.accommodationCents * 0.1));
+    expect(avec.discountCents).toBe(sans.discountCents);
+    expect(avec.cleaningFeeCents - sans.cleaningFeeCents).toBe(5 * 2500);
+    expect(avec.totalCents - sans.totalCents).toBe(5 * 2500);
+    expectLinesSumToTotal(avec);
+  });
+
+  it("supplément à 0 : comportement inchangé, quel que soit le nombre de nuits", () => {
+    const q = computeQuote(baseRequest({ unit: forfait({ chargesExtraNightCents: 0 }), checkout: "2026-03-09" }));
+    expect(q.cleaningFeeCents).toBe(24000);
+    expect(fee(q)?.label).toBe("Frais généraux — ménage et charges");
+  });
+
+  it("nuits incluses = 0 : le supplément joue dès la première nuit", () => {
+    const q = computeQuote(baseRequest({ unit: forfait({ feeIncludedNights: 0 }) }));
+    expect(q.cleaningFeeCents).toBe(24000 + 4 * 2500);
+    expect(fee(q)?.label).toBe("Frais généraux — ménage et charges (0 nuit incluse, +25 €/nuit)");
+  });
+
+  it("composite « somme » : même calcul sur chaque composante, additionné", () => {
+    const domaine: UnitPricingInfo = {
+      ...DOMAINE,
+      components: [
+        { id: 1, name: "La Maison du Scieur", cleaningFeeCents: 12000, chargesExtraNightCents: 3000, feeIncludedNights: 2 },
+        { id: 2, name: "La Scierie", cleaningFeeCents: 9000, chargesExtraNightCents: 2000, feeIncludedNights: 2 },
+      ],
+    };
+    const q = computeQuote(baseRequest({ unit: domaine, checkin: "2026-03-02", checkout: "2026-03-06", adults: 17 }));
+    // 4 nuits : (120 + 2×30) + (90 + 2×20) = 180 + 130 = 310 €
+    expect(q.cleaningFeeCents).toBe(31000);
+    expect(fee(q)?.label).toBe("Frais généraux — ménage et charges (2 nuits incluses, +50 €/nuit)");
+    expectLinesSumToTotal(q);
+  });
+
+  it("composite « somme » à règles de nuits différentes : montant exact, libellé générique", () => {
+    const domaine: UnitPricingInfo = {
+      ...DOMAINE,
+      components: [
+        { id: 1, name: "A", cleaningFeeCents: 10000, chargesExtraNightCents: 1000, feeIncludedNights: 2 },
+        { id: 2, name: "B", cleaningFeeCents: 10000, chargesExtraNightCents: 1000, feeIncludedNights: 3 },
+      ],
+    };
+    const q = computeQuote(baseRequest({ unit: domaine, adults: 10 }));
+    expect(q.cleaningFeeCents).toBe(10000 + 2000 + 10000 + 1000);
+    expect(fee(q)?.label).toBe("Frais généraux — ménage et charges");
+  });
+
+  it("traduction néerlandaise de la ligne avec supplément", () => {
+    expect(nlText("Frais généraux — ménage et charges (2 nuits incluses, +25 €/nuit)"))
+      .toBe("Algemene kosten — schoonmaak en lasten (2 nachten inbegrepen, +25 €/nacht)");
   });
 });
 

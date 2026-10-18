@@ -317,11 +317,15 @@ export function registerPublicRoutes(router: Router): void {
   router.get("/api/public/properties/:slug", async (_req, env, p) => {
     const property = await getProperty(env.DB, p.slug ?? "");
     if (!property || !property.active) return apiError(404, "domaine inconnu");
-    const [units, settings, options] = await Promise.all([
+    const [units, settings, options, links] = await Promise.all([
       listUnits(env.DB, property.id),
       getSettings(env.DB, property.id),
       listOptionsAdmin(env.DB, property.id),
+      listLinks(env.DB, property.id),
     ]);
+    // Maisons que bloque un bien composite (celles dont le moteur additionne les
+    // frais généraux en mode « somme »), comme dans le devis.
+    const physicalIds = new Set(units.filter((u) => u.active && !u.isComposite).map((u) => u.id));
     // Une seule requête pour toute la galerie du domaine : le tunnel affiche
     // les vignettes de chaque hébergement sans aller-retour supplémentaire.
     const gal = photosByUnit(await listUnitPhotos(env.DB, units.map((u) => u.id)));
@@ -345,6 +349,10 @@ export function registerPublicRoutes(router: Router): void {
           capacityMax: u.capacityMax,
           isComposite: u.isComposite,
           cleaningFeeCents: u.cleaningFeeCents,
+          chargesExtraNightCents: u.chargesExtraNightCents,
+          feeIncludedNights: u.feeIncludedNights,
+          compositePricing: u.isComposite ? u.compositePricing : "own",
+          componentIds: u.isComposite ? links.filter((l) => l.unitId === u.id && physicalIds.has(l.blocksUnitId)).map((l) => l.blocksUnitId) : [],
           photoUrl: mainPhotoUrl(u, gal.get(u.id)),
           photos: (gal.get(u.id) ?? []).map(publicPhoto),
           // Pourcentage d'arrhes EFFECTIF de l'hébergement (issue #75) : le
@@ -613,13 +621,15 @@ export function registerPublicRoutes(router: Router): void {
       name: u.name,
       compositePricing: u.isComposite ? u.compositePricing : "own",
       cleaningFeeCents: u.cleaningFeeCents,
+      chargesExtraNightCents: u.chargesExtraNightCents,
+      feeIncludedNights: u.feeIncludedNights,
       depositPct: u.depositPct,
       components: u.isComposite
         ? links
             .filter((l) => l.unitId === u.id && physicalIds.has(l.blocksUnitId))
             .map((l) => {
               const c = active.find((x) => x.id === l.blocksUnitId);
-              return { id: l.blocksUnitId, name: c?.name ?? "", cleaningFeeCents: c?.cleaningFeeCents ?? 0 };
+              return { id: l.blocksUnitId, name: c?.name ?? "", cleaningFeeCents: c?.cleaningFeeCents ?? 0, chargesExtraNightCents: c?.chargesExtraNightCents ?? 0, feeIncludedNights: c?.feeIncludedNights ?? 2 };
             })
         : [],
     });

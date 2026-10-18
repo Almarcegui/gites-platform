@@ -208,6 +208,7 @@ export async function buildPropertyPlan(db: D1Database, propertyId: number, publ
       maxPeople: Math.max(1, content?.capacite ?? u.capacityMax),
       ...(rule && rule.minNights >= 1 ? { minStay: Math.min(rule.minNights, 365) } : {}),
       ...(euros(rack) != null ? { rackRate: euros(rack) } : {}),
+      // Seul le forfait fixe part vers Beds24 : le supplément de charges par nuit n'est pas transmis aux canaux.
       ...(euros(u.cleaningFeeCents) != null ? { cleaningFee: euros(u.cleaningFeeCents) } : {}),
       ...(content ? { description: content.description } : {}),
       featureCodes: content?.featureCodes ?? [],

@@ -60,6 +60,62 @@ describe("PUT /api/admin/settings : valeurs refusées, rien n'est écrit", () =>
   });
 });
 
+describe("frais généraux d'un bien : nuits incluses et supplément par nuit", () => {
+  const MAUVAISES = [
+    ["nuits incluses vidées", { feeIncludedNights: "" }],
+    ["nuits incluses en lettres", { feeIncludedNights: "abc" }],
+    ["nuits incluses négatives", { feeIncludedNights: -3 }],
+    ["nuits incluses décimales", { feeIncludedNights: 12.5 }],
+    ["nuits incluses booléennes", { feeIncludedNights: true }],
+    ["nuits incluses en tableau", { feeIncludedNights: [3] }],
+    ["nuits incluses démesurées", { feeIncludedNights: 1e300 }],
+    ["nuits incluses au-delà de 365", { feeIncludedNights: 366 }],
+    ["supplément vidé", { chargesExtraNightCents: "" }],
+    ["supplément en lettres", { chargesExtraNightCents: "abc" }],
+    ["supplément négatif", { chargesExtraNightCents: -500 }],
+    ["supplément décimal", { chargesExtraNightCents: 12.5 }],
+    ["supplément booléen", { chargesExtraNightCents: true }],
+    ["supplément en tableau", { chargesExtraNightCents: [3] }],
+    ["supplément démesuré", { chargesExtraNightCents: 1e300 }],
+  ] as Array<[string, Record<string, unknown>]>;
+
+  it.each(MAUVAISES)("PATCH : %s → 400, rien n'est écrit", async (_nom, body) => {
+    const before = (await call("GET", "/api/admin/units?property=1")).data.units[0];
+    const r = await call("PATCH", `/api/admin/units/${before.id}`, body);
+    expect(r.status).toBe(400);
+    const after = (await call("GET", "/api/admin/units?property=1")).data.units[0];
+    expect(after).toEqual(before);
+  });
+
+  it.each(MAUVAISES)("POST : %s → 400, aucun bien créé", async (_nom, body) => {
+    const before = (await call("GET", "/api/admin/units?property=1")).data.units.length;
+    const r = await call("POST", "/api/admin/units", { propertyId: 1, name: "Bien de test", ...body });
+    expect(r.status).toBe(400);
+    expect((await call("GET", "/api/admin/units?property=1")).data.units.length).toBe(before);
+  });
+
+  it("des valeurs saines passent : 0 et 2 nuits, 0 et 2500 centimes, sous forme de nombre ou de chaîne", async () => {
+    const id = (await call("GET", "/api/admin/units?property=1")).data.units[0].id;
+    for (const body of [{ feeIncludedNights: 0 }, { feeIncludedNights: 2 }, { chargesExtraNightCents: 0 }, { chargesExtraNightCents: "2500", feeIncludedNights: "3" }]) {
+      expect((await call("PATCH", `/api/admin/units/${id}`, body)).status).toBe(200);
+    }
+    const u = (await call("GET", "/api/admin/units?property=1")).data.units[0];
+    expect([u.chargesExtraNightCents, u.feeIncludedNights]).toEqual([2500, 3]);
+  });
+
+  it("POST : valeurs absentes → défauts (0 centime, 2 nuits) ; valeurs saines gardées", async () => {
+    const a = await call("POST", "/api/admin/units", { propertyId: 1, name: "Sans réglage" });
+    expect(a.status).toBe(201);
+    const b = await call("POST", "/api/admin/units", { propertyId: 1, name: "Avec réglage", chargesExtraNightCents: 2500, feeIncludedNights: 0 });
+    expect(b.status).toBe(201);
+    const units = (await call("GET", "/api/admin/units?property=1")).data.units as Array<Record<string, any>>;
+    const ua = units.find((u) => u.id === a.data.id)!;
+    const ub = units.find((u) => u.id === b.data.id)!;
+    expect([ua.chargesExtraNightCents, ua.feeIncludedNights]).toEqual([0, 2]);
+    expect([ub.chargesExtraNightCents, ub.feeIncludedNights]).toEqual([2500, 0]);
+  });
+});
+
 describe("PATCH /api/admin/units/:id : un bien garde un nom, une capacité, un ménage positif", () => {
   it.each([
     ["nom vidé", { name: "  " }],
