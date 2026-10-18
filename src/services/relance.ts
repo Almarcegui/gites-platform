@@ -42,6 +42,7 @@ import {
 } from "../db/repo";
 import { formatDateFr, queueEmail, refSubject } from "./email";
 import { mailIntroLines } from "../core/mail-intro";
+import { bookingPath } from "../core/domain-pages";
 
 /** Délai après l'expiration du blocage avant d'envoyer la relance (issue : « proposer 24 h »). */
 export const ABANDON_DELAY_HOURS = 24;
@@ -141,14 +142,13 @@ export async function listAbandonedBookings(
  *  410 et donnerait au client l'impression d'un lien cassé. */
 export function resumeUrl(base: string, b: AbandonedBooking): string {
   const q = new URLSearchParams({
-    property: b.propertySlug,
     checkin: b.checkin,
     checkout: b.checkout,
     adults: String(b.adults),
     unit: b.unitSlug,
   });
   if (b.children > 0) q.set("children", String(b.children));
-  return `${base}/book/?${q.toString()}`;
+  return `${base}${bookingPath(b.propertySlug, q)}`;
 }
 
 /** Message de relance — sobre, une seule fois, sans urgence fabriquée.

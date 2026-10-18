@@ -13,7 +13,7 @@
   balises <link rel="canonical"> des pages (issue #30) - sinon les moteurs
   recoivent deux adresses concurrentes pour la meme page.
 
-  Sont volontairement ABSENTS : le tunnel de reservation (/book/), le
+  Sont volontairement ABSENTS : le tunnel de reservation (/book/, /reserver/), le
   back-office (/admin/), les flux iCal (/ical/) et l'API (/api/).
 -->
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">

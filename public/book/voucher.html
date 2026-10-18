@@ -19,6 +19,7 @@
 <script type="module">
 import { cgvHtml } from "./cgv.js";
 import { icsFile } from "./ics.js";
+import { bookingPage } from "./pages.js";
 import { mountPayment, paymentConfig } from "./pay-element.js";
 import { apiHeaders, CGV_NOTE_NL, eur, hour, LANG, mountLangSwitch, pl, t, translateStatic } from "./i18n.js";
 translateStatic();
@@ -70,7 +71,7 @@ const lineLabel = (l) => (l?.publicLabel && l.unitPriceCents != null
   const holdExpiresLocal = Date.now() + holdMsLeft;
   const expiredHtml = `<h3>${t("Option expirée")}</h3>
         <p class="small muted">${t("Le blocage de ce créneau est arrivé à son terme et les dates sont de nouveau ouvertes à la réservation. Aucun montant n'a été débité. Vous pouvez relancer une réservation — écrivez-nous ci-dessous si vous préférez qu'on s'en occupe.")}</p>
-        <p style="margin-top:10px"><a class="btn" href="/book/">${t("Relancer une réservation")}</a></p>`;
+        <p style="margin-top:10px"><a class="btn" href="${esc(bookingPage(b.propertySlug))}">${t("Relancer une réservation")}</a></p>`;
   const holdLabel = (ms) => {
     const min = Math.floor(ms / 60000);
     return min >= 1 ? pl(min, "minute", "minutes") : t("moins d'une minute");

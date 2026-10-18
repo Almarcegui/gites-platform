@@ -141,6 +141,16 @@ try {
     check("écran /admin/ : CSP bloquante, sans script en ligne", /script-src 'self'(;|$)/.test(adminPage.headers.get("content-security-policy") ?? ""), adminPage.headers.get("content-security-policy") ?? "absente");
   }
   check("site public : CSP en observation", (await fetch(`${base}/`)).headers.get("content-security-policy-report-only")?.includes("default-src 'self'") === true);
+  // Page de réservation dédiée au Pré Moré (/reserver/pre-more/) : servie depuis
+  // un sous-dossier, domaine fixé par la page, intégrable en iframe comme /book/
+  // (et seulement elles : le reste du site reste en DENY).
+  const reserver = await fetch(`${base}/reserver/pre-more/`);
+  const reserverHtml = await reserver.text();
+  check("réservation Pré Moré : /reserver/pre-more/ servie", reserver.status === 200 && reserverHtml.includes('<body data-property="pre-more">'), String(reserver.status));
+  check("réservation Pré Moré : sans slash final, servie aussi", (await fetch(`${base}/reserver/pre-more`)).status === 200);
+  check("réservation Pré Moré : iframe autorisée (pas de x-frame-options)", reserver.headers.get("x-frame-options") === null);
+  check("réservation Pré Moré : le reste du site refuse l'iframe", (await fetch(`${base}/`)).headers.get("x-frame-options") === "DENY" && (await fetch(`${base}/la-scierie/`)).headers.get("x-frame-options") === "DENY");
+  check("tunnel /book/ : iframe toujours autorisée", (await fetch(`${base}/book/`)).headers.get("x-frame-options") === null);
   // Cf-Connecting-IP forgé : le serveur le remplace par l'adresse vue. Six
   // questions « depuis six adresses » viennent en fait de la même : la sixième
   // tombe sur le plafond par adresse.

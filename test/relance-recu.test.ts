@@ -126,7 +126,7 @@ describe("relance : consentement (définition de fini)", () => {
     expect(res.sent).toBe(1);
     const [log] = await relances();
     expect(log?.status).toBe("stub"); // envois désactivés : journalisé, pas expédié
-    expect(String(log?.body_text)).toContain("/book/?");
+    expect(String(log?.body_text)).toContain("/reserver/pre-more/?");
   });
 
   it("le filtre de consentement vit dans la requête, pas dans la boucle", async () => {
@@ -224,8 +224,10 @@ describe("relance : le message", () => {
       guestEmail: "c@example.com", checkin: "2026-12-04", checkout: "2026-12-08",
       adults: 3, children: 2, holdExpiresAt: OLD_HOLD,
     });
-    expect(url).toContain("/book/?");
-    expect(url).toContain("property=pre-more");
+    // Pré Moré : page dédiée, le domaine est implicite (pas de property=).
+    expect(url).toContain("/reserver/pre-more/?");
+    expect(url).not.toContain("property=");
+    expect(url).toContain("unit=la-scierie");
     expect(url).toContain("checkin=2026-12-04");
     expect(url).toContain("checkout=2026-12-08");
     expect(url).toContain("adults=3");

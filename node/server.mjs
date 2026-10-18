@@ -11,7 +11,7 @@ import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { readFile, stat, unlink, writeFile } from "node:fs/promises";
-import { dirname, extname, join, normalize, resolve, sep } from "node:path";
+import { dirname, extname, join, normalize, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { openDatabase, snapshotSqlite } from "./sqlite-d1.mjs";
@@ -141,7 +141,7 @@ const { pullMailbox } = await import("../dist/services/mailbox.js");
 const { adminIpCheck, adminIpGate, ipDeniedResponse, markIpDenied } = await import("../dist/core/ip-allow.js");
 const { adminAddressRedirect } = await import("../dist/core/admin-redirect.js");
 const { localizePublicResponse } = await import("../dist/core/public-i18n.js");
-const { cspHeaderFor } = await import("../dist/services/http-headers.js");
+const { cspHeaderFor, isEmbeddablePath } = await import("../dist/services/http-headers.js");
 
 const router = new Router();
 registerPublicRoutes(router);
@@ -207,9 +207,10 @@ function staticHeaders(file) {
   const headers = {
     "content-type": MIME[ext] || "application/octet-stream",
     "x-content-type-options": "nosniff",
-    // Le tunnel de réservation /book/ est la seule page intégrable en iframe
-    // (WordPress) ; partout ailleurs, l'intégration reste interdite.
-    ...(file.startsWith(join(PUBLIC_DIR, "book")) ? {} : { "x-frame-options": "DENY" }),
+    // Le tunnel /book/ et les pages /reserver/<slug>/ sont les seules pages
+    // intégrables en iframe (WordPress) ; partout ailleurs, l'intégration reste
+    // interdite. Même règle que le Worker (isEmbeddablePath).
+    ...(isEmbeddablePath("/" + relative(PUBLIC_DIR, file).split(sep).join("/")) ? {} : { "x-frame-options": "DENY" }),
     "referrer-policy": "strict-origin-when-cross-origin",
     // Même politique que le Worker (src/services/http-headers.ts) : bloquante
     // sur l'écran d'administration, en observation sur le site public.
