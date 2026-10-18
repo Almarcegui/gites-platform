@@ -10,6 +10,7 @@
 import { spawn, spawnSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
+import { request as httpRequest } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -63,6 +64,18 @@ async function waitUp(base) {
   throw new Error("le serveur ne répond pas");
 }
 
+/** Requête brute (fetch refuse TRACE) : rend le code HTTP. */
+function rawRequest(port, method, path) {
+  return new Promise((res, rej) => {
+    const r = httpRequest({ host: "127.0.0.1", port, method, path }, (resp) => {
+      resp.resume();
+      resp.on("end", () => res(resp.statusCode));
+    });
+    r.on("error", rej);
+    r.end();
+  });
+}
+
 let failures = 0;
 function check(label, cond, detail = "") {
   console.log(`${cond ? "ok  " : "ÉCHEC"} ${label}${!cond && detail ? ` — ${detail}` : ""}`);
@@ -99,7 +112,7 @@ try {
   const tasks = await fetch(`${base}/api/admin/tasks`, { headers: auth });
   check("ménage : GET /api/admin/tasks", tasks.status === 200, String(tasks.status));
   const tpl = await (await fetch(`${base}/api/admin/message-templates`, { headers: auth })).json();
-  check("modèles : quatre modèles d'origine", tpl.templates?.length === 4, JSON.stringify(tpl).slice(0, 120));
+  check("modèles : au moins les quatre modèles d'origine (0037 en ajoute)", tpl.templates?.length >= 4, JSON.stringify(tpl).slice(0, 120));
   check("cron : /internal/cron", (await fetch(`${base}/internal/cron?key=cle-de-fumee`)).status === 200);
 
   const form = new FormData();
@@ -118,6 +131,35 @@ try {
   const malformedApi = await fetch(`${base}/ical/%c0`);
   check("adresse mal encodée sur une route dynamique (/ical/%c0) : 400", malformedApi.status === 400, String(malformedApi.status));
   check("adresse mal encodée : rien dans unhandled.error", !srv.log().includes("[erreur]"), srv.log().slice(-200));
+
+  // Audit de sécurité du 17/10 : méthode TRACE (500 + ligne d'erreur en base à
+  // chaque appel anonyme), CSP bloquante de l'écran, en-têtes « cf-… » forgés.
+  const trace = await rawRequest(port, "TRACE", "/api/public/today");
+  check("méthode TRACE : 405, sans erreur journalisée", trace === 405 && !srv.log().includes("[erreur]"), `${trace} ${srv.log().slice(-200)}`);
+  const adminPage = await fetch(`${base}/admin/`);
+  if (adminPage.status === 200) {
+    check("écran /admin/ : CSP bloquante, sans script en ligne", /script-src 'self'(;|$)/.test(adminPage.headers.get("content-security-policy") ?? ""), adminPage.headers.get("content-security-policy") ?? "absente");
+  }
+  check("site public : CSP en observation", (await fetch(`${base}/`)).headers.get("content-security-policy-report-only")?.includes("default-src 'self'") === true);
+  // Cf-Connecting-IP forgé : le serveur le remplace par l'adresse vue. Six
+  // questions « depuis six adresses » viennent en fait de la même : la sixième
+  // tombe sur le plafond par adresse.
+  const ask = (i) => fetch(`${base}/api/public/contact`, {
+    method: "POST",
+    headers: { "content-type": "application/json", "cf-connecting-ip": `203.0.113.${i}` },
+    body: JSON.stringify({ property: "pre-more", name: "Fumée", email: `fumee${i}@example.com`, message: "Question de fumée" }),
+  });
+  // Ce serveur-ci n'a pas TRUST_PROXY et reçoit tout de 127.0.0.1 : c'est le
+  // cas « Caddy sans TRUST_PROXY ». L'adresse de bouclage n'est pas posée, les
+  // plafonds par adresse ne s'appliquent pas (sinon communs à tout le site).
+  const asked = [];
+  for (let i = 1; i <= 6; i++) asked.push((await ask(i)).status);
+  check("bouclage sans TRUST_PROXY : pas de plafond commun à tous les visiteurs", asked.every((st) => st === 201), asked.join(","));
+  check("bouclage sans TRUST_PROXY : avertissement au démarrage et à la première requête", srv.log().includes("TRUST_PROXY ≠ true") && srv.log().includes("requêtes reçues de 127.0.0.1 sans TRUST_PROXY"), srv.log().slice(-300));
+  for (let i = 7; i <= 8; i++) await ask(i);
+  const auditRows = await (await fetch(`${base}/api/admin/audit?limit=500`, { headers: auth })).json();
+  const notes = JSON.stringify(auditRows).split("config.trust_proxy_absent").length - 1;
+  check("bouclage sans TRUST_PROXY : une seule ligne d'audit", notes === 1, String(notes));
   const huge = new Uint8Array(10 * 1024 * 1024);
   const tooBig = await fetch(`${base}/api/admin/units/1/photos/upload`, { method: "POST", headers: { ...auth, "content-type": "application/octet-stream" }, body: huge }).catch(() => null);
   check("photo : corps de 10 Mo refusé (413)", !tooBig || tooBig.status === 413, String(tooBig?.status));
@@ -129,6 +171,19 @@ try {
   const link = await (await fetch(`${base}/api/admin/task-links`, { method: "POST", headers: { ...auth, "content-type": "application/json" }, body: JSON.stringify({ label: "Fumée" }) })).json();
   const page = await fetch(link.url);
   check("lien de partage : page publique", page.status === 200 && (await page.text()).includes("Ménage"));
+
+  // Cf-Access-Jwt-Assertion forgé, sur un serveur SANS ADMIN_TOKEN : la garde
+  // l'aurait pris pour une authentification Cloudflare Access (accès complet,
+  // export de la base compris). Devant Node, l'en-tête est retiré.
+  const portNu = await freePort();
+  const baseNu = `http://127.0.0.1:${portNu}`;
+  const srvNu = start(portNu, dir, { ADMIN_TOKEN: "", SQLITE_PATH: join(dir, "smoke-nu.db") });
+  servers.push(srvNu);
+  await waitUp(baseNu);
+  const forged = await fetch(`${baseNu}/api/admin/users`, { headers: { "cf-access-jwt-assertion": "jeton-invente" } });
+  check("Cf-Access-Jwt-Assertion forgé sans ADMIN_TOKEN : refusé", forged.status === 401, String(forged.status));
+  const forgedExport = await fetch(`${baseNu}/api/admin/export.sqlite`, { headers: { "cf-access-jwt-assertion": "jeton-invente" } });
+  check("Cf-Access-Jwt-Assertion forgé : pas d'export de la base", forgedExport.status === 401, String(forgedExport.status));
 
   // Garde IP : un second serveur, fermé à tout sauf 10.9.9.9.
   const port2 = await freePort();
@@ -150,6 +205,19 @@ try {
   servers.push(srv3);
   await waitUp(base3);
   const from = (ip) => ({ "x-forwarded-for": ip });
+  // Avec TRUST_PROXY : l'adresse vient de X-Forwarded-For (posé par Caddy) ; un
+  // Cf-Connecting-IP forgé ne change rien. Six questions « depuis six adresses »
+  // viennent de la même : la sixième tombe sur le plafond par adresse.
+  const askVia = (i) => fetch(`${base3}/api/public/contact`, {
+    method: "POST",
+    headers: { "content-type": "application/json", ...from("198.51.100.42"), "cf-connecting-ip": `203.0.113.${i}` },
+    body: JSON.stringify({ property: "pre-more", name: "Fumée", email: `proxy${i}@example.com`, message: "Question de fumée" }),
+  });
+  const askedVia = [];
+  for (let i = 1; i <= 6; i++) askedVia.push((await askVia(i)).status);
+  check("Cf-Connecting-IP forgé ignoré : plafond de contact par adresse réelle", askedVia.slice(0, 5).every((st) => st === 201) && askedVia[5] === 429, askedVia.join(","));
+  const otherVisitor = await fetch(`${base3}/api/public/contact`, { method: "POST", headers: { "content-type": "application/json", ...from("198.51.100.43") }, body: JSON.stringify({ property: "pre-more", name: "Fumée", email: "autre@example.com", message: "Question de fumée" }) });
+  check("TRUST_PROXY : un autre visiteur n'est pas touché par le plafond du premier", otherVisitor.status === 201, String(otherVisitor.status));
   const json = { "content-type": "application/json" };
   const key = await (await fetch(`${base3}/api/admin/service-keys`, { method: "POST", headers: { ...auth, ...from("10.9.9.9"), ...json }, body: JSON.stringify({ name: "fumee-mac" }) })).json();
   check("garde IP : clé de service créée depuis la liste", typeof key.key === "string", JSON.stringify(key).slice(0, 120));

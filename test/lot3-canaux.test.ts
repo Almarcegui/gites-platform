@@ -2,6 +2,7 @@
 // avis Airbnb et Booking relevés au cron (migration 0025).
 // Aucun appel réseau réel : fetch est remplacé pour api.beds24.com (faux serveur).
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { installFakeAccess } from "./helpers/cf-access";
 import { createTestDb, type TestDb } from "./helpers/d1";
 import { FauxBeds24 } from "./helpers/beds24-faux";
 import { Router } from "../src/api/router";
@@ -328,10 +329,15 @@ describe("revue Codex 1", () => {
   });
 
   it("Cloudflare Access compte comme un humain (lien de ménage permis)", async () => {
-    const res = await router.handle(new Request("http://test.local/api/admin/task-links", {
-      method: "POST", headers: { "cf-access-jwt-assertion": "jeton", "content-type": "application/json" }, body: JSON.stringify({ label: "Ménage Access" }),
-    }), { ...env(false), ADMIN_TOKEN: undefined } as Env);
-    expect(res!.status).toBe(201);
+    const access = await installFakeAccess();
+    try {
+      const res = await router.handle(new Request("http://test.local/api/admin/task-links", {
+        method: "POST", headers: { "cf-access-jwt-assertion": await access.token(), "content-type": "application/json" }, body: JSON.stringify({ label: "Ménage Access" }),
+      }), { ...env(false), ADMIN_TOKEN: undefined, ...access.env } as Env);
+      expect(res!.status).toBe(201);
+    } finally {
+      access.restore();
+    }
   });
 });
 

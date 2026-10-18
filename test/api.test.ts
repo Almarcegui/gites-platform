@@ -9,6 +9,7 @@ import { Router } from "../src/api/router";
 import { registerPublicRoutes } from "../src/api/public";
 import { registerAdminRoutes } from "../src/api/admin";
 import { addDays, todayInZone } from "../src/core/dates";
+import { installFakeAccess } from "./helpers/cf-access";
 
 const router = new Router();
 registerPublicRoutes(router);
@@ -456,9 +457,19 @@ describe("admin", () => {
     const nu: Env = { ...env, ADMIN_TOKEN: undefined };
     // avant le correctif, cette requête renvoyait 200 et exposait le fichier clients
     expect((await call("GET", "/api/admin/bookings", undefined, { authorization: "" }, nu)).status).toBe(503);
-    // Cloudflare Access authentifie en amont : l'en-tête qu'il injecte suffit
-    const viaAccess = await call("GET", "/api/admin/bookings", undefined, { "cf-access-jwt-assertion": "jwt-factice" }, nu);
-    expect(viaAccess.status).toBe(200);
+    // Cloudflare Access : un en-tête inventé ne prouve rien (audit du 17/10 —
+    // il ouvrait tout le back-office). Seul un jeton signé par l'équipe passe.
+    const forged = await call("GET", "/api/admin/bookings", undefined, { "cf-access-jwt-assertion": "jwt-factice" }, nu);
+    expect(forged.status).toBe(503);
+    const access = await installFakeAccess();
+    try {
+      const nuAccess: Env = { ...nu, ...access.env };
+      expect((await call("GET", "/api/admin/bookings", undefined, { "cf-access-jwt-assertion": "jwt-factice" }, nuAccess)).status).toBe(503);
+      const viaAccess = await call("GET", "/api/admin/bookings", undefined, { "cf-access-jwt-assertion": await access.token() }, nuAccess);
+      expect(viaAccess.status).toBe(200);
+    } finally {
+      access.restore();
+    }
     // les routes publiques ne sont pas affectées
     expect((await call("GET", "/api/public/today", undefined, {}, nu)).status).toBe(200);
   });

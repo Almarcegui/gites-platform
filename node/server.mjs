@@ -11,7 +11,7 @@ import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { readFile, stat, unlink, writeFile } from "node:fs/promises";
-import { dirname, extname, join, normalize, resolve } from "node:path";
+import { dirname, extname, join, normalize, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { openDatabase, snapshotSqlite } from "./sqlite-d1.mjs";
@@ -141,6 +141,7 @@ const { pullMailbox } = await import("../dist/services/mailbox.js");
 const { adminIpCheck, adminIpGate, ipDeniedResponse, markIpDenied } = await import("../dist/core/ip-allow.js");
 const { adminAddressRedirect } = await import("../dist/core/admin-redirect.js");
 const { localizePublicResponse } = await import("../dist/core/public-i18n.js");
+const { cspHeaderFor } = await import("../dist/services/http-headers.js");
 
 const router = new Router();
 registerPublicRoutes(router);
@@ -182,9 +183,12 @@ const MIME = {
  *  sortie du dossier (traversée de répertoire). */
 function resolveStatic(pathname) {
   let rel = decodeURIComponent(pathname);
+  // Octet nul : refus net (les fonctions de fichier lèveraient une exception).
+  if (rel.includes("\0")) return null;
   if (rel.endsWith("/")) rel += "index.html";
   const full = normalize(join(PUBLIC_DIR, rel));
-  if (!full.startsWith(PUBLIC_DIR)) return null;
+  // Le séparateur compte : sans lui, un dossier voisin « public-… » passerait.
+  if (!full.startsWith(PUBLIC_DIR + sep)) return null;
   if (existsSync(full) && statSync(full).isFile()) return full;
   // /book → /book/index.html
   const asDir = join(full, "index.html");
@@ -207,6 +211,9 @@ function staticHeaders(file) {
     // (WordPress) ; partout ailleurs, l'intégration reste interdite.
     ...(file.startsWith(join(PUBLIC_DIR, "book")) ? {} : { "x-frame-options": "DENY" }),
     "referrer-policy": "strict-origin-when-cross-origin",
+    // Même politique que le Worker (src/services/http-headers.ts) : bloquante
+    // sur l'écran d'administration, en observation sur le site public.
+    ...cspHeaderFor(file.startsWith(join(PUBLIC_DIR, "admin") + sep) ? "/admin/" : "/"),
   };
   if (file.startsWith(join(PUBLIC_DIR, "img")) || file.startsWith(join(PUBLIC_DIR, "admin", "assets"))) {
     // Images, et fichiers hachés par le build de l'écran : le nom change avec
@@ -237,6 +244,24 @@ function clientIp(req) {
   return req.socket.remoteAddress || "";
 }
 
+/** Adresse de bouclage (127.0.0.0/8, ::1, ::ffff:127.x.x.x). */
+function isLoopback(ip) {
+  const v = ip.trim().toLowerCase();
+  return v === "::1" || /^127\./.test(v) || /^::ffff:127\./.test(v);
+}
+
+/** Une seule trace par processus : requêtes reçues du bouclage sans TRUST_PROXY. */
+let loopbackNoted = false;
+function noteLoopbackWithoutProxy() {
+  if (loopbackNoted) return;
+  loopbackNoted = true;
+  console.warn("[gites] ⚠️ requêtes reçues de 127.0.0.1 sans TRUST_PROXY=true : plafonds par adresse IP désactivés (derrière Caddy, poser TRUST_PROXY=true dans .env)");
+  db.prepare("INSERT INTO audit_log (actor, action, entity, detail) VALUES ('cron', 'config.trust_proxy_absent', NULL, ?1)")
+    .bind(JSON.stringify({ message: "requêtes reçues du bouclage sans TRUST_PROXY : plafonds par adresse IP désactivés" }))
+    .run()
+    .catch((e) => console.error("[audit_log indisponible]", e));
+}
+
 /** Fichier de UPLOADS_DIR pour /uploads/<nom>, ou null (nom strict : pas de
  *  sous-dossier, pas de traversée possible). */
 function resolveUpload(pathname) {
@@ -250,9 +275,24 @@ async function toRequest(req, origin) {
   const url = new URL(req.url, origin);
   const headers = new Headers();
   for (const [k, v] of Object.entries(req.headers)) {
+    // Les en-têtes « cf-… » ne sont posés que par Cloudflare, devant un Worker.
+    // Ici, devant Node, ils viendraient du visiteur lui-même : un
+    // Cf-Access-Jwt-Assertion inventé ouvrait le back-office dès qu'ADMIN_TOKEN
+    // manquait, et un Cf-Connecting-IP inventé déjouait les plafonds par adresse
+    // et faussait l'IP de la preuve d'acceptation des CGV. On les retire tous.
+    if (k.toLowerCase().startsWith("cf-")) continue;
     if (Array.isArray(v)) for (const one of v) headers.append(k, one);
     else if (v !== undefined) headers.set(k, v);
   }
+  // Le code métier lit l'adresse du client dans cf-connecting-ip (contrat du
+  // Worker) : on y met celle que le serveur a réellement vue. Exception : une
+  // adresse de bouclage sans TRUST_PROXY, c'est le proxy (Caddy) qui parle
+  // pour tout le monde ; la poser rendrait les plafonds par adresse communs à
+  // TOUS les visiteurs. On la laisse vide : plafonds par adresse inactifs,
+  // comme avant l'audit, plafonds par compte toujours actifs.
+  const ip = clientIp(req);
+  if (ip && !TRUST_PROXY && isLoopback(ip)) noteLoopbackWithoutProxy();
+  else if (ip) headers.set("cf-connecting-ip", ip);
   const hasBody = req.method !== "GET" && req.method !== "HEAD";
   let body;
   if (hasBody) {
@@ -289,6 +329,16 @@ async function sendResponse(res, response) {
 
 // --- serveur ----------------------------------------------------------------
 
+const ALLOWED_METHODS = new Set(["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]);
+
+/** Comparaison à temps constant (clé du cron). */
+function safeEqual(a, b) {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i += 1) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
 const server = createServer(async (req, res) => {
   const origin = env.PUBLIC_BASE_URL.startsWith("http") ? env.PUBLIC_BASE_URL : `http://localhost:${PORT}`;
   let url;
@@ -299,12 +349,20 @@ const server = createServer(async (req, res) => {
     return;
   }
 
+  // Méthodes que le serveur connaît. TRACE (refusé par le constructeur
+  // Request) faisait une erreur 500 et une ligne « unhandled.error » en base à
+  // chaque appel anonyme : 405, sans trace.
+  if (!ALLOWED_METHODS.has(req.method)) {
+    res.writeHead(405, { allow: [...ALLOWED_METHODS].join(", "), "content-type": "text/plain; charset=utf-8" }).end("méthode non autorisée");
+    return;
+  }
+
   try {
     // 1. Tâche planifiée déclenchée par le Planificateur Infomaniak (une URL
     //    appelée toutes les 15 min — il n'y a pas de crontab en mutualisé).
     if (url.pathname === "/internal/cron") {
       const given = url.searchParams.get("key") ?? "";
-      if (!CRON_KEY || given.length !== CRON_KEY.length || given !== CRON_KEY) {
+      if (!CRON_KEY || !safeEqual(given, CRON_KEY)) {
         res.writeHead(401, { "content-type": "application/json" }).end(JSON.stringify({ error: "clé invalide" }));
         return;
       }
@@ -445,6 +503,7 @@ server.listen(PORT, () => {
   console.log(`[gites] boîte  : ${env.IMAP_FETCH ? `relève IMAP ${env.IMAP_USER} @ ${env.IMAP_HOST || "imap.gmail.com"}, dossier ${(env.IMAP_FOLDER || "").trim() || "INBOX"} (lecture seule)` : "relève IMAP inactive (IMAP_USER / mot de passe absents)"}`);
   if (!env.ADMIN_TOKEN) console.warn("[gites] ⚠️ ADMIN_TOKEN absent — le back-office refusera tout (garde fail-closed)");
   if (!CRON_KEY) console.warn("[gites] ⚠️ CRON_KEY absente — /internal/cron est désactivé");
+  if (!TRUST_PROXY) console.warn("[gites] ⚠️ TRUST_PROXY ≠ true — derrière un proxy (Caddy), les plafonds par adresse IP seront désactivés (adresse de bouclage ignorée)");
 });
 
 // Filet entre deux passages du cron (15 min) : la boîte de contact est relevée toutes les

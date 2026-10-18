@@ -95,6 +95,8 @@ const MAX_ADVANCE_DAYS = 730; // réservation à 2 ans max
 export const MAX_ACTIVE_HOLDS = 3;
 /** Réservations directes tolérées sur une heure glissante. */
 export const MAX_BOOKINGS_PER_HOUR = 8;
+/** Questions du formulaire de contact acceptées par adresse IP et par heure. */
+export const MAX_CONTACTS_PER_IP_HOUR = 5;
 
 // --- suggestions de dates valides (issue #66) -------------------------------
 // Quand le séjour demandé est trop court (minimum de nuits) ou tombe un jour
@@ -1239,6 +1241,28 @@ export function registerPublicRoutes(router: Router): void {
     if (message.length < 5 || message.length > 4000) return apiError(400, "message trop court ou trop long");
     const property = await getProperty(db, body.property ?? "");
     if (!property || !property.active) return apiError(404, "domaine inconnu");
+    // Plafond par adresse (audit de sécurité du 17/10) : sans lui, un script
+    // remplissait Messages à volonté et faisait partir des accusés de réception
+    // — avec le texte qu'il voulait — vers autant d'adresses qu'il en inventait.
+    // La trace (message.contact) est inscrite AVANT le comptage : une rafale
+    // parallèle se compte elle-même. Refusée, elle est retirée aussitôt.
+    const ip = req.headers.get("cf-connecting-ip")?.trim() || null;
+    let traceId: number | null = null;
+    if (ip) {
+      const ins = await db
+        .prepare("INSERT INTO audit_log (actor, action, entity, detail) VALUES ('public', 'message.contact', NULL, ?1)")
+        .bind(JSON.stringify({ property: property.slug, from: email, ip }))
+        .run();
+      traceId = Number(ins.meta.last_row_id);
+      const recent = await db
+        .prepare("SELECT COUNT(*) AS n FROM audit_log WHERE action = 'message.contact' AND created_at > datetime('now', '-1 hour') AND json_extract(detail, '$.ip') = ?1")
+        .bind(ip)
+        .first<{ n: number }>();
+      if (Number(recent?.n ?? 0) > MAX_CONTACTS_PER_IP_HOUR) {
+        await db.prepare("DELETE FROM audit_log WHERE id = ?1").bind(traceId).run();
+        return apiError(429, "Trop de messages envoyés depuis cette connexion. Réessayez dans une heure, ou écrivez-nous directement par e-mail.", { code: "too_many_messages" });
+      }
+    }
     const guest = await db.prepare("SELECT id FROM guests WHERE lower(email) = ?1").bind(email).first<{ id: number }>();
     const id = await insertInboundMessage(db, {
       propertyId: property.id,
@@ -1255,7 +1279,14 @@ export function registerPublicRoutes(router: Router): void {
     // elle va dans l'objet, et la relève de la boîte y rattache la réponse.
     const reference = `QU-${todayInZone().slice(0, 4)}-${String(id).padStart(4, "0")}`;
     await db.prepare("UPDATE messages SET subject = ?1 WHERE id = ?2").bind(refSubject(reference, `Question de ${name} — ${property.name}`), id).run();
-    await audit(db, "public", "message.contact", `message:${id}`, { property: property.slug, from: email, reference });
+    if (traceId != null) {
+      await db
+        .prepare("UPDATE audit_log SET entity = ?1, detail = ?2 WHERE id = ?3")
+        .bind(`message:${id}`, JSON.stringify({ property: property.slug, from: email, reference, ip }), traceId)
+        .run();
+    } else {
+      await audit(db, "public", "message.contact", `message:${id}`, { property: property.slug, from: email, reference });
+    }
     const ack = await sendContactAck(db, env, { email, reference, property, name, message, lang: body.lang === "nl" ? "nl" : "fr" });
     return json({ ok: true, reference, ackSent: ack, deliveredTo: publicContact(property.contactEmail) }, 201);
   });

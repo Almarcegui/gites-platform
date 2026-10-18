@@ -16,7 +16,9 @@
   "assets": {
     "directory": "public",
     "binding": "ASSETS",
-    "run_worker_first": ["/api/*", "/ical/*", "/"]
+    // /admin et /admin/* aussi : sans le Worker, l'écran partait sans sa CSP
+    // bloquante ni la garde ADMIN_ALLOWED_IPS (revue Codex du 17/10).
+    "run_worker_first": ["/api/*", "/ical/*", "/", "/admin", "/admin/*"]
   },
 
   "d1_databases": [
@@ -75,7 +77,9 @@
       "assets": {
         "directory": "public",
         "binding": "ASSETS",
-        "run_worker_first": ["/api/*", "/ical/*", "/"]
+        // /admin et /admin/* aussi : sans le Worker, l'écran partait sans sa CSP
+    // bloquante ni la garde ADMIN_ALLOWED_IPS (revue Codex du 17/10).
+    "run_worker_first": ["/api/*", "/ical/*", "/", "/admin", "/admin/*"]
       },
       "d1_databases": [
         {
@@ -115,7 +119,9 @@
       "assets": {
         "directory": "public",
         "binding": "ASSETS",
-        "run_worker_first": ["/api/*", "/ical/*", "/"]
+        // /admin et /admin/* aussi : sans le Worker, l'écran partait sans sa CSP
+    // bloquante ni la garde ADMIN_ALLOWED_IPS (revue Codex du 17/10).
+    "run_worker_first": ["/api/*", "/ical/*", "/", "/admin", "/admin/*"]
       },
       "d1_databases": [
         {

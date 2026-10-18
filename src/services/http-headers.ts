@@ -70,6 +70,42 @@ const CSP_REPORT_ONLY = [
   `frame-src https://www.google.com ${STRIPE_FRAME_SRC} ${TURNSTILE_SRC}`,
 ].join("; ");
 
+/** Politique BLOQUANTE de l'écran d'administration (/admin/).
+ *
+ *  Le back-office est une application construite (Vite + React) : aucun script
+ *  en ligne, aucune origine tierce. C'est aussi l'écran qui affiche ce qui vient
+ *  de l'extérieur (mails relevés par IMAP, messages et noms de clients, avis des
+ *  plateformes) et qui garde le jeton de session dans le navigateur : une faille
+ *  XSS y vaudrait le compte. La politique ferme donc tout ce qui n'est pas du
+ *  site. `style-src 'unsafe-inline'` reste ouvert : React pose des attributs
+ *  `style`, et une injection de style ne vole pas de jeton. Images : le site,
+ *  les aperçus locaux (`blob:`, `data:`) et les photos importées encore
+ *  hébergées ailleurs (`https:`). */
+const CSP_ADMIN = [
+  "default-src 'self'",
+  "base-uri 'self'",
+  // blob: : un PDF ou un export ouvert depuis l'écran (URL.createObjectURL)
+  // hérite de cette politique ; on ne prend pas le risque de bloquer sa visionneuse.
+  "object-src 'self' blob:",
+  "frame-ancestors 'none'",
+  "form-action 'self'",
+  "script-src 'self'",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob: https:",
+  "font-src 'self' data:",
+  "connect-src 'self'",
+  "worker-src 'self'",
+  "manifest-src 'self'",
+  "frame-src 'self' blob:",
+].join("; ");
+
+/** En-tête CSP à poser pour ce chemin : bloquant sous /admin/, observation
+ *  ailleurs. Partagé avec le serveur Node (`node/server.mjs`). */
+export function cspHeaderFor(pathname: string): Record<string, string> {
+  if (pathname === "/admin" || pathname.startsWith("/admin/")) return { "content-security-policy": CSP_ADMIN };
+  return { "content-security-policy-report-only": CSP_REPORT_ONLY };
+}
+
 /** Permissions-Policy volontairement minimale : on coupe les trois capteurs
  *  qu'aucune page du site n'utilise. Rien de plus — une liste exhaustive se
  *  périme et finit par bloquer une fonctionnalité légitime. */
@@ -112,7 +148,7 @@ export function withStandardHeaders(response: Response, url: URL): Response {
   if (!url.pathname.startsWith("/book/")) h.set("x-frame-options", "DENY");
   h.set("referrer-policy", "strict-origin-when-cross-origin");
   h.set("permissions-policy", PERMISSIONS_POLICY);
-  h.set("content-security-policy-report-only", CSP_REPORT_ONLY);
+  for (const [k, v] of Object.entries(cspHeaderFor(url.pathname))) h.set(k, v);
 
   // HSTS n'a de sens que sur une réponse déjà servie en HTTPS ; l'annoncer sur
   // http://localhost n'apporte rien (les navigateurs l'ignorent) et brouille
