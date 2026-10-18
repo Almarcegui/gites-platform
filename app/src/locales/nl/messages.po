@@ -2570,6 +2570,10 @@ msgid "Chargement…"
 msgstr "Laden…"
 
 #: src/pages/settings/Domain.tsx
+msgid "charges ajoutées à chaque nuit après les nuits incluses"
+msgstr "kosten die bij elke nacht na de inbegrepen nachten komen"
+
+#: src/pages/settings/Domain.tsx
 msgid "Chemin du fichier"
 msgstr "Pad van het bestand"
 
@@ -5685,6 +5689,10 @@ msgstr "verkochte nacht"
 msgid "Nuits"
 msgstr "Nachten"
 
+#: src/pages/settings/Domain.tsx
+msgid "nuits couvertes par le forfait de frais généraux"
+msgstr "nachten gedekt door het forfait voor algemene kosten"
+
 #. placeholder {0}: longDate(r.from)
 #. placeholder {0}: longDate(sel.from)
 #. placeholder {1}: longDate(r.to)
@@ -5693,6 +5701,10 @@ msgstr "Nachten"
 #: src/pages/settings/Tarifs.tsx
 msgid "Nuits du {0} au {1}"
 msgstr "Nachten van {0} tot {1}"
+
+#: src/pages/settings/Domain.tsx
+msgid "Nuits incluses"
+msgstr "Inbegrepen nachten"
 
 #: src/pages/settings/Domain.tsx
 #: src/pages/settings/Tarifs.tsx
@@ -7595,6 +7607,10 @@ msgstr "Suggestie"
 #: src/pages/settings/Tarifs.tsx
 msgid "Suggestions"
 msgstr "Suggesties"
+
+#: src/pages/settings/Domain.tsx
+msgid "Supplément par nuit au-delà (€)"
+msgstr "Toeslag per extra nacht (€)"
 
 #: src/pages/settings/Promotions.tsx
 msgid "Supprimer"

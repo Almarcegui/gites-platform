@@ -2566,6 +2566,10 @@ msgid "Chargement…"
 msgstr "Chargement…"
 
 #: src/pages/settings/Domain.tsx
+msgid "charges ajoutées à chaque nuit après les nuits incluses"
+msgstr "charges ajoutées à chaque nuit après les nuits incluses"
+
+#: src/pages/settings/Domain.tsx
 msgid "Chemin du fichier"
 msgstr "Chemin du fichier"
 
@@ -5681,6 +5685,10 @@ msgstr "nuit vendue"
 msgid "Nuits"
 msgstr "Nuits"
 
+#: src/pages/settings/Domain.tsx
+msgid "nuits couvertes par le forfait de frais généraux"
+msgstr "nuits couvertes par le forfait de frais généraux"
+
 #. placeholder {0}: longDate(r.from)
 #. placeholder {0}: longDate(sel.from)
 #. placeholder {1}: longDate(r.to)
@@ -5689,6 +5697,10 @@ msgstr "Nuits"
 #: src/pages/settings/Tarifs.tsx
 msgid "Nuits du {0} au {1}"
 msgstr "Nuits du {0} au {1}"
+
+#: src/pages/settings/Domain.tsx
+msgid "Nuits incluses"
+msgstr "Nuits incluses"
 
 #: src/pages/settings/Domain.tsx
 #: src/pages/settings/Tarifs.tsx
@@ -7591,6 +7603,10 @@ msgstr "Suggestion"
 #: src/pages/settings/Tarifs.tsx
 msgid "Suggestions"
 msgstr "Suggestions"
+
+#: src/pages/settings/Domain.tsx
+msgid "Supplément par nuit au-delà (€)"
+msgstr "Supplément par nuit au-delà (€)"
 
 #: src/pages/settings/Promotions.tsx
 msgid "Supprimer"

@@ -885,6 +885,12 @@ export function registerAdminRoutes(router: Router): void {
     if (body.cleaningFeeCents != null && (String(body.cleaningFeeCents).trim() === "" || !(Number.isFinite(Number(body.cleaningFeeCents)) && Number(body.cleaningFeeCents) >= 0))) {
       return apiError(400, "frais de ménage : un montant positif ou nul");
     }
+    if (body.chargesExtraNightCents != null && (String(body.chargesExtraNightCents).trim() === "" || !(Number.isFinite(Number(body.chargesExtraNightCents)) && Number(body.chargesExtraNightCents) >= 0))) {
+      return apiError(400, "supplément de charges par nuit : un montant positif ou nul");
+    }
+    if (body.feeIncludedNights != null && (String(body.feeIncludedNights).trim() === "" || !(Number.isInteger(Number(body.feeIncludedNights)) && Number(body.feeIncludedNights) >= 0))) {
+      return apiError(400, "nuits incluses dans le forfait : un nombre entier positif ou nul");
+    }
 
     await updateUnit(env.DB, id, {
       priceMinCents,
@@ -897,6 +903,8 @@ export function registerAdminRoutes(router: Router): void {
       active: typeof body.active === "boolean" ? body.active : undefined,
       compositePricing: body.compositePricing === "own" || body.compositePricing === "sum" ? body.compositePricing : undefined,
       cleaningFeeCents: body.cleaningFeeCents != null ? Math.round(Number(body.cleaningFeeCents)) : undefined,
+      chargesExtraNightCents: body.chargesExtraNightCents != null ? Math.round(Number(body.chargesExtraNightCents)) : undefined,
+      feeIncludedNights: body.feeIncludedNights != null ? Number(body.feeIncludedNights) : undefined,
       photoUrl: typeof body.photoUrl === "string" ? body.photoUrl.trim() : undefined,
     });
     await audit(env.DB, "admin", "unit.update", `unit:${id}`, { ...body, par: currentUser(req) });
@@ -920,6 +928,8 @@ export function registerAdminRoutes(router: Router): void {
       isComposite: body.isComposite === true,
       compositePricing: body.compositePricing === "sum" ? "sum" : "own",
       cleaningFeeCents: body.cleaningFeeCents != null ? Math.round(Number(body.cleaningFeeCents)) : 0,
+      chargesExtraNightCents: body.chargesExtraNightCents != null ? Math.max(0, Math.round(Number(body.chargesExtraNightCents)) || 0) : 0,
+      feeIncludedNights: body.feeIncludedNights != null ? Math.max(0, Math.floor(Number(body.feeIncludedNights)) || 0) : 2,
       photoUrl: typeof body.photoUrl === "string" ? body.photoUrl.trim() || null : null,
     });
     if (Array.isArray(body.linkedUnitIds) && body.linkedUnitIds.length > 0) {
@@ -1135,13 +1145,15 @@ export function registerAdminRoutes(router: Router): void {
         name: u.name,
         compositePricing: u.isComposite ? u.compositePricing : "own",
         cleaningFeeCents: u.cleaningFeeCents,
+        chargesExtraNightCents: u.chargesExtraNightCents,
+        feeIncludedNights: u.feeIncludedNights,
         depositPct: u.depositPct,
         components: u.isComposite
           ? links
               .filter((l) => l.unitId === u.id && physicalIds.has(l.blocksUnitId))
               .map((l) => {
                 const c = units.find((x) => x.id === l.blocksUnitId);
-                return { id: l.blocksUnitId, name: c?.name ?? "", cleaningFeeCents: c?.cleaningFeeCents ?? 0 };
+                return { id: l.blocksUnitId, name: c?.name ?? "", cleaningFeeCents: c?.cleaningFeeCents ?? 0, chargesExtraNightCents: c?.chargesExtraNightCents ?? 0, feeIncludedNights: c?.feeIncludedNights ?? 2 };
               })
           : [],
       };

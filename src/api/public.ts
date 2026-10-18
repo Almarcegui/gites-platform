@@ -345,6 +345,8 @@ export function registerPublicRoutes(router: Router): void {
           capacityMax: u.capacityMax,
           isComposite: u.isComposite,
           cleaningFeeCents: u.cleaningFeeCents,
+          chargesExtraNightCents: u.chargesExtraNightCents,
+          feeIncludedNights: u.feeIncludedNights,
           photoUrl: mainPhotoUrl(u, gal.get(u.id)),
           photos: (gal.get(u.id) ?? []).map(publicPhoto),
           // Pourcentage d'arrhes EFFECTIF de l'hébergement (issue #75) : le
@@ -613,13 +615,15 @@ export function registerPublicRoutes(router: Router): void {
       name: u.name,
       compositePricing: u.isComposite ? u.compositePricing : "own",
       cleaningFeeCents: u.cleaningFeeCents,
+      chargesExtraNightCents: u.chargesExtraNightCents,
+      feeIncludedNights: u.feeIncludedNights,
       depositPct: u.depositPct,
       components: u.isComposite
         ? links
             .filter((l) => l.unitId === u.id && physicalIds.has(l.blocksUnitId))
             .map((l) => {
               const c = active.find((x) => x.id === l.blocksUnitId);
-              return { id: l.blocksUnitId, name: c?.name ?? "", cleaningFeeCents: c?.cleaningFeeCents ?? 0 };
+              return { id: l.blocksUnitId, name: c?.name ?? "", cleaningFeeCents: c?.cleaningFeeCents ?? 0, chargesExtraNightCents: c?.chargesExtraNightCents ?? 0, feeIncludedNights: c?.feeIncludedNights ?? 2 };
             })
         : [],
     });

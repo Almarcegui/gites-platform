@@ -74,12 +74,20 @@ if (cibles.length || fraisCibles.length) {
         const { units } = await fiche(cible.dataset.fraisProperty);
         const u = units.find((x) => x.id === Number(cible.dataset.fraisUnit));
         if (!u) return;
-        const cents = u.isComposite
-          ? units.filter((x) => !x.isComposite).reduce((t, x) => t + x.cleaningFeeCents, 0)
-          : u.cleaningFeeCents;
+        // Forfait + supplément par nuit au-delà des nuits incluses (migration
+        // 0038). L'unité composite additionne ses maisons, comme le moteur ;
+        // la précision « +X €/nuit » n'est ajoutée que si les maisons ont la
+        // même règle de nuits incluses (sinon le devis détaille).
+        const parts = u.isComposite ? units.filter((x) => !x.isComposite) : [u];
+        const cents = parts.reduce((t, x) => t + x.cleaningFeeCents, 0);
+        const extra = parts.reduce((t, x) => t + (x.chargesExtraNightCents || 0), 0);
+        const inclus = parts[0]?.feeIncludedNights ?? 2;
+        const memeRegle = parts.every((x) => (x.feeIncludedNights ?? 2) === inclus);
+        const fmt = (c) => { const e = c / 100; return `${Number.isInteger(e) ? e : e.toFixed(2).replace(".", ",")} €`; };
         if (typeof cents === "number" && cents > 0) {
-          const eur = cents / 100;
-          cible.textContent = `${Number.isInteger(eur) ? eur : eur.toFixed(2).replace(".", ",")} €`;
+          cible.textContent = extra > 0 && memeRegle
+            ? `${fmt(cents)} (${inclus} nuit${inclus > 1 ? "s" : ""} incluse${inclus > 1 ? "s" : ""}, +${fmt(extra)}/nuit ensuite)`
+            : fmt(cents);
         }
       } catch {
         // Repli du HTML conservé.

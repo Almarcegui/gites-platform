@@ -21,6 +21,8 @@ export interface Unit {
   active: boolean;
   sortOrder: number;
   cleaningFeeCents: number;
+  chargesExtraNightCents: number;
+  feeIncludedNights: number;
 }
 
 export interface UnitLink {

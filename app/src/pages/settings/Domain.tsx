@@ -25,6 +25,8 @@ interface UnitForm {
   capacityBase: number | string;
   capacityMax: number | string;
   cleaning: number | string;
+  includedNights: number | string;
+  extraNight: number | string;
   deposit: number | string;
   compositePricing: "own" | "sum";
   active: boolean;
@@ -91,6 +93,8 @@ function toForm(p: PropertyFull, s: FullSettings, units: UnitFull[], links: Unit
           capacityBase: u.capacityBase,
           capacityMax: u.capacityMax,
           cleaning: u.cleaningFeeCents / 100,
+          includedNights: u.feeIncludedNights,
+          extraNight: u.chargesExtraNightCents / 100,
           deposit: u.depositPct ?? "",
           compositePricing: u.compositePricing,
           active: u.active,
@@ -177,6 +181,8 @@ function DomainForm({ propertyId, init, units, onDirty }: { propertyId: number; 
               capacityBase: Number(a.capacityBase),
               capacityMax: Number(a.capacityMax),
               cleaningFeeCents: parseEuros(a.cleaning) ?? 0,
+              feeIncludedNights: Math.max(0, Math.floor(Number(a.includedNights) || 0)),
+              chargesExtraNightCents: parseEuros(a.extraNight) ?? 0,
               depositPct: a.deposit === "" ? null : Number(a.deposit),
               active: a.active,
               photoUrl: a.photoUrl.trim(),
@@ -295,6 +301,8 @@ function DomainForm({ propertyId, init, units, onDirty }: { propertyId: number; 
               <div className="grid2">
                 <TextInput size="md" label={t`Nom`} value={x.name} onChange={(e) => setU(u.id, { name: e.currentTarget.value })} />
                 <NumberInput size="md" label={t`Frais de ménage (€)`} min={0} decimalScale={2} decimalSeparator="," value={x.cleaning} onChange={(v) => setU(u.id, { cleaning: v })} />
+                <NumberInput size="md" label={t`Nuits incluses`} description={t`nuits couvertes par le forfait de frais généraux`} min={0} allowDecimal={false} value={x.includedNights} onChange={(v) => setU(u.id, { includedNights: v })} />
+                <NumberInput size="md" label={t`Supplément par nuit au-delà (€)`} description={t`charges ajoutées à chaque nuit après les nuits incluses`} min={0} decimalScale={2} decimalSeparator="," value={x.extraNight} onChange={(v) => setU(u.id, { extraNight: v })} />
                 <NumberInput size="md" label={t`Personnes, en temps normal`} min={1} value={x.capacityBase} onChange={(v) => setU(u.id, { capacityBase: v })} />
                 <NumberInput size="md" label={t`Personnes, au plus`} min={1} value={x.capacityMax} onChange={(v) => setU(u.id, { capacityMax: v })} />
                 <NumberInput size="md" label={t`Arrhes propres à ce bien (%)`} description={t`vide = ${f.set.deposit_pct} % comme le domaine`} min={0} max={100} value={x.deposit} onChange={(v) => setU(u.id, { deposit: v })} />
