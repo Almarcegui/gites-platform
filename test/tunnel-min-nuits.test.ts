@@ -195,11 +195,15 @@ describe("jours d'arrivée imposés, enfin visibles (#66)", () => {
 
   it("le calendrier public porte le minimum de nuits ET les jours d'arrivée, jour par jour", async () => {
     await poseSaison(7, "6");
-    const { status, data } = await call(`/api/public/calendar?property=pre-more&month=${SAISON_DEBUT.slice(0, 7)}`);
+    // Le mois demandé est celui du jour vérifié (pas celui du début de saison :
+    // quand la saison commence dans les 5 derniers jours d'un mois, ce jour
+    // tombait le mois suivant et le test échouait selon la date du jour).
+    const cible = addDays(SAISON_DEBUT, 5);
+    const { status, data } = await call(`/api/public/calendar?property=pre-more&month=${cible.slice(0, 7)}`);
     expect(status).toBe(200);
     const unit = (data.units as { unitId: number; days: { date: string; minNights: number | null; checkinDays: number[] | null }[] }[])
       .find((u) => u.unitId === 1);
-    const jour = unit?.days.find((d) => d.date === addDays(SAISON_DEBUT, 5));
+    const jour = unit?.days.find((d) => d.date === cible);
     expect(jour?.minNights).toBe(7);
     expect(jour?.checkinDays).toEqual([6]);
   });
