@@ -277,6 +277,63 @@ describe("flux iCal vide — annulation en masse", () => {
     expect(result.malformed).toBe(1);
     expect((await getFeed(db, feed.id))?.lastStatus).toContain("illisible");
   });
+
+  it("ignore les VEVENT illisibles déjà passés (vieux rendez-vous d'une heure)", async () => {
+    const feed = await makeFeed();
+    const nextYear = Number(todayInZone(NOW).slice(0, 4)) + 1;
+    const flux = [
+      "BEGIN:VCALENDAR",
+      "BEGIN:VEVENT", // passé, même jour : ignoré
+      "UID:rdv-2023@google.com",
+      "DTSTART:20230606T160000Z",
+      "DTEND:20230606T170000Z",
+      "SUMMARY:Rdv moulin",
+      "END:VEVENT",
+      "BEGIN:VEVENT", // à venir, même jour : compté
+      "UID:rdv-futur@google.com",
+      `DTSTART:${nextYear}0612T090000Z`,
+      `DTEND:${nextYear}0612T100000Z`,
+      "END:VEVENT",
+      "BEGIN:VEVENT", // aucune date : compté
+      "UID:sans-date@google.com",
+      "END:VEVENT",
+      "END:VCALENDAR",
+    ].join("\r\n");
+    const result = await syncFeed(db, feed, mockFetch(flux), NOW);
+    expect(result.malformed).toBe(2);
+  });
+
+  it("compte un séjour en cours sans fin lisible et un dernier bloc coupé", async () => {
+    const feed = await makeFeed();
+    const flux = [
+      "BEGIN:VCALENDAR",
+      "BEGIN:VEVENT", // commencé il y a longtemps, sans DTEND : compté
+      "UID:en-cours@google.com",
+      "DTSTART;VALUE=DATE:20200101",
+      "END:VEVENT",
+      "BEGIN:VEVENT", // flux coupé : ni END:VEVENT ni END:VCALENDAR
+      "UID:coupe@google.com",
+      "DTSTART;VALUE=DATE:20200101",
+    ].join("\r\n");
+    const result = await syncFeed(db, feed, mockFetch(flux), NOW);
+    expect(result.malformed).toBe(2);
+  });
+
+  it("aucun VEVENT illisible à venir → pas d'alerte", async () => {
+    const feed = await makeFeed();
+    const flux = [
+      "BEGIN:VCALENDAR",
+      "BEGIN:VEVENT",
+      "UID:rdv-2021@google.com",
+      "DTSTART:20210305T180000Z",
+      "DTEND:20210305T190000Z",
+      "END:VEVENT",
+      "END:VCALENDAR",
+    ].join("\r\n");
+    const result = await syncFeed(db, feed, mockFetch(flux), NOW);
+    expect(result.malformed).toBe(0);
+    expect((await getFeed(db, feed.id))?.lastStatus ?? "").not.toContain("illisible");
+  });
 });
 
 describe("remise mal saisie — devis négatif", () => {

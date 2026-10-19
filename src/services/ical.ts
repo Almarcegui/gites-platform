@@ -148,6 +148,32 @@ export function parseIcs(text: string): IcsEvent[] {
   return events;
 }
 
+/** Nombre de VEVENT du flux que `parseIcs` rejette (UID ou dates manquants,
+ *  fin avant ou égale au début, bloc sans END:VEVENT) et qui ne sont pas
+ *  déjà passés. Un rejet n'est ignoré que si sa date de fin se lit et tombe
+ *  avant aujourd'hui (vieux rendez-vous d'une heure de l'historique) ; sans
+ *  date de fin lisible, il est compté (un séjour en cours peut être en cause). */
+export function countMalformedUpcoming(text: string, today: IsoDate): number {
+  const unfolded = text.replace(/\r?\n[ \t]/g, "");
+  // Découpe sur BEGIN:VEVENT : un bloc dont l'END manque (flux coupé, END
+  // oublié) reste un bloc à part au lieu d'être avalé ou fusionné.
+  const blocks = unfolded.split(/\r?\nBEGIN:VEVENT(?=\r?\n)/).slice(1);
+  let count = 0;
+  for (const raw of blocks) {
+    const body = raw.split(/\r?\nEND:VCALENDAR/)[0]!;
+    const block = `BEGIN:VEVENT${body}`;
+    if (parseIcs(block).length > 0) continue;
+    let dtend: IsoDate | undefined;
+    for (const line of block.split(/\r?\n/)) {
+      const colon = line.indexOf(":");
+      if (colon < 0) continue;
+      if (line.slice(0, colon).split(";")[0]!.toUpperCase() === "DTEND") dtend = parseIcsDate(line.slice(colon + 1));
+    }
+    if (!dtend || dtend >= today) count++;
+  }
+  return count;
+}
+
 /** Convention « jour de départ inclus » (agendas Google de papa, décision
  *  Julien 11/10/2026) : l'événement affiché du 22 au 26 (DTEND exclusif = 27)
  *  est un séjour du 22 au 26, départ le 26. On retire un jour au DTEND des
@@ -239,7 +265,9 @@ export async function syncFeed(
     if (feed.departureDayIncluded) events = applyDepartureDayIncluded(events);
     // Un VEVENT annoncé mais non retenu = date ou UID illisible : on le compte
     // au lieu de l'ignorer en silence (un flux à moitié cassé doit se voir).
-    result.malformed = Math.max(0, (body.match(/BEGIN:VEVENT/g) ?? []).length - events.length);
+    // Seuls comptent ceux qui ne sont pas déjà passés : les vieux rendez-vous
+    // d'une heure de l'historique d'un agenda Google ne bloquent rien.
+    result.malformed = countMalformedUpcoming(body, today);
   } catch (e) {
     result.error = e instanceof Error ? e.message : String(e);
     await setFeedStatus(db, feed.id, `erreur : ${result.error}`, nowSql);
