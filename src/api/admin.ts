@@ -476,7 +476,8 @@ function checkMinNightsRelax(
   const steps: MinNightsStep[] = [];
   for (const x of v) {
     const o = x as { days?: unknown; minNights?: unknown } | null;
-    if (!o || badWhole(o.days, 0, 365) || badWhole(o.minNights, 1, 60) || o.days == null || o.minNights == null) {
+    if (!o || typeof o.days !== "number" || typeof o.minNights !== "number"
+      || badWhole(o.days, 0, 365) || badWhole(o.minNights, 1, 60) || steps.some((s) => s.days === o.days)) {
       return { ok: false, message: msg };
     }
     steps.push({ days: Number(o.days), minNights: Number(o.minNights) });
@@ -1141,7 +1142,9 @@ export function registerAdminRoutes(router: Router): void {
       const unitId = intParam(url.searchParams.get("unit"), 0);
       const ctx = await getQuoteContext(env.DB, unitId, { from, toExclusive: to });
       if (!ctx) return apiError(404, "hébergement inconnu");
-      const days = rateCalendar(ctx.pricingUnit, from, to, ctx.seasons, ctx.rateRules, ctx.rateOverrides);
+      // Avec la date du jour : le minimum affiché est celui que le devis applique
+      // (paliers de dernière minute compris), comme sur le site public.
+      const days = rateCalendar(ctx.pricingUnit, from, to, ctx.seasons, ctx.rateRules, ctx.rateOverrides, todayInZone());
       return json({
         unit: {
           id: ctx.unit.id,
@@ -1203,7 +1206,7 @@ export function registerAdminRoutes(router: Router): void {
           priceMinCents: u.priceMinCents,
           priceMaxCents: u.priceMaxCents,
         },
-        days: rateCalendar(pricingUnit, from, to, seasons, rules, overrides),
+        days: rateCalendar(pricingUnit, from, to, seasons, rules, overrides, todayInZone()),
       };
     });
     return json({ from, to, units: out, seasons });
@@ -2413,6 +2416,19 @@ export function registerAdminRoutes(router: Router): void {
         // minimum du site public ne s'y applique pas (avertissement seulement).
         { bypassLeadTime: true },
       );
+      // Mêmes dates, même logement : un minimum de nuits ou un jour d'arrivée
+      // posé APRÈS la vente ne doit pas figer la réservation (voyageurs,
+      // options). Ces deux refus deviennent de simples avertissements.
+      if (unitId === before.unitId && checkin === before.checkin && checkout === before.checkout) {
+        for (const code of ["min_nights", "checkin_day"]) {
+          const i = quote.errors.indexOf(code);
+          if (i >= 0) {
+            quote.errors.splice(i, 1);
+            quote.warnings.push(code);
+          }
+        }
+        quote.ok = quote.errors.length === 0;
+      }
       if (!quote.ok) return apiError(409, "devis impossible sur ces dates", { details: quote.errors, minNights: quote.minNights });
 
       const full = body.paymentMode === "full" || quote.balanceDueDate === null;
