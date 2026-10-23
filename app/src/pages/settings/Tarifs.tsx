@@ -36,6 +36,9 @@ function useRuleText(): (r: RateRule) => string {
     const parts = [r.priceWeekendCents !== r.priceWeekCents ? t`${eur(r.priceWeekCents)} la nuit en semaine, ${eur(r.priceWeekendCents)} le week-end` : t`${eur(r.priceWeekCents)} la nuit`];
     if (r.holidayPct) parts.push(t`fériés + ${r.holidayPct} %`);
     parts.push(r.minNights > 1 ? t`au moins ${r.minNights} nuits` : t`dès 1 nuit`);
+    for (const st of r.minNightsRelax ?? []) {
+      if (st.minNights < r.minNights) parts.push(t`${st.minNights} nuits à ${st.days} jours ou moins de l'arrivée`);
+    }
     if (r.checkinDays && r.checkinDays.length && r.checkinDays.length < 7) {
       const days = WEEK_ORDER.filter((d) => r.checkinDays!.includes(d)).map((d) => weekdayShortOfIndex(d)).join(", ");
       parts.push(t`arrivée le ${days}`);

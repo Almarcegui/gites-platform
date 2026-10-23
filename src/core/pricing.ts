@@ -45,6 +45,29 @@ export interface RateRule {
   holidayPct: number;
   minNights: number;
   checkinDays: number[] | null; // jours d'arrivée autorisés, 0=dim … 6=sam
+  /** minimum de dernière minute : quand la nuit d'arrivée est à `days` jours ou
+   *  moins, le minimum descend à `minNights` (le palier le plus bas l'emporte).
+   *  Null ou absent = minimum fixe. */
+  minNightsRelax?: MinNightsStep[] | null;
+}
+
+export interface MinNightsStep {
+  days: number;
+  minNights: number;
+}
+
+/** Minimum de nuits d'une règle, compte tenu des paliers de dernière minute.
+ *  `daysAhead` = jours entre la date du jour et la nuit d'arrivée ; null = pas
+ *  de date du jour (envoi à Beds24, contrôle de dérive) : minimum de la règle. */
+export function relaxedMinNights(
+  base: number,
+  steps: readonly MinNightsStep[] | null | undefined,
+  daysAhead: number | null,
+): number {
+  if (!steps || daysAhead == null) return base;
+  let m = base;
+  for (const s of steps) if (daysAhead <= s.days) m = Math.min(m, s.minNights);
+  return Math.max(1, m);
 }
 
 /** Surcharge posée sur UN jour et UNE unité (table rate_overrides).
@@ -269,6 +292,7 @@ function resolveNight(
   rules: RateRule[],
   ratedDays: Set<IsoDate>,
   overrides: Map<string, RateOverride>,
+  today?: IsoDate,
 ): NightResolution | null {
   const season = seasonForNight(night, seasons);
   const seasonRule = season ? ruleFor(unitId, season.id, rules) : null;
@@ -301,7 +325,9 @@ function resolveNight(
     baseCents: overridden ? overridePrice : (fallbackCents ?? 0) - fallbackSurcharge,
     surchargeCents: overridden ? 0 : fallbackSurcharge,
     source: overridden ? "override" : seasonRule ? "saison" : "base",
-    minNights: minNightsOverridden ? override!.minNights! : (rule?.minNights ?? 1),
+    minNights: minNightsOverridden
+      ? override!.minNights!
+      : relaxedMinNights(rule?.minNights ?? 1, rule?.minNightsRelax, today ? diffDays(today, night) : null),
     minNightsSource: minNightsOverridden ? "override" : "regle",
     checkinDays: rule?.checkinDays ?? null,
     fallbackCents,
@@ -364,6 +390,9 @@ export function rateCalendar(
   seasons: Season[],
   rateRules: RateRule[],
   rateOverrides: readonly RateOverride[] = [],
+  /** date du jour : applique les paliers de dernière minute (calendrier public).
+   *  Absente = minimum de la règle (Beds24, dérive, back-office). */
+  today?: IsoDate,
 ): DayRate[] {
   const ratedDays = holidayRatedDays(yearsSpanned(from, toExclusive));
   const overrides = indexOverrides(rateOverrides);
@@ -386,7 +415,7 @@ export function rateCalendar(
     let overrideMinNights: number | null = null;
     let checkinDays: number[] | null = null;
     for (const pid of partIds) {
-      const r = resolveNight(pid, d, seasons, rateRules, ratedDays, overrides);
+      const r = resolveNight(pid, d, seasons, rateRules, ratedDays, overrides, today);
       if (!r) {
         covered = false;
         break;
@@ -450,6 +479,7 @@ function breakdownForUnit(
   rules: RateRule[],
   ratedDays: Set<IsoDate>,
   overrides: Map<string, RateOverride>,
+  today: IsoDate,
 ): UnitBreakdown {
   interface Group {
     seasonLabel: string;
@@ -467,7 +497,7 @@ function breakdownForUnit(
   let missingRate = false;
 
   nights.forEach((night, idx) => {
-    const r = resolveNight(unitId, night, seasons, rules, ratedDays, overrides);
+    const r = resolveNight(unitId, night, seasons, rules, ratedDays, overrides, today);
     if (!r) {
       missingRate = true;
       return;
@@ -594,7 +624,7 @@ export function computeQuote(req: QuoteRequest): Quote {
   const parts = isSum ? req.unit.components : [{ id: req.unit.id, name: req.unit.name }];
   const overrides = indexOverrides(req.rateOverrides ?? []);
   const breakdowns = parts.map((p) =>
-    breakdownForUnit(p.id, p.name, isSum, nightsList, req.seasons, req.rateRules, ratedDays, overrides),
+    breakdownForUnit(p.id, p.name, isSum, nightsList, req.seasons, req.rateRules, ratedDays, overrides, req.today),
   );
 
   if (breakdowns.some((b) => b.missingRate)) errors.push("no_rate");
