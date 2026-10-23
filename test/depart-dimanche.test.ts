@@ -3,7 +3,7 @@
 // même heure tous les jours. Une seule fonction (src/core/checkout-time.ts),
 // lue par le mail de confirmation, le PDF, les mails du séjour, la page de la
 // réservation (voucher, Merci, .ics), le tunnel et le ménage. Et les CGV 3.2
-// (migration 0039). Données inventées (example.*).
+// (migration 0040). Données inventées (example.*).
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -187,11 +187,11 @@ describe("une réservation qui se termine un dimanche", () => {
   });
 });
 
-describe("CGV 3.2 (migration 0039)", () => {
+describe("CGV 3.2 (migration 0040)", () => {
   const cgvOf = async (key: string, propertyId: number) =>
     (await t.db.prepare("SELECT value FROM settings WHERE property_id = ?1 AND key = ?2").bind(propertyId, key).first<{ value: string }>())?.value;
-  const migration0039 = () =>
-    readFileSync(fileURLToPath(new URL("../migrations/0039_cgv_v3_2_depart_dimanche.sql", import.meta.url)), "utf8")
+  const migration0040 = () =>
+    readFileSync(fileURLToPath(new URL("../migrations/0040_cgv_v3_2_depart_dimanche.sql", import.meta.url)), "utf8")
       .split("\n").map((l) => l.replace(/--.*$/, "")).join("\n").split(";").map((s) => s.trim()).filter(Boolean);
 
   it("Pré Moré : version 3.2 du 23 octobre 2026, départ avant 10 h, le dimanche avant 18 h", async () => {
@@ -226,7 +226,7 @@ describe("CGV 3.2 (migration 0039)", () => {
     expect(created.status).toBe(201);
     const row = (await t.db.prepare("SELECT id FROM bookings WHERE reference = ?1").bind(created.data.reference).first<{ id: number }>())!;
     const v31 = (await cgvOf("cgv_text_avant_3_2", 1))!;
-    // comme une réservation d'avant la 0039 : version 3.1 enregistrée, avec la longueur du texte 3.1
+    // comme une réservation d'avant la 0040 : version 3.1 enregistrée, avec la longueur du texte 3.1
     await t.db.prepare("UPDATE bookings SET cgv_version = ?2 WHERE id = ?1").bind(row.id, `v3.1+sha256:0123456789abcdef-len${v31.length}`).run();
     const ctx = (await loadConfirmationPdfContext(t.db, row.id))!;
     expect(ctx.settings.cgvText).toBe(v31);
@@ -240,7 +240,7 @@ describe("CGV 3.2 (migration 0039)", () => {
   it("la migration se rejoue sans rien changer", async () => {
     const cur = await cgvOf("cgv_text", 1);
     const arch = await cgvOf("cgv_text_avant_3_2", 1);
-    for (const stmt of migration0039()) await t.db.prepare(stmt).run();
+    for (const stmt of migration0040()) await t.db.prepare(stmt).run();
     expect(await cgvOf("cgv_text", 1)).toBe(cur);
     expect(await cgvOf("cgv_text_avant_3_2", 1)).toBe(arch);
   });

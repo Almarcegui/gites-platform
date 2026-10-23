@@ -37,11 +37,11 @@ function migrationStatements(file: string): string[] {
   return sql.split("\n").map((l) => l.replace(/--.*$/, "")).join("\n").split(";").map((s) => s.trim()).filter(Boolean);
 }
 const migration0036 = () => migrationStatements("0036_cgv_v3_1_annulation.sql");
-const migration0039 = () => migrationStatements("0039_cgv_v3_2_depart_dimanche.sql");
+const migration0040 = () => migrationStatements("0040_cgv_v3_2_depart_dimanche.sql");
 
 describe("CGV v3.1 en base", () => {
   for (const propertyId of [1, 2]) {
-    // Le Pré Moré (domaine 1) est passé en 3.2 le 23/10/2026 (migration 0039,
+    // Le Pré Moré (domaine 1) est passé en 3.2 le 23/10/2026 (migration 0040,
     // départ du dimanche) : seuls l'en-tête, le point 6 et l'article 8.1 changent.
     it(`domaine ${propertyId} : version ${propertyId === 1 ? "3.2" : "3.1"}, 14 jours, arrhes, ni double ni 1590`, async () => {
       const cgv = await cgvOf(propertyId);
@@ -109,8 +109,8 @@ describe("CGV v3.1 en base", () => {
     }
     const current1 = await cgvOf(1);
     const current2 = await cgvOf(2);
-    // rejeu dans l'ordre : 0036 puis 0039 (la 3.2 du Pré Moré)
-    for (const stmt of [...migration0036(), ...migration0039()]) await t.db.prepare(stmt).run();
+    // rejeu dans l'ordre : 0036 puis 0040 (la 3.2 du Pré Moré)
+    for (const stmt of [...migration0036(), ...migration0040()]) await t.db.prepare(stmt).run();
     expect(await archive()).toEqual(before); // la 3.1 n'est pas archivée par-dessus la v3
     expect(await cgvOf(1)).toBe(current1);
     expect(await cgvOf(2)).toBe(current2);

@@ -58,7 +58,7 @@ export async function loadConfirmationPdfContext(db: D1Database, bookingId: numb
 /** Texte des CGV que le client a ACCEPTÉ : le texte en vigueur s'il est de la même
  *  version, sinon l'archive (cgv_text_avant_*) de cette version, de même longueur
  *  si possible. Une réservation acceptée en 3.1 garde la 3.1 en annexe après la
- *  0039 (CGV 3.2). Rien de trouvé : le texte en vigueur, comme avant. */
+ *  0040 (CGV 3.2). Rien de trouvé : le texte en vigueur, comme avant. */
 async function acceptedCgvText(db: D1Database, propertyId: number, stored: string | null, current: string): Promise<string> {
   const label = acceptedVersionLabel(stored);
   if (!label || cgvVersionLabel(current) === label) return current;

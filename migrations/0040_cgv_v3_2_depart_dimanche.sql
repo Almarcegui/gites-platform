@@ -1,4 +1,4 @@
--- Migration 0039 : conditions générales de location, version 3.2, domaine 1
+-- Migration 0040 : conditions générales de location, version 3.2, domaine 1
 -- (Pré Moré) seulement.
 --
 -- Décision de Julien du 23/10/2026 : départ avant 10 h, sauf le dimanche,

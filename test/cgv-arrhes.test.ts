@@ -98,7 +98,7 @@ describe("CGV injectées en base (0019, puis 0036 pour la v3.1)", () => {
     // Horaires : migration 0009 (18 h / 18 h, rotation le jour même).
     expect(settings.checkinTime).toBe("18:00");
     expect(settings.checkoutTime).toBe("18:00");
-    expect(cgv).toContain("Arrivée à partir de 18 h, départ avant 10 h, le dimanche avant 18 h"); // CGV 3.2 (0039)
+    expect(cgv).toContain("Arrivée à partir de 18 h, départ avant 10 h, le dimanche avant 18 h"); // CGV 3.2 (0040)
 
     // Caution : remise à 0 par la migration 0007, régime « arrhes seules ».
     expect(settings.cautionCents).toBe(0);
