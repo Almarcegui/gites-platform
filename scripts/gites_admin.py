@@ -1,6 +1,6 @@
 #!/opt/homebrew/bin/python3
 # Client en ligne de commande de l'API admin des gîtes, par une clé d'accès de service (Bearer svc:<clé>, ~/.config/gites/service.env) : santé, statut et liaison Beds24, annulation d'une réservation, export de la base. Sortie JSON, jamais la clé.
-# Usage : /opt/homebrew/bin/python3 scripts/gites_admin.py sante | beds24-statut | beds24-lier <code> | resa-annuler <référence> --motif "…" [--oui] | export-sauvegarde [--sortie fichier.sqlite]
+# Usage : /opt/homebrew/bin/python3 scripts/gites_admin.py sante | beds24-statut | beds24-lier <code> | resa-annuler <référence> --motif "…" [--oui] | reglage <domaine> <clé> <valeur> [--oui] | export-sauvegarde [--sortie fichier.sqlite]
 """Client de l'API admin de la plateforme des gîtes, pour Claude et les scripts du Mac.
 
 Authentification : une clé d'accès de service (pas un compte humain), créée par
@@ -16,6 +16,8 @@ Sous-commandes :
   beds24-lier <code>            échange un code d'invitation Beds24 (valable 24 h)
                                 et enregistre le jeton de liaison sur le serveur
   resa-annuler <réf> --motif M  montre la réservation ; l'annule seulement avec --oui
+  reglage <dom> <clé> <valeur>  montre le réglage du domaine et le changement ;
+                                l'écrit seulement avec --oui (valeur "" = vide)
   export-sauvegarde             copie complète de la base (fichier SQLite, 600)
 
 Sortie : du JSON indenté sur stdout ; erreurs en JSON sur stderr, code 1.
@@ -152,6 +154,24 @@ def resa_annuler(api: Api, a) -> dict:
     return {"annulee": resume, "motif": a.motif, "fait": True, "reponse": r}
 
 
+def _camel(cle: str) -> str:
+    t = cle.split("_")
+    return t[0] + "".join(m.capitalize() for m in t[1:])
+
+
+def reglage(api: Api, a) -> dict:
+    chemin = f"/api/admin/settings?property={int(a.domaine)}"
+    avant = api.objet("GET", chemin).get("settings", {})
+    champ = _camel(a.cle)
+    if champ not in avant:
+        raise Erreur(f"réglage inconnu : {a.cle} (le domaine {int(a.domaine)} n'a pas de champ {champ})")
+    resume = {"domaine": int(a.domaine), "cle": a.cle, "avant": avant.get(champ), "apres": a.valeur}
+    if not a.oui:
+        return {**resume, "fait": False, "note": "relancer avec --oui pour écrire"}
+    apres = api.objet("PUT", chemin, {"settings": {a.cle: a.valeur}}).get("settings", {})
+    return {**resume, "apres": apres.get(champ), "fait": True}
+
+
 def export_sauvegarde(api: Api, a) -> dict:
     sortie = Path(a.sortie) if a.sortie else Path.cwd() / f"gites-{dt.datetime.now():%Y-%m-%d-%H%M%S}.sqlite"
     if sortie.exists():
@@ -185,6 +205,12 @@ def main() -> int:
     x.add_argument("--motif", required=True)
     x.add_argument("--oui", action="store_true", help="annuler pour de bon (sans : montre seulement)")
     x.set_defaults(f=resa_annuler)
+    x = sp.add_parser("reglage")
+    x.add_argument("domaine", type=int)
+    x.add_argument("cle")
+    x.add_argument("valeur")
+    x.add_argument("--oui", action="store_true", help="écrire pour de bon (sans : montre seulement)")
+    x.set_defaults(f=reglage)
     x = sp.add_parser("export-sauvegarde")
     x.add_argument("--sortie")
     x.set_defaults(f=export_sauvegarde)

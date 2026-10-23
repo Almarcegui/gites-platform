@@ -33,6 +33,7 @@ import { ErrorLine, useAction } from "../lib/action";
 import { diffDays, hourLabel, longDate, sqlToBrussels, todayBrussels } from "../lib/dates";
 import { channelName, isChannel } from "../lib/derive";
 import { eur } from "../lib/money";
+import { checkoutTimeFor } from "../lib/checkoutTime";
 import { TemplateChips } from "../messages/TemplateChips";
 import { useToast } from "../lib/toasts";
 import { useLayout } from "../lib/useLayout";
@@ -53,7 +54,7 @@ export function bookingState(b: Booking): BookingState {
 function useTimes(propertyId: number | undefined) {
   return useQuery({
     queryKey: ["settings", propertyId],
-    queryFn: () => api<{ settings: { checkinTime: string; checkoutTime: string } }>("/settings", { query: { property: propertyId } }).then((r) => r.settings),
+    queryFn: () => api<{ settings: { checkinTime: string; checkoutTime: string; checkoutTimeSunday?: string } }>("/settings", { query: { property: propertyId } }).then((r) => r.settings),
     enabled: propertyId != null,
     staleTime: 5 * 60_000,
   });
@@ -165,7 +166,7 @@ function Fiche({ detail, dialog, setDialog }: { detail: BookingDetail; dialog: D
             </dt>
             <dd>
               {longDate(b.checkout)}
-              {times ? `, ${hourLabel(times.checkoutTime)}` : ""}
+              {times ? `, ${hourLabel(checkoutTimeFor(times, b.checkout))}` : ""}
             </dd>
           </div>
           <div>
@@ -743,7 +744,7 @@ function LinkDialog({ open, b, balance, onClose }: { open: boolean; b: Booking; 
   );
 }
 
-function WriteDialog({ open, b, guest, times, onClose }: { open: boolean; b: Booking; guest: Guest | undefined; times: { checkinTime: string; checkoutTime: string } | undefined; onClose: () => void }) {
+function WriteDialog({ open, b, guest, times, onClose }: { open: boolean; b: Booking; guest: Guest | undefined; times: { checkinTime: string; checkoutTime: string; checkoutTimeSunday?: string } | undefined; onClose: () => void }) {
   const { t } = useLingui();
   const { data: properties = [] } = useProperties();
   const a = useAction();
@@ -761,7 +762,7 @@ function WriteDialog({ open, b, guest, times, onClose }: { open: boolean; b: Boo
     unitName: b.unitName ?? "",
     arrival: longDate(b.checkin),
     checkinTime: hourLabel(times?.checkinTime ?? "16:00"),
-    checkoutTime: hourLabel(times?.checkoutTime ?? "10:00"),
+    checkoutTime: hourLabel(times ? checkoutTimeFor(times, b.checkout) : "10:00"),
     balance: balance > 0 && !isChannel(b) ? eur(balance) : null,
     signature: properties.find((p) => p.id === b.propertyId)?.name ?? "",
   };

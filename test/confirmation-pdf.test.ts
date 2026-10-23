@@ -177,8 +177,8 @@ describe("vente du back-office : une option, puis le client confirme en payant",
     expect(ok.status).toBe(200);
     expect((await view()).cgvAccepted).toBe(true);
     const row = await t.db.prepare("SELECT cgv_version, cgv_accepted_at, cgv_ip FROM bookings WHERE id = ?1").bind(b.id).first<Record<string, string>>();
-    expect(row!.cgv_version).toMatch(/^v3\.1\+sha256:[0-9a-f]{16}-len\d+$/);
-    expect(acceptedVersionLabel(row!.cgv_version)).toBe("3.1");
+    expect(row!.cgv_version).toMatch(/^v3\.2\+sha256:[0-9a-f]{16}-len\d+$/);
+    expect(acceptedVersionLabel(row!.cgv_version)).toBe("3.2");
     expect(row!.cgv_accepted_at).toMatch(/^\d{4}-/);
     expect(row!.cgv_ip).toBe("203.0.113.7");
     // un second paiement n'a plus besoin de l'acceptation
@@ -190,7 +190,7 @@ describe("vente du back-office : une option, puis le client confirme en payant",
     expect(conf).toHaveLength(1);
     expect(JSON.parse(conf[0]!.attachments)[0].filename).toBe(`Confirmation-${b.reference}.pdf`);
     const text = pdfText(buildConfirmationPdf((await loadConfirmationPdfContext(t.db, b.id))!));
-    expect(text.replace(/\s+/g, " ")).toMatch(/Réservation conclue par l'acceptation des conditions générales v3\.1 le \d\d\/\d\d\/\d{4} à \d\d:\d\d depuis l'adresse IP 203\.0\.113\.7 et le paiement des arrhes\./);
+    expect(text.replace(/\s+/g, " ")).toMatch(/Réservation conclue par l'acceptation des conditions générales v3\.2 le \d\d\/\d\d\/\d{4} à \d\d:\d\d depuis l'adresse IP 203\.0\.113\.7 et le paiement des arrhes\./);
   });
 
   it("une réservation en ligne (tunnel) n'est pas redemandée : le paiement part sans case à cocher", async () => {
@@ -290,7 +290,7 @@ describe("le mail", () => {
 });
 
 describe("le PDF « Confirmation de réservation et conditions générales »", () => {
-  it("français : PDF valide, récapitulatif, conclusion de la réservation, CGV v3.1 en annexe, aucun « contrat »", async () => {
+  it("français : PDF valide, récapitulatif, conclusion de la réservation, CGV v3.2 (Pré Moré) en annexe, aucun « contrat »", async () => {
     const b = await bookAndPay();
     const ctx = (await loadConfirmationPdfContext(t.db, b.id))!;
     const pdf = buildConfirmationPdf({ ...ctx, issuedAt: new Date("2026-10-11T10:00:00Z") });
@@ -309,12 +309,12 @@ describe("le PDF « Confirmation de réservation et conditions générales »", 
       "Annulation : article 5 des conditions générales", "6. Conclusion de la réservation",
       "ANNEXE — CONDITIONS GÉNÉRALES DE LOCATION", "Comment ça se passe", "Article 5 — Caution et annulation", "Article 13 — Droit applicable et litiges",
     ]) expect(text, needle).toContain(needle);
-    expect(text.replace(/\s+/g, " ")).toMatch(/Réservation conclue par l'acceptation des conditions générales v3\.1 le \d\d\/\d\d\/\d{4} à \d\d:\d\d .*et le paiement des arrhes\./);
+    expect(text.replace(/\s+/g, " ")).toMatch(/Réservation conclue par l'acceptation des conditions générales v3\.2 le \d\d\/\d\d\/\d{4} à \d\d:\d\d .*et le paiement des arrhes\./);
     // les articles 4 et 5 ne sont plus recopiés en page 1 : ils sont en annexe
     const cgv = ctx.settings.cgvText;
     expect(recap).not.toContain("Article 5 —");
     expect(text.replace(/\s+/g, " ")).toContain(cgvArticle(cgv, 5)!.split("\n").slice(2, 3)[0]!.replace(/\s+/g, " ").slice(0, 60));
-    expect(cgvVersionLabel(cgv)).toBe("3.1");
+    expect(cgvVersionLabel(cgv)).toBe("3.2");
     // le total est celui de la réservation
     const total = ctx.booking.totalCents;
     const eur = `${Math.floor(total / 100).toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ")},${String(total % 100).padStart(2, "0")} €`;
@@ -330,7 +330,7 @@ describe("le PDF « Confirmation de réservation et conditions générales »", 
     const pdf = buildConfirmationPdf(ctx);
     expect(pdfStructureProblems(pdf)).toEqual([]);
     const text = pdfText(pdf);
-    for (const needle of ["BEVESTIGING VAN RESERVERING", "1. Uitbater en klant", "3. Het verblijf", "Totale prijs van het verblijf", "voorschot", "Reservering tot stand gekomen door de aanvaarding van de algemene voorwaarden v3.1", "BIJLAGE", "De Franse versie is rechtsgeldend", "Article 4 — Arrhes"]) {
+    for (const needle of ["BEVESTIGING VAN RESERVERING", "1. Uitbater en klant", "3. Het verblijf", "Totale prijs van het verblijf", "voorschot", "Reservering tot stand gekomen door de aanvaarding van de algemene voorwaarden v3.2", "BIJLAGE", "De Franse versie is rechtsgeldend", "Article 4 — Arrhes"]) {
       expect(text, needle).toContain(needle);
     }
     expect(text).not.toMatch(/CONTRAT|contract|huurder|verhuurder|eigenaar/i);
@@ -343,8 +343,8 @@ describe("le PDF « Confirmation de réservation et conditions générales »", 
     let ctx = (await loadConfirmationPdfContext(t.db, id))!;
     expect(ctx.acceptance.acceptedAt).toBeNull();
     let text = pdfText(buildConfirmationPdf(ctx));
-    expect(text).not.toMatch(/ depuis l'adresse IP|v3\.1 le \d/);
-    expect(text).toContain("Réservation conclue par l'acceptation des conditions générales v3.1 et le paiement des arrhes.");
+    expect(text).not.toMatch(/ depuis l'adresse IP|v3\.2 le \d/);
+    expect(text).toContain("Réservation conclue par l'acceptation des conditions générales v3.2 et le paiement des arrhes.");
     expect(text.split("ANNEXE —")[0]).not.toMatch(/signé|accord écrit|Fait à/);
     expect(text).not.toContain("Une caution de");
     ctx = { ...ctx, settings: { ...ctx.settings, cautionCents: 30000 } };

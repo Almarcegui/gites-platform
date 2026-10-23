@@ -14,6 +14,7 @@
 import type { BookingRow, PropertyRow, PropertySettings } from "../db/repo";
 import { nlText } from "../core/public-i18n";
 import { mailIntroLines } from "../core/mail-intro";
+import { checkoutTimeFor } from "../core/checkout-time";
 import { CGV_NL_NOTE, formatDateFr, isNl, money, parseQuote, postalAddress, realContact } from "./email";
 
 export interface ConfirmationContext {
@@ -179,6 +180,7 @@ export function buildConfirmationEmail(ctx: ConfirmationContext): ConfirmationMa
   const label = (l: { label: string; publicLabel?: string }) => oneLine(nl ? nlText(l.publicLabel ?? l.label) : (l.publicLabel ?? l.label));
   const checkin = formatDateFr(b.checkin);
   const checkout = formatDateFr(b.checkout);
+  const departTime = checkoutTimeFor(settings, b.checkout);
   const due = b.balanceDueDate ? formatDateFr(b.balanceDueDate) : null;
   const address = oneLine(postalAddress(property));
   const contact = [oneLine(realContact(property.contactEmail)), oneLine(realContact(property.contactPhone))].filter(Boolean);
@@ -193,7 +195,7 @@ export function buildConfirmationEmail(ctx: ConfirmationContext): ConfirmationMa
     arrivee: checkin,
     solde: m(balance),
     heure_arrivee: settings.checkinTime,
-    heure_depart: settings.checkoutTime,
+    heure_depart: departTime,
     signature: propertyName,
     reference: b.reference,
   });
@@ -208,7 +210,7 @@ export function buildConfirmationEmail(ctx: ConfirmationContext): ConfirmationMa
     `${w.reference} : ${b.reference}`,
     `${w.unit} : ${unit} — ${propertyName}`,
     `${w.arrival} : ${checkin} — ${w.fromTime(settings.checkinTime)}`,
-    `${w.departure} : ${checkout} — ${w.beforeTime(settings.checkoutTime)}`,
+    `${w.departure} : ${checkout} — ${w.beforeTime(departTime)}`,
     `${w.guestsLabel} : ${w.guests(b.adults, b.children)}`,
     ``,
     w.priceTitle.toUpperCase(),
@@ -222,7 +224,7 @@ export function buildConfirmationEmail(ctx: ConfirmationContext): ConfirmationMa
   t.push(``, `${w.alreadyPaid} : ${m(b.paidCents)}`);
   t.push(balance > 0 ? `${w.balance} : ${m(balance)}${due ? ` — ${w.balanceDue(due)}` : ""}` : w.settled);
   t.push(``, `${ctx.voucherUrl.length ? w.buttonHint : ""}`, ctx.voucherUrl, ``, w.know.toUpperCase());
-  t.push(`- ${w.kArrival(settings.checkinTime, checkin)}`, `- ${w.kDeparture(settings.checkoutTime, checkout)}`);
+  t.push(`- ${w.kArrival(settings.checkinTime, checkin)}`, `- ${w.kDeparture(departTime, checkout)}`);
   if (address) t.push(`- ${w.kAddress} : ${address}`);
   if (contact.length) t.push(`- ${w.kContact} : ${contact.join(" · ")}`);
   if (balance > 0) t.push(`- ${w.kBalance(m(balance), due)}`);
@@ -236,7 +238,7 @@ export function buildConfirmationEmail(ctx: ConfirmationContext): ConfirmationMa
     row(w.reference, `<span style="font-family:Menlo,Consolas,monospace">${esc(b.reference)}</span>`),
     row(w.unit, esc(unit)),
     row(w.arrival, `${esc(checkin)}<br><span style="color:#5b5b55;font-size:12px">${esc(w.fromTime(settings.checkinTime))}</span>`),
-    row(w.departure, `${esc(checkout)}<br><span style="color:#5b5b55;font-size:12px">${esc(w.beforeTime(settings.checkoutTime))}</span>`),
+    row(w.departure, `${esc(checkout)}<br><span style="color:#5b5b55;font-size:12px">${esc(w.beforeTime(departTime))}</span>`),
     row(w.guestsLabel, esc(w.guests(b.adults, b.children))),
   ].join("");
 
@@ -254,7 +256,7 @@ export function buildConfirmationEmail(ctx: ConfirmationContext): ConfirmationMa
       : row(w.settled, ""),
   );
 
-  const know: string[] = [w.kArrival(settings.checkinTime, checkin), w.kDeparture(settings.checkoutTime, checkout)];
+  const know: string[] = [w.kArrival(settings.checkinTime, checkin), w.kDeparture(departTime, checkout)];
   if (address) know.push(`${w.kAddress} : ${address}`);
   if (contact.length) know.push(`${w.kContact} : ${contact.join(" · ")}`);
   if (balance > 0) know.push(w.kBalance(m(balance), due));

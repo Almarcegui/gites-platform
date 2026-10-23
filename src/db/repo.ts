@@ -438,6 +438,9 @@ export interface PropertySettings {
   cautionCents: number;
   checkinTime: string;
   checkoutTime: string;
+  /** Départ le dimanche (« HH:MM ») ; vide = même heure que `checkoutTime`.
+   *  Lire l'heure d'un séjour par `checkoutTimeFor`, jamais `checkoutTime` seul. */
+  checkoutTimeSunday: string;
   cgvText: string;
   allowDeposit: boolean;
   allowFullPayment: boolean;
@@ -469,6 +472,7 @@ const SETTINGS_DEFAULTS: PropertySettings = {
   cautionCents: 0,
   checkinTime: "16:00",
   checkoutTime: "10:00",
+  checkoutTimeSunday: "",
   cgvText: "",
   allowDeposit: true,
   allowFullPayment: true,
@@ -505,6 +509,7 @@ export async function getSettings(db: D1Database, propertyId: number): Promise<P
     cautionCents: int("caution_cents", D.cautionCents),
     checkinTime: text("checkin_time", D.checkinTime),
     checkoutTime: text("checkout_time", D.checkoutTime),
+    checkoutTimeSunday: text("checkout_time_sunday", D.checkoutTimeSunday),
     cgvText: text("cgv_text", D.cgvText),
     allowDeposit: bool("allow_deposit", D.allowDeposit),
     allowFullPayment: bool("allow_full_payment", D.allowFullPayment),

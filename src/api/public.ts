@@ -8,6 +8,7 @@ import { addDays, diffDays, isIsoDate, sqlNow, todayInZone, type IsoDate } from 
 import { blockingSourceUnitIds, blocksAsSpans, isUnitFree } from "../core/availability";
 import { firstBookableDate, rateCalendar, type UnitPricingInfo } from "../core/pricing";
 import { suggestStays, type NightOption, type StaySuggestion } from "../core/stay-options";
+import { checkoutTimeFor } from "../core/checkout-time";
 import {
   audit,
   bookingsInWindow,
@@ -364,6 +365,8 @@ export function registerPublicRoutes(router: Router): void {
       settings: {
         checkinTime: settings.checkinTime,
         checkoutTime: settings.checkoutTime,
+        // Le tunnel calcule l'heure du jour de départ choisi (checkout-time.js).
+        checkoutTimeSunday: settings.checkoutTimeSunday,
         depositPct: settings.depositPct,
         balanceDueDays: settings.balanceDueDays,
         cautionCents: settings.cautionCents,
@@ -1084,7 +1087,9 @@ export function registerPublicRoutes(router: Router): void {
       },
       stay: {
         checkinTime: settings?.checkinTime ?? "16:00",
-        checkoutTime: settings?.checkoutTime ?? "10:00",
+        // Heure du jour de départ de CE séjour (dimanche compris) : voucher,
+        // page Merci et .ics la lisent telle quelle.
+        checkoutTime: settings ? checkoutTimeFor(settings, booking.checkout) : "10:00",
         cautionCents: settings?.cautionCents ?? 0,
       },
       cgvText: settings?.cgvText ?? "",

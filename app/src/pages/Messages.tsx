@@ -12,6 +12,7 @@ import type { Message } from "../api/types";
 import { ActionButton, ErrorLine, useAction } from "../lib/action";
 import { hourLabel, longDate, todayBrussels, whenLabel } from "../lib/dates";
 import { eur } from "../lib/money";
+import { checkoutTimeFor } from "../lib/checkoutTime";
 import { unfilledVariables } from "../lib/templates";
 import { TemplateChips } from "../messages/TemplateChips";
 import { useLayout } from "../lib/useLayout";
@@ -119,7 +120,7 @@ function Thread({ message, onBack }: { message: Message; onBack?: () => void }) 
   const booking = useBooking(message.bookingId).data?.booking;
   const times = useQuery({
     queryKey: ["settings", booking?.propertyId ?? message.propertyId],
-    queryFn: () => api<{ settings: { checkinTime: string; checkoutTime: string } }>("/settings", { query: { property: booking?.propertyId ?? message.propertyId ?? 1 } }).then((r) => r.settings),
+    queryFn: () => api<{ settings: { checkinTime: string; checkoutTime: string; checkoutTimeSunday?: string } }>("/settings", { query: { property: booking?.propertyId ?? message.propertyId ?? 1 } }).then((r) => r.settings),
     staleTime: 5 * 60_000,
   }).data;
   const [text, setText] = useState("");
@@ -130,7 +131,7 @@ function Thread({ message, onBack }: { message: Message; onBack?: () => void }) 
     unitName: booking?.unitName ?? "",
     arrival: booking ? longDate(booking.checkin) : "",
     checkinTime: hourLabel(times?.checkinTime ?? "16:00"),
-    checkoutTime: hourLabel(times?.checkoutTime ?? "10:00"),
+    checkoutTime: hourLabel(times ? checkoutTimeFor(times, booking?.checkout) : "10:00"),
     balance: booking ? (balance > 0 ? eur(balance) : null) : undefined,
     // Signature : le nom du domaine (« Les Gîtes du Pré Moré »), pas celui du bien.
     signature: properties.find((p) => p.id === (booking?.propertyId ?? message.propertyId))?.name ?? "",

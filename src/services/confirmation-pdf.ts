@@ -21,6 +21,7 @@ import type { BookingRow, GuestRow, PropertyRow, PropertySettings } from "../db/
 import { getBooking, getCgvAcceptance, getGuest, getProperty, getSettings } from "../db/repo";
 import { PdfDocument, type TableOptions } from "../core/pdf";
 import { nlText } from "../core/public-i18n";
+import { checkoutTimeFor } from "../core/checkout-time";
 import { CGV_NL_NOTE, formatDateFr, isNl, money, parseQuote, postalAddress, realContact } from "./email";
 import { contractualArrhes } from "./annulation";
 
@@ -50,7 +51,24 @@ export async function loadConfirmationPdfContext(db: D1Database, bookingId: numb
     booking.guestId != null ? getGuest(db, booking.guestId) : Promise.resolve(null),
     getCgvAcceptance(db, booking.id),
   ]);
-  return { booking, property, settings, guest, acceptance };
+  const accepted = await acceptedCgvText(db, booking.propertyId, acceptance.version, settings.cgvText);
+  return { booking, property, guest, acceptance, settings: accepted === settings.cgvText ? settings : { ...settings, cgvText: accepted } };
+}
+
+/** Texte des CGV que le client a ACCEPTÉ : le texte en vigueur s'il est de la même
+ *  version, sinon l'archive (cgv_text_avant_*) de cette version, de même longueur
+ *  si possible. Une réservation acceptée en 3.1 garde la 3.1 en annexe après la
+ *  0040 (CGV 3.2). Rien de trouvé : le texte en vigueur, comme avant. */
+async function acceptedCgvText(db: D1Database, propertyId: number, stored: string | null, current: string): Promise<string> {
+  const label = acceptedVersionLabel(stored);
+  if (!label || cgvVersionLabel(current) === label) return current;
+  const { results } = await db
+    .prepare("SELECT value FROM settings WHERE property_id = ?1 AND key LIKE 'cgv_text_avant_%'")
+    .bind(propertyId)
+    .all<{ value: string }>();
+  const same = results.map((r) => r.value).filter((v) => cgvVersionLabel(v) === label);
+  const len = Number(/-len(\d+)$/.exec(stored ?? "")?.[1]);
+  return same.find((v) => v.length === len) ?? same[0] ?? current;
 }
 
 // --- extraits des CGV ---------------------------------------------------------------
@@ -291,7 +309,7 @@ export function buildConfirmationPdf(ctx: ConfirmationPdfContext): Uint8Array {
   doc.table(
     [
       [w.arrival, `${longDate(b.checkin, nl)}, ${w.fromTime(settings.checkinTime)}`],
-      [w.departure, `${longDate(b.checkout, nl)}, ${w.beforeTime(settings.checkoutTime)}`],
+      [w.departure, `${longDate(b.checkout, nl)}, ${w.beforeTime(checkoutTimeFor(settings, b.checkout))}`],
       ["", w.nights(nights)],
       [w.guests, w.guestsValue(b.adults, b.children)],
     ],

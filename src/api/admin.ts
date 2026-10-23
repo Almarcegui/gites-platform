@@ -2946,7 +2946,7 @@ export function registerAdminRoutes(router: Router): void {
   const SETTING_KEYS = new Set([
     "deposit_pct", "balance_due_days", "hold_minutes",
     "tourist_tax_cents_per_person_night", "tourist_tax_include_children",
-    "caution_cents", "checkin_time", "checkout_time", "cgv_text",
+    "caution_cents", "checkin_time", "checkout_time", "checkout_time_sunday", "cgv_text",
     "allow_deposit", "allow_full_payment",
     "auto_reply_enabled", "auto_reply_text", "email_forward_to",
     "stay_emails_enabled", "review_url", "arrival_info_text",
@@ -3001,7 +3001,11 @@ export function registerAdminRoutes(router: Router): void {
       if ((key === "checkin_time" || key === "checkout_time") && !/^([01]\d|2[0-3]):[0-5]\d$/.test(String(value))) {
         return apiError(400, "heure attendue au format HH:MM, de 00:00 à 23:59");
       }
-      entries[key] = String(value);
+      // Départ le dimanche : vide = même heure que les autres jours.
+      if (key === "checkout_time_sunday" && String(value ?? "").trim() !== "" && !/^([01]\d|2[0-3]):[0-5]\d$/.test(String(value).trim())) {
+        return apiError(400, "départ le dimanche : heure au format HH:MM, ou vide pour la même heure que les autres jours");
+      }
+      entries[key] = key === "checkout_time_sunday" ? String(value ?? "").trim() : String(value);
     }
     await updateSettings(env.DB, propertyId, entries);
     await audit(env.DB, "admin", "settings.update", `property:${propertyId}`, entries);
