@@ -10,7 +10,7 @@
 import { addDays, isIsoDate, sqlNow, todayInZone, type IsoDate } from "../core/dates";
 import type { UnitLink } from "../core/availability";
 import type { GuestIdType, GuestRegisterEntry } from "../core/guest-register";
-import type { OptionDef, Promotion, RateOverride, RateRule, Season, UnitPricingInfo } from "../core/pricing";
+import type { MinNightsStep, OptionDef, Promotion, RateOverride, RateRule, Season, UnitPricingInfo } from "../core/pricing";
 import { normalizeLeadDays } from "../core/pricing";
 import {
   MESSAGE_UNANSWERED_HOURS,
@@ -545,7 +545,22 @@ function mapRateRule(r: Raw): RateRule {
     priceWeekCents: num(r.price_week_cents), priceWeekendCents: num(r.price_weekend_cents),
     holidayPct: num(r.holiday_pct), minNights: num(r.min_nights),
     checkinDays: days ? days.split(",").map((d) => Number(d.trim())).filter((d) => !Number.isNaN(d)) : null,
+    minNightsRelax: parseMinNightsRelax(strOrNull(r.min_nights_relax)),
   };
+}
+
+/** Paliers de dernière minute, stockés « 28:3,14:2 » (jours:nuits). */
+export function parseMinNightsRelax(raw: string | null): MinNightsStep[] | null {
+  if (!raw) return null;
+  const steps = raw.split(",").map((p) => {
+    const [d, n] = p.split(":").map((x) => Number(x.trim()));
+    return { days: d ?? NaN, minNights: n ?? NaN };
+  }).filter((s) => Number.isInteger(s.days) && s.days >= 0 && Number.isInteger(s.minNights) && s.minNights >= 1);
+  return steps.length ? steps : null;
+}
+
+export function formatMinNightsRelax(steps: readonly MinNightsStep[] | null | undefined): string | null {
+  return steps && steps.length ? steps.map((s) => `${s.days}:${s.minNights}`).join(",") : null;
 }
 
 function mapPromotion(r: Raw): Promotion {
@@ -2029,17 +2044,19 @@ export interface RateRuleInput {
   holidayPct: number;
   minNights: number;
   checkinDays: number[] | null;
+  minNightsRelax?: MinNightsStep[] | null;
 }
 
 export async function createRateRule(db: D1Database, r: RateRuleInput): Promise<number> {
   const res = await db
     .prepare(
-      `INSERT INTO rate_rules (unit_id, season_id, price_week_cents, price_weekend_cents, holiday_pct, min_nights, checkin_days)
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)`,
+      `INSERT INTO rate_rules (unit_id, season_id, price_week_cents, price_weekend_cents, holiday_pct, min_nights, checkin_days, min_nights_relax)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)`,
     )
     .bind(
       r.unitId, r.seasonId, r.priceWeekCents, r.priceWeekendCents, r.holidayPct, r.minNights,
       r.checkinDays && r.checkinDays.length > 0 ? r.checkinDays.join(",") : null,
+      formatMinNightsRelax(r.minNightsRelax),
     )
     .run();
   return res.meta.last_row_id;
@@ -2053,7 +2070,8 @@ export async function updateRateRule(db: D1Database, id: number, r: Partial<Rate
          price_weekend_cents = COALESCE(?3, price_weekend_cents),
          holiday_pct = COALESCE(?4, holiday_pct),
          min_nights = COALESCE(?5, min_nights),
-         checkin_days = CASE WHEN ?7 = 1 THEN ?6 ELSE checkin_days END
+         checkin_days = CASE WHEN ?7 = 1 THEN ?6 ELSE checkin_days END,
+         min_nights_relax = CASE WHEN ?9 = 1 THEN ?8 ELSE min_nights_relax END
         WHERE id = ?1`,
     )
     .bind(
@@ -2063,6 +2081,9 @@ export async function updateRateRule(db: D1Database, id: number, r: Partial<Rate
       // 17/10/2026, un PATCH des seuls prix par l'API effaçait la règle en
       // silence (null écrit d'office). `null` ou [] explicite = aucune contrainte.
       r.checkinDays === undefined ? 0 : 1,
+      // même règle pour les paliers : absents = inchangés, null = minimum fixe
+      formatMinNightsRelax(r.minNightsRelax),
+      r.minNightsRelax === undefined ? 0 : 1,
     )
     .run();
 }

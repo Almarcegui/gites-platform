@@ -501,6 +501,7 @@ export function registerPublicRoutes(router: Router): void {
               ctx.seasons,
               ctx.rateRules,
               ctx.rateOverrides,
+              today,
             ).map((r) => ({
               date: r.date,
               // Une nuit en deçà du délai minimum ne peut entrer dans aucun
@@ -635,7 +636,7 @@ export function registerPublicRoutes(router: Router): void {
     });
 
     const out = active.map((u) => {
-      const rates = rateCalendar(toPricingUnit(u), from, to, seasons, rules, overrides);
+      const rates = rateCalendar(toPricingUnit(u), from, to, seasons, rules, overrides, today);
       return {
         unitId: u.id,
         name: u.name,

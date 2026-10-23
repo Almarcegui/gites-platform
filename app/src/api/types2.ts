@@ -74,6 +74,8 @@ export interface RateRule {
   holidayPct: number;
   minNights: number;
   checkinDays: number[] | null;
+  /** paliers de dernière minute : à `days` jours ou moins de l'arrivée, le minimum descend à `minNights` */
+  minNightsRelax?: { days: number; minNights: number }[] | null;
 }
 
 export interface RateOverride {

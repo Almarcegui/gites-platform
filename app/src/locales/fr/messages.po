@@ -463,6 +463,12 @@ msgstr "{0} nouvelle(s)"
 msgid "{0} nuits"
 msgstr "{0} nuits"
 
+#. placeholder {0}: st.minNights
+#. placeholder {1}: st.days
+#: src/pages/settings/Tarifs.tsx
+msgid "{0} nuits à {1} jours ou moins de l'arrivée"
+msgstr "{0} nuits à {1} jours ou moins de l'arrivée"
+
 #. placeholder {0}: r.minNights
 #: src/pages/settings/Tarifs.tsx
 msgid "{0} nuits min."
