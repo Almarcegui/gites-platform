@@ -5,7 +5,7 @@
 import { apiError, json, readJson, Router, type Handler } from "./router";
 import { addDays, dayOfWeek, diffDays, isIsoDate, rangesOverlap, sqlNow, todayInZone, type IsoDate } from "../core/dates";
 import { blockingUnitIds, blocksAsSpans, isActiveBooking, isUnitFree } from "../core/availability";
-import { rateCalendar, type RateOverride, type UnitPricingInfo } from "../core/pricing";
+import { rateCalendar, type MinNightsStep, type RateOverride, type UnitPricingInfo } from "../core/pricing";
 import { detectDrift, type DriftSignal } from "../core/drift";
 import { imageSize } from "../core/image-size";
 import { ipDeniedResponse, isIpDenied } from "../core/ip-allow";
@@ -462,6 +462,26 @@ function badWhole(v: unknown, min: number, max = Number.MAX_SAFE_INTEGER): boole
   if (typeof v === "string" && v.trim() === "") return true;
   const n = Number(v);
   return !Number.isInteger(n) || n < min || n > max;
+}
+
+/** Paliers de dernière minute d'une règle : liste de { days, minNights }
+ *  entiers (jours 0-365, nuits 1-60). Absent = inchangé, null ou [] = aucun. */
+function checkMinNightsRelax(
+  v: unknown,
+): { ok: true; steps: MinNightsStep[] | null | undefined } | { ok: false; message: string } {
+  if (v === undefined) return { ok: true, steps: undefined };
+  if (v === null || (Array.isArray(v) && v.length === 0)) return { ok: true, steps: null };
+  const msg = "paliers de dernière minute : une liste de { days, minNights } entiers (jours 0-365, nuits 1-60)";
+  if (!Array.isArray(v) || v.length > 5) return { ok: false, message: msg };
+  const steps: MinNightsStep[] = [];
+  for (const x of v) {
+    const o = x as { days?: unknown; minNights?: unknown } | null;
+    if (!o || badWhole(o.days, 0, 365) || badWhole(o.minNights, 1, 60) || o.days == null || o.minNights == null) {
+      return { ok: false, message: msg };
+    }
+    steps.push({ days: Number(o.days), minNights: Number(o.minNights) });
+  }
+  return { ok: true, steps: steps.sort((a, b) => b.days - a.days) };
 }
 
 function intParam(v: string | null | undefined, fallback: number): number {
@@ -2586,6 +2606,8 @@ export function registerAdminRoutes(router: Router): void {
     if (!week.ok) return apiError(400, week.message);
     const weekend = checkPrice(body.priceWeekendCents ?? week.cents, bounds, "prix weekend");
     if (!weekend.ok) return apiError(400, weekend.message);
+    const relax = checkMinNightsRelax(body.minNightsRelax);
+    if (!relax.ok) return apiError(400, relax.message);
     try {
       const id = await createRateRule(env.DB, {
         unitId: Number(body.unitId),
@@ -2595,6 +2617,7 @@ export function registerAdminRoutes(router: Router): void {
         holidayPct: Math.floor(Number(body.holidayPct ?? 0)),
         minNights: Math.max(1, Math.floor(Number(body.minNights ?? 1))),
         checkinDays: Array.isArray(body.checkinDays) ? body.checkinDays.map(Number).filter((d) => d >= 0 && d <= 6) : null,
+        minNightsRelax: relax.steps ?? null,
       });
       await audit(env.DB, "admin", "rate.create", `rate:${id}`, { ...body, par: currentUser(req) });
       await triggerBeds24PushAll(env.DB, env, execCtx);
@@ -2632,6 +2655,9 @@ export function registerAdminRoutes(router: Router): void {
       priceWeekend = c.cents;
     }
 
+    const relax = checkMinNightsRelax(body.minNightsRelax);
+    if (!relax.ok) return apiError(400, relax.message);
+
     await updateRateRule(env.DB, id, {
       priceWeekCents: priceWeek,
       priceWeekendCents: priceWeekend,
@@ -2643,6 +2669,7 @@ export function registerAdminRoutes(router: Router): void {
           : Array.isArray(body.checkinDays)
             ? body.checkinDays.map(Number).filter((d) => d >= 0 && d <= 6)
             : null,
+      minNightsRelax: relax.steps,
     });
     await audit(env.DB, "admin", "rate.update", `rate:${id}`, { ...body, par: currentUser(req) });
     await triggerBeds24PushAll(env.DB, env, execCtx);
