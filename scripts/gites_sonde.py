@@ -105,7 +105,19 @@ def ecrire_etat(etat: dict) -> None:
     os.replace(tmp, ETAT)
 
 
-def telegram(texte: str, quand: dt.datetime) -> None:
+def telegram(texte: str, quand: dt.datetime, vert: bool | None = None) -> None:
+    # Tri avant l'outbox (23/10) : alerte nouvelle = tout de suite ; rappels = comptés, non renvoyés ; retour au vert = résumé de 8 h.
+    if vert is not None:
+        try:
+            sys.path.insert(0, str(Path.home() / "Documents" / "ClaudeVault" / "_data" / "agents" / "specialistes"))
+            import telegram_envoi
+            if vert:
+                telegram_envoi.resoudre("gites-sonde", texte, source="gites-sonde", tag="gites-sonde")
+            else:
+                telegram_envoi.envoyer(texte, classe="urgent", cle="gites-sonde", tag="gites-sonde", source="gites-sonde", fenetre_h=24)
+            return
+        except ImportError:
+            pass
     ligne = {
         # le pont ignore une ligne sans id ; unique même à la seconde près
         "id": f"gites-sonde-{quand.strftime('%Y%m%d%H%M%S')}-{os.getpid()}-{time.time_ns() % 1_000_000}",
@@ -164,7 +176,7 @@ def main() -> int:
         texte = message_a_envoyer(vert, detail, a.url, etat, quand)
         if texte:
             try:
-                telegram(texte, quand)
+                telegram(texte, quand, vert)
                 if not vert:
                     etat["alerte_at"] = quand.isoformat(timespec="seconds")
             except OSError as e:
