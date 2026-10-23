@@ -74,18 +74,20 @@ describe("les trois pages existent et suivent le gabarit", () => {
   it("aucune adresse e-mail n'est écrite en dur dans les pages légales (hors autorités)", () => {
     for (const page of PAGES) {
       const emails = read(`${page}/index.html`).match(/[\w.+-]+@[\w-]+\.[\w.-]+/g) ?? [];
-      const autorites = ["contact@apd-gba.be", "contact@mediationconsommateur.be"];
+      // Décision du 23/10/2026 : l'e-mail de l'exploitant est écrit en dur dans les mentions légales.
+      const autorites = ["contact@apd-gba.be", "contact@mediationconsommateur.be", "jphde.cartier@gmail.com"];
       expect(emails.filter((e) => !autorites.includes(e))).toEqual([]);
     }
   });
 
-  it("les mentions légales prévoient le numéro d'enregistrement, masqué tant qu'absent", () => {
+  it("les mentions légales prévoient le numéro d'enregistrement, « en cours d'attribution » tant qu'absent", () => {
     const html = read("mentions-legales/index.html");
-    const lignes = html.match(/<span class="reg" data-registration="[^"]+" hidden>/g) ?? [];
+    const lignes = html.match(/<span class="reg" data-registration="[^"]+">/g) ?? [];
     expect(lignes).toHaveLength(3);
     expect(html).toContain('data-registration="pre-more/maison-du-scieur"');
     expect(html).toContain('data-registration="pre-more/la-scierie"');
     expect(html).toContain('data-registration="moulin-braives/le-moulin"');
+    expect(html.match(/<span data-registration-value>en cours d'attribution<\/span>/g)).toHaveLength(3);
   });
 
   it("la page conditions générales lit le texte de l'API, avec le rendu du tunnel", () => {

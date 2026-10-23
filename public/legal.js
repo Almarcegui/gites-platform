@@ -13,12 +13,11 @@
 //   data-contact-phone="<slug>"     téléphone du domaine, s'il existe.
 //   data-registration="<slug>/<unit-slug>"
 //                                   ligne « Numéro d'enregistrement » d'un
-//                                   hébergement. Le champ n'existe pas encore
-//                                   côté base (issue #10) : la ligne reste
-//                                   masquée (`hidden`) tant que la fiche ne
-//                                   porte pas de `registrationNumber`. Le jour
-//                                   où le champ est exposé par l'API, la ligne
-//                                   apparaît sans toucher au HTML.
+//                                   hébergement. Le HTML affiche « en cours
+//                                   d'attribution » ; il est remplacé par le
+//                                   numéro posé dans NUMEROS_ENREGISTREMENT
+//                                   (ci-dessous), ou par `registrationNumber`
+//                                   de la fiche si l'API l'expose un jour.
 //   data-cgv="<slug>"               conditions générales du domaine, rendues
 //                                   par le MÊME module que le tunnel
 //                                   (`/book/cgv.js`) depuis la MÊME source
@@ -49,6 +48,15 @@ function fiche(slug) {
   }
   return fiches.get(slug);
 }
+
+// Numéros d'enregistrement des hébergements : LE SEUL endroit où les poser.
+// Clé « <domaine>/<hébergement> », valeur = le numéro. Vide = la page affiche
+// « en cours d'attribution ».
+const NUMEROS_ENREGISTREMENT = {
+  "pre-more/maison-du-scieur": "",
+  "pre-more/la-scierie": "",
+  "moulin-braives/le-moulin": "",
+};
 
 /** Une adresse exploitable : non vide et pas un placeholder de seed. */
 const adresseUtilisable = (v) => typeof v === "string" && v.trim() !== "" && !/^TODO_/i.test(v.trim());
@@ -82,17 +90,22 @@ for (const cible of document.querySelectorAll("[data-contact-phone]")) {
     .catch(() => {});
 }
 
-// --- numéro d'enregistrement par hébergement (masqué tant qu'absent) --------
+// --- numéro d'enregistrement par hébergement (« en cours d'attribution » tant qu'absent) --------
 for (const cible of document.querySelectorAll("[data-registration]")) {
+  const poser = (numero) => {
+    const valeur = cible.querySelector("[data-registration-value]") ?? cible;
+    valeur.textContent = numero.trim();
+  };
+  const pose = NUMEROS_ENREGISTREMENT[cible.dataset.registration];
+  if (adresseUtilisable(pose)) {
+    poser(pose);
+    continue;
+  }
   const [slug, unitSlug] = String(cible.dataset.registration).split("/");
   fiche(slug)
     .then(({ units }) => {
-      const unit = (units ?? []).find((u) => u.slug === unitSlug);
-      const numero = unit?.registrationNumber;
-      if (!adresseUtilisable(numero)) return; // reste masqué (absent, vide ou TODO_)
-      const valeur = cible.querySelector("[data-registration-value]") ?? cible;
-      valeur.textContent = numero.trim();
-      cible.hidden = false;
+      const numero = (units ?? []).find((u) => u.slug === unitSlug)?.registrationNumber;
+      if (adresseUtilisable(numero)) poser(numero); // sinon : repli HTML « en cours d'attribution »
     })
     .catch(() => {});
 }

@@ -10,24 +10,12 @@
 // Volontairement séparé de `site.js`, qui ne sert que la page d'accueil et
 // déclenche des appels dont ces pages n'ont que faire (calendrier, contact).
 
-import "/arrhes.js";
+import { aujourdhui, calendrierMois, fmtEuros, moisSuivant } from "/arrhes.js";
 
 const cibles = [...document.querySelectorAll("[data-prix-unite]")];
 
 if (cibles.length) {
-  const eur = (cents) => `${Math.round(cents / 100)} €`;
-
-  const moisSuivant = (m) => {
-    const [a, n] = m.split("-").map(Number);
-    return new Date(Date.UTC(a, n, 1)).toISOString().slice(0, 7);
-  };
-
-  async function charger(domaine, mois) {
-    const url = `/api/public/calendar?property=${encodeURIComponent(domaine)}&month=${mois}`;
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`calendrier ${res.status}`);
-    return res.json();
-  }
+  const eur = fmtEuros; // centimes affichés quand il y en a
 
   for (const cible of cibles) {
     const domaine = cible.dataset.prixDomaine;
@@ -37,8 +25,8 @@ if (cibles.length) {
       try {
         // Deux mois de fenêtre, comme la page d'accueil : assez pour tomber sur
         // un tarif de semaine hors saison, qui est le « à partir de » honnête.
-        const m1 = new Date().toISOString().slice(0, 7);
-        const donnees = await Promise.all([charger(domaine, m1), charger(domaine, moisSuivant(m1))]);
+        const m1 = (await aujourdhui()).slice(0, 7);
+        const donnees = await Promise.all([calendrierMois(domaine, m1), calendrierMois(domaine, moisSuivant(m1))]);
 
         let min = null;
         for (const mois of donnees) {
