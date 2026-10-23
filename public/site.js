@@ -118,8 +118,9 @@ async function renderCalendar() {
     const inRange = selIn && selOut && date > selIn && date < selOut;
     const isSel = date === selIn || date === selOut;
     const cls = ["sday", past ? "past" : "", !past && free.length === 0 ? "full" : "", isSel ? "sel" : "", inRange ? "range" : ""].join(" ");
-    // espace ordinaire dans la grille : une espace insécable empêcherait la cellule de passer à la ligne (débordement à 375 px)
-    const sub = past ? "" : free.length ? `dès ${eurRound(Math.min(...free.map((d) => d.priceCents))).replace("\u00a0", " ")}` : "complet";
+    // Case du calendrier : euro inférieur, sans centimes (reste un vrai « dès » et tient à 375 px) ;
+    // espace ordinaire : une espace insécable empêcherait la cellule de passer à la ligne.
+    const sub = past ? "" : free.length ? `dès ${Math.floor(Math.min(...free.map((d) => d.priceCents)) / 100)} €` : "complet";
     html += `<button type="button" class="${cls}" data-date="${date}" ${past ? "disabled" : ""}><span class="d">${Number(date.slice(8, 10))}</span><span class="p">${sub}</span></button>`;
   }
   $("calGrid").innerHTML = html;

@@ -47,6 +47,12 @@ describe("total d'exemple — calcul pur de arrhes.js", () => {
     expect(totalExempleCents(sejour, [{ ...scierie, cleaningFeeCents: 20000 }])).toBe(55500); // 177,50 + 177,50 + 200
   });
 
+  it("un total qui tombe sur 50 centimes s'affiche au centime, jamais arrondi au-dessus du devis", () => {
+    const total = totalExempleCents({ arrivee: "2026-11-02", cents: 38450 }, [{ ...scierie, cleaningFeeCents: 20000 }]);
+    expect(total).toBe(58450);
+    expect(fmtEuros(total)).toBe("584,50\u00a0€");
+  });
+
   it("une nuit bon marché isolée (la suivante réservée ou fermée) ne compte pas : on prend la meilleure vraie paire", () => {
     const m = cal([
       ["2026-11-02", 100],                          // cheap, mais la nuit suivante est réservée
