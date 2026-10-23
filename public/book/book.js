@@ -11,6 +11,7 @@
 // sont libres — garanti par le moteur de liaison côté serveur.
 
 import { cgvHtml } from "./cgv.js";
+import { checkoutTimeFor } from "./checkout-time.js";
 import { mountPayment, paymentConfig } from "./pay-element.js";
 import { visionneuse } from "/galerie.js";
 import { apiHeaders, CGV_NOTE_NL, eur, hour, LANG, LOCALE, mountLangSwitch, pl, t, translateStatic } from "./i18n.js";
@@ -795,7 +796,7 @@ async function openBookingPanel(unitId) {
         <div class="card sum">
           <b class="sum-unit">${esc(SELECTED.name)}</b>
           <p class="small muted sum-stay">${t("Du {du} au {au}", { du: dfr(SEARCH.checkin), au: dfr(SEARCH.checkout) })} · ${pl(SEARCH.adults, "adulte", "adultes")}${SEARCH.children ? ` + ${pl(SEARCH.children, "enfant", "enfants")}` : ""}<br>
-          ${t("Arrivée dès {arr} · départ avant {dep}", { arr: esc(hour(PROP.settings.checkinTime)), dep: esc(hour(PROP.settings.checkoutTime)) })} · <a href="#" id="editDates">${t("modifier")}</a></p>
+          ${t("Arrivée dès {arr} · départ avant {dep}", { arr: esc(hour(PROP.settings.checkinTime)), dep: esc(hour(checkoutTimeFor(PROP.settings, SEARCH.checkout))) })} · <a href="#" id="editDates">${t("modifier")}</a></p>
           <div id="quoteZone" class="small muted" aria-live="polite" aria-atomic="true">${t("Calcul du devis…")}</div>
         </div>
       </aside>

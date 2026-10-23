@@ -16,6 +16,7 @@
 //   - l'envoi réel reste soumis à EMAILS_ENABLED (sinon : journalisé, statut stub).
 
 import { addDays, diffDays, sqlNow, todayInZone } from "../core/dates";
+import { checkoutTimeFor } from "../core/checkout-time";
 import { audit, getBooking, getProperty, getSettings, hasEmailOfKind, listBookings, type BookingRow, type PropertyRow, type PropertySettings } from "../db/repo";
 import { voucherUrl } from "./booking-flow";
 import { formatDateFr, isNl, money, postalAddress, queueEmail, realContact, refSubject } from "./email";
@@ -81,11 +82,12 @@ function contactLines(p: PropertyRow, nl: boolean): string[] {
 function arrivalBlock(c: Ctx, nl: boolean): string[] {
   const address = postalAddress(c.property);
   const info = c.settings.arrivalInfoText.trim();
+  const depart = checkoutTimeFor(c.settings, c.b.checkout);
   return [
     ...(address ? [`${nl ? "Adres" : "Adresse"} : ${address}`] : []),
     nl
-      ? `Aankomst vanaf ${c.settings.checkinTime}, vertrek uiterlijk om ${c.settings.checkoutTime}.`
-      : `Arrivée à partir de ${hour(c.settings.checkinTime)}, départ au plus tard à ${hour(c.settings.checkoutTime)}.`,
+      ? `Aankomst vanaf ${c.settings.checkinTime}, vertrek uiterlijk om ${depart}.`
+      : `Arrivée à partir de ${hour(c.settings.checkinTime)}, départ au plus tard à ${hour(depart)}.`,
     ...(info ? ["", info] : []),
   ];
 }

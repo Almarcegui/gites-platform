@@ -17,6 +17,7 @@ import { TaskTick } from "./Cleaning";
 import { addDays, hourLabel, longDate, stayRange, sqlToBrussels, titleDate, todayBrussels, weekdayShort, dayNum } from "../lib/dates";
 import { channelName, dayEvents, daySentence, isChannel, nombre, type DayEvent } from "../lib/derive";
 import { eur } from "../lib/money";
+import { checkoutTimeFor } from "../lib/checkoutTime";
 import { useLayout } from "../lib/useLayout";
 import { HealthStrip } from "../shell/Health";
 import { useOpenBooking } from "../shell/Shell";
@@ -38,7 +39,8 @@ function useDay() {
       links: d.links,
       unitNames: new Map(d.units.map((u) => [u.id, u.name])),
       checkinTime: d.settings?.checkinTime ?? "16:00",
-      checkoutTime: d.settings?.checkoutTime ?? "10:00",
+      // Les départs du jour : l'heure du jour (dimanche compris).
+      checkoutTime: d.settings ? checkoutTimeFor(d.settings, today) : "10:00",
     }));
   const events = dayEvents(perProperty, today);
   const tasksQ = useTasks(today, addDays(today, 1));

@@ -39,6 +39,7 @@ interface Form {
   set: {
     checkin_time: string;
     checkout_time: string;
+    checkout_time_sunday: string;
     deposit_pct: number | string;
     balance_due_days: number | string;
     hold_minutes: number | string;
@@ -68,6 +69,7 @@ function toForm(p: PropertyFull, s: FullSettings, units: UnitFull[], links: Unit
     set: {
       checkin_time: s.checkinTime,
       checkout_time: s.checkoutTime,
+      checkout_time_sunday: s.checkoutTimeSunday ?? "",
       deposit_pct: s.depositPct,
       balance_due_days: s.balanceDueDays,
       hold_minutes: s.holdMinutes,
@@ -226,6 +228,14 @@ function DomainForm({ propertyId, init, units, onDirty }: { propertyId: number; 
         <div className="grid2">
           <TextInput size="md" type="time" label={t`Arrivée à partir de`} value={f.set.checkin_time} onChange={(e) => setS("checkin_time", e.currentTarget.value)} />
           <TextInput size="md" type="time" label={t`Départ au plus tard à`} value={f.set.checkout_time} onChange={(e) => setS("checkout_time", e.currentTarget.value)} />
+          <TextInput
+            size="md"
+            type="time"
+            label={t`Départ le dimanche`}
+            description={t`vide = même heure que les autres jours`}
+            value={f.set.checkout_time_sunday}
+            onChange={(e) => setS("checkout_time_sunday", e.currentTarget.value)}
+          />
         </div>
         <div className="grid2" style={{ marginTop: 12 }}>
           <NumberInput

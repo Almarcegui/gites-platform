@@ -222,10 +222,10 @@ describe("pages publiques statiques", () => {
     }
   });
 
-  it("horaires : arrivée 18 h, départ 10 h partout sur l'accueil", () => {
+  it("horaires : arrivée 18 h, départ 10 h (dimanche 18 h) partout sur l'accueil", () => {
     const home = read("index.html");
-    expect(home).toContain("Arrivée dès 18 h · départ avant 10 h");
-    expect(home).toContain("Arrivée à 18 h, départ à 10 h");
+    expect(home).toContain("Arrivée dès 18 h · départ avant 10 h (le dimanche : avant 18 h)");
+    expect(home).toContain("Arrivée à 18 h, départ avant 10 h (le dimanche : avant 18 h).");
     expect(home).not.toMatch(/départ avant 18\s?h|Arrivée et départ à 18/);
   });
 

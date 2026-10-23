@@ -32,17 +32,21 @@ const cgvOf = async (propertyId: number) =>
   (await t.db.prepare("SELECT value FROM settings WHERE property_id = ?1 AND key = 'cgv_text'").bind(propertyId).first<{ value: string }>())!.value;
 
 /** Les instructions de la migration 0036, découpées comme le font les deux migrateurs. */
-function migration0036(): string[] {
-  const sql = readFileSync(fileURLToPath(new URL("../migrations/0036_cgv_v3_1_annulation.sql", import.meta.url)), "utf8");
+function migrationStatements(file: string): string[] {
+  const sql = readFileSync(fileURLToPath(new URL(`../migrations/${file}`, import.meta.url)), "utf8");
   return sql.split("\n").map((l) => l.replace(/--.*$/, "")).join("\n").split(";").map((s) => s.trim()).filter(Boolean);
 }
+const migration0036 = () => migrationStatements("0036_cgv_v3_1_annulation.sql");
+const migration0039 = () => migrationStatements("0039_cgv_v3_2_depart_dimanche.sql");
 
 describe("CGV v3.1 en base", () => {
   for (const propertyId of [1, 2]) {
-    it(`domaine ${propertyId} : version 3.1 du 12 octobre 2026, 14 jours, arrhes, ni double ni 1590`, async () => {
+    // Le Pré Moré (domaine 1) est passé en 3.2 le 23/10/2026 (migration 0039,
+    // départ du dimanche) : seuls l'en-tête, le point 6 et l'article 8.1 changent.
+    it(`domaine ${propertyId} : version ${propertyId === 1 ? "3.2" : "3.1"}, 14 jours, arrhes, ni double ni 1590`, async () => {
       const cgv = await cgvOf(propertyId);
-      expect(cgvVersionLabel(cgv)).toBe("3.1");
-      expect(cgv).toContain("Version 3.1 — 12 octobre 2026.");
+      expect(cgvVersionLabel(cgv)).toBe(propertyId === 1 ? "3.2" : "3.1");
+      expect(cgv).toContain(propertyId === 1 ? "Version 3.2 — 23 octobre 2026." : "Version 3.1 — 12 octobre 2026.");
       expect(cgv).toContain("14 jours");
       expect(cgv).toContain("arrhes");
       expect(cgv.toLowerCase()).not.toContain("double");
@@ -62,8 +66,9 @@ describe("CGV v3.1 en base", () => {
     });
   }
 
-  it("les deux domaines ont le même texte", async () => {
-    expect(await cgvOf(1)).toBe(await cgvOf(2));
+  it("les deux domaines avaient le même texte 3.1 (archive du Pré Moré avant la 3.2)", async () => {
+    const archive = await t.db.prepare("SELECT value FROM settings WHERE property_id = 1 AND key = 'cgv_text_avant_3_2'").first<{ value: string }>();
+    expect(archive!.value).toBe(await cgvOf(2));
   });
 
   it("le résumé « Comment ça se passe » ouvre le texte, avant l'article 1", async () => {
@@ -72,7 +77,7 @@ describe("CGV v3.1 en base", () => {
     expect(resume).toBeGreaterThan(0);
     expect(resume).toBeLessThan(cgv.indexOf("Article 1 —"));
     const bloc = cgv.slice(resume, cgv.indexOf("Article 1 —"));
-    for (const etape of ["réservez en ligne", "acceptez les présentes conditions générales", "payez les arrhes", "confirmation de votre réservation", "récapitulatif", "solde au plus tard 30 jours avant l'arrivée", "Arrivée à partir de 18 h", "Départ avant 18 h", "par e-mail en rappelant votre référence"]) {
+    for (const etape of ["réservez en ligne", "acceptez les présentes conditions générales", "payez les arrhes", "confirmation de votre réservation", "récapitulatif", "solde au plus tard 30 jours avant l'arrivée", "Arrivée à partir de 18 h", "Départ avant ", "par e-mail en rappelant votre référence"]) {
       expect(bloc, etape).toContain(etape);
     }
   });
@@ -102,14 +107,16 @@ describe("CGV v3.1 en base", () => {
       expect(cgvVersionLabel(r.value)).toBe("3.0");
       expect(r.value).toContain("double des arrhes"); // c'est bien l'ancienne
     }
-    const current = await cgvOf(1);
-    for (const stmt of migration0036()) await t.db.prepare(stmt).run();
+    const current1 = await cgvOf(1);
+    const current2 = await cgvOf(2);
+    // rejeu dans l'ordre : 0036 puis 0039 (la 3.2 du Pré Moré)
+    for (const stmt of [...migration0036(), ...migration0039()]) await t.db.prepare(stmt).run();
     expect(await archive()).toEqual(before); // la 3.1 n'est pas archivée par-dessus la v3
-    expect(await cgvOf(1)).toBe(current);
-    expect(await cgvOf(2)).toBe(current);
+    expect(await cgvOf(1)).toBe(current1);
+    expect(await cgvOf(2)).toBe(current2);
   });
 
-  it("l'acceptation enregistre la version 3.1 (et le hash du texte affiché)", async () => {
+  it("l'acceptation enregistre la version 3.2 au Pré Moré (et le hash du texte affiché)", async () => {
     const checkin = addDays(todayInZone(), 150);
     const req = new Request("http://test.local/api/public/bookings", {
       method: "POST",
@@ -123,9 +130,9 @@ describe("CGV v3.1 en base", () => {
     expect(res.status).toBe(201);
     const { reference } = (await res.json()) as { reference: string };
     const row = await t.db.prepare("SELECT cgv_version, cgv_ip FROM bookings WHERE reference = ?1").bind(reference).first<{ cgv_version: string; cgv_ip: string }>();
-    expect(row!.cgv_version).toMatch(/^v3\.1\+sha256:[0-9a-f]{16}-len\d+$/);
+    expect(row!.cgv_version).toMatch(/^v3\.2\+sha256:[0-9a-f]{16}-len\d+$/);
     expect(row!.cgv_version).toContain(`len${(await cgvOf(1)).length}`);
-    expect(acceptedVersionLabel(row!.cgv_version)).toBe("3.1");
+    expect(acceptedVersionLabel(row!.cgv_version)).toBe("3.2");
     expect(row!.cgv_ip).toBe("203.0.113.9");
   });
 });

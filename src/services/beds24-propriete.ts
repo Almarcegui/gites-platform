@@ -227,6 +227,11 @@ export async function buildPropertyPlan(db: D1Database, propertyId: number, publ
     "Heure limite d'arrivée (checkInEnd) : non définie chez nous",
   );
   if (!vitrine) aCompleter.push("Code postal et rue exacte : notre base n'a qu'une adresse libre" + (address ? ` (« ${address} »)` : ""));
+  // Beds24 ne connaît qu'une heure de départ : celle de la semaine. Le dimanche
+  // (checkout_time_sunday) n'est dit que par nos propres documents.
+  if (settings.checkoutTimeSunday.trim() && settings.checkoutTimeSunday.trim() !== settings.checkoutTime) {
+    aCompleter.push(`Départ le dimanche (${settings.checkoutTimeSunday.trim()}) : Beds24 n'a qu'une heure de départ, à préciser dans le texte de l'annonce`);
+  }
   if (!checkInStart || !checkOutEnd) aCompleter.push("Heures d'arrivée/départ : réglage absent ou hors quart d'heure");
   if (!clean(property.contactEmail)) aCompleter.push("E-mail de contact : absent ou provisoire (TODO) dans notre base");
   if (!phone) aCompleter.push("Téléphone de contact : absent de notre base");

@@ -3159,6 +3159,10 @@ msgstr "Départ : {0}, ménage à prévoir"
 msgid "Départ au plus tard à"
 msgstr "Départ au plus tard à"
 
+#: src/pages/settings/Domain.tsx
+msgid "Départ le dimanche"
+msgstr "Départ le dimanche"
+
 #: src/shell/Shell.tsx
 msgid "Déplier le menu"
 msgstr "Déplier le menu"
@@ -8148,6 +8152,10 @@ msgstr "vide = {0} % comme le domaine"
 #: src/pages/settings/Tarifs.tsx
 msgid "vide = celui de la saison"
 msgstr "vide = celui de la saison"
+
+#: src/pages/settings/Domain.tsx
+msgid "vide = même heure que les autres jours"
+msgstr "vide = même heure que les autres jours"
 
 #: src/pages/settings/Tarifs.tsx
 msgid "vide = prix de saison"

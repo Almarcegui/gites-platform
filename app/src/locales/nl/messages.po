@@ -3163,6 +3163,10 @@ msgstr "Vertrek: {0}, schoonmaak te voorzien"
 msgid "Départ au plus tard à"
 msgstr "Vertrek uiterlijk om"
 
+#: src/pages/settings/Domain.tsx
+msgid "Départ le dimanche"
+msgstr "Vertrek op zondag"
+
 #: src/shell/Shell.tsx
 msgid "Déplier le menu"
 msgstr "Menu uitklappen"
@@ -8152,6 +8156,10 @@ msgstr "leeg = {0} % zoals het domein"
 #: src/pages/settings/Tarifs.tsx
 msgid "vide = celui de la saison"
 msgstr "leeg = dat van het seizoen"
+
+#: src/pages/settings/Domain.tsx
+msgid "vide = même heure que les autres jours"
+msgstr "leeg = zelfde uur als de andere dagen"
 
 #: src/pages/settings/Tarifs.tsx
 msgid "vide = prix de saison"

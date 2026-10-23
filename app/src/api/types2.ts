@@ -45,6 +45,8 @@ export interface FullSettings {
   cautionCents: number;
   checkinTime: string;
   checkoutTime: string;
+  /** Départ le dimanche ; vide = même heure que les autres jours. */
+  checkoutTimeSunday?: string;
   cgvText: string;
   allowDeposit: boolean;
   allowFullPayment: boolean;

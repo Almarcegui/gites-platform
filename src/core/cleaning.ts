@@ -8,6 +8,7 @@
 // (app/src/lib/derive.ts, cleaningTasks), désormais calculée côté serveur.
 import type { UnitLink } from "./availability";
 import type { IsoDate } from "./dates";
+import { checkoutTimeFor, type CheckoutTimes } from "./checkout-time";
 
 export interface CleaningBooking {
   id: number;
@@ -56,7 +57,7 @@ export function relatedUnits(unitId: number, links: UnitLink[]): Set<number> {
 export function desiredCleaningTasks(
   bookings: CleaningBooking[],
   links: UnitLink[],
-  times: { checkinTime: string; checkoutTime: string },
+  times: { checkinTime: string } & CheckoutTimes,
   from: IsoDate,
   to: IsoDate,
   nowSql: string,
@@ -73,7 +74,7 @@ export function desiredCleaningTasks(
       bookingId: b.id,
       unitId: b.unitId,
       dueDate: b.checkout,
-      dueTime: times.checkoutTime,
+      dueTime: checkoutTimeFor(times, b.checkout),
       nextCheckin: next?.checkin ?? null,
       nextCheckinTime: next ? times.checkinTime : null,
       nextUnitId: next?.unitId ?? null,

@@ -23,6 +23,7 @@ import { useScope } from "../lib/scope";
 export interface Settings {
   checkinTime: string;
   checkoutTime: string;
+  checkoutTimeSunday?: string;
   depositPct: number;
   balanceDueDays: number;
   holdMinutes: number;
