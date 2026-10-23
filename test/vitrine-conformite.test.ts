@@ -13,7 +13,7 @@ import { createTestDb, type TestDb } from "./helpers/d1";
 import { Router } from "../src/api/router";
 import { registerPublicRoutes } from "../src/api/public";
 import { addDays, todayInZone } from "../src/core/dates";
-import { fraisSejourCents, partiesFrais, prixMinNuitCents, totalExempleEuros } from "../public/arrhes.js";
+import { fmtEuros, fraisSejourCents, meilleurSejour2Nuits, moisSuivant, partiesFrais, totalExempleCents } from "../public/arrhes.js";
 
 const PUBLIC = fileURLToPath(new URL("../public", import.meta.url));
 const read = (rel: string) => readFileSync(join(PUBLIC, rel), "utf8");
@@ -24,34 +24,82 @@ describe("total d'exemple — calcul pur de arrhes.js", () => {
   const deux = { id: 3, isComposite: true, compositePricing: "sum", componentIds: [1, 2], cleaningFeeCents: 0 };
   const units = [scieur, scierie, deux];
 
-  it("2 nuits = 2 × prix par nuit + forfait de frais, arrondi à l'euro", () => {
-    expect(totalExempleEuros(18000, [scieur])).toBe(480);
-    expect(totalExempleEuros(12050, [scierie])).toBe(Math.round((24100 + 9000) / 100));
+  // Calendrier fictif d'un hébergement : jours = [date, prix en euros | null, options].
+  type Opt = { available?: boolean; minNights?: number; checkinDays?: number[] | null };
+  const cal = (rows: [string, number | null, Opt?][], unitId = 1) => ({
+    units: [{ unitId, days: rows.map(([date, euros, o]) => ({
+      date, past: false, available: o?.available ?? true, priceCents: euros == null ? null : euros * 100,
+      minNights: o?.minNights ?? 2, checkinDays: o?.checkinDays ?? null,
+    })) }],
+  });
+  // 2026-11-02 = lundi, 11-06 = vendredi.
+  const FIN = "2026-11-30";
+
+  it("fmtEuros : centimes seulement quand il y en a, espace insécable avant €", () => {
+    expect(fmtEuros(20000)).toBe("200\u00a0€");
+    expect(fmtEuros(17750)).toBe("177,50\u00a0€");
+    expect(fmtEuros(41250)).toBe("412,50\u00a0€");
   });
 
-  it("les deux maisons additionnent les frais de leurs composantes", () => {
-    expect(partiesFrais(units, deux).map((u: { id: number }) => u.id)).toEqual([1, 2]);
-    expect(totalExempleEuros(30000, partiesFrais(units, deux))).toBe(810);
+  it("les montants affichés s'additionnent exactement : nuits + frais = total", () => {
+    const sejour = meilleurSejour2Nuits([cal([["2026-11-02", 177.5], ["2026-11-03", 177.5], ["2026-11-04", 300]], 2)], 2, FIN);
+    expect(sejour).toEqual({ arrivee: "2026-11-02", cents: 35500 });
+    expect(totalExempleCents(sejour, [{ ...scierie, cleaningFeeCents: 20000 }])).toBe(55500); // 177,50 + 177,50 + 200
   });
 
-  it("le supplément par nuit n'entre que si le séjour dépasse les nuits incluses", () => {
+  it("une nuit bon marché isolée (la suivante réservée ou fermée) ne compte pas : on prend la meilleure vraie paire", () => {
+    const m = cal([
+      ["2026-11-02", 100],                          // cheap, mais la nuit suivante est réservée
+      ["2026-11-03", 90, { available: false }],
+      ["2026-11-04", 150], ["2026-11-05", 160],
+      ["2026-11-10", 100], ["2026-11-11", null],    // seconde nuit sans tarif
+    ]);
+    expect(meilleurSejour2Nuits([m], 1, FIN)).toEqual({ arrivee: "2026-11-04", cents: 31000 });
+  });
+
+  it("une nuit bon marché en toute fin de saison, sans seconde nuit, n'est pas atteignable", () => {
+    const m = cal([["2026-11-25", 200], ["2026-11-26", 200], ["2026-11-30", 50]]);
+    expect(meilleurSejour2Nuits([m], 1, FIN)).toEqual({ arrivee: "2026-11-25", cents: 40000 });
+  });
+
+  it("jours d'arrivée imposés : seule une arrivée autorisée compte", () => {
+    const m = cal([
+      ["2026-11-02", 100, { checkinDays: [5, 6] }], ["2026-11-03", 100],   // lundi : refusé
+      ["2026-11-06", 150, { checkinDays: [5, 6] }], ["2026-11-07", 180],   // vendredi : accepté
+    ]);
+    expect(meilleurSejour2Nuits([m], 1, FIN)).toEqual({ arrivee: "2026-11-06", cents: 33000 });
+    expect(meilleurSejour2Nuits([cal([["2026-11-02", 100, { checkinDays: [] }], ["2026-11-03", 100]])], 1, FIN)).toBeNull();
+  });
+
+  it("minimum de nuits supérieur à 2 : exclu", () => {
+    expect(meilleurSejour2Nuits([cal([["2026-11-02", 100, { minNights: 3 }], ["2026-11-03", 100]])], 1, FIN)).toBeNull();
+  });
+
+  it("la paire qui chevauche la fin de fenêtre est retenue (seconde nuit dans le mois suivant)", () => {
+    const nov = cal([["2026-11-29", 400], ["2026-11-30", 90]]);
+    const dec = cal([["2026-12-01", 90], ["2026-12-02", 400]]);
+    expect(meilleurSejour2Nuits([nov, dec], 1, FIN)).toEqual({ arrivee: "2026-11-30", cents: 18000 });
+    // une arrivée APRÈS la fenêtre d'arrivée n'est pas envisagée
+    expect(meilleurSejour2Nuits([nov, dec], 1, "2026-11-29")).toEqual({ arrivee: "2026-11-29", cents: 49000 });
+  });
+
+  it("aucun jour disponible : null, donc mention masquée", () => {
+    const m = cal([["2026-11-02", 100, { available: false }], ["2026-11-03", 100, { available: false }]]);
+    expect(meilleurSejour2Nuits([m], 1, FIN)).toBeNull();
+    expect(meilleurSejour2Nuits([{ units: [] }], 1, FIN)).toBeNull();
+    expect(totalExempleCents(null, [scieur])).toBeNull();
+  });
+
+  it("les frais : forfait, supplément par nuit au-delà des nuits incluses, composite = somme", () => {
     const u = { cleaningFeeCents: 24000, chargesExtraNightCents: 2500, feeIncludedNights: 2 };
     expect(fraisSejourCents([u], 2)).toBe(24000);
     expect(fraisSejourCents([u], 4)).toBe(29000);
-    const unNuit = { cleaningFeeCents: 24000, chargesExtraNightCents: 2500, feeIncludedNights: 1 };
-    expect(fraisSejourCents([unNuit], 2)).toBe(26500);
-  });
-
-  it("le prix minimum ignore les jours passés et sans tarif", () => {
-    const mois = [{ units: [{ unitId: 1, days: [
-      { past: true, priceCents: 100 }, { past: false, priceCents: null }, { past: false, priceCents: 20000 }, { past: false, priceCents: 18000 },
-    ] }] }];
-    expect(prixMinNuitCents(mois, 1)).toBe(18000);
-    expect(prixMinNuitCents(mois, 2)).toBeNull();
+    expect(partiesFrais(units, deux).map((x: { id: number }) => x.id)).toEqual([1, 2]);
+    expect(fraisSejourCents(partiesFrais(units, deux), 2)).toBe(21000);
   });
 });
 
-describe("total d'exemple — cohérence avec le moteur de devis", () => {
+describe("total d'exemple — égalité exacte avec le devis réel le moins cher", () => {
   const router = new Router();
   registerPublicRoutes(router);
   let t: TestDb;
@@ -73,28 +121,73 @@ describe("total d'exemple — cohérence avec le moteur de devis", () => {
     await t.dispose();
   });
 
-  it("le total annoncé n'est jamais supérieur au devis réel le moins cher (hors promotions) d'un séjour de 2 nuits", async () => {
-    // Départ à 20 jours : ni « last minute » (≤ 7 j) ni « early bird » (≥ 90 j). Les promotions ne font que baisser le prix payé :
-    // le total « dès » se compare au tarif public, sans remise.
-    const debut = addDays(todayInZone(), 20);
-    const m1 = debut.slice(0, 7);
-    const m2 = addDays(`${m1}-01`, 32).slice(0, 7);
-    const mois = [await call("GET", `/api/public/calendar?property=pre-more&month=${m1}`), await call("GET", `/api/public/calendar?property=pre-more&month=${m2}`)];
+  /** Ce que la page afficherait, et le devis réel le moins cher du moteur sur la même fenêtre. */
+  async function compare(unitId: number) {
+    const today = addDays(todayInZone(), 0);
+    const m1 = today.slice(0, 7);
+    const m2 = moisSuivant(m1);
+    const mois = [];
+    for (const m of [m1, m2, moisSuivant(m2)]) mois.push(await call("GET", `/api/public/calendar?property=pre-more&month=${m}`));
     const { units } = await call("GET", "/api/public/properties/pre-more");
-    for (const u of units) {
-      const min = prixMinNuitCents(mois, u.id);
-      if (min == null) continue;
-      const exemple = totalExempleEuros(min, partiesFrais(units, u)) * 100;
-      const jours = mois.flatMap((m: any) => m.units.find((x: any) => x.unitId === u.id).days).filter((d: any) => d.date >= debut && d.priceCents != null);
-      const devis: number[] = [];
-      for (const j of jours.slice(0, 40)) {
-        const r = await call("POST", "/api/public/quote", { unitId: u.id, checkin: j.date, checkout: addDays(j.date, 2), adults: 2, children: 0 });
-        if (r.quote?.ok && !r.quote.discountCents) devis.push(r.quote.totalCents);
-      }
-      expect(devis.length, u.slug).toBeGreaterThan(0);
-      expect(exemple, u.slug).toBeLessThanOrEqual(Math.min(...devis) + 50); // + arrondi à l'euro
+    const u = units.find((x: any) => x.id === unitId);
+    const page = totalExempleCents(meilleurSejour2Nuits(mois, unitId, `${m2}-31`), partiesFrais(units, u));
+
+    // Disponibilité : celle du calendrier (le devis n'en répond pas). Tout le reste
+    // — tarif, minimum de nuits, jour d'arrivée, délai — vient du moteur de devis.
+    const jours = new Map<string, any>();
+    for (const m of mois) for (const j of m.units.find((x: any) => x.unitId === unitId).days) jours.set(j.date, j);
+    const devis: number[] = [];
+    for (const [date, j] of jours) {
+      if (date > `${m2}-31` || !j.available || !jours.get(addDays(date, 1))?.available) continue;
+      const r = await call("POST", "/api/public/quote", { unitId, checkin: date, checkout: addDays(date, 2), adults: 2, children: 0 });
+      // tarif public : les remises (last minute, early bird) ne font que baisser le prix payé
+      if (r.quote?.ok) devis.push(r.quote.totalCents + (r.quote.discountCents ?? 0));
     }
-  });
+    return { page, moteur: devis.length ? Math.min(...devis) : null };
+  }
+
+  it("les trois hébergements : le « dès » est égal au devis le moins cher atteignable", async () => {
+    for (const id of [1, 2, 3]) {
+      const { page, moteur } = await compare(id);
+      expect(moteur, `unité ${id}`).not.toBeNull();
+      expect(page, `unité ${id}`).toBe(moteur);
+    }
+  }, 180_000);
+
+  it("une nuit réservée change la paire retenue, et le « dès » suit le moteur", async () => {
+    const avant = await compare(2);
+    const jour = addDays(todayInZone(), 20);
+    await t.db.prepare("INSERT INTO manual_blocks (unit_id, checkin, checkout, reason) VALUES (2, ?1, ?2, 'test')").bind(jour, addDays(jour, 60)).run();
+    try {
+      const apres = await compare(2);
+      expect(apres.page).toBe(apres.moteur);
+      expect(apres.page).toBeGreaterThanOrEqual(avant.page!);
+    } finally {
+      await t.db.prepare("UPDATE manual_blocks SET active = 0 WHERE reason = 'test'").run();
+    }
+  }, 180_000);
+
+  it("jours d'arrivée imposés (vendredi seulement) : le « dès » suit le moteur", async () => {
+    await t.db.prepare("UPDATE rate_rules SET checkin_days = '5' WHERE unit_id = 2").run();
+    try {
+      const { page, moteur } = await compare(2);
+      expect(moteur).not.toBeNull();
+      expect(page).toBe(moteur);
+    } finally {
+      await t.db.prepare("UPDATE rate_rules SET checkin_days = NULL WHERE unit_id = 2").run();
+    }
+  }, 180_000);
+
+  it("minimum de 3 nuits partout : aucun séjour de 2 nuits, aucun total (mention masquée)", async () => {
+    await t.db.prepare("UPDATE rate_rules SET min_nights = 3 WHERE unit_id = 1").run();
+    try {
+      const { page, moteur } = await compare(1);
+      expect(moteur).toBeNull();
+      expect(page).toBeNull();
+    } finally {
+      await t.db.prepare("UPDATE rate_rules SET min_nights = 2 WHERE unit_id = 1").run();
+    }
+  }, 180_000);
 });
 
 describe("pages publiques statiques", () => {
@@ -117,7 +210,7 @@ describe("pages publiques statiques", () => {
     const js = read("arrhes.js");
     expect(js).toContain("data-total-exemple-unit");
     expect(js).toContain("2 nuits dès");
-    expect(js).toContain("tout compris");
+    expect(js).toContain("tout compris (prochains mois)");
     for (const rel of ["la-maison-du-scieur/index.html", "la-scierie/index.html"]) {
       expect(read(rel), rel).toMatch(/data-total-exemple-unit="[12]"/);
     }
@@ -128,6 +221,28 @@ describe("pages publiques statiques", () => {
     expect(home).toContain("Arrivée dès 18 h · départ avant 10 h");
     expect(home).toContain("Arrivée à 18 h, départ à 10 h");
     expect(home).not.toMatch(/départ avant 18\s?h|Arrivée et départ à 18/);
+  });
+
+  it("mobile : la colonne « exemple » du tableau disparaît sous 600 px (la carte porte déjà le total)", () => {
+    const home = read("index.html");
+    expect(home).toMatch(/<th class="ex"/);
+    expect(home.match(/<td class="r ex">/g)).toHaveLength(3);
+    expect(read("site.css")).toMatch(/@media \(max-width:600px\)\{\.tarifs \.ex\{display:none\}/);
+  });
+
+  it("téléphone : un seul format, 0498 44 08 83", () => {
+    expect(read("index.html")).toContain("0498 44 08 83");
+    expect(read("index.html")).not.toMatch(/0498\s?\/\s?440/);
+    expect(read("mentions-legales/index.html")).toContain(">0498 44 08 83<");
+  });
+
+  it("une seule source de calendrier partagée : site.js et prix.js passent par arrhes.js", () => {
+    for (const rel of ["site.js", "prix.js"]) {
+      const js = read(rel);
+      expect(js, rel).toContain("calendrierMois");
+      expect(js, rel).not.toMatch(/fetch\(`?\/api\/public\/calendar/);
+    }
+    expect(read("arrhes.js")).toContain("/api/public/today");
   });
 
   it("adresse : plus de « Redu (Daverdisse) » dans les pages", () => {
@@ -152,6 +267,8 @@ describe("pages publiques statiques", () => {
     expect(html).toContain("Hetzner Online GmbH");
     expect(html).toMatch(/Google Ireland Limited/);
     expect(html).not.toMatch(/Resend/);
+    expect(html).toContain("envoi et réception des e-mails ; Google agit selon ses propres conditions");
+    expect(html).not.toMatch(/Google[^<]*lorsque ce service est actif/);
     expect(html).not.toMatch(/hébergement du site et de la base de données, région Europe de l'Ouest/);
   });
 });

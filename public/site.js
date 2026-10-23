@@ -3,15 +3,14 @@
 //  · calendrier de disponibilités (le même moteur que la réservation)
 //  · formulaire de contact → boîte Messages du back-office.
 
-import "/arrhes.js";
+import { aujourdhui, calendrierMois, fmtEuros } from "/arrhes.js";
 
 const PROPERTY = "pre-more";
-const eurRound = (c) => `${Math.round(c / 100)} €`;
+const eurRound = fmtEuros; // centimes affichés quand il y en a : les sommes de la page s'additionnent
 const $ = (id) => document.getElementById(id);
 
 let TODAY = null;
 let calMonth = null;
-const calCache = new Map();
 
 async function api(path, body) {
   const res = await fetch(path, {
@@ -29,12 +28,7 @@ function monthShift(month, delta) {
   return new Date(Date.UTC(y, m - 1 + delta, 1)).toISOString().slice(0, 7);
 }
 
-async function loadMonth(month) {
-  if (!calCache.has(month)) {
-    calCache.set(month, await api(`/api/public/calendar?property=${PROPERTY}&month=${month}`));
-  }
-  return calCache.get(month);
-}
+const loadMonth = (month) => calendrierMois(PROPERTY, month); // cache partagé avec arrhes.js
 
 // --- prix « à partir de » par unité (min sur ~60 jours) ----------------------
 
@@ -124,7 +118,8 @@ async function renderCalendar() {
     const inRange = selIn && selOut && date > selIn && date < selOut;
     const isSel = date === selIn || date === selOut;
     const cls = ["sday", past ? "past" : "", !past && free.length === 0 ? "full" : "", isSel ? "sel" : "", inRange ? "range" : ""].join(" ");
-    const sub = past ? "" : free.length ? `dès ${eurRound(Math.min(...free.map((d) => d.priceCents)))}` : "complet";
+    // espace ordinaire dans la grille : une espace insécable empêcherait la cellule de passer à la ligne (débordement à 375 px)
+    const sub = past ? "" : free.length ? `dès ${eurRound(Math.min(...free.map((d) => d.priceCents))).replace("\u00a0", " ")}` : "complet";
     html += `<button type="button" class="${cls}" data-date="${date}" ${past ? "disabled" : ""}><span class="d">${Number(date.slice(8, 10))}</span><span class="p">${sub}</span></button>`;
   }
   $("calGrid").innerHTML = html;
@@ -170,8 +165,7 @@ function wireContact() {
 (async function init() {
   wireContact();
   try {
-    const t = await api("/api/public/today");
-    TODAY = t.today;
+    TODAY = await aujourdhui();
     calMonth = TODAY.slice(0, 7);
     $("calPrev").addEventListener("click", () => { calMonth = monthShift(calMonth, -1); renderCalendar(); });
     $("calNext").addEventListener("click", () => { calMonth = monthShift(calMonth, 1); renderCalendar(); });

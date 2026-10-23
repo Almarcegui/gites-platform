@@ -47,28 +47,76 @@ export function fraisSejourCents(parts, nuits) {
   }, 0);
 }
 
-// Total d'exemple « 2 nuits dès X € tout compris » (art. VI.4 CDE : le prix
-// annoncé inclut les services à payer obligatoirement). X = nuits × prix
-// « à partir de » par nuit + frais généraux du séjour, arrondi à l'euro. Pas de
-// taxe de séjour : le moteur n'en facture aucune.
-export function totalExempleEuros(minNuitCents, parts, nuits = 2) {
-  return Math.round((nuits * minNuitCents + fraisSejourCents(parts, nuits)) / 100);
+// Montant à l'affichage : euros entiers tels quels, centimes seulement quand il
+// y en a (177,50 €), espace insécable avant « € » (jamais de « € » seul en
+// début de ligne). Toutes les sommes de la page s'additionnent ainsi exactement.
+export function fmtEuros(cents) {
+  const e = cents / 100;
+  return `${Number.isInteger(e) ? e : e.toFixed(2).replace(".", ",")}\u00a0€`;
 }
 
-// Prix « à partir de » par nuit : même règle que site.js et prix.js (minimum
-// des nuits à venir, tarifées, sur la fenêtre de deux mois).
-export function prixMinNuitCents(mois, unitId) {
-  let min = null;
+// Calendrier et date du jour partagés par tous les scripts de la page (arrhes.js,
+// site.js, prix.js) : une seule requête par mois, une seule pour « aujourd'hui »
+// (date belge servie par l'API, pas l'horloge du navigateur).
+const caches = new Map();
+function unefois(cle, charge) {
+  if (!caches.has(cle)) {
+    caches.set(cle, charge().catch((e) => { caches.delete(cle); throw e; }));
+  }
+  return caches.get(cle);
+}
+const json = (res) => {
+  if (!res.ok) throw new Error(`${res.url} ${res.status}`);
+  return res.json();
+};
+export const aujourdhui = () => unefois("today", () => fetch("/api/public/today").then(json).then((t) => t.today));
+export const calendrierMois = (slug, mois) =>
+  unefois(`${slug}/${mois}`, () => fetch(`/api/public/calendar?property=${encodeURIComponent(slug)}&month=${mois}`).then(json));
+export const moisSuivant = (m) => {
+  const [a, n] = m.split("-").map(Number);
+  return new Date(Date.UTC(a, n, 1)).toISOString().slice(0, 7);
+};
+
+const ajouterJours = (iso, n) => new Date(Date.parse(`${iso}T00:00:00Z`) + n * 864e5).toISOString().slice(0, 10);
+
+// Séjour de 2 nuits le moins cher RÉELLEMENT réservable pour un hébergement :
+// on ne prend pas « 2 × la nuit la moins chère », on parcourt les vraies paires
+// de nuits, avec les règles du moteur de devis lues dans le calendrier public :
+//   · arrivée réservable (`available` : après le délai minimum, nuit libre) ;
+//   · seconde nuit libre et tarifée aussi (elle peut tomber dans le mois
+//     suivant : `mois` contient donc un mois de plus que la fenêtre d'arrivée) ;
+//   · minimum de nuits de la nuit d'arrivée ≤ 2 ;
+//   · jours d'arrivée imposés : nul, ou contenant le jour de la semaine d'arrivée.
+// `jusquau` = dernière date d'arrivée envisagée (incluse). Rend
+// { arrivee, cents } (somme des deux nuits, hors frais) ou null s'il n'y a aucune
+// paire — la mention est alors masquée plutôt que d'afficher un prix inatteignable.
+export function meilleurSejour2Nuits(mois, unitId, jusquau) {
+  const jours = new Map();
   for (const m of mois) {
-    for (const u of m.units) {
-      if (u.unitId !== unitId) continue;
-      for (const j of u.days) {
-        if (j.past || j.priceCents == null) continue;
-        if (min == null || j.priceCents < min) min = j.priceCents;
-      }
+    const u = m.units.find((x) => x.unitId === unitId);
+    for (const j of u ? u.days : []) jours.set(j.date, j);
+  }
+  let meilleur = null;
+  for (const [date, a] of jours) {
+    if (date > jusquau || !a.available || a.priceCents == null) continue;
+    if ((a.minNights ?? 1) > 2) continue;
+    if (a.checkinDays != null && !a.checkinDays.includes(new Date(`${date}T00:00:00Z`).getUTCDay())) continue;
+    const b = jours.get(ajouterJours(date, 1));
+    if (!b || !b.available || b.priceCents == null) continue;
+    const cents = a.priceCents + b.priceCents;
+    if (meilleur == null || cents < meilleur.cents || (cents === meilleur.cents && date < meilleur.arrivee)) {
+      meilleur = { arrivee: date, cents };
     }
   }
-  return min;
+  return meilleur;
+}
+
+// Total d'exemple « 2 nuits dès X € tout compris » (art. VI.4 CDE : le prix
+// annoncé inclut les services à payer obligatoirement) : la meilleure paire de
+// nuits + les frais généraux du séjour, au centime. Pas de taxe de séjour : le
+// moteur n'en facture aucune.
+export function totalExempleCents(sejour, parts) {
+  return sejour == null ? null : sejour.cents + fraisSejourCents(parts, 2);
 }
 
 if (cibles.length || fraisCibles.length || totalCibles.length) {
@@ -131,7 +179,7 @@ if (cibles.length || fraisCibles.length || totalCibles.length) {
         const extra = avecSupplement.reduce((t, x) => t + x.chargesExtraNightCents, 0);
         const inclus = parts[0]?.feeIncludedNights ?? 2;
         const memeRegle = parts.every((x) => (x.feeIncludedNights ?? 2) === inclus);
-        const fmt = (c) => { const e = c / 100; return `${Number.isInteger(e) ? e : e.toFixed(2).replace(".", ",")} €`; };
+        const fmt = fmtEuros;
         if (typeof cents === "number" && cents > 0) {
           cible.textContent = avecSupplement.length === 0
             ? fmt(cents)
@@ -151,37 +199,28 @@ if (cibles.length || fraisCibles.length || totalCibles.length) {
   //   data-total-exemple-property  slug du domaine
   //   data-total-exemple-unit      id de l'hébergement
   // La cible porte `hidden` (cartes) ou un repli lisible (tableau) : si un
-  // appel échoue, la page n'affiche aucun total plutôt qu'un total inventé.
-  const calendriers = new Map(); // slug → promesse des deux mois de calendrier
-  const calendrier = (slug) => {
-    if (!calendriers.has(slug)) {
-      const m1 = new Date().toISOString().slice(0, 7);
-      const [a, n] = m1.split("-").map(Number);
-      const m2 = new Date(Date.UTC(a, n, 1)).toISOString().slice(0, 7);
-      calendriers.set(
-        slug,
-        Promise.all([m1, m2].map((m) =>
-          fetch(`/api/public/calendar?property=${encodeURIComponent(slug)}&month=${m}`).then((res) => {
-            if (!res.ok) throw new Error(`calendrier ${res.status}`);
-            return res.json();
-          }),
-        )),
-      );
-    }
-    return calendriers.get(slug);
-  };
-
+  // appel échoue ou s'il n'y a aucune paire de nuits réservable, la page
+  // n'affiche aucun total plutôt qu'un total inventé. « (prochains mois) » dit
+  // l'horizon : le minimum est celui de la fenêtre, pas un minimum absolu.
   for (const cible of totalCibles) {
     (async () => {
       try {
         const slug = cible.dataset.totalExempleProperty;
         const id = Number(cible.dataset.totalExempleUnit);
-        const [{ units }, mois] = await Promise.all([fiche(slug), calendrier(slug)]);
+        const today = await aujourdhui();
+        const m1 = today.slice(0, 7);
+        const m2 = moisSuivant(m1);
+        // Fenêtre d'arrivée : le mois en cours et le suivant ; un troisième mois
+        // sert à la seconde nuit d'une arrivée le dernier jour de la fenêtre.
+        const [{ units }, ...mois] = await Promise.all([
+          fiche(slug),
+          ...[m1, m2, moisSuivant(m2)].map((m) => calendrierMois(slug, m)),
+        ]);
         const u = units.find((x) => x.id === id);
-        const min = prixMinNuitCents(mois, id);
-        if (!u || min == null) return;
-        const euros = totalExempleEuros(min, partiesFrais(units, u), 2);
-        cible.textContent = `2 nuits dès ${euros} € tout compris`;
+        const dernier = `${m2}-31`; // comparaison de chaînes : tout jour de m2 est <= m2-31
+        const cents = u && totalExempleCents(meilleurSejour2Nuits(mois, id, dernier), partiesFrais(units, u));
+        if (cents == null) return; // aucune paire réservable : la mention reste masquée
+        cible.textContent = `2 nuits dès ${fmtEuros(cents)} tout compris (prochains mois)`;
         cible.hidden = false;
       } catch {
         // Repli du HTML conservé.
