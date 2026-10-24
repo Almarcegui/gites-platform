@@ -1155,7 +1155,6 @@ export async function cancelBooking(db: D1Database, id: number, reason: string, 
 
 // --- Options à la date (0042) : un jour = une ligne, unique par (option, date) ---------------
 
-/** Libère les jours d'options d'une réservation (annulée, expirée ou rééditée). */
 /** Jours d'options tenus par une réservation, relus de son `options_json`. */
 export function claimsFromOptionsJson(optionsJson: string | null): { optionId: number; date: string }[] {
   try {
@@ -1169,6 +1168,7 @@ export function claimsFromOptionsJson(optionsJson: string | null): { optionId: n
   }
 }
 
+/** Libère les jours d'options d'une réservation (annulée, expirée ou rééditée). */
 export async function releaseOptionDays(db: D1Database, bookingId: number): Promise<void> {
   await db.prepare("DELETE FROM option_days WHERE booking_id = ?1").bind(bookingId).run();
 }

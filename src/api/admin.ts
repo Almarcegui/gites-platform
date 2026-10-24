@@ -160,6 +160,8 @@ import {
   stripeConfigForBooking,
   voucherUrl,
   withOptionDaysCheck,
+  cleanOptions,
+  type FrozenLine,
   type QuoteBody,
 } from "../services/booking-flow";
 import { allocateRefund, dropPreparedRefunds, executeRefunds, planCancellation, planExceptionalRefund, prepareRefunds, replayRefund, unsettledRefunds } from "../services/annulation";
@@ -2117,7 +2119,7 @@ export function registerAdminRoutes(router: Router): void {
     // Le délai minimum de réservation (demande n° 15) ne vaut que pour le site
     // public : l'exploitant au téléphone peut passer outre — le devis le dit
     // alors dans `warnings` ('lead_time') et la vente est tracée au journal.
-    const quote = await withOptionDaysCheck(db, quoteFromContext(ctx, { ...body, adults, children }, today, { bypassLeadTime: true }));
+    const quote = await withOptionDaysCheck(db, quoteFromContext(ctx, { ...body, options: cleanOptions(body.options), adults, children }, today, { bypassLeadTime: true }));
     // En vente manuelle, min_nights et jour d'arrivée restent bloquants ;
     // seul un devis calculable passe.
     if (!quote.ok) return apiError(409, "devis impossible", { details: quote.errors, minNights: quote.minNights });
@@ -2482,7 +2484,7 @@ export function registerAdminRoutes(router: Router): void {
       checkout?: string;
       adults?: number;
       children?: number;
-      options?: { id: number; qty: number; days?: string[]; frozen?: { label: string; amountCents: number } }[];
+      options?: { id: number; qty: number; days?: string[] }[];
       /** Change seulement les jours d'options à la date ; les autres options sont reconduites. */
       optionDays?: { id: number; days: string[] }[];
       promoCode?: string | null;
@@ -2519,7 +2521,7 @@ export function registerAdminRoutes(router: Router): void {
 
       // Options non renvoyées ⇒ on reconduit celles de la réservation, jamais
       // « aucune » : un recalcul ne doit pas faire disparaître ce qui est vendu.
-      let options = body.options;
+      let options: CarriedOption[] | undefined = cleanOptions(body.options); // `frozen` reçu d'un client : ignoré
       if (options === undefined) {
         const carried = optionsFromQuote(before.optionsJson, ctx.options);
         if (!carried.ok) {
@@ -2538,6 +2540,8 @@ export function registerAdminRoutes(router: Router): void {
         options = next;
       }
 
+      // Lignes figées : seulement celles déjà enregistrées (relues de la base), jamais celles d'une requête.
+      const frozenLines: FrozenLine[] = (options ?? []).flatMap((o) => (o.frozen ? [{ optionId: o.id, ...o.frozen }] : []));
       const quote = await withOptionDaysCheck(
         db,
         quoteFromContext(
@@ -2548,13 +2552,13 @@ export function registerAdminRoutes(router: Router): void {
             checkout,
             adults,
             children,
-            options,
+            options: (options ?? []).filter((o) => !o.frozen),
             promoCode: body.promoCode !== undefined ? body.promoCode : before.promoCode,
           },
           todayInZone(),
           // Modifier une réservation existante relève de l'exploitant : le délai
           // minimum du site public ne s'y applique pas (avertissement seulement).
-          { bypassLeadTime: true },
+          { bypassLeadTime: true, frozenLines },
         ),
         id, // les jours que cette réservation tient déjà ne la bloquent pas
       );
@@ -2680,7 +2684,7 @@ export function registerAdminRoutes(router: Router): void {
       env.DB,
       quoteFromContext(
         ctx,
-        { ...body, adults: Math.max(1, Number(body.adults ?? 1)), children: Math.max(0, Number(body.children ?? 0)) },
+        { ...body, options: cleanOptions(body.options), adults: Math.max(1, Number(body.adults ?? 1)), children: Math.max(0, Number(body.children ?? 0)) },
         todayInZone(),
         // Vente du back-office : délai minimum en avertissement, pas en refus.
         { bypassLeadTime: true },

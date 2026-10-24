@@ -42,8 +42,24 @@ export interface QuoteBody {
   checkout: IsoDate;
   adults: number;
   children: number;
-  options?: { id: number; qty: number; days?: IsoDate[]; frozen?: { label: string; amountCents: number } }[];
+  options?: { id: number; qty: number; days?: IsoDate[] }[];
   promoCode?: string | null;
+}
+
+/** Ligne d'option figée, relue côté serveur d'une réservation enregistrée (jamais d'une requête). */
+export interface FrozenLine {
+  optionId: number;
+  label: string;
+  amountCents: number;
+}
+
+/** Retire des options reçues tout ce qui n'est pas {id, qty, days} : une clé `frozen` envoyée par un client est ignorée. */
+export function cleanOptions(options: unknown): { id: number; qty: number; days?: IsoDate[] }[] | undefined {
+  if (!Array.isArray(options)) return undefined;
+  return options.map((o) => {
+    const x = (o ?? {}) as { id?: unknown; qty?: unknown; days?: unknown };
+    return { id: Number(x.id), qty: Number(x.qty), ...(Array.isArray(x.days) ? { days: x.days as IsoDate[] } : {}) };
+  });
 }
 
 /** Construit le devis à partir du contexte D1 (sélection d'options validée
@@ -52,13 +68,12 @@ export function quoteFromContext(
   ctx: QuoteContext,
   body: QuoteBody,
   today: IsoDate,
-  opts: { bypassLeadTime?: boolean } = {},
+  opts: { bypassLeadTime?: boolean; frozenLines?: FrozenLine[] } = {},
 ): Quote {
   const selected = (body.options ?? [])
     .map((sel) => {
       const opt = ctx.options.find((o) => o.id === Number(sel.id));
       if (!opt) return null;
-      if (sel.frozen) return { option: opt, qty: 1, frozen: sel.frozen };
       if (opt.perDate) {
         const days = Array.isArray(sel.days) ? sel.days.filter((d) => typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d)) : [];
         return { option: opt, qty: days.length > 0 ? 1 : 0, days };
@@ -66,6 +81,13 @@ export function quoteFromContext(
       return { option: opt, qty: Number(sel.qty) || 0 };
     })
     .filter((x): x is NonNullable<typeof x> => x !== null);
+  // Lignes figées : jamais lues d'une requête (le corps ne porte pas `frozen`) — seulement relues par le
+  // serveur de l'`options_json` déjà enregistré. Montant entier et positif ou nul, option connue du référentiel.
+  for (const f of opts.frozenLines ?? []) {
+    const opt = ctx.options.find((o) => o.id === Number(f.optionId));
+    if (!opt || !Number.isInteger(f.amountCents) || f.amountCents < 0) continue;
+    selected.push({ option: opt, qty: 1, frozen: { label: f.label, amountCents: f.amountCents } } as (typeof selected)[number]);
+  }
 
   return computeQuote({
     unit: ctx.pricingUnit,

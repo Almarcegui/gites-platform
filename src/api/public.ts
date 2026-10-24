@@ -58,6 +58,7 @@ import {
   startPayment,
   voucherUrl,
   type PaymentStart,
+  cleanOptions,
   type QuoteBody,
 } from "../services/booking-flow";
 import { buildContactAckEmail, queueEmail, realContact, refSubject } from "../services/email";
@@ -733,7 +734,7 @@ export function registerPublicRoutes(router: Router): void {
     }
     // Les jours que CE visiteur tient déjà (son hold en cours) ne lui sont pas « pris ».
     const own = await ownPendingHold(env, req, env.DB, ctx.property.id, sqlNow());
-    const quote = await withOptionDaysCheck(env.DB, quoteFromContext(ctx, { ...body, ...parsed.stay }, today), own?.id ?? null);
+    const quote = await withOptionDaysCheck(env.DB, quoteFromContext(ctx, { ...body, options: cleanOptions(body.options), ...parsed.stay }, today), own?.id ?? null);
     // Deuxième barreau de l'entonnoir : un devis affiché est un pas de plus
     // qu'une recherche. Un devis non réservable (minimum de nuits, jour
     // d'arrivée) compte comme infructueux — c'est bien ce que le client a vécu.
@@ -838,7 +839,7 @@ export function registerPublicRoutes(router: Router): void {
         own.unitId === Number(body.unitId) && own.checkin === stay.checkin && own.checkout === stay.checkout;
       const resumeCtx = sameStay ? await getQuoteContext(db, own.unitId) : null;
       if (resumeCtx) {
-        const q = await withOptionDaysCheck(db, quoteFromContext(resumeCtx, { ...body, ...stay }, today), own.id);
+        const q = await withOptionDaysCheck(db, quoteFromContext(resumeCtx, { ...body, options: cleanOptions(body.options), ...stay }, today), own.id);
         const wantsFullNow = body.paymentMode === "full";
         const fullNow = wantsFullNow || !resumeCtx.settings.allowDeposit || q.balanceDueDate === null;
         const dueNow = fullNow ? q.totalCents : q.depositCents;
@@ -924,7 +925,7 @@ export function registerPublicRoutes(router: Router): void {
       return apiError(503, PAYMENT_UNAVAILABLE_MESSAGE, { code: "payment_unavailable" });
     }
 
-    const quote = await withOptionDaysCheck(db, quoteFromContext(ctx, { ...body, ...stay }, today));
+    const quote = await withOptionDaysCheck(db, quoteFromContext(ctx, { ...body, options: cleanOptions(body.options), ...stay }, today));
     if (body.promoCode && quote.warnings.includes("promo_invalid")) {
       return apiError(400, "code promo invalide ou expiré");
     }

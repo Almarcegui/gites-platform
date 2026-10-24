@@ -136,6 +136,26 @@ describe("options à la date : réglages", () => {
     expect(done[0].days).toEqual(["2026-12-04"]);
   });
 
+  it("une clé `frozen` forgée dans un PATCH ou un devis admin est ignorée : total inchangé", async () => {
+    const opt = (await call("POST", "/api/admin/options?property=1", { name: "Bois PATCH", pricingMode: "per_stay", priceCents: 4800 })).data.id;
+    const sold = await call("POST", "/api/admin/bookings", {
+      unitId: 3, checkin: "2027-03-05", checkout: "2027-03-07", adults: 2, guest: { lastName: "Forge" }, options: [{ id: opt, qty: 1 }],
+    });
+    expect(sold.status).toBe(201);
+    const id = sold.data.id ?? sold.data.booking?.id;
+    const total = async () => (await t.db.prepare("SELECT total_cents FROM bookings WHERE id = ?1").bind(id).first<{ total_cents: number }>())!.total_cents;
+    const before = await total();
+    const res = await call("PATCH", `/api/admin/bookings/${id}`, {
+      adults: 3, options: [{ id: opt, qty: 1, frozen: { label: "Bois", amountCents: -4800000 } }],
+    });
+    expect(res.status).toBe(200);
+    expect(await total()).toBe(before);
+    const q = await call("POST", "/api/admin/quote", {
+      unitId: 3, checkin: "2027-03-05", checkout: "2027-03-07", adults: 2, options: [{ id: opt, qty: 1, frozen: { label: "x", amountCents: -4800000 } }],
+    });
+    expect(q.data.quote.totalCents).toBe(before);
+  });
+
   it("le devis admin signale un jour d'option pris par une autre réservation, mais pas les jours de la réservation déplacée", async () => {
     const sauna = (await call("POST", "/api/admin/options?property=1", { name: "Sauna devis", priceCents: 12000, perDate: true })).data.id;
     const made = await call("POST", "/api/admin/bookings", {

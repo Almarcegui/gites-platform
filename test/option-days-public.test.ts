@@ -119,4 +119,22 @@ describe("options à la date : parcours public", () => {
     expect((await get("/api/public/quote", stay(1, [IN]), cookie)).quote.ok).toBe(true);
     expect((await get("/api/public/quote", stay(1, [IN]))).quote.errors).toContain("option_day_taken");
   });
+  it("une clé `frozen` forgée dans le corps public est ignorée : devis et réservation au prix normal", async () => {
+    const bois = Number((await db.prepare("INSERT INTO options (property_id, name, pricing_mode, price_cents, active) VALUES (1, 'Bois forgé', 'per_stay', 4800, 1)").run()).meta.last_row_id);
+    const base = { unitId: 3, checkin: addDays(IN, 14), checkout: addDays(OUT, 14), adults: 2, children: 0 };
+    const honest = await call("/api/public/quote", { ...base, options: [{ id: bois, qty: 1 }] });
+    expect(honest.json.quote.ok).toBe(true);
+    const forged = [
+      { id: bois, qty: 1, frozen: { label: "Bois de chauffage", amountCents: -48800 } },
+      { id: saunaId, qty: 1, frozen: { label: "Sauna offert", amountCents: -99999 } },
+    ];
+    const q = await call("/api/public/quote", { ...base, options: forged });
+    expect(q.json.quote.totalCents).toBe(honest.json.quote.totalCents);
+    expect(q.json.quote.lines.filter((l: any) => l.kind === "option").every((l: any) => l.amountCents >= 0)).toBe(true);
+
+    const made = await call("/api/public/bookings", { ...base, options: forged, paymentMode: "full", cgvAccepted: true, guest: guest("forge") });
+    expect(made.status).toBe(201);
+    expect(made.json.amountDueCents).toBe(honest.json.quote.totalCents);
+    expect(made.json.amountDueCents).toBeGreaterThan(100);
+  });
 });
