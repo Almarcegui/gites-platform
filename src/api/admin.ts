@@ -118,6 +118,7 @@ import {
   updatePromotion,
   updateRateRule,
   countNewMessages,
+  optionDaysOfDate,
   createUnit,
   createUnitPhoto,
   getMessage,
@@ -1643,6 +1644,14 @@ export function registerAdminRoutes(router: Router): void {
       newEmails = 0; // table absente tant que la migration 0005 n'est pas passée
     }
 
+    // Options à la date prises aujourd'hui (« Sauna aujourd'hui ») : repli neutre si la migration 0042 manque.
+    let dayOptions: Awaited<ReturnType<typeof optionDaysOfDate>> = [];
+    try {
+      dayOptions = await optionDaysOfDate(db, propertyId, today);
+    } catch {
+      dayOptions = [];
+    }
+
     function summary(b: BookingRow) {
       return {
         id: b.id,
@@ -1673,6 +1682,7 @@ export function registerAdminRoutes(router: Router): void {
         balanceDueTotalCents: balancesDue.reduce((s, b) => s + b.balanceCents, 0),
         balanceDueCount: balancesDue.length,
       },
+      dayOptions,
       movements: [...arrivals, ...departures].sort((a, b) => ((a.kind === "arrivée" ? a.checkin : a.checkout) < (b.kind === "arrivée" ? b.checkin : b.checkout) ? -1 : 1)),
       alerts: {
         overdueBalances: balancesDue.filter((b) => b.overdue),
@@ -2413,7 +2423,9 @@ export function registerAdminRoutes(router: Router): void {
       checkout?: string;
       adults?: number;
       children?: number;
-      options?: { id: number; qty: number }[];
+      options?: { id: number; qty: number; days?: string[] }[];
+      /** Change seulement les jours d'options à la date ; les autres options sont reconduites. */
+      optionDays?: { id: number; days: string[] }[];
       promoCode?: string | null;
       paymentMode?: "deposit" | "full";
     }>(req);
@@ -2423,7 +2435,7 @@ export function registerAdminRoutes(router: Router): void {
     if (!before) return apiError(404, "réservation inconnue");
 
     const wantsStay = body.checkin != null || body.checkout != null || body.unitId != null
-      || body.adults != null || body.children != null || body.options != null || body.promoCode !== undefined;
+      || body.adults != null || body.children != null || body.options != null || body.optionDays != null || body.promoCode !== undefined;
     const wantsGuest = body.guest != null;
     const wantsNotes = typeof body.internalNotes === "string";
     if (!wantsStay && !wantsGuest && !wantsNotes) return apiError(400, "rien à modifier");
@@ -2456,6 +2468,11 @@ export function registerAdminRoutes(router: Router): void {
           });
         }
         options = carried.options;
+      }
+      if (Array.isArray(body.optionDays)) {
+        const next = (options ?? []).filter((o) => !body.optionDays!.some((d) => d.id === o.id));
+        for (const d of body.optionDays) if (Array.isArray(d.days) && d.days.length > 0) next.push({ id: Number(d.id), qty: 1, days: d.days.map(String) });
+        options = next;
       }
 
       const quote = await withOptionDaysCheck(

@@ -96,6 +96,8 @@ export interface Overview {
     revenuePrevCents?: number;
     nextArrival?: { checkin: IsoDate; unitName: string; persons: number; guestName: string | null } | null;
   };
+  /** options « à la date » prises aujourd'hui (sauna, bain chaud…) */
+  dayOptions?: { optionName: string; bookingId: number; reference: string; unitName: string; guestName: string | null }[];
   movements?: { kind: "arrivée" | "départ"; id: number; reference: string; unitName: string; guestName: string | null; checkin: IsoDate; checkout: IsoDate; persons: number; status: string }[];
   alerts: {
     overdueBalances: OverviewBalance[];

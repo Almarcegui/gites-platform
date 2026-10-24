@@ -117,6 +117,12 @@ export interface OptionRow {
   maxQty: number | null;
   active: boolean;
   sortOrder: number;
+  /** réservée à une date du séjour, un exemplaire par jour pour tout le domaine */
+  perDate?: boolean;
+  weekendPriceCents?: number | null;
+  /** 0 = dimanche … 6 = samedi */
+  weekendDays?: number[];
+  consecutivePct?: number | null;
 }
 
 export interface GuestRow {

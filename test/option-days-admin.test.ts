@@ -84,6 +84,11 @@ describe("options à la date : réglages", () => {
     claims = (await db.prepare("SELECT date FROM option_days WHERE booking_id = ? ORDER BY date").bind(idA).all()).results.map((r: any) => r.date);
     expect(claims).toEqual(["2026-10-24", "2026-10-25"]);
 
+    // « optionDays » : ne change que les jours (la fiche), le reste est reconduit
+    expect((await call("PATCH", `/api/admin/bookings/${idA}`, { optionDays: [{ id: sauna, days: ["2026-10-25"] }] })).status).toBe(200);
+    claims = (await db.prepare("SELECT date FROM option_days WHERE booking_id = ?").bind(idA).all()).results.map((r: any) => r.date);
+    expect(claims).toEqual(["2026-10-25"]);
+
     // l'annulation libère
     expect((await call("POST", `/api/admin/bookings/${idA}/cancel`, {})).status).toBe(200);
     expect((await sale(1, ["2026-10-24"])).status).toBe(201);
