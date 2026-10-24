@@ -15,6 +15,14 @@ import { Router } from "../src/api/router";
 import { registerPublicRoutes } from "../src/api/public";
 import { addDays, todayInZone } from "../src/core/dates";
 
+/** Date d'arrivée stable : +250 jours, déplacée hors de juillet-août (minimum de nuits d'été)
+ *  et sur un mardi, pour ne pas dépendre du jour où la suite tourne. */
+function arriveeHorsEte(): string {
+  let d = addDays(todayInZone(), 250);
+  while (["07", "08"].includes(d.slice(5, 7)) || new Date(`${d}T12:00:00Z`).getUTCDay() !== 2) d = addDays(d, 1);
+  return d;
+}
+
 const read = (rel: string): string => readFileSync(fileURLToPath(new URL(`../${rel}`, import.meta.url)), "utf8");
 const HTML = read("public/book/index.html");
 const JS = read("public/book/book.js");
@@ -62,7 +70,7 @@ describe("décompte du blocage (#16)", () => {
   });
 
   it("la création de réservation renvoie la fin du blocage ET l'heure serveur", async () => {
-    const checkin = addDays(todayInZone(), 250);
+    const checkin = arriveeHorsEte();
     const req = new Request("http://test.local/api/public/bookings", {
       method: "POST",
       headers: { "content-type": "application/json" },
