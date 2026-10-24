@@ -129,4 +129,23 @@ describe("options à la date : réglages", () => {
     const done = await lineOf();
     expect(done[0].days).toEqual(["2026-12-04"]);
   });
+
+  it("le devis admin signale un jour d'option pris par une autre réservation, mais pas les jours de la réservation déplacée", async () => {
+    const sauna = (await call("POST", "/api/admin/options?property=1", { name: "Sauna devis", priceCents: 12000, perDate: true })).data.id;
+    const made = await call("POST", "/api/admin/bookings", {
+      unitId: 1, checkin: "2027-01-08", checkout: "2027-01-11", adults: 2, guest: { lastName: "Devis" },
+      options: [{ id: sauna, qty: 1, days: ["2027-01-09"] }],
+    });
+    expect(made.status).toBe(201);
+    const id = made.data.id ?? made.data.booking?.id;
+    const q = (bookingId?: number) => call("POST", "/api/admin/quote", {
+      unitId: 2, checkin: "2027-01-08", checkout: "2027-01-11", adults: 2, bookingId,
+      options: [{ id: sauna, qty: 1, days: ["2027-01-09"] }],
+    });
+    const other = await q();
+    expect(other.data.quote.ok).toBe(false);
+    expect(other.data.quote.errors).toContain("option_day_taken");
+    const own = await q(id);
+    expect(own.data.quote.errors).not.toContain("option_day_taken");
+  });
 });

@@ -2644,12 +2644,17 @@ export function registerAdminRoutes(router: Router): void {
     }
     const ctx = await getQuoteContext(env.DB, Number(body.unitId));
     if (!ctx) return apiError(404, "hébergement inconnu");
-    const quote = quoteFromContext(
-      ctx,
-      { ...body, adults: Math.max(1, Number(body.adults ?? 1)), children: Math.max(0, Number(body.children ?? 0)) },
-      todayInZone(),
-      // Vente du back-office : délai minimum en avertissement, pas en refus.
-      { bypassLeadTime: true },
+    const quote = await withOptionDaysCheck(
+      env.DB,
+      quoteFromContext(
+        ctx,
+        { ...body, adults: Math.max(1, Number(body.adults ?? 1)), children: Math.max(0, Number(body.children ?? 0)) },
+        todayInZone(),
+        // Vente du back-office : délai minimum en avertissement, pas en refus.
+        { bypassLeadTime: true },
+      ),
+      // Devis de modification : les jours de la réservation déplacée ne comptent pas comme pris.
+      body.bookingId ? Math.floor(Number(body.bookingId)) : null,
     );
     // Le devis dit combien ; il doit aussi dire SI c'est vendable (issue #70).
     // Sans ce champ, la vente téléphone calculait un prix sur un créneau déjà
