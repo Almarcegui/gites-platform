@@ -48,4 +48,44 @@ describe("options à la date : réglages", () => {
     const bain = (await call("POST", "/api/admin/options?property=1", { name: "Bain test", priceCents: 5000, perDate: true })).data.id;
     expect(await find(bain)).toMatchObject({ perDate: true, priceCents: 5000, weekendPriceCents: null, consecutivePct: null });
   });
+
+  it("vente et modification au back-office : mêmes contrôles, jours relus, annulation qui libère", async () => {
+    const db = t.db;
+    await db.prepare("INSERT OR REPLACE INTO settings (property_id, key, value) VALUES (1, 'checkout_time', '10:00')").run();
+    await db.prepare("INSERT OR REPLACE INTO settings (property_id, key, value) VALUES (1, 'checkout_time_sunday', '18:00')").run();
+    const sauna = (await call("POST", "/api/admin/options?property=1", { name: "Sauna vente", priceCents: 12000, perDate: true, weekendPriceCents: 18000, consecutivePct: 70 })).data.id;
+    const sale = (unitId: number, days: string[]) => call("POST", "/api/admin/bookings", {
+      unitId, checkin: "2026-10-22", checkout: "2026-10-25", adults: 2, guest: { lastName: "Testeur" },
+      options: [{ id: sauna, qty: 1, days }],
+    });
+
+    const a = await sale(1, ["2026-10-24"]);
+    expect(a.status).toBe(201);
+    // même jour dans l'autre maison : refusé
+    const clash = await sale(2, ["2026-10-24"]);
+    expect(clash.status).toBe(409);
+    expect(JSON.stringify(clash.data)).toContain("option_day_taken");
+    // un autre jour passe
+    const b = await sale(2, ["2026-10-23"]);
+    expect(b.status).toBe(201);
+
+    // la fiche relit les jours : une modification sans options reconduit les jours
+    const idA = a.data.id ?? a.data.booking?.id;
+    const keep = await call("PATCH", `/api/admin/bookings/${idA}`, { adults: 3 });
+    expect(keep.status).toBe(200);
+    let claims = (await db.prepare("SELECT date FROM option_days WHERE booking_id = ?1").bind(idA).all()).results.map((r: any) => r.date);
+    expect(claims).toEqual(["2026-10-24"]);
+
+    // changer les jours : le jour de l'autre réservation est refusé, un jour libre passe
+    const bad = await call("PATCH", `/api/admin/bookings/${idA}`, { options: [{ id: sauna, qty: 1, days: ["2026-10-23"] }] });
+    expect(bad.status).toBe(409);
+    const ok = await call("PATCH", `/api/admin/bookings/${idA}`, { options: [{ id: sauna, qty: 1, days: ["2026-10-24", "2026-10-25"] }] });
+    expect(ok.status).toBe(200);
+    claims = (await db.prepare("SELECT date FROM option_days WHERE booking_id = ? ORDER BY date").bind(idA).all()).results.map((r: any) => r.date);
+    expect(claims).toEqual(["2026-10-24", "2026-10-25"]);
+
+    // l'annulation libère
+    expect((await call("POST", `/api/admin/bookings/${idA}/cancel`, {})).status).toBe(200);
+    expect((await sale(1, ["2026-10-24"])).status).toBe(201);
+  });
 });

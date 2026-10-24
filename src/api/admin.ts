@@ -109,6 +109,7 @@ import {
   listUnits,
   updateBookingNotes,
   updateBookingStayAtomic,
+  claimOptionDays,
   updateChecklistItem,
   updateFeed,
   updateGuest,
@@ -149,11 +150,13 @@ import { pullBeds24Bookings, pushCalendars, triggerBeds24Push, triggerBeds24Push
 import { beds24Liaison, buildPropertyPlan, createBeds24Property, CreationRefusee } from "../services/beds24-propriete";
 import {
   MIN_CHECKOUT_CENTS,
+  optionDayClaims,
   quoteFromContext,
   sendConfirmation,
   startCheckout,
   stripeConfigForBooking,
   voucherUrl,
+  withOptionDaysCheck,
   type QuoteBody,
 } from "../services/booking-flow";
 import { allocateRefund, dropPreparedRefunds, executeRefunds, planCancellation, planExceptionalRefund, prepareRefunds, replayRefund, unsettledRefunds } from "../services/annulation";
@@ -647,19 +650,26 @@ function intOr(value: unknown, fallback: number, min: number): number {
 function optionsFromQuote(
   optionsJson: string | null,
   referential: { id: number; name: string; pricingMode: string }[],
-): { ok: true; options: { id: number; qty: number }[] } | { ok: false; unmatched: string[] } {
-  let lines: { label?: unknown }[] = [];
+): { ok: true; options: { id: number; qty: number; days?: string[] }[] } | { ok: false; unmatched: string[] } {
+  type SavedLine = { label?: unknown; optionId?: unknown; days?: unknown };
+  let lines: SavedLine[] = [];
   try {
     const parsed: unknown = optionsJson ? JSON.parse(optionsJson) : [];
-    lines = Array.isArray(parsed) ? (parsed as { label?: unknown }[]) : [];
+    lines = Array.isArray(parsed) ? (parsed as SavedLine[]) : [];
   } catch {
     lines = [];
   }
-  const options: { id: number; qty: number }[] = [];
+  const options: { id: number; qty: number; days?: string[] }[] = [];
   const unmatched: string[] = [];
   for (const line of lines) {
     const label = String(line?.label ?? "");
     if (!label) continue;
+    // Option à la date : la ligne garde son id et ses jours (le libellé « Nom — sam 24/10 (180 €) » n'est que lisible).
+    const dated = Array.isArray(line.days) && line.days.length > 0 ? referential.find((o) => o.id === Number(line.optionId)) : undefined;
+    if (dated) {
+      options.push({ id: dated.id, qty: 1, days: (line.days as unknown[]).map(String) });
+      continue;
+    }
     const opt = referential.find((o) => label === o.name || label.startsWith(`${o.name} (`));
     if (!opt) {
       unmatched.push(label);
@@ -669,6 +679,19 @@ function optionsFromQuote(
     options.push({ id: opt.id, qty });
   }
   return unmatched.length > 0 ? { ok: false, unmatched } : { ok: true, options };
+}
+
+/** Jours d'options tenus par une réservation, relus de son `options_json`. */
+function claimsFromSaved(optionsJson: string | null): { optionId: number; date: string }[] {
+  try {
+    const lines: unknown = optionsJson ? JSON.parse(optionsJson) : [];
+    if (!Array.isArray(lines)) return [];
+    return lines.flatMap((l: { optionId?: unknown; days?: unknown }) =>
+      Array.isArray(l?.days) && Number.isFinite(Number(l.optionId)) ? l.days.map((d) => ({ optionId: Number(l.optionId), date: String(d) })) : [],
+    );
+  } catch {
+    return [];
+  }
 }
 
 /** Un conflit nommé : une réservation active (avec sa référence) ou un blocage
@@ -2025,7 +2048,7 @@ export function registerAdminRoutes(router: Router): void {
     // Le délai minimum de réservation (demande n° 15) ne vaut que pour le site
     // public : l'exploitant au téléphone peut passer outre — le devis le dit
     // alors dans `warnings` ('lead_time') et la vente est tracée au journal.
-    const quote = quoteFromContext(ctx, { ...body, adults, children }, today, { bypassLeadTime: true });
+    const quote = await withOptionDaysCheck(db, quoteFromContext(ctx, { ...body, adults, children }, today, { bypassLeadTime: true }));
     // En vente manuelle, min_nights et jour d'arrivée restent bloquants ;
     // seul un devis calculable passe.
     if (!quote.ok) return apiError(409, "devis impossible", { details: quote.errors, minNights: quote.minNights });
@@ -2067,6 +2090,11 @@ export function registerAdminRoutes(router: Router): void {
       internalNotes: String(body.internalNotes ?? "").trim() || null,
     });
     if (!created.ok) return apiError(409, "créneau indisponible (conflit avec une autre réservation)");
+    const dayClaims = optionDayClaims(quote);
+    if (dayClaims.length > 0 && !(await claimOptionDays(db, created.id, dayClaims))) {
+      await cancelBooking(db, created.id, "option_day_taken");
+      return apiError(409, "un des jours d'option vient d'être pris par une autre réservation", { details: ["option_day_taken"] });
+    }
     const leadTimeOverridden = quote.warnings.includes("lead_time");
     await audit(db, "admin", "booking.create_manual", `booking:${created.id}`, {
       reference: created.reference,
@@ -2430,21 +2458,25 @@ export function registerAdminRoutes(router: Router): void {
         options = carried.options;
       }
 
-      const quote = quoteFromContext(
-        ctx,
-        {
-          unitId,
-          checkin,
-          checkout,
-          adults,
-          children,
-          options,
-          promoCode: body.promoCode !== undefined ? body.promoCode : before.promoCode,
-        },
-        todayInZone(),
-        // Modifier une réservation existante relève de l'exploitant : le délai
-        // minimum du site public ne s'y applique pas (avertissement seulement).
-        { bypassLeadTime: true },
+      const quote = await withOptionDaysCheck(
+        db,
+        quoteFromContext(
+          ctx,
+          {
+            unitId,
+            checkin,
+            checkout,
+            adults,
+            children,
+            options,
+            promoCode: body.promoCode !== undefined ? body.promoCode : before.promoCode,
+          },
+          todayInZone(),
+          // Modifier une réservation existante relève de l'exploitant : le délai
+          // minimum du site public ne s'y applique pas (avertissement seulement).
+          { bypassLeadTime: true },
+        ),
+        id, // les jours que cette réservation tient déjà ne la bloquent pas
       );
       // Mêmes dates, même logement : un minimum de nuits ou un jour d'arrivée
       // posé APRÈS la vente ne doit pas figer la réservation (voyageurs,
@@ -2462,6 +2494,13 @@ export function registerAdminRoutes(router: Router): void {
       if (!quote.ok) return apiError(409, "devis impossible sur ces dates", { details: quote.errors, minNights: quote.minNights });
 
       const full = body.paymentMode === "full" || quote.balanceDueDate === null;
+      // Jours d'options : pris AVANT la mise à jour (l'unicité tranche la course) ; rendus si la mise à jour échoue.
+      const newClaims = optionDayClaims(quote);
+      const oldClaims = claimsFromSaved(before.optionsJson);
+      const touchesDays = newClaims.length > 0 || oldClaims.length > 0;
+      if (touchesDays && !(await claimOptionDays(db, id, newClaims))) {
+        return apiError(409, "un des jours d'option vient d'être pris par une autre réservation", { details: ["option_day_taken"] });
+      }
       const outcome = await updateBookingStayAtomic(db, id, {
         unitId,
         checkin,
@@ -2477,6 +2516,7 @@ export function registerAdminRoutes(router: Router): void {
         optionsJson: JSON.stringify(quote.lines.filter((l) => l.kind === "option")),
         promoCode: quote.promoApplied,
       });
+      if (outcome !== "updated" && touchesDays) await claimOptionDays(db, id, oldClaims);
       if (outcome === "conflict") {
         // Le refus se nomme, et la réservation d'origine n'a pas bougé.
         const conflicts = await checkAvailability(db, unitId, ctx.unit.propertyId, checkin, checkout, new Date(), id);
