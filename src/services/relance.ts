@@ -162,6 +162,7 @@ export function buildAbandonReminderEmail(
   property: PropertyRow,
   url: string,
   introRaw?: string,
+  signatureText?: string,
 ): { subject: string; bodyText: string } {
   const bonjour = b.guestFirstName ? `Bonjour ${b.guestFirstName},` : "Bonjour,";
   // Intro personnalisable (Réglages › Modèles de réponse) : vide = paragraphes
@@ -171,7 +172,7 @@ export function buildAbandonReminderEmail(
     prenom: b.guestFirstName ?? "",
     bien: b.unitName,
     arrivee: formatDateFr(b.checkin),
-    signature: property.name,
+    signature: signatureText?.trim() || property.name,
     reference: b.reference,
     lien: url,
   });
@@ -254,7 +255,7 @@ export async function runAbandonedReminders(env: Env, now: Date = new Date()): P
       continue;
     }
     const settings = await getSettings(db, b.propertyId);
-    const email = buildAbandonReminderEmail(b, property, resumeUrl(env.PUBLIC_BASE_URL, b), settings.abandonIntroFr);
+    const email = buildAbandonReminderEmail(b, property, resumeUrl(env.PUBLIC_BASE_URL, b), settings.abandonIntroFr, settings.signatureText);
     await queueEmail(db, env, {
       bookingId: b.id,
       to: b.guestEmail,

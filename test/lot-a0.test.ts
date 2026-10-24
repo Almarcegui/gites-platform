@@ -24,6 +24,14 @@ import {
 } from "../src/db/repo";
 import { addDays, todayInZone } from "../src/core/dates";
 
+/** Date d'arrivée stable : +250 jours, déplacée hors de juillet-août (minimum de nuits d'été)
+ *  et sur un mardi, pour ne pas dépendre du jour où la suite tourne. */
+function arriveeHorsEte(): string {
+  let d = addDays(todayInZone(), 250);
+  while (["07", "08"].includes(d.slice(5, 7)) || new Date(`${d}T12:00:00Z`).getUTCDay() !== 2) d = addDays(d, 1);
+  return d;
+}
+
 const router = new Router();
 registerPublicRoutes(router);
 registerAdminRoutes(router);
@@ -388,7 +396,7 @@ describe("remise mal saisie — devis négatif", () => {
 
 describe("exports CSV — injection de formule Excel", () => {
   it("un nom de client en « =HYPERLINK(…) » est neutralisé dans l'export", async () => {
-    const from = addDays(todayInZone(), 250);
+    const from = arriveeHorsEte();
     const res = await router.handle(
       new Request("http://test.local/api/public/bookings", {
         method: "POST",

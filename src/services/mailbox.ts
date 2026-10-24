@@ -17,14 +17,13 @@
 import { sqlNow, todayInZone } from "../core/dates";
 import {
   audit,
-  bookingsForGuest,
-  getBooking,
-  getBookingByReference,
   insertInboundMessage,
   listProperties,
   type BookingRow,
 } from "../db/repo";
-import { extractMessageIds, parseRawEmail, type ParsedEmail } from "./inbound-email";
+import { parseRawEmail, type ParsedEmail } from "./inbound-email";
+import { closestBooking, linkMail, type MailLink } from "./message-link";
+export { closestBooking, getTeamAddresses, linkMail, parseTeamAddresses, TEAM_ADDRESSES_KEY, type MailLink } from "./message-link";
 import { getSetting, setSetting } from "./settings";
 
 export const MAILBOX_STATE_KEY = "mailbox_imap_state";
@@ -97,70 +96,6 @@ export function isSpoofed(parsed: Pick<ParsedEmail, "from" | "senderAuthenticate
   return own.has(parsed.from.toLowerCase()) && !parsed.senderAuthenticated;
 }
 
-function dayDiff(a: string, b: string): number {
-  return Math.abs(Date.parse(`${a}T00:00:00Z`) - Date.parse(`${b}T00:00:00Z`)) / 86_400_000;
-}
-
-/** Réservation la plus proche dans le temps (séjour en cours = 0), non annulée de préférence. */
-export function closestBooking(bookings: BookingRow[], today: string): BookingRow | null {
-  const live = bookings.filter((b) => b.status !== "cancelled");
-  const pool = live.length ? live : bookings;
-  let best: BookingRow | null = null;
-  let bestScore = Number.POSITIVE_INFINITY;
-  for (const b of pool) {
-    const inside = b.checkin <= today && today <= b.checkout;
-    const score = inside ? 0 : Math.min(dayDiff(b.checkin, today), dayDiff(b.checkout, today));
-    // à égalité, le séjour le plus tardif (à venir avant passé)
-    if (score < bestScore || (score === bestScore && best && b.checkin > best.checkin)) {
-      best = b;
-      bestScore = score;
-    }
-  }
-  return best;
-}
-
-export interface MailLink {
-  booking: BookingRow | null;
-  guestId: number | null;
-  via: "reference" | "fil" | "adresse" | null;
-}
-
-/** Rattache un mail : référence PM-2026-001 > réponse à l'un de nos messages > adresse de l'expéditeur. */
-export async function linkMail(db: D1Database, parsed: ParsedEmail, today: string): Promise<MailLink> {
-  const refMatch = /\b([A-Z]{2}-\d{4}-\d{3,})\b/.exec(`${parsed.subject} ${parsed.textBody}`);
-  if (refMatch) {
-    const booking = await getBookingByReference(db, refMatch[1]!);
-    if (booking) return { booking, guestId: booking.guestId, via: "reference" };
-  }
-  const ids = [...extractMessageIds(parsed.inReplyTo), ...extractMessageIds(parsed.references)].slice(0, 25);
-  if (ids.length) {
-    const row = await db
-      .prepare(
-        `SELECT booking_id, guest_id FROM messages
-          WHERE message_id IN (${ids.map((_, i) => `?${i + 1}`).join(",")})
-            AND (booking_id IS NOT NULL OR guest_id IS NOT NULL)
-          ORDER BY id DESC LIMIT 1`,
-      )
-      .bind(...ids)
-      .first<{ booking_id: number | null; guest_id: number | null }>();
-    if (row) {
-      const booking = row.booking_id ? await getBooking(db, row.booking_id) : null;
-      return { booking, guestId: booking?.guestId ?? row.guest_id, via: "fil" };
-    }
-  }
-  if (parsed.from) {
-    const guest = await db
-      .prepare("SELECT id FROM guests WHERE lower(email) = ?1 ORDER BY id LIMIT 1")
-      .bind(parsed.from.toLowerCase())
-      .first<{ id: number }>();
-    if (guest) {
-      const booking = closestBooking(await bookingsForGuest(db, guest.id), today);
-      return { booking, guestId: guest.id, via: "adresse" };
-    }
-  }
-  return { booking: null, guestId: null, via: null };
-}
-
 function formatSize(bytes: number): string {
   return bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1).replace(".", ",")} Mo` : `${Math.max(1, Math.round(bytes / 1024))} Ko`;
 }
@@ -219,6 +154,8 @@ export async function ingestMail(
     imapUid: mail.uid,
     attachments: parsed.attachments ?? [],
     spoofed: isSpoofed(parsed, own),
+    senderAuth: parsed.senderAuthenticated === true,
+    linkManual: link.manual === true,
   });
   return { inserted: id !== null, linked: link.booking != null };
 }

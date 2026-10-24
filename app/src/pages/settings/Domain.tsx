@@ -10,7 +10,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { api, apiUpload, errorText } from "../../api/client";
-import { useRefresh } from "../../api/hooks";
+import { useMailbox, useRefresh } from "../../api/hooks";
 import type { UnitLink } from "../../api/types";
 import type { FullSettings, Photo, PropertyFull, UnitFull } from "../../api/types2";
 import { ErrorLine, useAction } from "../../lib/action";
@@ -55,6 +55,9 @@ interface Form {
     review_url: string;
     arrival_info_text: string;
     cgv_text: string;
+    signature_text: string;
+    signature_html: string;
+    signature_on_replies: boolean;
   };
   units: Record<number, UnitForm>;
 }
@@ -85,6 +88,9 @@ function toForm(p: PropertyFull, s: FullSettings, units: UnitFull[], links: Unit
       review_url: s.reviewUrl,
       arrival_info_text: s.arrivalInfoText,
       cgv_text: s.cgvText,
+      signature_text: s.signatureText ?? "",
+      signature_html: s.signatureHtml ?? "",
+      signature_on_replies: s.signatureOnReplies ?? false,
     },
     units: Object.fromEntries(
       units.map((u) => [
@@ -109,6 +115,55 @@ function toForm(p: PropertyFull, s: FullSettings, units: UnitFull[], links: Unit
 }
 
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+
+/** Aperçu de la signature HTML dans un cadre isolé : aucun script ne s'y exécute (sandbox sans
+ *  autorisation), et le HTML enregistré sera en plus nettoyé par le serveur. */
+export function SignaturePreview({ html }: { html: string }) {
+  const { t } = useLingui();
+  if (html.trim() === "") return null;
+  return (
+    <div className="sig-prev">
+      <p className="tpl">{t`Aperçu de la signature`}</p>
+      <iframe title={t`Aperçu de la signature`} sandbox="" srcDoc={`<!doctype html><meta charset="utf-8"><body style="margin:12px;font:15px/1.5 Arial,sans-serif;color:#222">${html}</body>`} />
+    </div>
+  );
+}
+
+/** Adresses de l'équipe et de la famille : réglage global (tous les domaines), une adresse par ligne.
+ *  Un mail venant d'une de ces adresses n'est jamais rattaché à une réservation par son expéditeur. */
+function TeamAddressesCard() {
+  const { t } = useLingui();
+  const q = useMailbox();
+  const a = useAction();
+  const saved = (q.data?.teamAddresses ?? []).join("\n");
+  const [v, setV] = useState<string | null>(null);
+  const value = v ?? saved;
+  const dirty = v !== null && v.trim() !== saved.trim();
+  return (
+    <Section
+      title={t`Adresses de l'équipe et de la famille`}
+      hint={t`Pour tous les domaines, une adresse par ligne. Un mail qui vient d'une de ces adresses n'est jamais rattaché à une réservation à cause de son expéditeur : seulement par une référence écrite dans l'objet ou le message, ou parce qu'il répond à un fil déjà rattaché.`}
+    >
+      {q.error ? <ErrorLine text={t`Les adresses n'ont pas pu être lues.`} /> : null}
+      <Textarea size="md" autosize minRows={3} aria-label={t`Adresses de l'équipe et de la famille`} placeholder="prenom@exemple.be" value={value} onChange={(e) => setV(e.currentTarget.value)} />
+      <div className="send">
+        <button
+          type="button"
+          className="btn pri"
+          disabled={!dirty || a.state.status === "busy"}
+          onClick={async () => {
+            if (await a.run(() => api("/mailbox/team", { method: "PUT", body: { addresses: value } }), t`C'est fait. Adresses enregistrées.`)) {
+              setV(null);
+            }
+          }}
+        >
+          {a.state.status === "busy" ? t`Un instant…` : t`Enregistrer les adresses`}
+        </button>
+      </div>
+      {a.state.status === "error" ? <ErrorLine text={a.state.text} /> : null}
+    </Section>
+  );
+}
 
 export function DomainPage() {
   const { t } = useLingui();
@@ -280,6 +335,18 @@ function DomainForm({ propertyId, init, units, onDirty }: { propertyId: number; 
         <Textarea mt="sm" size="md" autosize minRows={4} label={t`Texte de l'accusé de réception`} description={t`${"{nom}"} et ${"{reference}"} sont remplacés par le nom du client et la référence de sa réservation`} value={f.set.auto_reply_text} onChange={(e) => setS("auto_reply_text", e.currentTarget.value)} />
         <TextInput mt="sm" size="md" type="email" label={t`Faire suivre les mails reçus à`} placeholder="vous@exemple.be" value={f.set.email_forward_to} onChange={(e) => setS("email_forward_to", e.currentTarget.value)} />
       </Section>
+
+      <Section
+        title={t`Signature des messages`}
+        hint={t`Ajoutée à la fin de chaque réponse ou message envoyé depuis cet écran (Messages, fiche d'une réservation). La signature en texte sert aussi à la variable ${"{signature}"} des modèles. Avec une signature en HTML, le mail part en deux versions (texte et mise en forme) ; le HTML est nettoyé à l'enregistrement : tableaux, images, liens, couleurs et polices restent, tout le reste est retiré.`}
+      >
+        <Switch size="md" label={t`Ajouter la signature aux réponses et messages`} checked={f.set.signature_on_replies} onChange={(e) => setS("signature_on_replies", e.currentTarget.checked)} />
+        <Textarea mt="sm" size="md" autosize minRows={4} maxLength={2000} label={t`Signature (texte)`} value={f.set.signature_text} onChange={(e) => setS("signature_text", e.currentTarget.value)} />
+        <Textarea mt="sm" size="md" autosize minRows={4} maxRows={16} maxLength={20000} label={t`Signature (HTML)`} description={t`Une image du site s'écrit /img/nom.jpg ; elle est remplacée par son adresse complète à l'envoi.`} styles={{ input: { fontFamily: "ui-monospace, Menlo, monospace", fontSize: 13 } }} value={f.set.signature_html} onChange={(e) => setS("signature_html", e.currentTarget.value)} />
+        <SignaturePreview html={f.set.signature_html} />
+      </Section>
+
+      <TeamAddressesCard />
 
       <Section
         title={t`Mails automatiques du séjour`}

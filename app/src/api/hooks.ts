@@ -121,6 +121,35 @@ export function useMessages(status?: "nouveau") {
   });
 }
 
+export interface MailboxInfo {
+  configured: boolean;
+  supported: boolean;
+  note: string | null;
+  /** Adresse de la boîte (IMAP_USER), sinon adresse de contact du domaine : sert au lien « Ouvrir Gmail ». */
+  address: string | null;
+  /** Adresses de l'équipe et de la famille : jamais rattachées par expéditeur. */
+  teamAddresses: string[];
+}
+
+export function useMailbox() {
+  return useQuery({ queryKey: ["mailbox"], queryFn: () => api<MailboxInfo>("/mailbox"), staleTime: 5 * 60_000 });
+}
+
+/** Signature du domaine : texte (variable {signature}), et la case « ajouter aux réponses ». */
+export function useSignature(propertyId: number | null | undefined) {
+  return useQuery({
+    queryKey: ["settings-signature", propertyId],
+    enabled: propertyId != null,
+    staleTime: 5 * 60_000,
+    queryFn: () =>
+      api<{ settings: { signatureText?: string; signatureHtml?: string; signatureOnReplies?: boolean } }>("/settings", { query: { property: propertyId ?? undefined } }).then((r) => ({
+        text: (r.settings.signatureText ?? "").trim(),
+        hasHtml: (r.settings.signatureHtml ?? "").trim() !== "",
+        onReplies: r.settings.signatureOnReplies === true,
+      })),
+  });
+}
+
 export function useBooking(id: number | null) {
   return useQuery({ queryKey: ["booking", id], queryFn: () => api<BookingDetail>(`/bookings/${id}`), enabled: id != null });
 }

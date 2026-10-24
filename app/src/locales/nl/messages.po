@@ -693,6 +693,10 @@ msgstr "{free} vrije nachten"
 msgid "{label} copié."
 msgstr "{label} gekopieerd."
 
+#: src/pages/Messages.tsx
+msgid "{label}, {n} à répondre"
+msgstr "{label}, {n} te beantwoorden"
+
 #: src/pages/settings/Tarifs.tsx
 msgid "{missing} nuits sans prix en {year} : elles ne se vendent pas."
 msgstr "{missing} nachten zonder prijs in {year}: die worden niet verkocht."
@@ -966,7 +970,11 @@ msgstr "Te regelen zonder vast uur"
 msgid "À rembourser (trop-perçu, à faire à la main)"
 msgstr "Terug te betalen (te veel ontvangen, met de hand te doen)"
 
-#. placeholder {0}: pending.data?.length ?? 0
+#: src/pages/Messages.tsx
+msgid "À répondre"
+msgstr "Te beantwoorden"
+
+#. placeholder {0}: todo[section]
 #: src/pages/Messages.tsx
 msgid "À répondre ({0})"
 msgstr "Te beantwoorden ({0})"
@@ -1040,6 +1048,10 @@ msgstr "actief"
 msgid "Adresse"
 msgstr "Adres"
 
+#: src/messages/MailLinks.tsx
+msgid "Adresse copiée."
+msgstr "Adres gekopieerd."
+
 #. placeholder {0}: e.unitName
 #: src/pages/settings/Ical.tsx
 msgid "Adresse de {0} copiée."
@@ -1060,6 +1072,10 @@ msgstr "iCal-adres"
 #: src/pages/Settings.tsx
 msgid "Adresses à donner aux autres sites, calendriers à lire"
 msgstr "Adressen voor andere sites, kalenders om te lezen"
+
+#: src/pages/settings/Domain.tsx
+msgid "Adresses de l'équipe et de la famille"
+msgstr "Adressen van het team en de familie"
 
 #: src/booking/BookingPanel.tsx
 #: src/sale/SaleFlow.tsx
@@ -1123,9 +1139,18 @@ msgstr "Airbnb, Booking en Vrbo"
 msgid "Airbnb, Booking ou autre site"
 msgstr "Airbnb, Booking of een andere site"
 
+#. placeholder {0}: "{signature}"
+#: src/pages/settings/Domain.tsx
+msgid "Ajoutée à la fin de chaque réponse ou message envoyé depuis cet écran (Messages, fiche d'une réservation). La signature en texte sert aussi à la variable {0} des modèles. Avec une signature en HTML, le mail part en deux versions (texte et mise en forme) ; le HTML est nettoyé à l'enregistrement : tableaux, images, liens, couleurs et polices restent, tout le reste est retiré."
+msgstr "Wordt onderaan elk antwoord of bericht gezet dat vanuit dit scherm wordt verstuurd (Berichten, fiche van een reservering). De tekstversie van de handtekening wordt ook gebruikt voor de variabele {0} van de modellen. Met een HTML-handtekening gaat de mail in twee versies weg (tekst en opmaak). De HTML wordt bij het opslaan opgeschoond: tabellen, afbeeldingen, links, kleuren en lettertypes blijven, al de rest wordt verwijderd."
+
 #: src/pages/settings/Ical.tsx
 msgid "Ajouter"
 msgstr "Toevoegen"
+
+#: src/pages/settings/Domain.tsx
+msgid "Ajouter la signature aux réponses et messages"
+msgstr "Handtekening toevoegen aan antwoorden en berichten"
 
 #: src/pages/settings/Domain.tsx
 msgid "Ajouter un bien"
@@ -1200,6 +1225,7 @@ msgstr "Geannuleerd"
 #: src/booking/BookingPanel.tsx
 #: src/booking/Register.tsx
 #: src/calendar/PricePanel.tsx
+#: src/messages/MailLinks.tsx
 #: src/pages/Cleaning.tsx
 #: src/pages/settings/Accounts.tsx
 #: src/pages/settings/Domain.tsx
@@ -1225,6 +1251,10 @@ msgstr "Wijzigingen ongedaan maken"
 #: src/pages/settings/ChannelPrices.tsx
 msgid "Aperçu"
 msgstr "Voorbeeld"
+
+#: src/pages/settings/Domain.tsx
+msgid "Aperçu de la signature"
+msgstr "Voorbeeld van de handtekening"
 
 #: src/calendar/PricePanel.tsx
 msgid "Aperçu des nouveaux prix"
@@ -1588,6 +1618,10 @@ msgstr "Geen enkele reservering komt overeen met « {q} »"
 msgid "Aucune réservation sur cette période"
 msgstr "Geen reserveringen in deze periode"
 
+#: src/pages/Messages.tsx
+msgid "Aucune réservation trouvée."
+msgstr "Geen reservering gevonden."
+
 #: src/pages/settings/Clients.tsx
 msgid "Aucune réservation."
 msgstr "Geen reserveringen."
@@ -1664,6 +1698,10 @@ msgstr "Andere betaalwijze"
 #: src/pages/Bookings.tsx
 msgid "Autre site"
 msgstr "Andere site"
+
+#: src/pages/Messages.tsx
+msgid "Autres"
+msgstr "Overige"
 
 #: src/pages/settings/Stats.tsx
 msgid "Avance médiane"
@@ -1875,6 +1913,10 @@ msgstr "Gedaan. Toegang teruggegeven."
 msgid "C'est fait. Adresse copiée."
 msgstr "Gelukt. Adres gekopieerd."
 
+#: src/pages/settings/Domain.tsx
+msgid "C'est fait. Adresses enregistrées."
+msgstr "Klaar. Adressen opgeslagen."
+
 #: src/pages/settings/ChannelPrices.tsx
 msgid "C'est fait. Airbnb a reçu les promotions."
 msgstr "Gedaan. Airbnb heeft de promoties ontvangen."
@@ -1984,6 +2026,15 @@ msgstr "Gedaan. Klantenfiche opgeslagen."
 #: src/ui/kit.tsx
 msgid "C'est fait. Fichier {filename} téléchargé."
 msgstr "Gedaan. Bestand {filename} gedownload."
+
+#: src/pages/Messages.tsx
+msgid "C'est fait. Fil détaché de la réservation."
+msgstr "Klaar. Gesprek losgekoppeld van de reservering."
+
+#. placeholder {0}: b.reference
+#: src/pages/Messages.tsx
+msgid "C'est fait. Fil rattaché à {0}."
+msgstr "Klaar. Gesprek gekoppeld aan {0}."
 
 #: src/pages/settings/Templates.tsx
 msgid "C'est fait. Intro enregistrée."
@@ -2575,6 +2626,10 @@ msgstr "Het gesprek wordt geladen…"
 msgid "Chargement…"
 msgstr "Laden…"
 
+#: src/pages/Messages.tsx
+msgid "Charger plus"
+msgstr "Meer laden"
+
 #: src/pages/settings/Domain.tsx
 msgid "charges ajoutées à chaque nuit après les nuits incluses"
 msgstr "kosten die bij elke nacht na de inbegrepen nachten komen"
@@ -2939,6 +2994,7 @@ msgstr "Gekopieerd"
 msgid "Copie impossible : recopiez-le à la main."
 msgstr "Kopiëren onmogelijk: neem het met de hand over."
 
+#: src/messages/MailLinks.tsx
 #: src/pages/settings/Accounts.tsx
 #: src/pages/settings/Ical.tsx
 #: src/pages/settings/MyAccount.tsx
@@ -3305,6 +3361,10 @@ msgstr "Beschrijving op de site"
 msgid "Destinataire"
 msgstr "Ontvanger"
 
+#: src/pages/Messages.tsx
+msgid "Détacher"
+msgstr "Loskoppelen"
+
 #: src/pages/settings/Import.tsx
 msgid "Détail"
 msgstr "Detail"
@@ -3613,6 +3673,10 @@ msgstr "De reservering opslaan"
 #: src/booking/BookingPanel.tsx
 msgid "Enregistrer le changement"
 msgstr "De wijziging opslaan"
+
+#: src/pages/settings/Domain.tsx
+msgid "Enregistrer les adresses"
+msgstr "Adressen opslaan"
 
 #: src/pages/settings/Channels.tsx
 msgid "Enregistrer les pourcentages"
@@ -4268,6 +4332,10 @@ msgstr "De sleutel werkt (testrekening)."
 msgid "La clé fonctionne (compte réel)."
 msgstr "De sleutel werkt (echte rekening)."
 
+#: src/messages/MailLinks.tsx
+msgid "La copie n'a pas marché : sélectionnez l'adresse à la main."
+msgstr "Kopiëren is mislukt: selecteer het adres met de hand."
+
 #: src/pages/settings/Tarifs.tsx
 msgid "La dernière nuit doit venir après la première."
 msgstr "De laatste nacht moet na de eerste komen."
@@ -4348,6 +4416,10 @@ msgstr "De schoonmaakhulp kan een eigen link krijgen, zonder wachtwoord: stuur h
 #: src/pages/settings/MyAccount.tsx
 msgid "La plateforme en choisit un pour vous, facile à dicter"
 msgstr "Het platform kiest er een voor u, makkelijk te dicteren"
+
+#: src/pages/Messages.tsx
+msgid "La recherche n'a pas pu se faire."
+msgstr "De zoekopdracht is mislukt."
 
 #: src/canaux/canal.ts
 msgid "La réponse part par e-mail à {to}, depuis l'adresse des gîtes, dans le même fil que son message."
@@ -4701,6 +4773,10 @@ msgstr "Legende"
 msgid "Légende (facultatif)"
 msgstr "Bijschrift (facultatief)"
 
+#: src/pages/settings/Domain.tsx
+msgid "Les adresses n'ont pas pu être lues."
+msgstr "De adressen konden niet worden gelezen."
+
 #: src/booking/BookingPanel.tsx
 msgid "Les arrhes restent acquises, le solde payé est rendu sous 14 jours sur le moyen de paiement utilisé."
 msgstr "Het voorschot blijft verworven, het betaalde saldo wordt binnen 14 dagen terugbetaald op het gebruikte betaalmiddel."
@@ -4791,10 +4867,6 @@ msgstr "De logboeken"
 #: src/pages/settings/Tarifs.tsx
 msgid "Les jours où un prix ou un minimum a été posé depuis le calendrier. Ils passent avant les saisons."
 msgstr "De dagen waarop een prijs of een minimum vanuit de kalender is vastgelegd. Ze gaan voor op de seizoenen."
-
-#: src/pages/Messages.tsx
-msgid "Les liens de ce mail ne sont pas cliquables ici : recopiez-les à la main si vous êtes sûr de leur origine."
-msgstr "De links in deze e-mail zijn hier niet aanklikbaar: kopieer ze zelf over als u zeker bent van hun herkomst."
 
 #: src/pages/Cleaning.tsx
 msgid "Les liens n'ont pas pu être lus."
@@ -5045,6 +5117,10 @@ msgstr "link vervangen door een andere"
 msgid "Lien vers la réservation du client :"
 msgstr "Link naar de reservering van de klant:"
 
+#: src/messages/MailLinks.tsx
+msgid "Liens du message"
+msgstr "Links in het bericht"
+
 #: src/pages/settings/Import.tsx
 msgid "Ligne"
 msgstr "Regel"
@@ -5086,6 +5162,7 @@ msgstr "Stel er mij een voor"
 msgid "mail"
 msgstr "mail"
 
+#: src/canaux/canal.ts
 #: src/pages/settings/Clients.tsx
 #: src/pages/settings/Logs.tsx
 #: src/sale/SaleFlow.tsx
@@ -5750,6 +5827,7 @@ msgid "numéro obtenu, date, qui a appelé…"
 msgstr "verkregen nummer, datum, wie gebeld heeft…"
 
 #: src/booking/BookingPanel.tsx
+#: src/pages/Messages.tsx
 msgid "Objet"
 msgstr "Onderwerp"
 
@@ -5844,6 +5922,10 @@ msgstr "Hoe ver we staan"
 msgid "ouvert {0}"
 msgstr "geopend {0}"
 
+#: src/messages/MailLinks.tsx
+msgid "Ouverture désactivée : Gmail n'atteste pas l'expéditeur de ce message. Copiez l'adresse si vous êtes sûr de son origine."
+msgstr "Openen uitgeschakeld: Gmail bevestigt de afzender van dit bericht niet. Kopieer het adres als u zeker bent van de herkomst."
+
 #: src/pages/settings/Help.tsx
 msgid "Ouvrez « Aujourd'hui » le matin. Vous y voyez qui arrive, qui part, les ménages, l'argent à encaisser et les messages qui attendent une réponse."
 msgstr "Open « Vandaag » 's morgens. U ziet er wie aankomt, wie vertrekt, de schoonmaakbeurten, het te innen geld en de berichten die op een antwoord wachten."
@@ -5852,10 +5934,25 @@ msgstr "Open « Vandaag » 's morgens. U ziet er wie aankomt, wie vertrekt, de s
 msgid "Ouvrez Settings, puis Apps & Integrations, puis API."
 msgstr "Open Settings, dan Apps & Integrations, dan API."
 
+#: src/messages/MailLinks.tsx
 #: src/pages/settings/Ical.tsx
 #: src/pages/settings/Tarifs.tsx
 msgid "Ouvrir"
 msgstr "Openen"
+
+#. placeholder {0}: l.host
+#: src/messages/MailLinks.tsx
+msgid "Ouvrir {0}"
+msgstr "{0} openen"
+
+#. placeholder {0}: l.host
+#: src/messages/MailLinks.tsx
+msgid "Ouvrir {0} ?"
+msgstr "{0} openen?"
+
+#: src/pages/Messages.tsx
+msgid "Ouvrir Gmail"
+msgstr "Gmail openen"
 
 #: src/sale/SaleFlow.tsx
 msgid "Ouvrir la fiche"
@@ -6337,6 +6434,10 @@ msgstr "Voor wie"
 msgid "Pour retrouver qui a fait quoi, et ce qui a été écrit aux clients."
 msgstr "Om terug te vinden wie wat heeft gedaan, en wat er aan klanten geschreven is."
 
+#: src/pages/settings/Domain.tsx
+msgid "Pour tous les domaines, une adresse par ligne. Un mail qui vient d'une de ces adresses n'est jamais rattaché à une réservation à cause de son expéditeur : seulement par une référence écrite dans l'objet ou le message, ou parce qu'il répond à un fil déjà rattaché."
+msgstr "Voor alle domeinen, één adres per regel. Een mail van een van deze adressen wordt nooit aan een reservering gekoppeld op basis van de afzender: alleen via een referentie in het onderwerp of het bericht, of omdat hij antwoordt in een gesprek dat al gekoppeld is."
+
 #: src/pages/settings/Shortcode.tsx
 msgid "Pour un bloc HTML WordPress sans PHP, ou tout autre site : cette adresse s'incruste dans une iframe. Elle accepte les mêmes options."
 msgstr "Voor een HTML-blok in WordPress zonder PHP, of elke andere site: dit adres past in een iframe. Het aanvaardt dezelfde opties."
@@ -6677,6 +6778,10 @@ msgstr "saldoherinnering verstuurd"
 msgid "Rattacher"
 msgstr "Koppelen"
 
+#: src/pages/Messages.tsx
+msgid "Rattacher à une réservation"
+msgstr "Aan een reservering koppelen"
+
 #: src/pages/settings/Domain.tsx
 msgid "Rattacher une photo déjà déposée"
 msgstr "Een al geplaatste foto koppelen"
@@ -6739,6 +6844,10 @@ msgstr "Ref."
 #: src/booking/BookingPanel.tsx
 msgid "Référence"
 msgstr "Referentie"
+
+#: src/pages/Messages.tsx
+msgid "Référence (PM-2026-012) ou nom du client"
+msgstr "Referentie (PM-2026-012) of naam van de klant"
 
 #: src/pages/settings/Templates.tsx
 msgid "référence de la réservation"
@@ -7024,6 +7133,10 @@ msgstr "Reservering"
 msgid "Réservation {0}"
 msgstr "Reservering {0}"
 
+#: src/pages/Messages.tsx
+msgid "Réservation à rattacher"
+msgstr "Reservering om aan te koppelen"
+
 #: src/booking/BookingPanel.tsx
 #: src/pages/settings/Logs.tsx
 msgid "réservation annulée"
@@ -7077,6 +7190,7 @@ msgid "Réservation venue d'un canal : le remboursement se fait sur ce canal."
 msgstr "Boeking via een kanaal: de terugbetaling gebeurt via dat kanaal."
 
 #: src/pages/Bookings.tsx
+#: src/pages/Messages.tsx
 #: src/pages/settings/Stats.tsx
 #: src/shell/nav.tsx
 msgid "Réservations"
@@ -7089,6 +7203,10 @@ msgstr "Bevestigde reserveringen"
 #: src/pages/settings/Stats.tsx
 msgid "Réservations démarrées"
 msgstr "Gestarte reserveringen"
+
+#: src/pages/Messages.tsx
+msgid "Réservations ou autres messages"
+msgstr "Reserveringen of overige berichten"
 
 #: src/pages/settings/Channels.tsx
 msgid "réservations rapatriées"
@@ -7521,6 +7639,18 @@ msgstr "Verschijnt er een rode balk bovenaan Vandaag, dan loopt er iets mis: lee
 msgid "signature"
 msgstr "handtekening"
 
+#: src/pages/settings/Domain.tsx
+msgid "Signature (HTML)"
+msgstr "Handtekening (HTML)"
+
+#: src/pages/settings/Domain.tsx
+msgid "Signature (texte)"
+msgstr "Handtekening (tekst)"
+
+#: src/pages/settings/Domain.tsx
+msgid "Signature des messages"
+msgstr "Handtekening van de berichten"
+
 #: src/pages/settings/Tarifs.tsx
 msgid "Sinon, le prix de base du bien."
 msgstr "Anders de basisprijs van de woning."
@@ -7852,10 +7982,6 @@ msgstr "Alle instellingen"
 msgid "Tous mes gîtes"
 msgstr "Al mijn vakantiewoningen"
 
-#: src/pages/Messages.tsx
-msgid "Tout arrive ici : les messages du site, la boîte e-mail des gîtes, et ceux d'Airbnb, de Booking et de Vrbo (par Beds24). Chacun porte son origine."
-msgstr "Alles komt hier binnen: berichten van de website, de e-mailbox van de gîtes en die van Airbnb, Booking en Vrbo (via Beds24). Elk bericht toont zijn herkomst."
-
 #: src/pages/Settings.tsx
 msgid "Tout ce qui a été encaissé ou attendu"
 msgstr "Alles wat geïnd of verwacht werd"
@@ -8034,6 +8160,10 @@ msgstr "een aankomst"
 msgid "Une case par nuit, plus foncée quand le prix est plus haut. Touchez une case pour lire ou changer son prix."
 msgstr "Eén vakje per nacht, donkerder wanneer de prijs hoger is. Tik op een vakje om de prijs te lezen of te wijzigen."
 
+#: src/pages/settings/Domain.tsx
+msgid "Une image du site s'écrit /img/nom.jpg ; elle est remplacée par son adresse complète à l'envoi."
+msgstr "Een afbeelding van de site schrijft u als /img/naam.jpg; bij het versturen wordt ze vervangen door het volledige adres."
+
 #: src/pages/settings/Help.tsx
 msgid "Une journée type"
 msgstr "Een gewone dag"
@@ -8145,7 +8275,9 @@ msgid "Vers {0}. Collez l'export des réservations à venir (une ligne par rése
 msgstr "Naar {0}. Plak de export van de komende reserveringen (één regel per reservering, kolommen unite, arrivee, depart, nom, prenom, email, telephone, adultes, enfants, total, paye, reference)."
 
 #. placeholder {0}: channelName(b)
+#. placeholder {0}: l.via
 #: src/calendar/Grid.tsx
+#: src/messages/MailLinks.tsx
 msgid "via {0}"
 msgstr "via {0}"
 
@@ -8221,6 +8353,11 @@ msgstr "Uw antwoord"
 msgid "Votre session a expiré. Reconnectez-vous."
 msgstr "Uw sessie is verlopen. Meld u opnieuw aan."
 
+#: src/booking/BookingPanel.tsx
+#: src/pages/Messages.tsx
+msgid "Votre signature est ajoutée au mail."
+msgstr "Uw handtekening wordt aan de mail toegevoegd."
+
 #: src/lib/derive.ts
 msgid "votre site"
 msgstr "uw site"
@@ -8228,6 +8365,11 @@ msgstr "uw site"
 #: src/pages/Messages.tsx
 msgid "Vous"
 msgstr "U"
+
+#. placeholder {0}: l.host
+#: src/messages/MailLinks.tsx
+msgid "Vous allez ouvrir {0} dans un nouvel onglet. Vérifiez que ce domaine est bien celui que vous attendez."
+msgstr "U staat op het punt {0} in een nieuw tabblad te openen. Controleer of dit domein wel het domein is dat u verwacht."
 
 #: src/pages/settings/MyAccount.tsx
 msgid "Vous êtes entré avec l'accès de secours du serveur : ce mot de passe-là se change dans la configuration du serveur, pas ici. Créez-vous un compte dans « Personnes qui ont accès »."

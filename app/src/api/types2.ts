@@ -56,6 +56,10 @@ export interface FullSettings {
   stayEmailsEnabled: boolean;
   reviewUrl: string;
   arrivalInfoText: string;
+  /** Signature des messages envoyés depuis le back-office : texte, HTML (nettoyé), case « ajouter aux réponses ». */
+  signatureText?: string;
+  signatureHtml?: string;
+  signatureOnReplies?: boolean;
 }
 
 export interface Season {

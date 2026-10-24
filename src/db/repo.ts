@@ -461,6 +461,12 @@ export interface PropertySettings {
   /** Délai minimum de réservation en ligne, en jours avant l'arrivée (demande
    *  n° 15). 0 = aucun. Le back-office peut passer outre, avec avertissement. */
   minLeadDays: number;
+  /** Signature des messages envoyés depuis le back-office : texte brut (variable {signature}). */
+  signatureText: string;
+  /** Même signature en HTML, nettoyée à l'enregistrement (src/core/signature.ts). */
+  signatureHtml: string;
+  /** Ajouter la signature à toute réponse ou tout message envoyé depuis le back-office. */
+  signatureOnReplies: boolean;
 }
 
 const SETTINGS_DEFAULTS: PropertySettings = {
@@ -488,6 +494,9 @@ const SETTINGS_DEFAULTS: PropertySettings = {
   cancellationIntroNl: "",
   abandonIntroFr: "",
   minLeadDays: 0,
+  signatureText: "",
+  signatureHtml: "",
+  signatureOnReplies: false,
 };
 
 export async function getSettings(db: D1Database, propertyId: number): Promise<PropertySettings> {
@@ -525,6 +534,9 @@ export async function getSettings(db: D1Database, propertyId: number): Promise<P
     cancellationIntroNl: text("cancellation_intro_nl", D.cancellationIntroNl),
     abandonIntroFr: text("abandon_intro_fr", D.abandonIntroFr),
     minLeadDays: normalizeLeadDays(kv.get("min_lead_days") ?? D.minLeadDays),
+    signatureText: text("signature_text", D.signatureText),
+    signatureHtml: text("signature_html", D.signatureHtml),
+    signatureOnReplies: bool("signature_on_replies", D.signatureOnReplies),
   };
 }
 
@@ -2484,6 +2496,10 @@ export interface MessageRow {
   attachments: { name: string; size: number | null }[];
   /** Le mail prétend venir de l'adresse des gîtes sans que le serveur de réception l'atteste. */
   spoofed: boolean;
+  /** Gmail atteste l'expéditeur (DMARC ou DKIM pass) : seuls ces mails ont des liens ouvrables. */
+  senderAuth: boolean;
+  /** Rattachement choisi à la main : il prime sur l'automatique. */
+  linkManual: boolean;
 }
 
 function parseAttachments(raw: unknown): { name: string; size: number | null }[] {
@@ -2517,6 +2533,8 @@ function mapMessage(r: Raw): MessageRow {
     refs: strOrNull(r.refs),
     attachments: parseAttachments(r.attachments),
     spoofed: num(r.spoofed) === 1,
+    senderAuth: num(r.sender_auth) === 1,
+    linkManual: num(r.link_manual) === 1,
   };
 }
 
@@ -2544,18 +2562,130 @@ export async function listMessages(
   return (results as Raw[]).map(mapMessage);
 }
 
-/** Fil de conversation : tous les messages du même client OU de la même résa,
- *  du plus ancien au plus récent. */
+export interface ThreadListRow {
+  key: string;
+  /** Le message entrant le plus récent du fil (celui qui l'ouvre). */
+  last: MessageRow;
+  /** Messages encore à répondre dans ce fil. */
+  pending: number;
+  count: number;
+  booked: boolean;
+}
+
+export interface ThreadList {
+  threads: ThreadListRow[];
+  /** Il reste des fils plus anciens : repasser `before` = id du dernier message rendu. */
+  more: boolean;
+  /** Fils à répondre par section, tous filtres de liste confondus (compteurs des onglets). */
+  counts: { resa: number; autres: number };
+  /** Origines présentes dans la section et le filtre demandés, avec leurs messages à répondre. */
+  origins: { channel: string; canal: string | null; n: number; pending: number }[];
+}
+
+const THREAD_KEY = `CASE WHEN e.booking_id IS NOT NULL THEN 'b:' || e.booking_id
+                         WHEN e.guest_id IS NOT NULL THEN 'g:' || e.guest_id
+                         ELSE 'e:' || lower(e.from_email) END`;
+const CANAL = "(SELECT cm.channel_label FROM channel_messages cm WHERE cm.message_id = e.id LIMIT 1)";
+
+/** Liste de l'écran Messages : UNE ligne par fil (le dernier message), pour une section
+ *  (« resa » = rattachés à une réservation, « autres » = non rattachés), paginée par curseur
+ *  (`before` = id du dernier message de la page précédente). La clé d'un fil suit la même règle
+ *  que le fil lui-même : réservation, sinon client, sinon adresse. */
+export async function listThreads(
+  db: D1Database,
+  f: { propertyId?: number; section: "resa" | "autres"; pendingOnly: boolean; channel?: string; canal?: string | null; before?: number; limit?: number },
+): Promise<ThreadList> {
+  const limit = Math.min(Math.max(f.limit ?? 50, 1), 200);
+  const scope: string[] = ["e.direction = 'in'"];
+  const sbinds: unknown[] = [];
+  if (f.propertyId) {
+    sbinds.push(f.propertyId);
+    scope.push(`e.property_id = ?${sbinds.length}`);
+  }
+  const scopeSql = scope.join(" AND ");
+  const sectionSql = f.section === "resa" ? "e.booking_id IS NOT NULL" : "e.booking_id IS NULL";
+  const idx = (v: unknown) => {
+    sbinds.push(v);
+    return `?${sbinds.length}`;
+  };
+
+  // compteurs des onglets : fils à répondre, par section
+  const cnt = await db
+    .prepare(
+      `SELECT booked, COUNT(*) AS n FROM (
+         SELECT (e.booking_id IS NOT NULL) AS booked FROM messages e
+          WHERE ${scopeSql} AND e.status = 'nouveau' GROUP BY ${THREAD_KEY})
+        GROUP BY booked`,
+    )
+    .bind(...sbinds)
+    .all();
+  const counts = { resa: 0, autres: 0 };
+  for (const r of cnt.results as Raw[]) {
+    if (num(r.booked) === 1) counts.resa = num(r.n);
+    else counts.autres = num(r.n);
+  }
+
+  // origines de la section (messages)
+  const orows = await db
+    .prepare(
+      `SELECT e.channel AS channel, ${CANAL} AS canal, COUNT(*) AS n, SUM(e.status = 'nouveau') AS pending
+         FROM messages e WHERE ${scopeSql} AND ${sectionSql} ${f.pendingOnly ? "AND e.status = 'nouveau'" : ""}
+        GROUP BY e.channel, canal`,
+    )
+    .bind(...sbinds)
+    .all();
+  const origins = (orows.results as Raw[]).map((r) => ({ channel: str(r.channel), canal: strOrNull(r.canal), n: num(r.n), pending: num(r.pending) }));
+
+  // fils
+  const where = [scopeSql, sectionSql];
+  if (f.pendingOnly) where.push("e.status = 'nouveau'");
+  if (f.channel) {
+    where.push(`e.channel = ${idx(f.channel)}`);
+    if (f.canal) where.push(`${CANAL} = ${idx(f.canal)}`);
+  }
+  const having = f.before ? `HAVING MAX(e.id) < ${idx(f.before)}` : "";
+  const groups = await db
+    .prepare(
+      `SELECT ${THREAD_KEY} AS tkey, MAX(e.id) AS last_id, SUM(e.status = 'nouveau') AS pending, COUNT(*) AS n
+         FROM messages e WHERE ${where.join(" AND ")}
+        GROUP BY tkey ${having} ORDER BY last_id DESC LIMIT ${limit + 1}`,
+    )
+    .bind(...sbinds)
+    .all();
+  const g = groups.results as Raw[];
+  const page = g.slice(0, limit);
+  const more = g.length > limit;
+  if (page.length === 0) return { threads: [], more: false, counts, origins };
+  const ids = page.map((r) => num(r.last_id));
+  const msgs = await db
+    .prepare(`${MESSAGE_JOIN} WHERE e.id IN (${ids.map((_, i) => `?${i + 1}`).join(",")})`)
+    .bind(...ids)
+    .all();
+  const byId = new Map((msgs.results as Raw[]).map((r) => [num(r.id), mapMessage(r)]));
+  const threads = page
+    .map((r) => ({ key: str(r.tkey), last: byId.get(num(r.last_id))!, pending: num(r.pending), count: num(r.n), booked: str(r.tkey).startsWith("b:") }))
+    .filter((t) => t.last);
+  return { threads, more, counts, origins };
+}
+
+/** Fil de conversation, du plus ancien au plus récent.
+ *  - rattaché à une réservation : UNIQUEMENT les messages de cette réservation (`booking_id = ?`),
+ *    jamais ceux du même client sur une autre réservation, ni ceux qui ne sont rattachés à rien ;
+ *  - non rattaché : seulement les messages `booking_id IS NULL` du même client ou de la même
+ *    adresse, jamais ceux rattachés ailleurs.
+ *  Le voucher du client ne lit que le premier cas : un message qui n'est pas de sa réservation n'y
+ *  apparaît jamais, quelle que soit l'adresse dont il vient. */
 export async function getThread(
   db: D1Database,
   ref: { bookingId?: number | null; guestId?: number | null; email?: string | null },
 ): Promise<MessageRow[]> {
+  if (ref.bookingId) {
+    const sql = `${MESSAGE_JOIN} WHERE e.booking_id = ?1 ORDER BY e.id ASC LIMIT 300`;
+    const { results } = await db.prepare(sql).bind(ref.bookingId).all();
+    return (results as Raw[]).map(mapMessage);
+  }
   const clauses: string[] = [];
   const binds: unknown[] = [];
-  if (ref.bookingId) {
-    binds.push(ref.bookingId);
-    clauses.push(`e.booking_id = ?${binds.length}`);
-  }
   if (ref.guestId) {
     binds.push(ref.guestId);
     clauses.push(`e.guest_id = ?${binds.length}`);
@@ -2567,7 +2697,7 @@ export async function getThread(
     clauses.push(`lower(e.to_email) = ?${binds.length}`);
   }
   if (clauses.length === 0) return [];
-  const sql = `${MESSAGE_JOIN} WHERE ${clauses.join(" OR ")} ORDER BY e.id ASC LIMIT 300`;
+  const sql = `${MESSAGE_JOIN} WHERE e.booking_id IS NULL AND (${clauses.join(" OR ")}) ORDER BY e.id ASC LIMIT 300`;
   const { results } = await db.prepare(sql).bind(...binds).all();
   return (results as Raw[]).map(mapMessage);
 }
@@ -2590,6 +2720,10 @@ export interface InboundMessageInput {
   imapUid?: number | null;
   attachments?: { name: string; size: number | null }[];
   spoofed?: boolean;
+  /** Gmail atteste l'expéditeur (DMARC ou DKIM pass). */
+  senderAuth?: boolean;
+  /** Rattachement hérité d'un choix manuel (fil ou adresse) : il reste prioritaire. */
+  linkManual?: boolean;
 }
 
 /** Insère un message entrant. Retourne null si doublon (Message-ID). */
@@ -2599,9 +2733,9 @@ export async function insertInboundMessage(db: D1Database, m: InboundMessageInpu
       .prepare(
         `INSERT INTO messages (property_id, message_id, direction, channel, from_email, from_name,
                                to_email, subject, body_text, booking_id, guest_id, received_at,
-                               in_reply_to, refs, imap_uid, attachments, spoofed)
+                               in_reply_to, refs, imap_uid, attachments, spoofed, sender_auth, link_manual)
          VALUES (?1, ?2, 'in', ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, COALESCE(?11, datetime('now')),
-                 ?12, ?13, ?14, ?15, ?16)`,
+                 ?12, ?13, ?14, ?15, ?16, ?17, ?18)`,
       )
       .bind(
         m.propertyId, m.messageId ?? null, m.channel, m.fromEmail, m.fromName ?? null,
@@ -2610,6 +2744,8 @@ export async function insertInboundMessage(db: D1Database, m: InboundMessageInpu
         m.inReplyTo ?? null, m.references ?? null, m.imapUid ?? null,
         m.attachments && m.attachments.length ? JSON.stringify(m.attachments) : null,
         m.spoofed ? 1 : 0,
+        m.senderAuth ? 1 : 0,
+        m.linkManual ? 1 : 0,
       )
       .run();
     return res.meta.last_row_id;
@@ -2656,6 +2792,24 @@ export async function insertOutboundMessage(
 
 export async function markMessage(db: D1Database, id: number, status: "nouveau" | "traité"): Promise<void> {
   await db.prepare("UPDATE messages SET status = ?2 WHERE id = ?1").bind(id, status).run();
+}
+
+/** Rattache (bookingId) ou détache (null) tous les messages donnés, à la main : le choix prime
+ *  ensuite sur le rattachement automatique (link_manual). Le client suit la réservation. */
+export async function setMessagesLink(
+  db: D1Database,
+  ids: number[],
+  link: { bookingId: number; guestId: number | null; propertyId: number | null } | null,
+): Promise<void> {
+  if (ids.length === 0) return;
+  const stmts = ids.map((id) =>
+    link
+      ? db
+          .prepare("UPDATE messages SET booking_id = ?2, guest_id = ?3, property_id = COALESCE(?4, property_id), link_manual = 1 WHERE id = ?1")
+          .bind(id, link.bookingId, link.guestId, link.propertyId)
+      : db.prepare("UPDATE messages SET booking_id = NULL, guest_id = NULL, link_manual = 1 WHERE id = ?1").bind(id),
+  );
+  await db.batch(stmts);
 }
 
 export async function getMessage(db: D1Database, id: number): Promise<MessageRow | null> {

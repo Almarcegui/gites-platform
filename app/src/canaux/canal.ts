@@ -49,6 +49,24 @@ export function sourceLabel(m: Pick<Message, "channel" | "canal">): SourceBadge 
   }
 }
 
+/** Origine en quelques lettres pour une ligne de liste serrée (le nom complet reste dans `title`). */
+export function originAbbr(m: Pick<Message, "channel" | "canal">): string {
+  switch (originOf(m)) {
+    case "site":
+      return t`Site`;
+    case "email":
+      return t`Mail`;
+    case "airbnb":
+      return "Abnb";
+    case "booking":
+      return "Bkg";
+    case "vrbo":
+      return "Vrbo";
+    default:
+      return (m.canal || t`Canal`).slice(0, 4);
+  }
+}
+
 /** Décompte des messages par origine, du plus nombreux au moins nombreux : « E-mail 2, Airbnb 1 ». */
 export function originCounts(list: Pick<Message, "channel" | "canal">[]): { key: string; text: string; n: number }[] {
   const by = new Map<string, { key: string; text: string; n: number }>();

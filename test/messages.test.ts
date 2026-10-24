@@ -128,13 +128,13 @@ describe("fil de conversation du voucher (sans email)", () => {
     expect(messages[0]!.direction).toBe("out");
   });
 
-  it("le fil du voucher regroupe messages de résa ET du même client (contact form)", async () => {
+  it("le voucher ne montre QUE les messages de la réservation : le message du formulaire de contact (même adresse) n'y est pas", async () => {
     const booking = await createBookingViaAdmin();
     await call("POST", "/api/public/contact", {
       property: "pre-more", name: "Marie Lambert", email: GUEST.email, message: "Question générale avant séjour",
     });
     const thread = await call("GET", `/api/public/bookings/${booking.reference}/messages?email=${encodeURIComponent(GUEST.email)}`);
-    expect((thread.data.messages as unknown[]).length).toBe(1); // le message contact est lié au guest → visible
+    expect((thread.data.messages as unknown[]).length).toBe(0); // un message d'ailleurs ne s'affiche jamais chez la cliente (hameçonnage)
   });
 });
 
