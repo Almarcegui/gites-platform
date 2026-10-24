@@ -242,6 +242,8 @@ export interface QuoteResponse {
   unit: { id: number; name: string };
   quote: Quote;
   availability: { available: boolean; conflicts: { reference: string; unitName?: string }[] };
+  /** Jours d'option qui sortiraient du séjour déplacé : retirés à l'enregistrement. */
+  removedOptionDays?: { optionId: number; name: string; days: string[] }[];
 }
 
 export interface Message {

@@ -154,4 +154,40 @@ describe("options à la date : réglages", () => {
     const own = await q(id);
     expect(own.data.quote.errors).not.toContain("option_day_taken");
   });
+
+  it("déplacer un séjour avec sauna : jours encore dedans gardés, les autres retirés et annoncés, 0 jour = option retirée", async () => {
+    const db = t.db;
+    const sauna = (await call("POST", "/api/admin/options?property=1", { name: "Sauna move", priceCents: 12000, perDate: true })).data.id;
+    const made = await call("POST", "/api/admin/bookings", {
+      unitId: 3, checkin: "2027-02-04", checkout: "2027-02-07", adults: 2, guest: { lastName: "Move" },
+      options: [{ id: sauna, qty: 1, days: ["2027-02-05", "2027-02-06"] }],
+    });
+    expect(made.status).toBe(201);
+    const id = made.data.id ?? made.data.booking?.id;
+    const daysOf = async () => (await db.prepare("SELECT date FROM option_days WHERE booking_id = ?1 ORDER BY date").bind(id).all()).results.map((r: any) => r.date);
+    const totalOf = async () => (await db.prepare("SELECT total_cents FROM bookings WHERE id = ?1").bind(id).first<{ total_cents: number }>())!.total_cents;
+    const total0 = await totalOf();
+
+    // l'aperçu annonce ce qui sera retiré avant d'enregistrer
+    const preview = await call("POST", "/api/admin/quote", { unitId: 3, checkin: "2027-02-04", checkout: "2027-02-06", adults: 2, bookingId: id });
+    expect(preview.data.removedOptionDays).toEqual([{ optionId: sauna, name: "Sauna move", days: ["2027-02-06"] }]);
+
+    const moved = await call("PATCH", `/api/admin/bookings/${id}`, { checkin: "2027-02-04", checkout: "2027-02-06" });
+    expect(moved.status).toBe(200);
+    expect(moved.data.removedOptionDays).toEqual([{ optionId: sauna, name: "Sauna move", days: ["2027-02-06"] }]);
+    expect(await daysOf()).toEqual(["2027-02-05"]);
+    expect(await totalOf()).toBeLessThan(total0);
+
+    // plus aucun jour dedans : l'option disparaît, sans erreur
+    const moved2 = await call("PATCH", `/api/admin/bookings/${id}`, { checkin: "2027-02-10", checkout: "2027-02-12" });
+    expect(moved2.status).toBe(200);
+    expect(await daysOf()).toEqual([]);
+
+    // 0 jour envoyé à la fiche = option retirée
+    const again = await call("PATCH", `/api/admin/bookings/${id}`, { optionDays: [{ id: sauna, days: ["2027-02-10"] }] });
+    expect(again.status).toBe(200);
+    expect(await daysOf()).toEqual(["2027-02-10"]);
+    expect((await call("PATCH", `/api/admin/bookings/${id}`, { optionDays: [{ id: sauna, days: [] }] })).status).toBe(200);
+    expect(await daysOf()).toEqual([]);
+  });
 });

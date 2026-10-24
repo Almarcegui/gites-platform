@@ -2488,6 +2488,10 @@ msgstr "Deze data worden niet zo verkocht (minimum aantal nachten of aankomstdag
 msgid "Ces données ne sortent par aucun autre chemin que cet export."
 msgstr "Deze gegevens gaan langs geen enkele andere weg naar buiten dan deze export."
 
+#: src/booking/BookingPanel.tsx
+msgid "Ces jours sortent du séjour et seront retirés : {removedText}. Le montant des options est recalculé."
+msgstr "Deze dagen vallen buiten het verblijf en worden verwijderd: {removedText}. Het bedrag van de opties wordt herberekend."
+
 #: src/calendar/BlockPanel.tsx
 msgid "Ces nuits redeviennent libres tout de suite, ici et sur Airbnb et Booking."
 msgstr "Deze nachten worden meteen weer vrij, hier en op Airbnb en Booking."
@@ -5938,6 +5942,10 @@ msgstr "optie gewijzigd"
 msgid "Option payante"
 msgstr "Betalende optie"
 
+#: src/booking/OptionDays.tsx
+msgid "Option retirée"
+msgstr "Optie verwijderd"
+
 #: src/pages/settings/Logs.tsx
 msgid "option supprimée"
 msgstr "optie verwijderd"
@@ -7408,6 +7416,10 @@ msgstr "{0} verwijderen?"
 #: src/pages/settings/Ical.tsx
 msgid "Retirer ce calendrier"
 msgstr "Deze kalender verwijderen"
+
+#: src/booking/OptionDays.tsx
+msgid "Retirer l'option"
+msgstr "Optie verwijderen"
 
 #: src/pages/settings/StripeAccounts.tsx
 msgid "Retirer les clés"

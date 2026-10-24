@@ -2484,6 +2484,10 @@ msgstr "Ces dates ne se vendent pas telles quelles (minimum de nuits ou jour d'a
 msgid "Ces données ne sortent par aucun autre chemin que cet export."
 msgstr "Ces données ne sortent par aucun autre chemin que cet export."
 
+#: src/booking/BookingPanel.tsx
+msgid "Ces jours sortent du séjour et seront retirés : {removedText}. Le montant des options est recalculé."
+msgstr "Ces jours sortent du séjour et seront retirés : {removedText}. Le montant des options est recalculé."
+
 #: src/calendar/BlockPanel.tsx
 msgid "Ces nuits redeviennent libres tout de suite, ici et sur Airbnb et Booking."
 msgstr "Ces nuits redeviennent libres tout de suite, ici et sur Airbnb et Booking."
@@ -5934,6 +5938,10 @@ msgstr "option modifiée"
 msgid "Option payante"
 msgstr "Option payante"
 
+#: src/booking/OptionDays.tsx
+msgid "Option retirée"
+msgstr "Option retirée"
+
 #: src/pages/settings/Logs.tsx
 msgid "option supprimée"
 msgstr "option supprimée"
@@ -7404,6 +7412,10 @@ msgstr "Retirer {0} ?"
 #: src/pages/settings/Ical.tsx
 msgid "Retirer ce calendrier"
 msgstr "Retirer ce calendrier"
+
+#: src/booking/OptionDays.tsx
+msgid "Retirer l'option"
+msgstr "Retirer l'option"
 
 #: src/pages/settings/StripeAccounts.tsx
 msgid "Retirer les clés"

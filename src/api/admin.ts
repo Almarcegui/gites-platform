@@ -691,6 +691,32 @@ function optionsFromQuote(
   return unmatched.length > 0 ? { ok: false, unmatched } : { ok: true, options };
 }
 
+/** Séjour déplacé : les jours d'une option à la date qui tombent hors du nouveau séjour sont retirés
+ *  (l'option disparaît s'il n'en reste aucun). Rend aussi ce qui a été retiré, pour le dire à l'écran. */
+type CarriedOption = { id: number; qty: number; days?: string[]; frozen?: { label: string; amountCents: number } };
+function trimOptionDaysToStay(
+  options: CarriedOption[],
+  referential: { id: number; name: string }[],
+  checkin: string,
+  checkout: string,
+  times: { checkoutTime: string; checkoutTimeSunday?: string },
+): { options: CarriedOption[]; removed: { optionId: number; name: string; days: string[] }[] } {
+  const allowed = new Set(proposedDays(checkin, checkout, times));
+  const removed: { optionId: number; name: string; days: string[] }[] = [];
+  const out: CarriedOption[] = [];
+  for (const o of options) {
+    if (!o.days || o.days.length === 0) {
+      out.push(o);
+      continue;
+    }
+    const kept = o.days.filter((d) => allowed.has(d));
+    const gone = o.days.filter((d) => !allowed.has(d));
+    if (gone.length > 0) removed.push({ optionId: o.id, name: referential.find((r) => r.id === o.id)?.name ?? "", days: gone });
+    if (kept.length > 0) out.push({ ...o, days: kept });
+  }
+  return { options: out, removed };
+}
+
 /** Jours d'options tenus par une réservation, relus de son `options_json`. */
 function claimsFromSaved(optionsJson: string | null): { optionId: number; date: string }[] {
   try {
@@ -2475,6 +2501,7 @@ export function registerAdminRoutes(router: Router): void {
 
     // --- séjour ---------------------------------------------------------------
     let quotePayload: unknown = null;
+    let removedOptionDays: { optionId: number; name: string; days: string[] }[] = [];
     if (wantsStay) {
       if (before.status === "cancelled") return apiError(409, "réservation annulée — elle ne se modifie plus");
       const checkin = String(body.checkin ?? before.checkin);
@@ -2500,7 +2527,10 @@ export function registerAdminRoutes(router: Router): void {
             details: carried.unmatched,
           });
         }
-        options = carried.options;
+        // Séjour déplacé : on garde les jours encore dans le nouveau séjour, on retire les autres et on le dit.
+        const trimmed = trimOptionDaysToStay(carried.options, ctx.options, checkin, checkout, ctx.settings);
+        options = trimmed.options;
+        removedOptionDays = trimmed.removed;
       }
       if (Array.isArray(body.optionDays)) {
         const next = (options ?? []).filter((o) => !body.optionDays!.some((d) => d.id === o.id));
@@ -2630,6 +2660,7 @@ export function registerAdminRoutes(router: Router): void {
       ok: true,
       booking: after,
       quote: quotePayload,
+      removedOptionDays,
       // Positif = solde à encaisser ; négatif = avoir à rembourser à la main.
       balanceCents: Math.max(0, delta),
       refundCents: Math.max(0, -delta),
@@ -2673,7 +2704,17 @@ export function registerAdminRoutes(router: Router): void {
       // elle-même (issue #73).
       body.bookingId ? Math.floor(Number(body.bookingId)) : undefined,
     );
-    return json({ unit: { id: ctx.unit.id, name: ctx.unit.name }, quote, availability });
+    // Déplacement d'une réservation : les jours d'option hors du nouveau séjour seraient retirés — on le dit avant d'enregistrer.
+    let removedOptionDays: { optionId: number; name: string; days: string[] }[] = [];
+    const bid = body.bookingId ? Math.floor(Number(body.bookingId)) : 0;
+    if (bid > 0) {
+      const existing = await getBooking(env.DB, bid);
+      if (existing) {
+        const carried = optionsFromQuote(existing.optionsJson, ctx.options);
+        if (carried.ok) removedOptionDays = trimOptionDaysToStay(carried.options, ctx.options, String(body.checkin), String(body.checkout), ctx.settings).removed;
+      }
+    }
+    return json({ unit: { id: ctx.unit.id, name: ctx.unit.name }, quote, availability, removedOptionDays });
   }));
 
   // --- saisons ----------------------------------------------------------------

@@ -57,12 +57,12 @@ export function OptionDays({ b, line }: { b: Booking; line: QuoteLine }) {
       <button
         type="button"
         className="btn"
-        disabled={save.state.status === "busy" || picked.length === 0}
+        disabled={save.state.status === "busy"}
         onClick={async () => {
-          if (await save.run(() => api(`/bookings/${b.id}`, { method: "PATCH", body: { optionDays: [{ id: line.optionId, days: picked }] } }), t`Jours enregistrés`)) setOpen(false);
+          if (await save.run(() => api(`/bookings/${b.id}`, { method: "PATCH", body: { optionDays: [{ id: line.optionId, days: picked }] } }), picked.length === 0 ? t`Option retirée` : t`Jours enregistrés`)) setOpen(false);
         }}
       >
-        {t`Enregistrer les jours`}
+        {picked.length === 0 ? t`Retirer l'option` : t`Enregistrer les jours`}
       </button>
       {save.state.status === "error" ? <ErrorLine text={save.state.text} /> : null}
     </div>
