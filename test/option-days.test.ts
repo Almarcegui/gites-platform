@@ -16,6 +16,16 @@ describe("jours proposés", () => {
   it("sans horaire du dimanche, le jour du départ n'est pas proposé", () => {
     expect(proposedDays("2026-10-22", "2026-10-25", { checkoutTime: "10:00" })).toEqual(["2026-10-22", "2026-10-23", "2026-10-24"]);
   });
+  it("départ général tardif (16 h) sans horaire du dimanche : le dimanche est proposé", () => {
+    expect(proposedDays("2026-10-22", "2026-10-25", { checkoutTime: "16:00" })).toHaveLength(4);
+  });
+  it("dimanche à 12 h : pas proposé ; à 14 h : proposé", () => {
+    expect(proposedDays("2026-10-22", "2026-10-25", { checkoutTime: "10:00", checkoutTimeSunday: "12:00" })).toHaveLength(3);
+    expect(proposedDays("2026-10-22", "2026-10-25", { checkoutTime: "10:00", checkoutTimeSunday: "14:00" })).toHaveLength(4);
+  });
+  it("départ un samedi tardif : jamais le jour du départ", () => {
+    expect(proposedDays("2026-10-22", "2026-10-24", { checkoutTime: "18:00" })).toEqual(["2026-10-22", "2026-10-23"]);
+  });
 });
 
 describe("prix des jours", () => {

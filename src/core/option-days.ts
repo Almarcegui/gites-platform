@@ -23,13 +23,17 @@ export function parseWeekendDays(s: string | null | undefined): number[] | null 
   return out.length ? [...new Set(out)] : null;
 }
 
-/** Jours proposés : de l'arrivée à la veille du départ, plus le jour du départ s'il a
- *  l'horaire tardif du dimanche (départ à 18 h au lieu de 10 h). */
+/** Jours proposés : de l'arrivée à la veille du départ, plus le jour du départ si c'est
+ *  un dimanche avec un départ à 14 h ou plus tard. */
 export function proposedDays(checkin: IsoDate, checkout: IsoDate, times: CheckoutTimes): IsoDate[] {
   const out: IsoDate[] = [];
   for (let d = checkin; d < checkout; d = addDays(d, 1)) out.push(d);
-  const sundayRule = (times.checkoutTimeSunday ?? "").trim();
-  if (sundayRule && dayOfWeek(checkout) === 0 && checkoutTimeFor(times, checkout) !== times.checkoutTime) out.push(checkout);
+  // Départ le dimanche à 14 h ou plus tard (horaire du dimanche, sinon l'horaire général) :
+  // on profite encore de la journée, le dimanche est proposé.
+  if (dayOfWeek(checkout) === 0 && /^\d{1,2}:\d{2}/.test(checkoutTimeFor(times, checkout))) {
+    const [h, m] = checkoutTimeFor(times, checkout).split(":").map(Number);
+    if ((h as number) * 60 + (m as number) >= 14 * 60) out.push(checkout);
+  }
   return out;
 }
 
