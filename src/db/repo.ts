@@ -2409,7 +2409,14 @@ export async function listOptionsAdmin(db: D1Database, propertyId: number): Prom
     .prepare("SELECT * FROM options WHERE property_id = ?1 ORDER BY sort_order, id")
     .bind(propertyId)
     .all();
-  return (results as Raw[]).map(mapOption);
+  return (results as Raw[]).map((r) => ({
+    ...mapOption(r),
+    // L'écran des réglages a toujours besoin des quatre champs, même pour une option ordinaire.
+    perDate: num(r.per_date) === 1,
+    weekendPriceCents: numOrNull(r.weekend_price_cents),
+    weekendDays: parseWeekendDays(strOrNull(r.weekend_days)),
+    consecutivePct: numOrNull(r.consecutive_pct),
+  }));
 }
 
 export interface OptionInput {
@@ -2420,15 +2427,24 @@ export interface OptionInput {
   maxQty: number | null;
   active: boolean;
   sortOrder: number;
+  /** Option à la date (0042) ; pour les trois suivants, null = vide, undefined = inchangé (mise à jour). */
+  perDate?: boolean;
+  weekendPriceCents?: number | null;
+  weekendDays?: number[] | null;
+  consecutivePct?: number | null;
 }
 
 export async function createOption(db: D1Database, propertyId: number, o: OptionInput): Promise<number> {
   const res = await db
     .prepare(
-      `INSERT INTO options (property_id, name, pricing_mode, price_cents, unit_label, max_qty, active, sort_order)
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)`,
+      `INSERT INTO options (property_id, name, pricing_mode, price_cents, unit_label, max_qty, active, sort_order,
+                            per_date, weekend_price_cents, weekend_days, consecutive_pct)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)`,
     )
-    .bind(propertyId, o.name, o.pricingMode, o.priceCents, o.unitLabel, o.maxQty, o.active ? 1 : 0, o.sortOrder)
+    .bind(
+      propertyId, o.name, o.pricingMode, o.priceCents, o.unitLabel, o.maxQty, o.active ? 1 : 0, o.sortOrder,
+      o.perDate ? 1 : 0, o.weekendPriceCents ?? null, o.weekendDays?.length ? o.weekendDays.join(",") : null, o.consecutivePct ?? null,
+    )
     .run();
   return res.meta.last_row_id;
 }
@@ -2439,12 +2455,20 @@ export async function updateOption(db: D1Database, id: number, o: Partial<Option
       `UPDATE options SET
          name = COALESCE(?2, name), pricing_mode = COALESCE(?3, pricing_mode),
          price_cents = COALESCE(?4, price_cents), unit_label = COALESCE(?5, unit_label),
-         max_qty = COALESCE(?6, max_qty), active = COALESCE(?7, active), sort_order = COALESCE(?8, sort_order)
+         max_qty = COALESCE(?6, max_qty), active = COALESCE(?7, active), sort_order = COALESCE(?8, sort_order),
+         per_date = COALESCE(?9, per_date),
+         weekend_price_cents = CASE WHEN ?10 = 1 THEN ?11 ELSE weekend_price_cents END,
+         weekend_days = CASE WHEN ?12 = 1 THEN ?13 ELSE weekend_days END,
+         consecutive_pct = CASE WHEN ?14 = 1 THEN ?15 ELSE consecutive_pct END
         WHERE id = ?1`,
     )
     .bind(
       id, o.name ?? null, o.pricingMode ?? null, o.priceCents ?? null, o.unitLabel ?? null,
       o.maxQty ?? null, o.active === undefined ? null : o.active ? 1 : 0, o.sortOrder ?? null,
+      o.perDate === undefined ? null : o.perDate ? 1 : 0,
+      o.weekendPriceCents === undefined ? 0 : 1, o.weekendPriceCents ?? null,
+      o.weekendDays === undefined ? 0 : 1, o.weekendDays?.length ? o.weekendDays.join(",") : null,
+      o.consecutivePct === undefined ? 0 : 1, o.consecutivePct ?? null,
     )
     .run();
 }

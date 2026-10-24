@@ -489,6 +489,29 @@ function checkMinNightsRelax(
   return { ok: true, steps: steps.sort((a, b) => b.days - a.days) };
 }
 
+/** Champs « option à la date » d'un corps POST/PATCH : seules les clés présentes sont reprises
+ *  (null ou chaîne vide = champ vidé). Jours de week-end : tableau ou « 5,6,0 » (0=dim … 6=sam). */
+function datedFields(body: Record<string, unknown> | null | undefined): Partial<OptionInput> {
+  const out: Partial<OptionInput> = {};
+  if (!body) return out;
+  const empty = (v: unknown) => v === null || v === "";
+  if (body.perDate !== undefined) out.perDate = body.perDate === true || body.perDate === 1;
+  if (body.weekendPriceCents !== undefined) {
+    const n = Math.round(Number(body.weekendPriceCents));
+    out.weekendPriceCents = empty(body.weekendPriceCents) || !Number.isFinite(n) || n < 0 ? null : n;
+  }
+  if (body.weekendDays !== undefined) {
+    const raw = Array.isArray(body.weekendDays) ? body.weekendDays : String(body.weekendDays ?? "").split(",");
+    const days = [...new Set(raw.filter((x) => x !== "" && x !== null).map(Number).filter((d) => Number.isInteger(d) && d >= 0 && d <= 6))];
+    out.weekendDays = empty(body.weekendDays) || !days.length ? null : days;
+  }
+  if (body.consecutivePct !== undefined) {
+    const n = Math.round(Number(body.consecutivePct));
+    out.consecutivePct = empty(body.consecutivePct) || !Number.isFinite(n) || n <= 0 || n >= 100 ? null : n;
+  }
+  return out;
+}
+
 function intParam(v: string | null | undefined, fallback: number): number {
   const n = Math.floor(Number(v));
   return Number.isFinite(n) && n > 0 ? n : fallback;
@@ -2791,6 +2814,7 @@ export function registerAdminRoutes(router: Router): void {
       maxQty: body?.maxQty != null ? Math.floor(Number(body.maxQty)) : null,
       active: body?.active !== false,
       sortOrder: Math.floor(Number(body?.sortOrder ?? 0)),
+      ...datedFields(body),
     });
     await audit(env.DB, "admin", "option.create", `option:${id}`, { ...body, par: currentUser(req) });
     return json({ id }, 201);
@@ -2813,6 +2837,7 @@ export function registerAdminRoutes(router: Router): void {
       maxQty: body.maxQty !== undefined ? (body.maxQty == null ? null : Math.floor(Number(body.maxQty))) : undefined,
       active: typeof body.active === "boolean" ? body.active : undefined,
       sortOrder: body.sortOrder != null ? Math.floor(Number(body.sortOrder)) : undefined,
+      ...datedFields(body),
     });
     await audit(env.DB, "admin", "option.update", `option:${id}`, { ...body, par: currentUser(req) });
     return json({ ok: true });
