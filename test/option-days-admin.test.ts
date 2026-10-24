@@ -102,4 +102,31 @@ describe("options à la date : réglages", () => {
     expect((await call("POST", `/api/admin/bookings/${idA}/cancel`, {})).status).toBe(200);
     expect((await sale(1, ["2026-10-24"])).status).toBe(201);
   });
+
+  it("une réservation d'avant la fonctionnalité garde sa ligne Sauna au recalcul (figée, montant et libellé identiques)", async () => {
+    const db = t.db;
+    const old = (await call("POST", "/api/admin/options?property=1", { name: "Sauna ancien", pricingMode: "per_stay", priceCents: 18000 })).data.id;
+    const sold = await call("POST", "/api/admin/bookings", {
+      unitId: 3, checkin: "2026-12-04", checkout: "2026-12-06", adults: 2, guest: { lastName: "Ancien" }, options: [{ id: old, qty: 1 }],
+    });
+    expect(sold.status).toBe(201);
+    const id = sold.data.id ?? sold.data.booking?.id;
+    const lineOf = async () => JSON.parse((await db.prepare("SELECT options_json FROM bookings WHERE id = ?1").bind(id).first<{ options_json: string }>())!.options_json);
+    const before = await lineOf();
+    expect(before).toHaveLength(1);
+    // l'option devient « à la date » après la vente
+    await call("PATCH", `/api/admin/options/${old}`, { perDate: true, priceCents: 12000 });
+    const res = await call("PATCH", `/api/admin/bookings/${id}`, { adults: 3 });
+    expect(res.status).toBe(200);
+    const after = await lineOf();
+    expect(after).toHaveLength(1);
+    expect(after[0]).toMatchObject({ label: before[0].label, amountCents: before[0].amountCents });
+    const claims = (await db.prepare("SELECT 1 FROM option_days WHERE booking_id = ?1").bind(id).all()).results;
+    expect(claims).toHaveLength(0);
+    // y poser des jours remplace la ligne figée
+    const set = await call("PATCH", `/api/admin/bookings/${id}`, { optionDays: [{ id: old, days: ["2026-12-04"] }] });
+    expect(set.status).toBe(200);
+    const done = await lineOf();
+    expect(done[0].days).toEqual(["2026-12-04"]);
+  });
 });

@@ -652,9 +652,9 @@ function intOr(value: unknown, fallback: number, min: number): number {
  *  qu'un prix silencieusement faux. */
 function optionsFromQuote(
   optionsJson: string | null,
-  referential: { id: number; name: string; pricingMode: string }[],
-): { ok: true; options: { id: number; qty: number; days?: string[] }[] } | { ok: false; unmatched: string[] } {
-  type SavedLine = { label?: unknown; optionId?: unknown; days?: unknown };
+  referential: { id: number; name: string; pricingMode: string; perDate?: boolean }[],
+): { ok: true; options: { id: number; qty: number; days?: string[]; frozen?: { label: string; amountCents: number } }[] } | { ok: false; unmatched: string[] } {
+  type SavedLine = { label?: unknown; optionId?: unknown; days?: unknown; amountCents?: unknown };
   let lines: SavedLine[] = [];
   try {
     const parsed: unknown = optionsJson ? JSON.parse(optionsJson) : [];
@@ -662,7 +662,7 @@ function optionsFromQuote(
   } catch {
     lines = [];
   }
-  const options: { id: number; qty: number; days?: string[] }[] = [];
+  const options: { id: number; qty: number; days?: string[]; frozen?: { label: string; amountCents: number } }[] = [];
   const unmatched: string[] = [];
   for (const line of lines) {
     const label = String(line?.label ?? "");
@@ -676,6 +676,12 @@ function optionsFromQuote(
     const opt = referential.find((o) => label === o.name || label.startsWith(`${o.name} (`));
     if (!opt) {
       unmatched.push(label);
+      continue;
+    }
+    // Option devenue « à la date » après la vente : la ligne n'a pas de jours. On la fige (même libellé, même montant)
+    // plutôt que de la relire comme « 1 jour sans date » et la faire disparaître au recalcul.
+    if (opt.perDate) {
+      options.push({ id: opt.id, qty: 1, frozen: { label, amountCents: Number(line.amountCents) || 0 } });
       continue;
     }
     const qty = opt.pricingMode === "per_unit_qty" ? Number(/\((\d+)/.exec(label)?.[1] ?? 1) || 1 : 1;
@@ -2449,7 +2455,7 @@ export function registerAdminRoutes(router: Router): void {
       checkout?: string;
       adults?: number;
       children?: number;
-      options?: { id: number; qty: number; days?: string[] }[];
+      options?: { id: number; qty: number; days?: string[]; frozen?: { label: string; amountCents: number } }[];
       /** Change seulement les jours d'options à la date ; les autres options sont reconduites. */
       optionDays?: { id: number; days: string[] }[];
       promoCode?: string | null;

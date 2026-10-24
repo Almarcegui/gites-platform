@@ -198,7 +198,8 @@ export interface QuoteRequest {
   rateOverrides?: readonly RateOverride[];
   promotions: Promotion[];
   promoCode?: string | null;
-  optionsSelected: { option: OptionDef; qty: number; days?: IsoDate[] }[];
+  /** `frozen` : ligne d'option à la date posée AVANT la fonctionnalité (sans jours) — reconduite telle quelle, jamais recalculée ni supprimée. */
+  optionsSelected: { option: OptionDef; qty: number; days?: IsoDate[]; frozen?: { label: string; amountCents: number } }[];
   settings: PricingSettings;
   /** Vente du back-office : le délai minimum devient un avertissement
    *  (`warnings: ['lead_time']`) au lieu d'une erreur. Jamais côté public. */
@@ -729,6 +730,11 @@ export function computeQuote(req: QuoteRequest): Quote {
   let optionsCents = 0;
   for (const sel of req.optionsSelected) {
     const o = sel.option;
+    if (sel.frozen) {
+      optionsCents += sel.frozen.amountCents;
+      lines.push({ kind: "option", label: sel.frozen.label, amountCents: sel.frozen.amountCents });
+      continue;
+    }
     if (o.perDate) {
       const days = [...new Set(sel.days ?? [])].sort();
       if (days.length === 0) continue;

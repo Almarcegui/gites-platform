@@ -42,7 +42,7 @@ export interface QuoteBody {
   checkout: IsoDate;
   adults: number;
   children: number;
-  options?: { id: number; qty: number; days?: IsoDate[] }[];
+  options?: { id: number; qty: number; days?: IsoDate[]; frozen?: { label: string; amountCents: number } }[];
   promoCode?: string | null;
 }
 
@@ -58,6 +58,7 @@ export function quoteFromContext(
     .map((sel) => {
       const opt = ctx.options.find((o) => o.id === Number(sel.id));
       if (!opt) return null;
+      if (sel.frozen) return { option: opt, qty: 1, frozen: sel.frozen };
       if (opt.perDate) {
         const days = Array.isArray(sel.days) ? sel.days.filter((d) => typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d)) : [];
         return { option: opt, qty: days.length > 0 ? 1 : 0, days };
