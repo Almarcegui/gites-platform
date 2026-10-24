@@ -62,6 +62,8 @@ const EXACT: Record<string, string> = {
   "Consultez le calendrier pour les disponibilités.": "Bekijk de kalender voor de beschikbaarheid.",
   "Trop de réservations lancées depuis cette connexion sur la dernière heure. Réessayez dans quelques minutes, ou contactez-nous directement : nous réserverons pour vous.":
     "Te veel reserveringen gestart vanaf deze verbinding in het afgelopen uur. Probeer opnieuw over enkele minuten, of neem rechtstreeks contact met ons op: wij reserveren voor u.",
+  "Un des jours choisis pour une option vient d'être réservé par un autre client. Choisissez un autre jour.":
+    "Een van de gekozen dagen voor een optie is net door een andere klant geboekt. Kies een andere dag.",
   "Arrhes": "Voorschot",
   "Solde": "Saldo",
   "Paiement intégral": "Volledige betaling",
@@ -69,6 +71,9 @@ const EXACT: Record<string, string> = {
 };
 
 const PATTERNS: Array<[RegExp, (...m: string[]) => string]> = [
+  // Option à la date (0042) : « Sauna — sam 25/10 (180 €), dim 26/10 (126 €) » ; le nom saisi reste tel quel.
+  [/^(.+) — ((?:(?:dim|lun|mar|mer|jeu|ven|sam) \d\d\/\d\d \([^)]+\)(?:, )?)+)$/, (_, nom, jours) =>
+    `${nom} — ${jours!.replace(/\b(dim|lun|mar|mer|jeu|ven|sam) /g, (_m, j) => `${JOURS_NL[j!]} `)}`],
   [/^séjour trop long \(max (\d+) nuits\)$/, (_, n) => `verblijf te lang (max. ${n} nachten)`],
   [/^Réservation en ligne au plus tard (\d+) jours? avant l'arrivée\. Contactez-nous : nous verrons si c'est possible\.$/, (_, n) => `Online reserveren kan tot ${n} ${n === "1" ? "dag" : "dagen"} voor de aankomst. Neem contact met ons op: wij bekijken wat mogelijk is.`],
   [/^capacité dépassée \(max (\d+) personnes\)$/, (_, n) => `capaciteit overschreden (max. ${n} personen)`],
@@ -89,6 +94,8 @@ const PATTERNS: Array<[RegExp, (...m: string[]) => string]> = [
   [/^Les (\d+) week-ends d(?:'|e )(.+) sont encore libres\.$/, (_, n, p) => `De ${n} weekends van ${period(p!)} zijn nog vrij.`],
   [/^(\d+) week-ends? encore libres? sur les (\d+) d(?:'|e )(.+)\.$/, (_, f, n, p) => `${f} ${f === "1" ? "weekend" : "weekends"} nog vrij op de ${n} van ${period(p!)}.`],
 ];
+
+const JOURS_NL: Record<string, string> = { dim: "zo", lun: "ma", mar: "di", mer: "wo", jeu: "do", ven: "vr", sam: "za" };
 
 /** Provenance d'un prix (pricing.ts) ; un nom de saison saisi reste tel quel. */
 const SEASON: Record<string, string> = { "tarif de base": "basistarief", "prix fixé à la main": "vaste prijs" };
