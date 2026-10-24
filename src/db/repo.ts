@@ -1449,7 +1449,7 @@ export async function markPaymentStatus(
       `UPDATE payments SET status = ?2, received_at = COALESCE(?3, received_at),
                            stripe_payment_intent = COALESCE(?4, stripe_payment_intent),
                            note = COALESCE(?5, note)
-        WHERE id = ?1`,
+        WHERE id = ?1 AND (?2 <> 'failed' OR status = 'pending')`, // un « payé » n'est jamais réécrit en échec
     )
     .bind(paymentId, status, opts.receivedAt ?? null, opts.stripePaymentIntent ?? null, opts.note ?? null)
     .run();

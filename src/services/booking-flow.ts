@@ -27,6 +27,7 @@ import {
   createCheckoutSession,
   createPaymentIntent,
   paymentElementEnabled,
+  remotePaymentClosed,
   remotePaymentInFlight,
   stripeEnabled,
   stripePublishableKey,
@@ -136,6 +137,7 @@ export async function voidPendingSessions(
   env: Env,
   bookingId: number,
   actor: "public" | "admin",
+  opts: { strict?: boolean } = {},
 ): Promise<void> {
   const pendings = (await listPayments(db, { bookingId })).filter((x) => x.status === "pending");
   const cfg = await stripeConfigForBooking(db, env, { id: bookingId });
@@ -150,6 +152,14 @@ export async function voidPendingSessions(
       // Une même réservation peut porter les deux si le mode a changé entre
       // deux tentatives — d'où l'aiguillage plutôt qu'un appel en dur.
       const closed = await voidRemotePayment(cfg, pay.stripeSessionId);
+      // Mode strict (libération du créneau par le client) : un échec de
+      // fermeture n'autorise JAMAIS à libérer. On relit chez Stripe ; tant que
+      // la tentative n'est pas confirmée fermée (payée, en cours, Stripe
+      // injoignable), on refuse — sinon le webhook « payé » arrive sur un
+      // séjour annulé : argent encaissé, plus de séjour.
+      if (!closed && opts.strict && stripeEnabled(cfg) && !(await remotePaymentClosed(cfg, pay.stripeSessionId))) {
+        throw new PaymentInFlightError();
+      }
       if (!closed && stripeEnabled(cfg)) {
         await audit(db, actor, "payment.expire_failed", `booking:${bookingId}`, {
           payment: pay.id,
@@ -179,7 +189,7 @@ export async function releaseGuestHold(
   if (booking.status === "cancelled") return "already";
   if (booking.status !== "pending") return "paid";
   if ((await listPayments(db, { bookingId: booking.id })).some((x) => x.status === "succeeded")) return "paid";
-  await voidPendingSessions(db, env, booking.id, "public");
+  await voidPendingSessions(db, env, booking.id, "public", { strict: true });
   const now = sqlNow();
   const res = await db
     .prepare(
