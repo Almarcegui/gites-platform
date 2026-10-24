@@ -87,6 +87,7 @@ export const NL = {
   "Temps restant :": "Resterende tijd:",
   "Continuer le paiement": "Betaling voortzetten",
   "Annuler": "Annuleren",
+  "Votre réservation en cours est annulée, les dates sont libérées.": "Uw lopende reservering is geannuleerd, de data zijn weer vrij.",
   "Impossible de rouvrir le paiement ici. Annulez puis recommencez.": "De betaling kan hier niet worden heropend. Annuleer en begin opnieuw.",
   "Le blocage de votre créneau a expiré.": "De blokkering van uw periode is verlopen.",
   "Le contrôle anti-robot est bloqué par votre navigateur (extension de blocage ?). Autorisez challenges.cloudflare.com, ou contactez-nous : nous réservons pour vous.":

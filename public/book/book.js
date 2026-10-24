@@ -1087,7 +1087,15 @@ async function submitBooking() {
     } else {
       msg.innerHTML = `<div class="note bad">${esc(e.message)}</div>`;
     }
-    msg.scrollIntoView({ behavior: "smooth", block: "center" });
+    // Réservation en cours : le verrou masque le formulaire et #bookMsg avec lui.
+    // L'erreur se lit alors dans le bandeau, qui reste visible.
+    const holdErr = document.body.classList.contains("hold-locked") ? $("holdErr") : null;
+    if (holdErr) {
+      holdErr.textContent = e.message;
+      $("holdBanner").scrollIntoView({ behavior: "smooth", block: "start" });
+    } else {
+      msg.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
   }
 }
 
@@ -1213,10 +1221,20 @@ async function restoreOwnHold() {
   try {
     data = await api(`/api/public/hold?property=${encodeURIComponent(PROPERTY)}`);
   } catch {
-    return false; // la reprise est un plus : son échec ne bloque pas le tunnel
+    return "erreur"; // la reprise est un plus : son échec ne bloque pas le tunnel
   }
   const hold = data.hold;
-  if (!hold) return false;
+  if (!hold) {
+    // Le serveur fait foi : plus de réservation en cours pour ce navigateur
+    // (annulée dans un autre onglet, expirée). Une copie locale périmée ne
+    // doit ni rouvrir le bandeau ni garder le tunnel verrouillé.
+    clearHold();
+    clearTimeout(holdTimer);
+    const bar = $("holdBanner");
+    if (bar) { bar.hidden = true; bar.innerHTML = ""; }
+    lockForHold(false);
+    return "aucun";
+  }
   RESUMED_HOLD = hold;
   selIn = hold.checkin;
   selOut = hold.checkout;
@@ -1230,7 +1248,7 @@ async function restoreOwnHold() {
     amountCents: hold.amountDueCents,
     email: hold.guestEmail,
   });
-  return true;
+  return "hold";
 }
 
 /** Reprise après retour depuis la page de paiement (bouton « précédent »). */
@@ -1304,6 +1322,10 @@ function holdExpired(bar) {
 async function continueHoldPayment(hold) {
   const err = $("holdErr");
   err.textContent = "";
+  if (!(hold.expiresAtLocal > Date.now())) { // bandeau resté affiché après l'échéance
+    err.textContent = t("Impossible de rouvrir le paiement ici. Annulez puis recommencez.");
+    return;
+  }
   const card = $("payCard");
   if (card && !card.hidden && card.childElementCount) {
     card.scrollIntoView({ behavior: "smooth", block: "start" }); // paiement déjà ouvert sur cette page
@@ -1315,6 +1337,12 @@ async function continueHoldPayment(hold) {
     const email = hold.info?.email;
     if (email && hold.reference) {
       const res = await api(`/api/public/bookings/${encodeURIComponent(hold.reference)}/pay`, { email });
+      // Seul le paiement initial d'un hold actif se rouvre ici : un solde
+      // (kind « balance », sans échéance de blocage) relève de la page voucher.
+      if ((res.kind !== "deposit" && res.kind !== "full") || !res.holdExpiresAt) {
+        err.textContent = t("Impossible de rouvrir le paiement ici. Annulez puis recommencez.");
+        return;
+      }
       if (res.payment?.mode === "element") {
         let host = $("payCard");
         if (!host) {
@@ -1334,12 +1362,12 @@ async function continueHoldPayment(hold) {
         host.scrollIntoView({ behavior: "smooth", block: "start" });
         return;
       }
-      if (res.checkoutUrl) { location.href = res.checkoutUrl; return; }
+      if (res.checkoutUrl && (res.kind === "deposit" || res.kind === "full")) { location.href = res.checkoutUrl; return; }
     }
-    if (hold.checkoutUrl) { location.href = hold.checkoutUrl; return; }
     err.textContent = t("Impossible de rouvrir le paiement ici. Annulez puis recommencez.");
   } catch (e) {
-    if (hold.checkoutUrl) { location.href = hold.checkoutUrl; return; }
+    // Jamais de repli sur l'ancienne adresse de paiement : après un refus du
+    // serveur (réservation expirée, annulée, réglée) elle ne vaut plus rien.
     err.textContent = e.message;
   } finally {
     btn.disabled = false;
@@ -1374,8 +1402,15 @@ async function cancelHold() {
   // dates et personnes sont conservées : on relance la recherche, le visiteur
   // peut les modifier ou reprendre
   if (selIn && selOut) search();
-  const first = $("searchCard");
-  if (first) first.scrollIntoView({ behavior: "smooth", block: "start" });
+  // Focus sur le titre de l'étape des dates + annonce vocale : le bandeau
+  // disparaît, le focus ne doit pas se perdre dans le vide.
+  const title = $("paxTitle");
+  if (title) {
+    title.tabIndex = -1;
+    title.focus({ preventScroll: false });
+  }
+  const live = $("holdLive");
+  if (live) live.textContent = t("Votre réservation en cours est annulée, les dates sont libérées.");
 }
 
 // ---------------------------------------------------------------------------
@@ -1471,8 +1506,11 @@ async function initFlow() {
   renderOffers(); // remises actives + disponibilité factuelle (sans bloquer)
   // Une réservation encore en cours prime sur tout le reste : c'est elle qui
   // porte les dates réellement bloquées pour ce visiteur (#68).
-  if (!(await restoreOwnHold())) {
-    restoreHold(); // une option posée juste avant ? on reprend son décompte
+  const own = await restoreOwnHold();
+  if (own !== "hold") {
+    // Serveur muet seulement : on reprend la copie locale. Si le serveur a
+    // répondu « aucun hold », elle a déjà été effacée.
+    if (own === "erreur") restoreHold();
     restoreSelection();
   }
   if (selIn && selOut) {

@@ -168,6 +168,19 @@ describe("nouvelle réservation avec un hold existant", () => {
     expect(sessions?.n).toBe(1);
   });
 
+  it("un nouveau séjour refusé (validation) ne coûte pas son créneau au client", async () => {
+    const hold = await poserHold();
+    const res = await call(
+      "POST", "/api/public/bookings",
+      bookingBody({ checkin: addDays(CHECKIN, 27), checkout: addDays(CHECKIN, 20) }), hold.cookie, // départ avant l'arrivée
+    );
+    expect(res.status).toBeGreaterThanOrEqual(400);
+    expect(res.status).toBeLessThan(500);
+    expect((await statusOf(hold.data.reference))?.status).toBe("pending");
+    const sessions = await db.prepare("SELECT COUNT(*) AS n FROM payments WHERE status = 'pending'").first<{ n: number }>();
+    expect(sessions?.n).toBe(1);
+  });
+
   it("ne remplace pas un hold déjà payé", async () => {
     const hold = await poserHold();
     await db.prepare("UPDATE payments SET status = 'succeeded'").run();

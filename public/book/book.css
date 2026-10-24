@@ -220,6 +220,7 @@ input[aria-invalid=true]{border-color:var(--bad);border-width:2px}
 .holdbar:focus{outline:2px solid currentColor;outline-offset:2px}
 .holdbar .holdinfo{flex:1 1 260px;min-width:0;overflow-wrap:anywhere}
 .holdbar .holdactions{display:flex;flex-wrap:wrap;gap:8px;justify-content:center}
+.holdbar .holdactions[hidden]{display:none}
 .holdbar .holdactions .btn{min-height:44px;min-width:44px;padding:0 16px}
 .holdbar .holderr{flex:1 1 100%;color:#7A2C2C;font-weight:600}
 .holdbar .holderr:empty{display:none}
