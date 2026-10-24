@@ -603,7 +603,7 @@ export function DayPanel({ edit, onClose }: { edit: DayEdit; onClose: () => void
       {edit.fallbackCents != null ? <p className="lead">{t`Sans prix fixé à la main : ${eur(edit.fallbackCents)} la nuit.`}</p> : null}
       <div className="grid2">
         <NumberInput size="md" label={t`Prix de la nuit (€)`} description={t`vide = prix de saison`} min={1} decimalScale={2} decimalSeparator="," value={price} onChange={setPrice} />
-        <NumberInput size="md" label={t`Nuits minimum à l'arrivée`} description={t`vide = celui de la saison`} min={1} max={60} value={min} onChange={setMin} />
+        <NumberInput size="md" label={t`Nuits minimum`} description={t`vide = celui de la saison`} min={1} max={60} value={min} onChange={setMin} />
       </div>
       {a.state.status === "error" ? <ErrorLine text={a.state.text} /> : null}
       {clear.state.status === "error" ? <ErrorLine text={clear.state.text} /> : null}

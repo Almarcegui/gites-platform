@@ -85,7 +85,8 @@ const ajouterJours = (iso, n) => new Date(Date.parse(`${iso}T00:00:00Z`) + n * 8
 //   · arrivée réservable (`available` : après le délai minimum, nuit libre) ;
 //   · seconde nuit libre et tarifée aussi (elle peut tomber dans le mois
 //     suivant : `mois` contient donc un mois de plus que la fenêtre d'arrivée) ;
-//   · minimum de nuits de la nuit d'arrivée ≤ 2 ;
+//   · minimum d'une arrivée ce jour-là ≤ 2 (le calendrier le calcule sur les
+//     nuits couvertes) et seconde nuit à 2 au plus ;
 //   · jours d'arrivée imposés : nul, ou contenant le jour de la semaine d'arrivée.
 // `jusquau` = dernière date d'arrivée envisagée (incluse). Rend
 // { arrivee, cents } (somme des deux nuits, hors frais) ou null s'il n'y a aucune
@@ -102,7 +103,9 @@ export function meilleurSejour2Nuits(mois, unitId, jusquau) {
     if ((a.minNights ?? 1) > 2) continue;
     if (a.checkinDays != null && !a.checkinDays.includes(new Date(`${date}T00:00:00Z`).getUTCDay())) continue;
     const b = jours.get(ajouterJours(date, 1));
-    if (!b || !b.available || b.priceCents == null) continue;
+    // La seconde nuit compte aussi : un séjour doit tenir le plus haut minimum
+    // de ses nuits (décision du 24/10/2026).
+    if (!b || !b.available || b.priceCents == null || (b.minNights ?? 1) > 2) continue;
     const cents = a.priceCents + b.priceCents;
     if (meilleur == null || cents < meilleur.cents || (cents === meilleur.cents && date < meilleur.arrivee)) {
       meilleur = { arrivee: date, cents };

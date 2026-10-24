@@ -92,3 +92,48 @@ describe("stockage des paliers", () => {
     expect(formatMinNightsRelax([])).toBeNull();
   });
 });
+
+describe("le plus haut minimum des nuits du séjour (décision du 24/10/2026)", () => {
+  // Saison krokus 2027 : nuits du vendredi 5/2 au samedi 13/2 à 4 nuits ; avant, 2.
+  const KROKUS: Season[] = [{ id: 7, name: "Krokus 2027", dateStart: "2027-02-05", dateEnd: "2027-02-13", priority: 17 }];
+  const R: RateRule[] = [
+    { id: 1, unitId: 2, seasonId: null, priceWeekCents: 10000, priceWeekendCents: 10000, holidayPct: 0, minNights: 2, checkinDays: null },
+    { id: 2, unitId: 2, seasonId: 7, priceWeekCents: 10000, priceWeekendCents: 10000, holidayPct: 0, minNights: 4, checkinDays: null, minNightsRelax: [{ days: 14, minNights: 2 }] },
+  ];
+  const q = (today: string, checkin: string, checkout: string) =>
+    computeQuote({ unit: SCIERIE, checkin, checkout, adults: 2, children: 0, today, seasons: KROKUS, rateRules: R, promotions: [], optionsSelected: [], settings: SETTINGS });
+
+  it("jeudi 4 → dimanche 7/2 : 3 nuits refusées, le séjour touche des nuits à 4", () => {
+    const r = q("2026-11-01", "2027-02-04", "2027-02-07");
+    expect(r.errors).toContain("min_nights");
+    expect(r.minNights).toBe(4);
+    expect(q("2026-11-01", "2027-02-04", "2027-02-08").errors).not.toContain("min_nights");
+  });
+  it("lundi 1 → mercredi 3/2 : hors période, 2 nuits passent", () => {
+    expect(q("2026-11-01", "2027-02-01", "2027-02-03").errors).not.toContain("min_nights");
+  });
+  it("les paliers se comptent depuis l'arrivée : à J-12 de l'arrivée, 3 nuits passent", () => {
+    // le 23/01, arrivée le 4/02 à 12 jours : toutes les nuits sont à 2 minimum
+    expect(q("2027-01-23", "2027-02-04", "2027-02-07").errors).not.toContain("min_nights");
+  });
+  it("pas de cas absurde : le 26/01 pour une arrivée le 8/02 (J-13), 2, 3 et 4 nuits passent", () => {
+    for (const out of ["2027-02-10", "2027-02-11", "2027-02-12"]) {
+      expect(q("2027-01-26", "2027-02-08", out).errors).not.toContain("min_nights");
+    }
+  });
+  it("à J-20 de l'arrivée, un séjour qui touche la période doit faire 4 nuits, même si sa fin est à J-14", () => {
+    expect(q("2027-01-15", "2027-02-04", "2027-02-07").minNights).toBe(4);
+  });
+  it("calendrier : un jeudi à 2 suivi d'un week-end à 4 affiche 4 (minimum d'une arrivée ce jour-là)", () => {
+    const days = rateCalendar(SCIERIE, "2027-02-01", "2027-02-06", KROKUS, R, [], "2026-11-01");
+    expect(days.find((d) => d.date === "2027-02-01")?.minNights).toBe(2); // lundi → mercredi : hors période
+    // mercredi : 2 nuits passent, mais 3 (→ samedi) toucheraient le vendredi à 4 :
+    // le calendrier affiche la valeur prudente, 4, pour ne rien promettre de faux
+    expect(days.find((d) => d.date === "2027-02-03")?.minNights).toBe(4);
+    expect(q("2026-11-01", "2027-02-03", "2027-02-06").errors).toContain("min_nights");
+    expect(days.find((d) => d.date === "2027-02-02")?.minNights).toBe(2); // mardi : 3 nuits → vendredi exclu, 4 → touche, 4 ≥ 4
+    expect(days.find((d) => d.date === "2027-02-04")?.minNights).toBe(4); // jeudi
+    // sans date du jour (Beds24) : même règle, minimum de la règle
+    expect(rateCalendar(SCIERIE, "2027-02-04", "2027-02-05", KROKUS, R)[0]?.minNights).toBe(4);
+  });
+});

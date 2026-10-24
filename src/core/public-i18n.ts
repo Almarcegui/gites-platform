@@ -21,6 +21,12 @@ const mois = (m: string) => MOIS_NL[MOIS_FR.indexOf(m)] ?? m;
 const nuits = (n: string) => (n === "1" ? "1 nacht" : `${n} nachten`);
 
 const EXACT: Record<string, string> = {
+  "Paiement en cours, réessayez dans une minute.": "Betaling bezig, probeer het over een minuut opnieuw.",
+  "Cette réservation est déjà réglée, elle ne peut plus être annulée ici.": "Deze reservering is al betaald en kan hier niet meer worden geannuleerd.",
+  "trop de tentatives, réessayez dans un moment": "te veel pogingen, probeer het later opnieuw",
+  "une réservation est déjà en cours de règlement pour ce navigateur": "er wordt voor deze browser al een reservering afgerekend",
+  "Un paiement est déjà en cours de traitement pour cette réservation (Bancontact met parfois quelques minutes). Attendez sa confirmation avant d'en lancer un autre — vous recevrez un email dès qu'il aboutit.": "Er wordt al een betaling voor deze reservering verwerkt (Bancontact heeft soms enkele minuten nodig). Wacht op de bevestiging voordat u een nieuwe start: u ontvangt een e-mail zodra de betaling gelukt is.",
+  "Trop de tentatives de paiement sur cette réservation. Reprenez-la depuis le lien reçu par email, ou contactez-nous : nous la finalisons pour vous.": "Te veel betalingspogingen voor deze reservering. Hervat ze via de link in uw e-mail, of neem contact met ons op: wij ronden ze voor u af.",
   "domaine inconnu": "onbekend domein",
   "acceptation des conditions générales requise": "aanvaarding van de algemene voorwaarden vereist",
   "dates invalides (format AAAA-MM-JJ)": "ongeldige data (formaat JJJJ-MM-DD)",

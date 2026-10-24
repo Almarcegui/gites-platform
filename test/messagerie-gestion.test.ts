@@ -707,5 +707,5 @@ describe("liste des fils côté serveur : pagination et compteurs", () => {
     expect(autres.threads.every((x) => x.key.startsWith("e:"))).toBe(true);
     const tous = await get("section=autres&status=all&limit=50");
     expect(tous.threads).toHaveLength(40);
-  });
+  }, 120_000); // 750 insertions : plus de 30 s sur la machine de la CI
 });

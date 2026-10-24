@@ -28,6 +28,16 @@ export const NL = {
   "Arrivée": "Aankomst",
   "Arrivée dès {arr} · départ avant {dep}": "Aankomst vanaf {arr} · vertrek voor {dep}",
   "Arrivée le <b>{date}</b> — choisissez le jour de départ.": "Aankomst op <b>{date}</b> — kies de vertrekdag.",
+  "Arrivée le <b>{date}</b>": "Aankomst op <b>{date}</b>",
+  "Départ le <b>{date}</b>": "Vertrek op <b>{date}</b>",
+  "1 nuit payée": "1 betaalde nacht",
+  "{n} nuits payées": "{n} betaalde nachten",
+  "Choisissez maintenant le jour de départ.": "Kies nu de vertrekdag.",
+  "Pas d'arrivée ce jour-là.": "Geen aankomst op die dag.",
+  "Arrivée le <b>{date}</b> dès {h}": "Aankomst op <b>{date}</b> vanaf {h}",
+  "Départ le <b>{date}</b> avant {h}": "Vertrek op <b>{date}</b> voor {h}",
+  "Les réservations ont une durée minimum selon les saisons et les fêtes : elle est indiquée sur chaque jour.": "Reservaties hebben een minimumduur volgens het seizoen en de feestdagen: die staat bij elke dag.",
+  "Réservation en ligne au plus tard {jours} avant l'arrivée.": "Online reserveren kan tot {jours} voor de aankomst.",
   "Arrivée possible uniquement {jours} à ces dates": "Aankomst op deze data alleen mogelijk {jours}",
   "Attention, il reste moins d'une minute avant l'expiration du blocage de votre créneau.": "Opgelet, nog minder dan een minuut voor de blokkering van uw periode verloopt.",
   "Aucun hébergement n'est réservable du {du} au {au} — les dates proposées ci-dessous fonctionnent, en un clic.": "Geen enkele accommodatie is te boeken van {du} tot {au} — de voorgestelde data hieronder werken wel, met één klik.",
@@ -84,8 +94,14 @@ export const NL = {
   "La confirmation peut prendre quelques minutes. Retrouvez votre réservation ici :": "De bevestiging kan enkele minuten duren. Uw reservering vindt u hier:",
   "Le blocage de ce créneau est arrivé à son terme et les dates sont de nouveau ouvertes à la réservation. Aucun montant n'a été débité. Vous pouvez relancer une réservation — écrivez-nous ci-dessous si vous préférez qu'on s'en occupe.":
     "De blokkering van deze periode is verlopen en de data zijn opnieuw te boeken. Er is geen bedrag afgeschreven. U kunt een nieuwe reservering starten — schrijf ons hieronder als u liever hebt dat wij het regelen.",
-  "Le blocage de votre créneau a <b>expiré</b> — ces dates sont de nouveau ouvertes à la vente. Relancez une réservation depuis le calendrier.":
-    "De blokkering van uw periode is <b>verlopen</b> — deze data zijn opnieuw te koop. Start een nieuwe reservering vanuit de kalender.",
+  "Le blocage de votre créneau a <b>expiré</b>. Le délai est écoulé, les dates ont été libérées.":
+    "De blokkering van uw periode is <b>verlopen</b>. De termijn is verstreken, de data zijn weer vrijgegeven.",
+  "Réservation en cours": "Reservering in behandeling",
+  "Temps restant :": "Resterende tijd:",
+  "Continuer le paiement": "Betaling voortzetten",
+  "Annuler": "Annuleren",
+  "Votre réservation en cours est annulée, les dates sont libérées.": "Uw lopende reservering is geannuleerd, de data zijn weer vrij.",
+  "Impossible de rouvrir le paiement ici. Annulez puis recommencez.": "De betaling kan hier niet worden heropend. Annuleer en begin opnieuw.",
   "Le blocage de votre créneau a expiré.": "De blokkering van uw periode is verlopen.",
   "Le contrôle anti-robot est bloqué par votre navigateur (extension de blocage ?). Autorisez challenges.cloudflare.com, ou contactez-nous : nous réservons pour vous.":
     "De robotcontrole wordt door uw browser geblokkeerd (blokkeringsextensie?). Sta challenges.cloudflare.com toe, of neem contact met ons op: wij reserveren voor u.",

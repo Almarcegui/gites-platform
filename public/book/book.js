@@ -35,6 +35,8 @@ if (FIXED_PROPERTY && params.has("property")) {
 const eurRound = (c) => (LANG === "nl" ? `€ ${Math.round(c / 100)}` : `${Math.round(c / 100)} €`);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 const dfr = (iso) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`;
+/** « jeudi 4 février 2027 » : arrivée et départ se lisent avec leur jour. */
+const dlong = (iso) => new Date(iso + "T12:00:00Z").toLocaleDateString(LOCALE, { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
 const nightsBetween = (a, b) => Math.round((Date.parse(b) - Date.parse(a)) / 86400000);
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const dow = (iso) => new Date(iso + "T12:00:00Z").getUTCDay(); // 0 = dimanche
@@ -370,13 +372,16 @@ async function renderCalendar() {
   for (const d of days) {
     const inRange = selIn && selOut && d.date > selIn && d.date < selOut;
     const isSel = d.date === selIn || d.date === selOut;
+    // Le jour du départ n'est pas une nuit payée : sa case se dessine à part.
+    const isOut = selOut != null && d.date === selOut;
     const noArrival = !d.past && d.available && d.arrivalDays != null && !d.arrivalDays.includes(dow(d.date));
     const cls = ["pday", d.past ? "past" : "", !d.past && !d.available ? "full" : "",
-      noArrival ? "noarr" : "", isSel ? "sel" : "", inRange ? "range" : ""].join(" ");
-    const sub = d.past ? "" : d.available ? (d.minPrice != null ? t("dès {prix}", { prix: eurRound(d.minPrice) }) : "") : t("complet");
+      noArrival ? "noarr" : "", isSel ? "sel" : "", isOut ? "dep" : "", inRange ? "range" : ""].join(" ");
+    // Case du départ : ni prix ni minimum, ce n'est pas une nuit payée.
+    const sub = isOut ? t("départ") : d.past ? "" : d.available ? (d.minPrice != null ? t("dès {prix}", { prix: eurRound(d.minPrice) }) : "") : t("complet");
     // Le minimum de nuits est écrit DANS la case : c'est la seule façon de le
     // voir avant d'avoir choisi ses dates (impasse n° 5 du parcours au clic).
-    const mn = !d.past && d.available && d.minNights > 1 ? `<span class="mn">${t("min {n} n", { n: d.minNights })}</span>` : "";
+    const mn = !isOut && !d.past && d.available && d.minNights > 1 ? `<span class="mn">${t("min {n} n", { n: d.minNights })}</span>` : "";
     const hints = d.past || !d.available ? [] : [
       d.minNights > 1 ? t("{n} nuits minimum", { n: d.minNights }) : "",
       d.arrivalDays != null ? arrivalLabel(d.arrivalDays) : "",
@@ -384,7 +389,8 @@ async function renderCalendar() {
     const title = hints.length ? ` title="${esc(hints.join(" · "))}"` : "";
     const full = new Date(d.date + "T12:00:00Z").toLocaleDateString(LOCALE, { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
     const role = d.date === selIn ? `, ${t("arrivée")}` : d.date === selOut ? `, ${t("départ")}` : "";
-    const aria = ` aria-label="${esc(full + role + (d.past ? "" : d.available ? (d.minPrice != null ? ", " + sub : "") : ", " + t("complet")))}" aria-pressed="${isSel ? "true" : "false"}"`;
+    const ariaMin = !isOut && !d.past && d.available && d.minNights > 1 ? ", " + t("{n} nuits minimum", { n: d.minNights }) : "";
+    const aria = ` aria-label="${esc(full + role + (isOut ? "" : d.past ? "" : d.available ? (d.minPrice != null ? ", " + sub : "") + ariaMin : ", " + t("complet")))}" aria-pressed="${isSel ? "true" : "false"}"`;
     html += `<button type="button" class="${cls}" data-date="${d.date}"${title}${aria} ${d.past ? "disabled" : ""}>
       <span class="d">${Number(d.date.slice(8, 10))}</span><span class="p">${sub}</span>${mn}</button>`;
   }
@@ -395,55 +401,48 @@ async function renderCalendar() {
   renderCalRules(days, data.minLeadDays);
 }
 
-/** Règles de séjour du mois affiché, regroupées par période contiguë (#66).
- *  « Séjour minimum : 7 nuits du 01/07 au 31/07 » — la règle existe depuis
- *  toujours côté moteur ; elle n'était écrite nulle part. */
+/** Règles de séjour du mois affiché, en une phrase (décision du 24/10/2026 :
+ *  la liste période par période était excessive). Le minimum de chaque jour
+ *  reste écrit DANS sa case ; ici, on dit seulement pourquoi il change. */
 function renderCalRules(days, minLeadDays = 0) {
   const zone = $("calRules");
   if (!zone) return;
+  const futurs = days.filter((d) => !d.past && d.ruleMinNights != null);
+  const parts = [];
+  if (futurs.some((d) => d.ruleMinNights > 1)) {
+    parts.push(t("Les réservations ont une durée minimum selon les saisons et les fêtes : elle est indiquée sur chaque jour."));
+  }
+  // Jours d'arrivée : dits une fois, s'ils sont les mêmes tout le mois.
+  const arr = [...new Set(futurs.map((d) => (d.ruleArrivalDays ?? []).join(",")))];
+  if (arr.length === 1 && arr[0] !== "") {
+    const label = arrivalLabel(arr[0].split(",").map(Number));
+    parts.push(label.charAt(0).toUpperCase() + label.slice(1) + ".");
+  }
   // Délai minimum de réservation (demande n° 15) : les jours trop proches sont
   // grisés comme des jours passés — la règle doit être écrite, pas devinée.
-  const lead = minLeadDays > 0
-    ? `<span class="rule">${esc(t("Réservation en ligne au plus tard {jours} avant l'arrivée", { jours: pl(minLeadDays, "jour", "jours") }))}</span>`
-    : "";
-  const segments = [];
-  for (const d of days) {
-    // Une règle ne dépend pas de l'occupation (cf. ruleMinNights plus haut).
-    if (d.past || d.ruleMinNights == null) continue;
-    const key = `${d.ruleMinNights}|${(d.ruleArrivalDays ?? []).join(",")}`;
-    const last = segments.at(-1);
-    if (last && last.key === key && nightsBetween(last.to, d.date) === 1) last.to = d.date;
-    else segments.push({ key, minNights: d.ruleMinNights, arrivalDays: d.ruleArrivalDays, from: d.date, to: d.date });
-  }
-  const notable = segments.filter((s) => s.minNights > 1 || s.arrivalDays != null);
-  if (notable.length === 0) {
-    zone.innerHTML = lead;
-    return;
-  }
-  const period = (s) => (s.from === s.to ? t("le {date}", { date: dfr(s.from) }) : t("du {du} au {au}", { du: dfr(s.from), au: dfr(s.to) }));
-  zone.innerHTML = (lead ? lead + " · " : "") + notable
-    .map((s) => {
-      const parts = [];
-      if (s.minNights > 1) parts.push(`<b>${t("{n} nuits minimum", { n: s.minNights })}</b>`);
-      if (s.arrivalDays != null) parts.push(esc(arrivalLabel(s.arrivalDays)));
-      return `<span class="rule">${parts.join(", ")} ${esc(period(s))}</span>`;
-    })
-    .join(" · ");
+  if (minLeadDays > 0) parts.push(t("Réservation en ligne au plus tard {jours} avant l'arrivée.", { jours: pl(minLeadDays, "jour", "jours") }));
+  zone.innerHTML = parts.map((x) => `<span class="rule">${esc(x)}</span>`).join(" ");
 }
 
 function onDayClick(date, cell) {
   if (cell.classList.contains("past")) return;
   const isFull = cell.classList.contains("full");
-  if (!selIn || (selIn && selOut)) {
+  const asArrival = !selIn || Boolean(selOut) || date <= selIn;
+  // Un jour sans arrivée (samedi, dimanche…) reste cliquable comme DÉPART, mais
+  // jamais comme arrivée : le refus tombait seulement au devis (24/10/2026).
+  if (asArrival && cell.classList.contains("noarr")) {
+    // Le résumé du séjour en cours reste : le refus s'écrit sur sa propre ligne.
+    updateSummary();
+    $("staySummary").insertAdjacentHTML("beforeend", `<p class="pcal-hint">${esc(t("Pas d'arrivée ce jour-là."))}${
+      cell.title ? ` ${esc(cell.title)}` : ""}</p>`);
+    return;
+  }
+  if (asArrival) {
     if (isFull) return; // un jour complet ne peut pas être une arrivée
     selIn = date;
     selOut = null;
-  } else if (date > selIn) {
-    selOut = date; // le jour de départ peut être « complet » (rotation le jour même)
   } else {
-    if (isFull) return;
-    selIn = date;
-    selOut = null;
+    selOut = date; // le jour de départ peut être « complet » (rotation le jour même)
   }
   renderCalendar();
   onSelectionChange();
@@ -453,9 +452,13 @@ function updateSummary() {
   const zone = $("staySummary");
   if (selIn && selOut) {
     const n = nightsBetween(selIn, selOut);
-    zone.innerHTML = `<div class="stay-summary">${t("Séjour du <b>{du}</b> au <b>{au}</b> — {nuits}", { du: dfr(selIn), au: dfr(selOut), nuits: pl(n, "nuit", "nuits") })}</div>`;
+    zone.innerHTML = `<div class="stay-summary">
+      <span>${t("Arrivée le <b>{date}</b>", { date: dlong(selIn) })}</span>
+      <span>${t("Départ le <b>{date}</b>", { date: dlong(selOut) })}</span>
+      <span class="stay-n">${n === 1 ? t("1 nuit payée") : t("{n} nuits payées", { n })}</span></div>`;
   } else if (selIn) {
-    zone.innerHTML = `<div class="stay-summary">${t("Arrivée le <b>{date}</b> — choisissez le jour de départ.", { date: dfr(selIn) })}</div>`;
+    zone.innerHTML = `<div class="stay-summary"><span>${t("Arrivée le <b>{date}</b>", { date: dlong(selIn) })}</span>
+      <span class="muted">${t("Choisissez maintenant le jour de départ.")}</span></div>`;
   } else {
     zone.innerHTML = "";
   }
@@ -465,6 +468,7 @@ function updateSummary() {
 let searchTimer = null;
 
 function onSelectionChange() {
+  if (document.body.classList.contains("hold-locked")) return; // réservation en cours : dates figées
   updateSummary();
   persistSelection();
   $("bookingPanel").innerHTML = "";
@@ -805,8 +809,9 @@ async function openBookingPanel(unitId) {
       <aside class="panel-side">
         <div class="card sum">
           <b class="sum-unit">${esc(SELECTED.name)}</b>
-          <p class="small muted sum-stay">${t("Du {du} au {au}", { du: dfr(SEARCH.checkin), au: dfr(SEARCH.checkout) })} · ${pl(SEARCH.adults, "adulte", "adultes")}${SEARCH.children ? ` + ${pl(SEARCH.children, "enfant", "enfants")}` : ""}<br>
-          ${t("Arrivée dès {arr} · départ avant {dep}", { arr: esc(hour(PROP.settings.checkinTime)), dep: esc(hour(checkoutTimeFor(PROP.settings, SEARCH.checkout))) })} · <a href="#" id="editDates">${t("modifier")}</a></p>
+          <p class="sum-stay">${t("Arrivée le <b>{date}</b> dès {h}", { date: dlong(SEARCH.checkin), h: esc(hour(PROP.settings.checkinTime)) })}<br>
+          ${t("Départ le <b>{date}</b> avant {h}", { date: dlong(SEARCH.checkout), h: esc(hour(checkoutTimeFor(PROP.settings, SEARCH.checkout))) })}</p>
+          <p class="small muted">${pl(nightsBetween(SEARCH.checkin, SEARCH.checkout), "nuit", "nuits")} · ${pl(SEARCH.adults, "adulte", "adultes")}${SEARCH.children ? ` + ${pl(SEARCH.children, "enfant", "enfants")}` : ""} · <a href="#" id="editDates">${t("modifier")}</a></p>
           <div id="quoteZone" class="small muted" aria-live="polite" aria-atomic="true">${t("Calcul du devis…")}</div>
         </div>
       </aside>
@@ -1159,7 +1164,13 @@ async function submitBooking() {
     try { localStorage.removeItem(storeKey()); } catch { /* au pire la reprise re-proposera les dates */ }
     // Le créneau est bloqué à partir de maintenant : le décompte démarre ici et
     // reste visible si le visiteur revient sur le tunnel (issue #16).
-    rememberHold(res);
+    rememberHold(res, {
+      checkin: SEARCH.checkin,
+      checkout: SEARCH.checkout,
+      unitName: SELECTED?.name,
+      amountCents: res.amountDueCents,
+      email,
+    });
     // Le jeton vient d'être consommé. Depuis le paiement intégré (#26) la page
     // ne navigue plus : un retour au formulaire renverrait un jeton mort, et le
     // visiteur se verrait refuser sans comprendre. On réarme tout de suite.
@@ -1191,7 +1202,15 @@ async function submitBooking() {
     } else {
       msg.innerHTML = `<div class="note bad">${esc(e.message)}</div>`;
     }
-    msg.scrollIntoView({ behavior: "smooth", block: "center" });
+    // Réservation en cours : le verrou masque le formulaire et #bookMsg avec lui.
+    // L'erreur se lit alors dans le bandeau, qui reste visible.
+    const holdErr = document.body.classList.contains("hold-locked") ? $("holdErr") : null;
+    if (holdErr) {
+      holdErr.textContent = e.message;
+      $("holdBanner").scrollIntoView({ behavior: "smooth", block: "start" });
+    } else {
+      msg.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
   }
 }
 
@@ -1244,11 +1263,13 @@ function clearHold() {
 }
 
 /** Mémorise l'option posée par l'API et lance le décompte. */
-function rememberHold(res) {
+function rememberHold(res, info) {
   if (!res?.holdExpiresAt || !res?.now) return;
   const hold = {
     reference: res.reference,
     checkoutUrl: res.checkoutUrl,
+    // dates, hébergement, montant et e-mail : le bandeau les rappelle
+    info: info || null,
     // converti tout de suite en horloge locale via l'écart au temps serveur
     expiresAtLocal: Date.now() + Math.max(0, sqlToMs(res.holdExpiresAt) - sqlToMs(res.now)),
   };
@@ -1263,8 +1284,10 @@ function startHoldCountdown(hold) {
   bar.hidden = false;
   // Le chiffre qui défile est masqué aux lecteurs d'écran (il serait relu
   // chaque seconde) ; seuls les seuils utiles sont annoncés, dans la zone
-  // vocale de la même région aria-live.
-  bar.innerHTML = `<span id="holdCount" aria-hidden="true"></span><span id="holdSay" class="sr-only"></span>`;
+  // vocale de la même région aria-live. La structure (texte + boutons) est
+  // construite une fois : le tick ne touche que le texte, le focus reste.
+  buildHoldBar(bar, hold);
+  lockForHold(true);
   const count = $("holdCount");
   const say = $("holdSay");
   let lastSaid = null;
@@ -1287,18 +1310,15 @@ function startHoldCountdown(hold) {
     const left = hold.expiresAtLocal - Date.now();
     if (left <= 0) {
       bar.classList.add("expired");
-      count.innerHTML = `⏳ ${t("Le blocage de votre créneau a <b>expiré</b> — ces dates sont de nouveau ouvertes à la vente. Relancez une réservation depuis le calendrier.")}`;
+      count.innerHTML = `⏳ ${t("Le blocage de votre créneau a <b>expiré</b>. Le délai est écoulé, les dates ont été libérées.")}`;
       announce(0);
-      clearHold();
+      holdExpired(bar);
       return;
     }
     const m = Math.floor(left / 60000);
     const s = Math.floor((left % 60000) / 1000);
-    const resume = hold.checkoutUrl ? ` · <a href="${esc(hold.checkoutUrl)}">${t("reprendre le paiement")}</a>` : "";
     bar.classList.remove("expired");
-    count.innerHTML =
-      `⏳ ${t("Créneau bloqué pour vous encore <b>{m} min {s} s</b>", { m, s: String(s).padStart(2, "0") })}` +
-      `${hold.reference ? ` · ${t("réservation {ref}", { ref: esc(hold.reference) })}` : ""}${resume}`;
+    count.innerHTML = holdBarText(hold, `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`);
     announce(m + 1);
     holdTimer = setTimeout(tick, 1000);
   };
@@ -1316,18 +1336,34 @@ async function restoreOwnHold() {
   try {
     data = await api(`/api/public/hold?property=${encodeURIComponent(PROPERTY)}`);
   } catch {
-    return false; // la reprise est un plus : son échec ne bloque pas le tunnel
+    return "erreur"; // la reprise est un plus : son échec ne bloque pas le tunnel
   }
   const hold = data.hold;
-  if (!hold) return false;
+  if (!hold) {
+    // Le serveur fait foi : plus de réservation en cours pour ce navigateur
+    // (annulée dans un autre onglet, expirée). Une copie locale périmée ne
+    // doit ni rouvrir le bandeau ni garder le tunnel verrouillé.
+    clearHold();
+    clearTimeout(holdTimer);
+    const bar = $("holdBanner");
+    if (bar) { bar.hidden = true; bar.innerHTML = ""; }
+    lockForHold(false);
+    return "aucun";
+  }
   RESUMED_HOLD = hold;
   selIn = hold.checkin;
   selOut = hold.checkout;
   setPax(hold.adults, hold.children);
   calMonth = selIn.slice(0, 7);
   if (hold.unitSlug) preferredUnit = hold.unitSlug; // rouvre le bon hébergement
-  rememberHold({ reference: hold.reference, holdExpiresAt: hold.holdExpiresAt, now: hold.now });
-  return true;
+  rememberHold({ reference: hold.reference, holdExpiresAt: hold.holdExpiresAt, now: hold.now }, {
+    checkin: hold.checkin,
+    checkout: hold.checkout,
+    unitName: hold.unitName,
+    amountCents: hold.amountDueCents,
+    email: hold.guestEmail,
+  });
+  return "hold";
 }
 
 /** Reprise après retour depuis la page de paiement (bouton « précédent »). */
@@ -1338,6 +1374,158 @@ function restoreHold() {
     if (hold.expiresAtLocal > Date.now()) startHoldCountdown(hold);
     else clearHold();
   } catch { /* stockage indisponible */ }
+}
+
+// ---------------------------------------------------------------------------
+// Réservation en cours : verrou du tunnel, « Continuer le paiement », « Annuler »
+//
+// Tant qu'un hold existe pour ce navigateur, dates, hébergement, personnes et
+// options ne bougent plus : changer de dates laissait l'ancien créneau bloqué
+// sans moyen de l'annuler. Le bandeau est le seul point de sortie.
+// ---------------------------------------------------------------------------
+
+function holdBarText(hold, mmss) {
+  const i = hold.info;
+  const what = i?.checkin && i?.checkout
+    ? [
+        t("du {du} au {au}", { du: dfr(i.checkin), au: dfr(i.checkout) }),
+        i.unitName ? esc(i.unitName) : "",
+        Number.isFinite(i.amountCents) ? eur(i.amountCents) : "",
+      ].filter(Boolean).join(", ")
+    : hold.reference ? t("réservation {ref}", { ref: esc(hold.reference) }) : "";
+  return `⏳ ${t("Réservation en cours")}${what ? ` : ${what}` : ""}. ${t("Temps restant :")} <b>${mmss}</b>`;
+}
+
+function buildHoldBar(bar, hold) {
+  bar.classList.remove("expired");
+  bar.innerHTML =
+    `<span class="holdinfo"><span id="holdCount" aria-hidden="true"></span><span id="holdSay" class="sr-only"></span></span>` +
+    `<span class="holdactions">` +
+    `<button type="button" class="btn" id="holdResume">${t("Continuer le paiement")}</button>` +
+    `<button type="button" class="btn o" id="holdCancel">${t("Annuler")}</button></span>` +
+    `<span id="holdErr" class="holderr" role="alert"></span>`;
+  $("holdResume").addEventListener("click", () => continueHoldPayment(hold));
+  $("holdCancel").addEventListener("click", () => cancelHold());
+  bar.tabIndex = -1;
+  bar.focus({ preventScroll: false });
+}
+
+/** Fige (ou libère) tout ce qui permet de modifier la sélection. */
+function lockForHold(on) {
+  document.body.classList.toggle("hold-locked", on);
+  for (const id of ["offersCard", "searchCard", "results"]) {
+    const el = $(id);
+    if (el) el.inert = on;
+  }
+}
+
+function holdExpired(bar) {
+  clearHold();
+  RESUMED_HOLD = null;
+  lockForHold(false);
+  const actions = bar.querySelector(".holdactions");
+  if (actions) actions.hidden = true;
+  const left = $("bookingPanel");
+  if (left) left.innerHTML = "";
+  SELECTED = null;
+  calCache.clear();
+  setStep(1);
+  renderCalendar();
+  if (selIn && selOut) search();
+}
+
+async function continueHoldPayment(hold) {
+  const err = $("holdErr");
+  err.textContent = "";
+  if (!(hold.expiresAtLocal > Date.now())) { // bandeau resté affiché après l'échéance
+    err.textContent = t("Impossible de rouvrir le paiement ici. Annulez puis recommencez.");
+    return;
+  }
+  const card = $("payCard");
+  if (card && !card.hidden && card.childElementCount) {
+    card.scrollIntoView({ behavior: "smooth", block: "start" }); // paiement déjà ouvert sur cette page
+    return;
+  }
+  const btn = $("holdResume");
+  btn.disabled = true;
+  try {
+    const email = hold.info?.email;
+    if (email && hold.reference) {
+      const res = await api(`/api/public/bookings/${encodeURIComponent(hold.reference)}/pay`, { email });
+      // Seul le paiement initial d'un hold actif se rouvre ici : un solde
+      // (kind « balance », sans échéance de blocage) relève de la page voucher.
+      if ((res.kind !== "deposit" && res.kind !== "full") || !res.holdExpiresAt) {
+        err.textContent = t("Impossible de rouvrir le paiement ici. Annulez puis recommencez.");
+        return;
+      }
+      if (res.payment?.mode === "element") {
+        let host = $("payCard");
+        if (!host) {
+          host = document.createElement("div");
+          host.className = "card";
+          host.id = "payCard";
+          $("bookingPanel").appendChild(host);
+        }
+        host.hidden = false;
+        await mountPayment(host, {
+          publishableKey: res.payment.publishableKey || (await paymentConfig()).publishableKey,
+          clientSecret: res.payment.clientSecret,
+          returnUrl: res.payment.returnUrl,
+          amountLabel: eur(res.amountCents ?? res.payment.amountCents),
+          title: t("Paiement sécurisé"),
+        });
+        host.scrollIntoView({ behavior: "smooth", block: "start" });
+        return;
+      }
+      if (res.checkoutUrl && (res.kind === "deposit" || res.kind === "full")) { location.href = res.checkoutUrl; return; }
+    }
+    err.textContent = t("Impossible de rouvrir le paiement ici. Annulez puis recommencez.");
+  } catch (e) {
+    // Jamais de repli sur l'ancienne adresse de paiement : après un refus du
+    // serveur (réservation expirée, annulée, réglée) elle ne vaut plus rien.
+    err.textContent = e.message;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function cancelHold() {
+  const err = $("holdErr");
+  err.textContent = "";
+  const btn = $("holdCancel");
+  btn.disabled = true;
+  try {
+    await api("/api/public/hold/cancel", {});
+  } catch (e) {
+    err.textContent = e.message; // ex. « Paiement en cours, réessayez dans une minute. »
+    btn.disabled = false;
+    return;
+  }
+  clearTimeout(holdTimer);
+  clearHold();
+  RESUMED_HOLD = null;
+  $("holdBanner").hidden = true;
+  $("holdBanner").innerHTML = "";
+  lockForHold(false);
+  $("bookingPanel").innerHTML = "";
+  SELECTED = null;
+  QUOTE = null;
+  calCache.clear();
+  setStep(1);
+  updateSummary();
+  renderCalendar();
+  // dates et personnes sont conservées : on relance la recherche, le visiteur
+  // peut les modifier ou reprendre
+  if (selIn && selOut) search();
+  // Focus sur le titre de l'étape des dates + annonce vocale : le bandeau
+  // disparaît, le focus ne doit pas se perdre dans le vide.
+  const title = $("paxTitle");
+  if (title) {
+    title.tabIndex = -1;
+    title.focus({ preventScroll: false });
+  }
+  const live = $("holdLive");
+  if (live) live.textContent = t("Votre réservation en cours est annulée, les dates sont libérées.");
 }
 
 // ---------------------------------------------------------------------------
@@ -1433,8 +1621,11 @@ async function initFlow() {
   renderOffers(); // remises actives + disponibilité factuelle (sans bloquer)
   // Une réservation encore en cours prime sur tout le reste : c'est elle qui
   // porte les dates réellement bloquées pour ce visiteur (#68).
-  if (!(await restoreOwnHold())) {
-    restoreHold(); // une option posée juste avant ? on reprend son décompte
+  const own = await restoreOwnHold();
+  if (own !== "hold") {
+    // Serveur muet seulement : on reprend la copie locale. Si le serveur a
+    // répondu « aucun hold », elle a déjà été effacée.
+    if (own === "erreur") restoreHold();
     restoreSelection();
   }
   if (selIn && selOut) {

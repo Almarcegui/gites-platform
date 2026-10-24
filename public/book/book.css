@@ -121,6 +121,7 @@ a{color:var(--accent)}
    toute sélection de dates (issue #66). */
 .pday .mn{display:block;font-size:11px;line-height:1.3;color:#8a7a45;font-weight:600}
 .pday.sel .mn{color:#F0EAD8}
+.pday.sel.dep .mn{display:none}
 .pday.noarr{background:repeating-linear-gradient(135deg,#fff,#fff 5px,#F5F2EA 5px,#F5F2EA 10px)}
 .pday.noarr.sel{background:var(--accent)}
 .pcal-rules{font-size:13.5px;color:var(--muted);margin:6px 0 0}
@@ -129,7 +130,12 @@ a{color:var(--accent)}
 .sugg{margin-top:8px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 .sugg .sugg-b{padding:8px 12px;font-size:14px;text-align:left}
 .pcal-hint{font-size:14px;color:var(--muted);margin-top:8px}
-.stay-summary{background:#E6EFE8;border-radius:6px;padding:8px 12px;font-size:14px}
+.stay-summary{background:#E6EFE8;border-radius:6px;padding:10px 12px;font-size:15.5px;display:flex;flex-wrap:wrap;gap:4px 18px}
+.stay-summary .stay-n{color:var(--muted)}
+.sum-stay{font-size:14.5px;line-height:1.5;margin:6px 0 2px}
+/* Jour du départ : pas une nuit payée, la case reste claire, bordée. */
+.pday.sel.dep{background:#fff;border:2px solid var(--accent)}
+.pday.sel.dep .d,.pday.sel.dep .p{color:var(--accent)}
 
 /* --- barre séjour : résumé + voyageurs, la recherche part toute seule --- */
 .stay-bar{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-top:10px}
@@ -215,6 +221,20 @@ input[aria-invalid=true]{border-color:var(--bad);border-width:2px}
   background:#FDF3D8;border:1px solid #E4C97E;color:#5B4A16;font-size:13.5px;text-align:center}
 .holdbar a{color:inherit;text-decoration:underline}
 .holdbar.expired{background:#FBE4E4;border-color:#E0A5A5;color:#7A2C2C}
+.holdbar{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:8px 14px}
+.holdbar[hidden]{display:none}
+.holdbar:focus{outline:2px solid currentColor;outline-offset:2px}
+.holdbar .holdinfo{flex:1 1 260px;min-width:0;overflow-wrap:anywhere}
+.holdbar .holdactions{display:flex;flex-wrap:wrap;gap:8px;justify-content:center}
+.holdbar .holdactions[hidden]{display:none}
+.holdbar .holdactions .btn{min-height:44px;min-width:44px;padding:0 16px}
+.holdbar .holderr{flex:1 1 100%;color:#7A2C2C;font-weight:600}
+.holdbar .holderr:empty{display:none}
+/* Réservation en cours : seule la zone de paiement reste utilisable. */
+.hold-locked #offersCard,.hold-locked #searchCard,.hold-locked #results,
+.hold-locked #mobileBar{display:none!important}
+.hold-locked #bookingPanel .panel-main>.card:not(#payCard),
+.hold-locked #bookingPanel .panel-side{display:none}
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;
   clip:rect(0,0,0,0);white-space:nowrap;border:0}
 
@@ -279,7 +299,7 @@ input[type=checkbox],input[type=radio]{min-width:22px;min-height:22px}
   .prop .price .per{flex:1 1 100%;order:3}
   .prop .price .savings{flex:1 1 100%;order:4}
   .pcal{gap:2px}
-  .pday .mn{display:none} /* le minimum de nuits reste écrit sous le calendrier (.pcal-rules) */
+  .pday .mn{font-size:10px} /* le minimum reste visible : la phrase sous la grille renvoie aux cases */
   .pday{padding:3px 3px}
   .holdbar{font-size:14px}
 }

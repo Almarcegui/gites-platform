@@ -46,8 +46,9 @@ export interface RateRule {
   holidayPct: number;
   minNights: number;
   checkinDays: number[] | null; // jours d'arrivée autorisés, 0=dim … 6=sam
-  /** minimum de dernière minute : quand la nuit d'arrivée est à `days` jours ou
-   *  moins, le minimum descend à `minNights` (le palier le plus bas l'emporte).
+  /** minimum de dernière minute : quand l'ARRIVÉE du séjour est à `days` jours
+   *  ou moins, le minimum de chaque nuit de cette règle descend à `minNights`
+   *  (le palier le plus bas l'emporte).
    *  Null ou absent = minimum fixe. */
   minNightsRelax?: MinNightsStep[] | null;
 }
@@ -306,6 +307,10 @@ function resolveNight(
   ratedDays: Set<IsoDate>,
   overrides: Map<string, RateOverride>,
   today?: IsoDate,
+  /** date d'arrivée du séjour : les paliers de dernière minute se comptent
+   *  depuis elle pour TOUTES les nuits (décision du 24/10/2026). Absente = la
+   *  nuit elle-même. */
+  arrival?: IsoDate,
 ): NightResolution | null {
   const season = seasonForNight(night, seasons);
   const seasonRule = season ? ruleFor(unitId, season.id, rules) : null;
@@ -340,7 +345,7 @@ function resolveNight(
     source: overridden ? "override" : seasonRule ? "saison" : "base",
     minNights: minNightsOverridden
       ? override!.minNights!
-      : relaxedMinNights(rule?.minNights ?? 1, rule?.minNightsRelax, today ? diffDays(today, night) : null),
+      : relaxedMinNights(rule?.minNights ?? 1, rule?.minNightsRelax, today ? diffDays(today, arrival ?? night) : null),
     minNightsSource: minNightsOverridden ? "override" : "regle",
     checkinDays: rule?.checkinDays ?? null,
     fallbackCents,
@@ -361,6 +366,8 @@ export interface DayRate {
   source: RateSource | null;
   seasonId: number | null;
   seasonName: string | null;
+  /** minimum d'un séjour qui COMMENCE ce jour : le plus haut des minimums des
+   *  nuits couvertes (décision du 24/10/2026), donc ce que le devis exigera */
   minNights: number | null;
   /** provenance du minimum de nuits, indépendante de celle du prix : une
    *  surcharge peut ne porter QUE le minimum de nuits. */
@@ -409,6 +416,8 @@ export function rateCalendar(
 ): DayRate[] {
   const ratedDays = holidayRatedDays(yearsSpanned(from, toExclusive));
   const overrides = indexOverrides(rateOverrides);
+  // Aucun minimum ne dépasse celui-ci : au-delà, toute durée passe.
+  const plafond = Math.max(1, ...rateRules.map((r) => r.minNights), ...rateOverrides.map((o) => o.minNights ?? 1)) + 1;
   const isSum = unit.compositePricing === "sum" && unit.components.length > 0;
   const partIds = isSum ? unit.components.map((c) => c.id) : [unit.id];
   const days: DayRate[] = [];
@@ -452,6 +461,37 @@ export function rateCalendar(
         overrideMinNights = raw.minNights;
       }
     }
+    // Minimum affiché pour une arrivée ce jour (décision du 24/10/2026) : un
+    // séjour doit tenir le plus haut minimum de ses nuits, paliers comptés
+    // depuis l'arrivée. Une durée plus longue peut donc toucher une nuit plus
+    // exigeante (mercredi → samedi refusé quand le vendredi est à 4, alors que
+    // mercredi → vendredi passe). On affiche la valeur PRUDENTE : le plus petit
+    // n tel que toute durée ≥ n passe. Le calendrier, les suggestions et Beds24
+    // ne promettent ainsi jamais un séjour que le devis refuserait.
+    if (covered) {
+      let cumul = minNights; // plus haut minimum des nuits [d, d + m)
+      let prudent = 1;
+      for (let m = 1; m < Math.min(plafond, 60); m++) {
+        if (m > 1) {
+          const night = addDays(d, m - 1);
+          let stop = false;
+          for (const pid of partIds) {
+            const rr = resolveNight(pid, night, seasons, rateRules, ratedDays, overrides, today, d);
+            if (!rr) {
+              stop = true;
+              break;
+            }
+            if (rr.minNights > cumul) {
+              cumul = rr.minNights;
+              minNightsOverridden = minNightsOverridden || rr.minNightsSource === "override";
+            }
+          }
+          if (stop) break;
+        }
+        if (m < cumul) prudent = m + 1;
+      }
+      minNights = Math.max(minNights, prudent);
+    }
     days.push({
       date: d,
       priceCents: covered ? price : null,
@@ -476,8 +516,9 @@ interface UnitBreakdown {
   baseCents: number;
   holidaySurchargeCents: number;
   holidayNights: number;
-  /** minimum de nuits de la NUIT D'ARRIVÉE (surcharge du jour prioritaire) */
-  arrivalMinNights: number;
+  /** minimum de nuits du séjour : le plus haut des minimums de ses nuits
+   *  (surcharge du jour prioritaire sur chaque nuit) — décision du 24/10/2026 */
+  stayMinNights: number;
   arrivalCheckinDays: number[] | null;
   missingRate: boolean;
 }
@@ -505,20 +546,21 @@ function breakdownForUnit(
   const groups = new Map<string, Group>();
   let surcharge = 0;
   let holidayNights = 0;
-  let arrivalMinNights = 1;
+  let stayMinNights = 1;
   let arrivalCheckinDays: number[] | null = null;
   let missingRate = false;
 
   nights.forEach((night, idx) => {
-    const r = resolveNight(unitId, night, seasons, rules, ratedDays, overrides, today);
+    const r = resolveNight(unitId, night, seasons, rules, ratedDays, overrides, today, nights[0]);
     if (!r) {
       missingRate = true;
       return;
     }
-    if (idx === 0) {
-      arrivalMinNights = r.minNights;
-      arrivalCheckinDays = r.checkinDays;
-    }
+    // Un séjour qui touche une nuit à 4 minimum doit faire 4 nuits, quel que
+    // soit son jour d'arrivée (décision du 24/10/2026) ; avant, seule la nuit
+    // d'arrivée comptait et un jeudi-dimanche passait sous un week-end à 6.
+    stayMinNights = Math.max(stayMinNights, r.minNights);
+    if (idx === 0) arrivalCheckinDays = r.checkinDays;
     // Une nuit surchargée sort du groupe de sa saison : son prix ne vient plus
     // d'elle, et le devis doit le dire au client comme au téléphone.
     const seasonLabel =
@@ -564,7 +606,7 @@ function breakdownForUnit(
     baseCents: lines.reduce((s, l) => s + l.amountCents, 0),
     holidaySurchargeCents: surcharge,
     holidayNights,
-    arrivalMinNights,
+    stayMinNights,
     arrivalCheckinDays,
     missingRate,
   };
@@ -654,9 +696,9 @@ export function computeQuote(req: QuoteRequest): Quote {
   }
   const accommodationCents = breakdowns.reduce((s, b) => s + b.baseCents, 0) + surchargeCents;
 
-  // --- min. nuits & jour d'arrivée (règle de la nuit d'arrivée ; composite
-  //     'sum' : la plus exigeante des composantes)
-  const minNights = Math.max(1, ...breakdowns.map((b) => b.arrivalMinNights));
+  // --- min. nuits (le plus haut des nuits du séjour) & jour d'arrivée (règle de
+  //     la nuit d'arrivée) ; composite 'sum' : la plus exigeante des composantes
+  const minNights = Math.max(1, ...breakdowns.map((b) => b.stayMinNights));
   if (nights < minNights) errors.push("min_nights");
   let checkinDays: number[] | null = null;
   for (const b of breakdowns) checkinDays = intersectCheckinDays(checkinDays, b.arrivalCheckinDays);

@@ -137,4 +137,35 @@ describe("options à la date : parcours public", () => {
     expect(made.json.amountDueCents).toBe(honest.json.quote.totalCents);
     expect(made.json.amountDueCents).toBeGreaterThan(100);
   });
+  it("hold annulé puis hold remplacé : option_days ne garde que la nouvelle réservation", async () => {
+    const env = { DB: db, ASSETS: undefined as unknown as Fetcher, PUBLIC_BASE_URL: "http://test.local", EMAILS_ENABLED: "false", ADMIN_TOKEN: "test-admin-token" } as Env;
+    const inn = addDays(IN, 35), out = addDays(OUT, 35), day = addDays(SAT, 35);
+    const body = (n: string) => ({ unitId: 1, checkin: inn, checkout: out, adults: 2, children: 0, options: [{ id: saunaId, qty: 1, days: [day] }], paymentMode: "full", cgvAccepted: true, guest: guest(n) });
+    const post = async (path: string, b: unknown, ck?: string) =>
+      router.handle(new Request("http://test.local" + path, { method: "POST", headers: { "content-type": "application/json", ...(ck ? { cookie: ck } : {}) }, body: JSON.stringify(b) }), env);
+    const holders = async () => (await db.prepare("SELECT DISTINCT booking_id FROM option_days WHERE date = ?1").bind(day).all<{ booking_id: number }>()).results.map((r) => r.booking_id);
+    const idOf = async (ref: string) => (await db.prepare("SELECT id FROM bookings WHERE reference = ?1").bind(ref).first<{ id: number }>())!.id;
+
+    const a = await post("/api/public/bookings", body("holdA"));
+    expect(a!.status).toBe(201);
+    const idA = await idOf(((await a!.json()) as any).reference);
+    const ckA = (a!.headers.get("set-cookie") ?? "").split(";")[0] as string;
+    expect(await holders()).toEqual([idA]);
+
+    const cancelled = await post("/api/public/hold/cancel", {}, ckA);
+    expect(cancelled!.status).toBe(200);
+    expect(await holders()).toEqual([]);
+
+    const b = await post("/api/public/bookings", body("holdB"));
+    expect(b!.status).toBe(201);
+    const idB = await idOf(((await b!.json()) as any).reference);
+    const ckB = (b!.headers.get("set-cookie") ?? "").split(";")[0] as string;
+    expect(await holders()).toEqual([idB]);
+
+    const c = await post("/api/public/bookings", body("holdC"), ckB);
+    expect(c!.status).toBe(201);
+    const idC = await idOf(((await c!.json()) as any).reference);
+    expect(idC).not.toBe(idB);
+    expect(await holders()).toEqual([idC]);
+  });
 });
