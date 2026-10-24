@@ -2622,6 +2622,10 @@ msgstr "Chargement du fil…"
 msgid "Chargement…"
 msgstr "Chargement…"
 
+#: src/pages/Messages.tsx
+msgid "Charger plus"
+msgstr "Charger plus"
+
 #: src/pages/settings/Domain.tsx
 msgid "charges ajoutées à chaque nuit après les nuits incluses"
 msgstr "charges ajoutées à chaque nuit après les nuits incluses"
@@ -8267,7 +8271,9 @@ msgid "Vers {0}. Collez l'export des réservations à venir (une ligne par rése
 msgstr "Vers {0}. Collez l'export des réservations à venir (une ligne par réservation, colonnes unite, arrivee, depart, nom, prenom, email, telephone, adultes, enfants, total, paye, reference)."
 
 #. placeholder {0}: channelName(b)
+#. placeholder {0}: l.via
 #: src/calendar/Grid.tsx
+#: src/messages/MailLinks.tsx
 msgid "via {0}"
 msgstr "via {0}"
 

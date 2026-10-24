@@ -124,6 +124,7 @@ import {
   insertOutboundMessage,
   listChecklist,
   listMessages,
+  listThreads,
   markMessage,
   setMessagesLink,
   setMutualLinks,
@@ -2069,7 +2070,10 @@ export function registerAdminRoutes(router: Router): void {
         try {
           const property = booking.propertyId != null ? await getProperty(db, booking.propertyId) : null;
           if (property) {
-            const mail = buildPaymentLinkEmail(booking, property, full ? "Paiement intégral" : "Arrhes", amountDue, optionUrl, { holdUntil: booking.holdExpiresAt });
+            const mail = buildPaymentLinkEmail(booking, property, full ? "Paiement intégral" : "Arrhes", amountDue, optionUrl, {
+              holdUntil: booking.holdExpiresAt,
+              signature: (await getSettings(db, property.id)).signatureText,
+            });
             await queueEmail(db, env, { bookingId: booking.id, to: email, subject: mail.subject, bodyText: mail.bodyText, kind: "payment_link" });
             optionMailQueued = true;
           }
@@ -2283,7 +2287,7 @@ export function registerAdminRoutes(router: Router): void {
     if (!property) return apiError(404, "domaine inconnu");
 
     const payUrl = voucherUrl(env, booking);
-    const email = buildBalanceReminderEmail(booking, property, payUrl);
+    const email = buildBalanceReminderEmail(booking, property, payUrl, (await getSettings(env.DB, property.id)).signatureText);
     await queueEmail(env.DB, env, {
       bookingId: id,
       to: booking.guestEmail,
@@ -3233,6 +3237,26 @@ export function registerAdminRoutes(router: Router): void {
     }
   }));
 
+  // Liste de l'écran Messages : un fil par ligne, une section à la fois, paginée (« Charger plus »).
+  router.get("/api/admin/messages/threads", guard(async (_req, env, _p, url) => {
+    const section = url.searchParams.get("section") === "autres" ? "autres" : "resa";
+    try {
+      return json(
+        await listThreads(env.DB, {
+          propertyId: intParam(url.searchParams.get("property"), 0) || undefined,
+          section,
+          pendingOnly: url.searchParams.get("status") !== "all",
+          channel: url.searchParams.get("channel") || undefined,
+          canal: url.searchParams.get("canal") || undefined,
+          before: intParam(url.searchParams.get("before"), 0) || undefined,
+          limit: intParam(url.searchParams.get("limit"), 50),
+        }),
+      );
+    } catch {
+      return json({ threads: [], more: false, counts: { resa: 0, autres: 0 }, origins: [], note: "table messages absente — appliquer les migrations" });
+    }
+  }));
+
   router.get("/api/admin/messages/:id/thread", guard(async (_req, env, p) => {
     const id = intParam(p.id, 0);
     const message = await getMessage(env.DB, id);
@@ -3240,7 +3264,7 @@ export function registerAdminRoutes(router: Router): void {
     const thread = await getThread(env.DB, {
       bookingId: message.bookingId,
       guestId: message.guestId,
-      email: message.bookingId || message.guestId ? null : message.direction === "in" ? message.fromEmail : message.toEmail,
+      email: message.direction === "in" ? message.fromEmail : message.toEmail,
     });
     // Liens du message : la liste, et le droit de les ouvrir (expéditeur attesté par Gmail)
     const withLinks = (m: typeof message) => ({ ...m, ...linksOf(m) });
@@ -3269,7 +3293,7 @@ export function registerAdminRoutes(router: Router): void {
       const thread = await getThread(env.DB, {
         bookingId: message.bookingId,
         guestId: message.guestId,
-        email: message.bookingId || message.guestId ? null : message.direction === "in" ? message.fromEmail : message.toEmail,
+        email: message.direction === "in" ? message.fromEmail : message.toEmail,
       });
       const ids = [...new Set([message.id, ...thread.filter((m) => m.channel !== "beds24").map((m) => m.id)])];
       await setMessagesLink(env.DB, ids, link);
@@ -3419,7 +3443,7 @@ export function registerAdminRoutes(router: Router): void {
     const bookingId = intParam(p.id, 0);
     const booking = await getBooking(env.DB, bookingId);
     if (!booking) return apiError(404, "réservation inconnue");
-    const body = await readJson<{ body?: string }>(req);
+    const body = await readJson<{ body?: string; subject?: string }>(req);
     const text = String(body?.body ?? "").trim();
     if (text.length < 2) return apiError(400, "message vide");
     const result = await sendTeamReply(env, {
@@ -3427,7 +3451,7 @@ export function registerAdminRoutes(router: Router): void {
       bookingId: booking.id,
       guestId: booking.guestId,
       toEmail: booking.guestEmail ?? null,
-      subject: `[${booking.reference}] Votre réservation`,
+      subject: replySubject(String(body?.subject ?? "").trim() || "Votre réservation", booking.reference),
       body: text,
     });
     return json({ ok: true, ...result });

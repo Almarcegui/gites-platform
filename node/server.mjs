@@ -502,6 +502,7 @@ server.listen(PORT, () => {
   console.log(`[gites] beds24 : écritures ${env.BEDS24_WRITE_ENABLED === "true" ? "ACTIVES" : "FERMÉES (BEDS24_WRITE_ENABLED ≠ true)"}`);
   console.log(`[gites] admin  : ${(env.ADMIN_ALLOWED_IPS || "").trim() ? `réservé à ${env.ADMIN_ALLOWED_IPS}${TRUST_PROXY ? " (via X-Forwarded-For)" : ""}` : "ouvert à toute adresse"}`);
   console.log(`[gites] boîte  : ${env.IMAP_FETCH ? `relève IMAP ${env.IMAP_USER} @ ${env.IMAP_HOST || "imap.gmail.com"}, dossier ${(env.IMAP_FOLDER || "").trim() || "INBOX"} (lecture seule)` : "relève IMAP inactive (IMAP_USER / mot de passe absents)"}`);
+  if (!/^https?:\/\/(?!localhost|127\.|\[::1\])/i.test(process.env.PUBLIC_BASE_URL || "")) console.warn("[gites] ⚠️ PUBLIC_BASE_URL absente ou locale — les images de la signature HTML (/img/…) sont retirées des mails (elles seraient cassées chez le destinataire)");
   if (!env.ADMIN_TOKEN) console.warn("[gites] ⚠️ ADMIN_TOKEN absent — le back-office refusera tout (garde fail-closed)");
   if (!CRON_KEY) console.warn("[gites] ⚠️ CRON_KEY absente — /internal/cron est désactivé");
   if (!TRUST_PROXY) console.warn("[gites] ⚠️ TRUST_PROXY ≠ true — derrière un proxy (Caddy), les plafonds par adresse IP seront désactivés (adresse de bouclage ignorée)");

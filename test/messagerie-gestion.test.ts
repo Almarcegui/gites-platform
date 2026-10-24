@@ -9,7 +9,8 @@ import { registerAdminRoutes } from "../src/api/admin";
 import { addDays, todayInZone } from "../src/core/dates";
 import { createBookingAtomic, insertInboundMessage, upsertGuest } from "../src/db/repo";
 import { absolutizeImages, composeOutgoing, sanitizeSignatureHtml, textToHtml } from "../src/core/signature";
-import { extractLinks } from "../src/core/links";
+import { extractLinks, isPrivateHost } from "../src/core/links";
+import { authenticatesSender, parseRawEmail, processInboundEmail } from "../src/services/inbound-email";
 import { replySubject } from "../src/services/email";
 import { MAILBOX_STATE_KEY, pullMailbox } from "../src/services/mailbox";
 import { buildMessage } from "../node/smtp.mjs";
@@ -147,9 +148,27 @@ describe("signature : assemblage et envoi", () => {
     expect(composeOutgoing("Salut", { signatureText: "JP", signatureHtml: "", signatureOnReplies: true })).toEqual({ text: "Salut\n\n-- \nJP" });
   });
 
-  it("jamais deux fois : un modèle qui porte déjà la signature texte n'est pas doublé", () => {
+  it("jamais deux fois : un modèle qui FINIT par la signature texte part tel quel ; le HTML reçoit le corps sans elle puis la signature HTML", () => {
     const sig = { signatureText: SIG_TXT, signatureHtml: SIG_HTML, signatureOnReplies: true };
-    expect(composeOutgoing(`Bien à vous,\n${SIG_TXT}`, sig)).toEqual({ text: `Bien à vous,\n${SIG_TXT}` });
+    const tpl = `Bonjour Marie,\n\nMerci.\n\n${SIG_TXT}`;
+    const c = composeOutgoing(tpl, sig, "https://gites.test");
+    expect(c.text).toBe(tpl);
+    expect(c.html).toBeDefined();
+    expect(c.html).toContain("Merci.");
+    expect(c.html).not.toContain("Cartier");
+    expect(c.html!.split("Jean-Philippe").length - 1).toBe(1); // une seule signature (celle du HTML)
+    expect(composeOutgoing(tpl, { ...sig, signatureHtml: "" }, null)).toEqual({ text: tpl });
+    // sans HTML ni texte déjà présent : ajoutée
+    expect(composeOutgoing("Merci.", sig, "https://gites.test").text).toBe(`Merci.\n\n-- \n${SIG_TXT}`);
+  });
+
+  it("une signature courte dans le corps (« Julien vous rappellera ») n'empêche pas la signature", () => {
+    const short = { signatureText: "Julien", signatureHtml: "<b>Julien</b>", signatureOnReplies: true };
+    const c = composeOutgoing("Bonjour, Julien vous rappellera demain.", short, "https://g.test");
+    expect(c.text).toBe("Bonjour, Julien vous rappellera demain.\n\n-- \nJulien");
+    expect(c.html).toContain("<b>Julien</b>");
+    // signature « Julien » seule à la fin du corps : déjà là
+    expect(composeOutgoing("Merci.\nJulien", short, "https://g.test").text).toBe("Merci.\nJulien");
   });
 
   it("multipart/alternative correct : deux parties, quoted-printable, lignes ≤ 76, image absolue, accents intacts", () => {
@@ -386,5 +405,307 @@ describe("Réservations / Autres", () => {
     const free = (await inbound({ guestId: null, subject: "Hors résa" }))!;
     const thread = (await call("GET", `/api/admin/messages/${free}/thread`)).data.thread as { subject: string }[];
     expect(thread.map((m) => m.subject)).toEqual(["Hors résa"]);
+  });
+});
+
+
+// ---------------------------------------------------------------------------------------------
+// Contrôle de la PR (24/10/2026) : cas du contrôleur repris en tests
+// ---------------------------------------------------------------------------------------------
+
+const voucher = async (ref: string, email: string) => {
+  const res = await router.handle(new Request(`http://test.local/api/public/bookings/${ref}/messages?email=${encodeURIComponent(email)}`), env);
+  return ((await res!.json()) as { messages: { body?: string }[] }).messages;
+};
+const bookingOf = async (messageId: string) => (await t.db.prepare("SELECT booking_id FROM messages WHERE message_id = ?1").bind(messageId).first<{ booking_id: number | null }>())?.booking_id ?? null;
+
+describe("voucher : seulement les messages de SA réservation (hameçonnage)", () => {
+  it("un POST anonyme /api/public/contact avec l'adresse d'une cliente n'apparaît ni sur son voucher, ni dans sa fiche", async () => {
+    const b = await makeBooking();
+    const slug = (await t.db.prepare("SELECT slug FROM properties WHERE id = 1").first<{ slug: string }>())!.slug;
+    const res = await router.handle(new Request("http://test.local/api/public/contact", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ property: slug, name: "Les Gîtes du Pré Moré", email: "marie@example.com", message: "Solde à régler : https://evil.test/pay" }),
+    }), env);
+    expect(res!.status).toBeLessThan(300);
+    expect(await voucher(b.reference, "marie@example.com")).toEqual([]);
+    const fiche = (await call("GET", `/api/admin/messages?booking=${b.id}`)).data.messages as unknown[];
+    expect(fiche).toEqual([]);
+  });
+
+  it("un message « Autres » du même client (guest_id sans réservation) n'est pas sur le voucher", async () => {
+    const b = await makeBooking();
+    await inbound({ bookingId: b.id, guestId: b.guestId, bodyText: "dans la résa" });
+    await inbound({ bookingId: null, guestId: b.guestId, bodyText: "SECRET-AUTRES" });
+    const v = await voucher(b.reference, "marie@example.com");
+    expect(v.map((m) => m.body)).toEqual(["dans la résa"]);
+  });
+
+  it("l'objet du formulaire de contact ne porte pas le nom de la personne", async () => {
+    const slug = (await t.db.prepare("SELECT slug FROM properties WHERE id = 1").first<{ slug: string }>())!.slug;
+    await router.handle(new Request("http://test.local/api/public/contact", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ property: slug, name: "Marie Lambert", email: "nouvelle@example.com", message: "Bonjour, une question" }),
+    }), env);
+    const row = await t.db.prepare("SELECT subject FROM messages ORDER BY id DESC").first<{ subject: string }>();
+    expect(row!.subject).toMatch(/^\[QU-\d{4}-\d{4}\] Question — /);
+    expect(row!.subject).not.toContain("Marie");
+  });
+
+  it("réponse à un ancien formulaire (objet avec le nom) : l'objet prérempli n'a plus le nom", async () => {
+    const id = (await inbound({ channel: "form", subject: "[QU-2026-0042] Question de Marie Lambert — Les Gîtes du Pré Moré" }))!;
+    await call("POST", `/api/admin/messages/${id}/reply`, { body: "Merci pour votre question." });
+    expect(sent[0]!.subject).toBe("Re: [QU-2026-0042] Question — Les Gîtes du Pré Moré");
+  });
+});
+
+describe("rattacher / détacher : un seul fil, jamais l'historique du client", () => {
+  it("détacher sur B2 laisse B1 intacte", async () => {
+    const b1 = await makeBooking("marie@example.com", "Lambert", 0);
+    const b2 = await makeBooking("marie@example.com", "Lambert", 40);
+    expect(b1.guestId).toBe(b2.guestId);
+    const m1 = (await inbound({ bookingId: b1.id, guestId: b1.guestId, subject: "Séjour 1" }))!;
+    const m2 = (await inbound({ bookingId: b2.id, guestId: b2.guestId, subject: "Séjour 2" }))!;
+    const r = await call("PATCH", `/api/admin/messages/${m2}`, { bookingId: null });
+    expect(r.data.messages).toBe(1);
+    const rows = await t.db.prepare("SELECT id, booking_id FROM messages ORDER BY id").all<{ id: number; booking_id: number | null }>();
+    expect(rows.results).toEqual([{ id: m1, booking_id: b1.id }, { id: m2, booking_id: null }]);
+    expect((await voucher(b1.reference, "marie@example.com")).length).toBe(1);
+  });
+
+  it("rattacher un message « Autres » à B2 n'emporte pas les messages de B1", async () => {
+    const b1 = await makeBooking("marie@example.com", "Lambert", 0);
+    const b2 = await makeBooking("marie@example.com", "Lambert", 40);
+    const m1 = (await inbound({ bookingId: b1.id, guestId: b1.guestId }))!;
+    const loose = (await inbound({ bookingId: null, guestId: b1.guestId, subject: "Question" }))!;
+    const r = await call("PATCH", `/api/admin/messages/${loose}`, { bookingId: b2.id });
+    expect(r.data.messages).toBe(1);
+    const rows = await t.db.prepare("SELECT id, booking_id FROM messages ORDER BY id").all<{ id: number; booking_id: number | null }>();
+    expect(rows.results).toEqual([{ id: m1, booking_id: b1.id }, { id: loose, booking_id: b2.id }]);
+  });
+
+  it("le fil d'un message rattaché ne lit que sa réservation ; celui d'un message libre que les messages libres", async () => {
+    const b1 = await makeBooking("marie@example.com", "Lambert", 0);
+    const a = (await inbound({ bookingId: b1.id, guestId: b1.guestId, subject: "A" }))!;
+    const loose = (await inbound({ bookingId: null, guestId: b1.guestId, subject: "L" }))!;
+    const subjects = async (id: number) => ((await call("GET", `/api/admin/messages/${id}/thread`)).data.thread as { subject: string }[]).map((m) => m.subject);
+    expect(await subjects(a)).toEqual(["A"]);
+    expect(await subjects(loose)).toEqual(["L"]);
+  });
+});
+
+describe("authentification Gmail de l'expéditeur : pas de contournement", () => {
+  const FROM = "service@victim.test";
+  const cases: [string, string, boolean][] = [
+    ["dmarc=pass écrit dans smtp.mailfrom, dmarc=fail réel", "mx.google.com; spf=pass (google.com: domain of dmarc=pass@attacker.test designates 1.2.3.4 as permitted sender) smtp.mailfrom=dmarc=pass@attacker.test; dmarc=fail (p=NONE) header.from=victim.test", false],
+    ["dmarc=pass dans un commentaire", "mx.google.com; spf=pass (dmarc=pass) smtp.mailfrom=x@attacker.test; dmarc=fail header.from=victim.test", false],
+    ["dmarc=pass dans une chaîne entre guillemets", 'mx.google.com; spf=pass smtp.mailfrom="a; dmarc=pass header.from=victim.test"@attacker.test; dmarc=fail header.from=victim.test', false],
+    ["dmarc=pass d'un AUTRE domaine From", "mx.google.com; dmarc=pass (p=NONE) header.from=attacker.test", false],
+    ["dkim=pass signé par un autre domaine", "mx.google.com; dkim=pass header.i=@attacker.test header.s=s1", false],
+    ["dkim=pass d'un autre domaine, dmarc cité dans un commentaire", "mx.google.com; dkim=pass (dmarc=pass) header.d=attacker.test", false],
+    ["dmarc=pass aligné sur le From", "mx.google.com; dkim=pass header.i=@victim.test; spf=pass smtp.mailfrom=victim.test; dmarc=pass (p=REJECT) header.from=victim.test", true],
+    ["dkim=pass signé par le domaine du From (sans dmarc)", "mx.google.com; dkim=pass header.i=@victim.test header.s=s1", true],
+    ["dkim=pass signé par le parent du domaine", "mx.google.com; dkim=pass header.d=victim.test", true],
+    ["rien", "", false],
+  ];
+  for (const [name, header, expected] of cases) {
+    it(name, () => expect(authenticatesSender(header, FROM)).toBe(expected));
+  }
+
+  it("de bout en bout : l'en-tête forgé ne donne ni senderAuthenticated, ni lien ouvrable, et l'usurpation de l'adresse des gîtes est signalée", async () => {
+    const forged = (from: string) => ["Authentication-Results: mx.google.com;\r\n       spf=pass (google.com: domain of dmarc=pass@attacker.test designates 1.2.3.4 as permitted sender) smtp.mailfrom=dmarc=pass@attacker.test;\r\n       dmarc=fail (p=NONE) header.from=" + from.split("@")[1],
+      `From: Service <${from}>`, "To: lesgitesdupremore@gmail.com", "Subject: Facture", "Message-ID: <forge@attacker.test>", "", "Payez ici https://victim.test.evil.test/pay"].join("\r\n");
+    expect(parseRawEmail(forged("service@victim.test")).senderAuthenticated).toBe(false);
+    await pullOne(forged("lesgitesdupremore@gmail.com"));
+    const row = await t.db.prepare("SELECT spoofed, sender_auth, id FROM messages WHERE message_id = '<forge@attacker.test>'").first<{ spoofed: number; sender_auth: number; id: number }>();
+    expect(row).toMatchObject({ spoofed: 1, sender_auth: 0 });
+    const m = (await call("GET", `/api/admin/messages/${row!.id}/thread`)).data.message as { links: { openable: boolean }[]; linksOpenable: boolean };
+    expect(m.linksOpenable).toBe(false);
+    expect(m.links.every((l) => !l.openable)).toBe(true);
+  });
+});
+
+describe("ordre du rattachement", () => {
+  it("réponse à NOTRE message sur B2 : reste sur B2 malgré un ancien choix manuel d'adresse vers B1", async () => {
+    const b1 = await makeBooking("marie@example.com", "Lambert", 0);
+    const m1 = (await inbound({ bookingId: null, guestId: null }))!;
+    await call("PATCH", `/api/admin/messages/${m1}`, { bookingId: b1.id });
+    const b2 = await makeBooking("marie@example.com", "Lambert", 200);
+    await call("POST", `/api/admin/bookings/${b2.id}/messages`, { body: "Votre séjour B2 approche." });
+    const ourId = (await t.db.prepare("SELECT message_id FROM messages WHERE direction='out' ORDER BY id DESC").first<{ message_id: string }>())!.message_id;
+    await pullOne(["From: Marie <marie@example.com>", "To: lesgitesdupremore@gmail.com", "Subject: Re: Votre réservation", "Message-ID: <h-rep@client.test>", `In-Reply-To: ${ourId}`, "", "Merci"].join("\r\n"));
+    expect(await bookingOf("<h-rep@client.test>")).toBe(b2.id);
+  });
+
+  it("un choix manuel d'adresse vers B1 ne vaut plus quand le client a une réservation active plus récente", async () => {
+    const b1 = await makeBooking("marie@example.com", "Lambert", 0);
+    const m1 = (await inbound({ bookingId: null, guestId: null }))!;
+    await call("PATCH", `/api/admin/messages/${m1}`, { bookingId: b1.id });
+    // tant que B1 est la dernière réservation, l'adresse reste sur B1
+    await pullOne(["From: Marie <marie@example.com>", "To: lesgitesdupremore@gmail.com", "Subject: Q1", "Message-ID: <d1@client.test>", "", "Bonjour"].join("\r\n"));
+    expect(await bookingOf("<d1@client.test>")).toBe(b1.id);
+    const b2 = await makeBooking("marie@example.com", "Lambert", -80);
+    await pullOne(["From: Marie <marie@example.com>", "To: lesgitesdupremore@gmail.com", "Subject: Q2", "Message-ID: <d2@client.test>", "", "Bonjour"].join("\r\n"));
+    expect(await bookingOf("<d2@client.test>")).toBe(b2.id);
+  });
+
+  it("l'ordre d'un fil manuel reste prioritaire sur la référence écrite dans le mail", async () => {
+    const b1 = await makeBooking("marie@example.com", "Lambert", 0);
+    const b2 = await makeBooking("paul@example.com", "Durand", 30);
+    const m1 = (await inbound({ messageId: "<racine@x.test>", fromEmail: "inconnu@autre.test" }))!;
+    await call("PATCH", `/api/admin/messages/${m1}`, { bookingId: b1.id });
+    await pullOne(["From: Inconnu <inconnu@autre.test>", "To: lesgitesdupremore@gmail.com", `Subject: Re: ${b2.reference}`, "Message-ID: <suite-manuel@autre.test>", "In-Reply-To: <racine@x.test>", "", "x"].join("\r\n"));
+    expect(await bookingOf("<suite-manuel@autre.test>")).toBe(b1.id);
+  });
+});
+
+describe("réception Cloudflare Email Routing : même logique de rattachement", () => {
+  const parsed = (over: Partial<Parameters<typeof processInboundEmail>[2]>) => ({
+    messageId: `<cf${(uid += 1)}@x.test>`, from: "marie@example.com", fromName: "Marie", to: "lesgitesdupremore@gmail.com", subject: "Question", textBody: "Bonjour", isAutoGenerated: false, ...over,
+  }) as Parameters<typeof processInboundEmail>[2];
+
+  it("adresses de l'équipe : jamais rattachées par expéditeur ; référence explicite : rattachées", async () => {
+    const b = await makeBooking("jdc@example.com", "Famille");
+    await call("PUT", "/api/admin/mailbox/team", { addresses: "jdc@example.com" });
+    const r1 = await processInboundEmail(t.db, env, parsed({ from: "jdc@example.com", subject: "Transfert" }));
+    expect(r1.bookingRef).toBeNull();
+    const r2 = await processInboundEmail(t.db, env, parsed({ from: "jdc@example.com", subject: `Pour ${b.reference}` }));
+    expect(r2.bookingRef).toBe(b.reference);
+  });
+
+  it("choix manuel du fil et attestation Gmail respectés", async () => {
+    const b1 = await makeBooking("marie@example.com", "Lambert", 0);
+    const m1 = (await inbound({ messageId: "<cfroot@x.test>", fromEmail: "inconnu@autre.test" }))!;
+    await call("PATCH", `/api/admin/messages/${m1}`, { bookingId: b1.id });
+    const r = await processInboundEmail(t.db, env, parsed({ from: "inconnu@autre.test", inReplyTo: "<cfroot@x.test>", senderAuthenticated: true }));
+    expect(r.bookingRef).toBe(b1.reference);
+    const row = await t.db.prepare("SELECT booking_id, link_manual, sender_auth FROM messages WHERE id = ?1").bind(r.id).first();
+    expect(row).toEqual({ booking_id: b1.id, link_manual: 1, sender_auth: 1 });
+  });
+});
+
+describe("nettoyage CSS de la signature : liste blanche de propriétés", () => {
+  const css = (style: string) => sanitizeSignatureHtml(`<div style="${style}">x</div>`);
+  it("refuse image-set, url(), data:, position, expression, @import, behavior, antislash", () => {
+    for (const bad of [
+      "background-image:image-set('https://evil.test/t.png' 1x)", "background:url(https://evil.test/x)", "background:u\\rl(https://evil)",
+      "background:&#x75;rl(https://evil)", "width:expr/**/ession(alert(1))", "position:fixed;top:0;left:0;width:100%;height:100%",
+      "position:absolute", "position:sticky", "behavior:url(x.htc)", "list-style:url(data:image/png;base64,AA)", "content:'x'",
+      "color:red;-moz-binding:url(x)", "filter:blur(2px)", "z-index:9999",
+    ]) {
+      const out = css(bad);
+      expect(out, bad).not.toMatch(/url|image-set|data:|position|expression|import|behavior|binding|content|filter|z-index|fixed|absolute|sticky/i);
+    }
+    expect(css("position:fixed;color:red")).toContain('style="color:red"');
+  });
+  it("garde couleur, police, taille, marges, bordures, dimensions, alignement, arrondi, display, object-fit", () => {
+    const out = css("color:#2F5D3F;font:600 17px/1.3 Georgia,'Times New Roman',serif;margin:0 0 8px;padding:2px 0;border-left:3px solid #2F5D3F;width:96px;height:96px;text-align:left;vertical-align:top;border-radius:10px;display:block;object-fit:cover");
+    for (const k of ["color:", "font:", "margin:", "padding:", "border-left:", "width:", "height:", "text-align:", "vertical-align:", "border-radius:", "display:block", "object-fit:cover"]) expect(out).toContain(k);
+    expect(css("display:flex")).not.toContain("display");
+  });
+});
+
+describe("objet : référence bornée, insensible à la casse, objet vide", () => {
+  it("PM-2026-0123 n'est pas PM-2026-012 ; minuscules reconnues ; vide ou de contrôle → « [REF] Votre réservation »", () => {
+    expect(replySubject("Re: PM-2026-0123 x", "PM-2026-012")).toBe("[PM-2026-012] Re: PM-2026-0123 x");
+    expect(replySubject("[pm-2026-012] Re: x", "PM-2026-012")).toBe("[pm-2026-012] Re: x");
+    expect(replySubject("Re: x PM-2026-012.", "PM-2026-012")).toBe("Re: x PM-2026-012.");
+    expect(replySubject("\u0001\u0002", "PM-2026-012")).toBe("[PM-2026-012] Votre réservation");
+    expect(replySubject("   ", "PM-2026-012")).toBe("[PM-2026-012] Votre réservation");
+    expect(replySubject("Re: x\u0085Bcc: y", null)).toBe("Re: x Bcc: y");
+    expect(replySubject("", null)).toBe("Votre message");
+  });
+  it("le message depuis la fiche réservation a un objet éditable, avec la référence une seule fois", async () => {
+    const b = await makeBooking();
+    await call("POST", `/api/admin/bookings/${b.id}/messages`, { body: "Bonjour", subject: "Arrivée samedi" });
+    await call("POST", `/api/admin/bookings/${b.id}/messages`, { body: "Bonjour" });
+    expect(sent[0]!.subject).toBe(`[${b.reference}] Arrivée samedi`);
+    expect(sent[1]!.subject).toBe(`[${b.reference}] Votre réservation`);
+  });
+});
+
+describe("signature partout", () => {
+  it("lien de paiement et rappel de solde (FR et NL) signent avec la signature du domaine, sinon le nom", async () => {
+    const { buildPaymentLinkEmail, buildBalanceReminderEmail } = await import("../src/services/email");
+    const { getBooking, getProperty } = await import("../src/db/repo");
+    const b = await makeBooking();
+    const booking = (await getBooking(t.db, b.id))!;
+    const property = (await getProperty(t.db, 1))!;
+    const sig = "Jean-Philippe\nPré Moré";
+    expect(buildPaymentLinkEmail(booking, property, "Arrhes", 1000, "https://x.test", { signature: sig }).bodyText).toContain(`À bientôt,\n${sig}`);
+    expect(buildPaymentLinkEmail(booking, property, "Arrhes", 1000, "https://x.test").bodyText).toContain(`À bientôt,\n${property.name}`);
+    expect(buildBalanceReminderEmail(booking, property, "https://x.test", sig).bodyText).toContain(`À bientôt,\n${sig}`);
+    const nl = { ...booking, guestLang: "nl" } as typeof booking;
+    expect(buildPaymentLinkEmail(nl, property, "Arrhes", 1000, "https://x.test", { signature: sig }).bodyText).toContain(`Tot binnenkort,\n${sig}`);
+    expect(buildBalanceReminderEmail(nl, property, "https://x.test", sig).bodyText).toContain(`Tot binnenkort,\n${sig}`);
+  });
+});
+
+describe("liens : redirecteurs, adresses privées, bidi", () => {
+  it("un redirecteur connu montre la cible réelle et n'est jamais ouvrable", () => {
+    const [g, f, ok] = extractLinks("https://www.google.com/url?q=https://evil.test/x&sa=D https://l.facebook.com/l.php?u=https%3A%2F%2Fevil2.test%2F https://exemple.test/a");
+    expect(g).toMatchObject({ host: "evil.test", via: "www.google.com", openable: false });
+    expect(f).toMatchObject({ host: "evil2.test", via: "l.facebook.com", openable: false });
+    expect(ok).toMatchObject({ host: "exemple.test", openable: true });
+  });
+  it("localhost, boucle, réseaux privés, IPv6 locale, nom sans point : jamais ouvrables", () => {
+    const urls = ["http://localhost/x", "http://127.0.0.1:8080/admin", "http://10.0.0.5/", "http://192.168.1.1/", "http://172.20.0.1/", "http://169.254.169.254/latest", "https://[::1]/x", "http://2130706433/", "http://intranet/x", "http://x.local/a"];
+    for (const l of extractLinks(urls.join(" "))) expect(l.openable, l.url).toBe(false);
+    expect(isPrivateHost("exemple.test")).toBe(false);
+    expect(isPrivateHost("172.32.0.1")).toBe(false);
+  });
+  it("caractères bidi et espaces de largeur nulle retirés de l'adresse affichée", () => {
+    const [l] = extractLinks("https://ok.test/\u202egnp.exe et https://a\u200b.test/");
+    expect(l!.url).toBe("https://ok.test/gnp.exe");
+    expect(extractLinks("https://a\u200b.test/")[0]!.url).toBe("https://a.test/");
+  });
+});
+
+describe("image de la signature sans adresse publique", () => {
+  it("sans PUBLIC_BASE_URL valable (vide, locale), l'image relative est retirée de la partie HTML", () => {
+    const sig = { signatureText: "JP", signatureHtml: '<b>JP</b><img src="/img/a.jpg" alt="x">', signatureOnReplies: true };
+    for (const base of [undefined, "", "http://localhost:3000", "http://127.0.0.1"]) {
+      const c = composeOutgoing("Bonjour", sig, base);
+      expect(c.html, String(base)).not.toContain("<img");
+      expect(c.html).toContain("<b>JP</b>");
+    }
+    expect(composeOutgoing("Bonjour", sig, "https://gites.test").html).toContain('src="https://gites.test/img/a.jpg"');
+  });
+});
+
+describe("liste des fils côté serveur : pagination et compteurs", () => {
+  it("250 fils de plusieurs messages + des « Autres » : une ligne par fil, pages de 50, compteurs justes, Autres hors Réservations", async () => {
+    // 250 réservations × 3 messages (insertion directe : la liste ne dépend que des lignes de messages)
+    const guest = await upsertGuest(t.db, { email: "g@example.com", lastName: "G" });
+    for (let i = 0; i < 250; i += 1) {
+      const c = await createBookingAtomic(t.db, { unitId: 2, checkin: addDays(CHECKIN, i * 10), checkout: addDays(CHECKIN, i * 10 + 2), adults: 1, children: 0, status: "confirmed", source: "manual", guestId: guest });
+      if (!c.ok) throw new Error("résa");
+      for (let k = 0; k < 3; k += 1) await inbound({ bookingId: c.id, guestId: guest, fromEmail: `c${i}@example.com`, subject: `s${i}-${k}`, status: undefined });
+    }
+    for (let i = 0; i < 40; i += 1) await inbound({ fromEmail: `g${i}@google.com`, fromName: `Google ${i}` });
+    // un fil « Autres » traité
+    await t.db.prepare("UPDATE messages SET status = 'traité' WHERE from_email = 'g0@google.com'").run();
+    type Page = { threads: { key: string; last: { id: number }; pending: number; count: number }[]; more: boolean; counts: { resa: number; autres: number } };
+    const get = async (q: string) => (await call("GET", `/api/admin/messages/threads?${q}`)).data as unknown as Page;
+    let before = "";
+    const seen: string[] = [];
+    for (let p = 0; p < 10; p += 1) {
+      const page = await get(`section=resa&status=nouveau&limit=50${before}`);
+      if (p === 0) expect(page.counts).toEqual({ resa: 250, autres: 39 });
+      seen.push(...page.threads.map((x) => x.key));
+      expect(page.threads.every((x) => x.count === 3 && x.pending === 3)).toBe(true);
+      if (!page.more) break;
+      before = `&before=${page.threads[page.threads.length - 1]!.last.id}`;
+    }
+    // toutes les réservations rattachées au client « guest » partagent un seul client mais chaque réservation est un fil
+    expect(seen).toHaveLength(250);
+    expect(new Set(seen).size).toBe(250);
+    expect(seen.every((k) => k.startsWith("b:"))).toBe(true);
+    const autres = await get("section=autres&status=nouveau&limit=50");
+    expect(autres.threads).toHaveLength(39);
+    expect(autres.more).toBe(false);
+    expect(autres.threads.every((x) => x.key.startsWith("e:"))).toBe(true);
+    const tous = await get("section=autres&status=all&limit=50");
+    expect(tous.threads).toHaveLength(40);
   });
 });

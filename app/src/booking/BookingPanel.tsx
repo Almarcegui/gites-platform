@@ -27,6 +27,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useState, type ReactNode } from "react";
 
 import { api, openAdminPdf } from "../api/client";
+import { replySubject } from "../messages/subject";
 import { useBooking, useGuest, useProperties, useSignature } from "../api/hooks";
 import type { AuditEntry, Booking, BookingDetail, Guest, QuoteResponse } from "../api/types";
 import { ErrorLine, useAction } from "../lib/action";
@@ -750,9 +751,11 @@ function WriteDialog({ open, b, guest, times, onClose }: { open: boolean; b: Boo
   const sig = useSignature(b.propertyId);
   const a = useAction();
   const [text, setText] = useState("");
+  const [subject, setSubject] = useState<string | null>(null);
   useEffect(() => {
     if (open) {
       setText("");
+      setSubject(null);
       a.reset();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -772,6 +775,7 @@ function WriteDialog({ open, b, guest, times, onClose }: { open: boolean; b: Boo
   return (
     <Box open={open} onClose={onClose} title={t`Écrire à ${b.guestName ?? t`ce client`}`}>
       {open ? <TemplateChips propertyId={b.propertyId} ctx={ctx} onPick={setText} labelId="tpl-w" /> : null}
+      <TextInput mt="md" size="md" label={t`Objet`} maxLength={200} value={subject ?? replySubject("Votre réservation", b.reference)} onChange={(e) => setSubject(e.currentTarget.value)} />
       <Textarea mt="md" label={t`Votre message`} autosize minRows={8} size="md" value={text} onChange={(e) => setText(e.currentTarget.value)} />
       <div className="send">
         <p>
@@ -784,7 +788,7 @@ function WriteDialog({ open, b, guest, times, onClose }: { open: boolean; b: Boo
           disabled={a.state.status === "busy" || text.trim().length < 2}
           onClick={async () => {
             const ok = await a.run(
-              () => api<{ delivery: string }>(`/bookings/${b.id}/messages`, { method: "POST", body: { body: text } }),
+              () => api<{ delivery: string }>(`/bookings/${b.id}/messages`, { method: "POST", body: { body: text, subject: subject ?? replySubject("Votre réservation", b.reference) } }),
               (r) => deliveryText((r as { delivery?: string }).delivery),
             );
             if (ok) onClose();

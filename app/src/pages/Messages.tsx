@@ -2,12 +2,13 @@
 // Les modèles viennent de la base (Réglages › Modèles de réponse).
 import { Trans, useLingui } from "@lingui/react/macro";
 import { IconChevronLeft, IconExternalLink, IconSend } from "@tabler/icons-react";
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useSearch } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 
 import { api } from "../api/client";
-import { useBooking, useMailbox, useMessages, useProperties, useSignature } from "../api/hooks";
+import { useBooking, useMailbox, useProperties, useSignature } from "../api/hooks";
+import { useScope } from "../lib/scope";
 import type { Booking, Message } from "../api/types";
 import { ActionButton, ErrorLine, useAction } from "../lib/action";
 import { hourLabel, longDate, todayBrussels, whenLabel } from "../lib/dates";
@@ -18,39 +19,70 @@ import { TemplateChips } from "../messages/TemplateChips";
 import { useLayout } from "../lib/useLayout";
 import { deliveryText } from "../booking/BookingPanel";
 import { useOpenBooking } from "../shell/Shell";
-import { channelDeliveryText, displayName, originAbbr, originCounts, originOf, replyHint, sourceLabel } from "../canaux/canal";
+import { channelDeliveryText, displayName, originAbbr, originOf, replyHint, sourceLabel } from "../canaux/canal";
 import { MailLinks } from "../messages/MailLinks";
-import { groupThreads, type ThreadRow } from "../messages/threads";
+import { replySubject } from "../messages/subject";
+import { threadKey, type ThreadPage, type ThreadRow } from "../messages/threads";
 
 export function MessagesPage() {
   const { t } = useLingui();
   const layout = useLayout();
+  const { scope } = useScope();
   const [filter, setFilter] = useState<"nouveau" | "all">("nouveau");
   // Deux sections : les fils rattachés à une réservation, et les autres (Google, Drive, divers)
   const [section, setSection] = useState<"resa" | "autres">("resa");
-  // Origine : « toutes », ou une seule (e-mail, Airbnb, Booking, Vrbo, site) — la clé de originCounts
+  // Origine : « toutes », ou une seule (e-mail, Airbnb, Booking, Vrbo, site)
   const [origin, setOrigin] = useState<string>("all");
-  const pending = useMessages("nouveau");
-  const all = useMessages();
   const mailbox = useMailbox();
   const gmail = mailbox.data?.address ? `https://mail.google.com/mail/u/?authuser=${encodeURIComponent(mailbox.data.address)}` : null;
-  const keyOf = (m: Message) => (originOf(m) === "canal" ? `canal:${sourceLabel(m).text}` : originOf(m));
-  const inSection = (m: Message) => (section === "resa") === (m.bookingId != null);
-  const base = ((filter === "nouveau" ? pending.data : all.data) ?? []).filter(inSection);
-  const origins = originCounts((all.data ?? []).filter(inSection));
-  const unreadBy = new Map(originCounts((pending.data ?? []).filter(inSection)).map((o) => [o.key, o.n]));
-  const rows = groupThreads(origin === "all" ? base : base.filter((m) => keyOf(m) === origin));
-  // Compteurs « à répondre » : des fils (une ligne = un fil), pour chaque section
-  const pendingThreads = groupThreads(pending.data ?? []);
-  const todo = { resa: pendingThreads.filter((r) => r.booked).length, autres: pendingThreads.filter((r) => !r.booked).length };
   const wanted = (useSearch({ strict: false }) as { msg?: number }).msg ?? null;
   const [selected, setSelected] = useState<number | null>(wanted);
   const today = todayBrussels();
-  const current = (all.data ?? []).find((m) => m.id === selected) ?? null;
+  // origine choisie → filtre du serveur (canal + libellé)
+  const originFilter = (() => {
+    if (origin === "all") return {};
+    const [channel, canal] = origin.split("|");
+    return { channel, ...(canal ? { canal } : {}) };
+  })();
+  // La liste vient du serveur : un fil par ligne, 50 à la fois (« Charger plus »), par section.
+  const list = useInfiniteQuery({
+    queryKey: ["threads", scope, section, filter, origin],
+    initialPageParam: undefined as number | undefined,
+    queryFn: ({ pageParam }) =>
+      api<ThreadPage>("/messages/threads", {
+        query: { property: scope === "all" ? undefined : scope, section, status: filter, before: pageParam, limit: 50, ...originFilter },
+      }),
+    getNextPageParam: (last) => (last.more ? last.threads[last.threads.length - 1]?.last.id : undefined),
+  });
+  const rows: ThreadRow[] = (list.data?.pages ?? []).flatMap((p) => p.threads);
+  const first = list.data?.pages[0];
+  const todo = first?.counts ?? { resa: 0, autres: 0 };
+  const origins = (() => {
+    const by = new Map<string, { key: string; text: string; n: number; pending: number }>();
+    for (const o of first?.origins ?? []) {
+      const m = { channel: o.channel as Message["channel"], canal: o.canal };
+      const label = sourceLabel(m).text;
+      const key = originOf(m) === "canal" ? `${o.channel}|${o.canal ?? ""}` : o.channel === "beds24" ? `beds24|${o.canal ?? ""}` : o.channel;
+      const cur = by.get(key) ?? { key, text: label, n: 0, pending: 0 };
+      cur.n += o.n;
+      cur.pending += o.pending;
+      by.set(key, cur);
+    }
+    return [...by.values()].sort((a, b) => b.n - a.n || a.text.localeCompare(b.text));
+  })();
+  // Le message ouvert vient du fil lui-même : il n'a pas à figurer dans les fils déjà chargés.
+  const cur = useQuery({
+    queryKey: ["thread", selected],
+    enabled: selected != null,
+    queryFn: () => api<{ message: Message; thread: Message[] }>(`/messages/${selected}/thread`),
+  });
+  const current = selected != null ? (cur.data?.message ?? null) : null;
   const firstId = rows[0]?.last.id;
+  // un message dont le fil ne se lit pas n'est pas rouvert en boucle
+  const [bad, setBad] = useState<number | null>(null);
   useEffect(() => {
-    if (layout === "A" && selected == null && firstId != null) setSelected(firstId);
-  }, [layout, firstId, selected]);
+    if (layout === "A" && selected == null && firstId != null && firstId !== bad) setSelected(firstId);
+  }, [layout, firstId, selected, bad]);
   // Un lien ?msg= ouvre ce message ; sans lien, on garde la sélection (à
   // l'ordinateur, le premier message s'ouvre de lui-même).
   useEffect(() => {
@@ -60,11 +92,14 @@ export function MessagesPage() {
   useEffect(() => {
     if (current) setSection(current.bookingId != null ? "resa" : "autres");
   }, [current?.id, current?.bookingId]); // eslint-disable-line react-hooks/exhaustive-deps
-  const loaded = !!all.data && !!pending.data;
   // Message demandé introuvable (autre domaine, déjà supprimé) : retour à la liste.
   useEffect(() => {
-    if (loaded && selected != null && !(all.data ?? []).some((m) => m.id === selected)) setSelected(null);
-  }, [loaded, selected, all.data]);
+    if (cur.error && selected != null) {
+      setBad(selected);
+      setSelected(null);
+    }
+  }, [cur.error, selected]);
+  const openKey = current ? threadKey(current) : null;
   const showList = layout === "A" || selected == null || current == null;
   const showThread = current != null && (layout === "A" || selected != null);
   return (
@@ -102,26 +137,31 @@ export function MessagesPage() {
               {t`Tous`}
             </button>
           </div>
-          {origins.length > 1 ? (
+          {origins.length > 1 || origin !== "all" ? (
             <div className="chips" style={{ padding: "0 12px 6px" }} role="group" aria-label={t`Origine des messages`}>
               <button type="button" className="chip" aria-pressed={origin === "all"} onClick={() => setOrigin("all")}>
                 {t`Toutes les origines`}
               </button>
               {origins.map((o) => (
                 <button key={o.key} type="button" className="chip" aria-pressed={origin === o.key} onClick={() => setOrigin(o.key)}>
-                  {unreadBy.get(o.key) ? `${o.text} (${unreadBy.get(o.key)})` : o.text}
+                  {o.pending ? `${o.text} (${o.pending})` : o.text}
                 </button>
               ))}
             </div>
           ) : null}
-          {(filter === "nouveau" ? pending : all).error ? <ErrorLine text={t`Les messages n'ont pas pu être lus.`} /> : null}
+          {list.error ? <ErrorLine text={t`Les messages n'ont pas pu être lus.`} /> : null}
           <div className="conv-scroll" role="tabpanel" aria-labelledby={`tab-${section}`}>
-            {rows.length === 0 ? (
+            {list.data && rows.length === 0 ? (
               <p style={{ padding: "12px 16px 16px", margin: 0 }}>{filter === "nouveau" ? t`Aucun message en attente. Tout est répondu.` : t`Aucun message pour l'instant.`}</p>
             ) : null}
             {rows.map((r) => (
-              <ConvRow key={r.key} row={r} today={today} active={selected != null && r.ids.includes(selected)} onOpen={() => setSelected(r.last.id)} />
+              <ConvRow key={r.key} row={r} today={today} active={r.key === openKey} onOpen={() => setSelected(r.last.id)} />
             ))}
+            {list.hasNextPage ? (
+              <button type="button" className="btn ghost more-btn" disabled={list.isFetchingNextPage} onClick={() => void list.fetchNextPage()}>
+                {list.isFetchingNextPage ? t`Un instant…` : t`Charger plus`}
+              </button>
+            ) : null}
           </div>
         </section>
       ) : null}
@@ -225,10 +265,7 @@ function Thread({ message, onBack }: { message: Message; onBack?: () => void }) 
   // (jamais le nom du client). Éditable avant « Envoyer » ; le serveur applique la même règle.
   const isMail = message.channel !== "beds24";
   const reference = message.bookingReference ?? booking?.reference ?? null;
-  const defaultSubject = (() => {
-    const re = message.subject.startsWith("Re:") ? message.subject : `Re: ${message.subject}`;
-    return reference && !re.includes(reference) ? `[${reference}] ${re}` : re;
-  })();
+  const defaultSubject = replySubject(message.subject.startsWith("Re:") ? message.subject : `Re: ${message.subject}`, reference);
   const subject = subjectEdit ?? defaultSubject;
   const items = thread.data?.thread ?? [message];
   const unfilled = unfilledVariables(text);

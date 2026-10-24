@@ -18,6 +18,7 @@ import {
   expireStaleHolds,
   expireStalePaymentSessions,
   getProperty,
+  getSettings,
   hasEmailOfKind,
   listBookings,
   listFeeds,
@@ -138,7 +139,7 @@ export async function runScheduled(env: Env, now: Date = new Date(), fetcher: ty
     if (!property) continue;
     // Depuis l'issue #67, le solde se règle en libre-service sur le voucher :
     // le rappel y renvoie au lieu de promettre un lien « sur demande ».
-    const email = buildBalanceReminderEmail(b, property, voucherUrl(env, b));
+    const email = buildBalanceReminderEmail(b, property, voucherUrl(env, b), (await getSettings(db, property.id)).signatureText);
     await queueEmail(db, env, {
       bookingId: b.id,
       to: b.guestEmail,

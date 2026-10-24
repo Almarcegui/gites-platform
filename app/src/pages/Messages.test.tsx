@@ -6,7 +6,8 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Message } from "../api/types";
-import { groupThreads } from "../messages/threads";
+import { replySubject } from "../messages/subject";
+import { threadKey } from "../messages/threads";
 import { renderApp } from "../test/render";
 import { setWide } from "../test/setup";
 
@@ -18,11 +19,35 @@ const base = (o: Partial<Message> & { id: number }): Message => ({
 
 const MAILBOX = { configured: true, supported: true, note: null, address: "jphde.cartier@gmail.com", teamAddresses: [] };
 
+/** Faux serveur de la liste : un fil par ligne (clé réservation, client, adresse), par section, paginé comme le vrai. */
+function threadsOf(messages: Message[], q: Record<string, string>) {
+  const section = q.section === "autres" ? "autres" : "resa";
+  const pendingOnly = q.status !== "all";
+  const before = q.before ? Number(q.before) : Infinity;
+  const limit = Number(q.limit ?? 50);
+  const mk = (m: Message) => threadKey(m);
+  const groups = new Map<string, Message[]>();
+  for (const m of [...messages].sort((a, b) => b.id - a.id)) {
+    if ((m.bookingId != null) !== (section === "resa")) continue;
+    if (pendingOnly && m.status !== "nouveau") continue;
+    groups.set(mk(m), [...(groups.get(mk(m)) ?? []), m]);
+  }
+  const all = [...groups.entries()].map(([key, ms]) => ({ key, last: ms[0]!, pending: ms.filter((x) => x.status === "nouveau").length, count: ms.length, booked: key.startsWith("b:") }));
+  const page = all.filter((r) => r.last.id < before);
+  const pend = (booked: boolean) => new Set(messages.filter((m) => m.status === "nouveau" && (m.bookingId != null) === booked).map(mk)).size;
+  return { threads: page.slice(0, limit), more: page.length > limit, counts: { resa: pend(true), autres: pend(false) }, origins: [{ channel: "email", canal: null, n: all.length, pending: all.length }] };
+}
+
 function handlers(messages: Message[], extra: Parameters<typeof renderApp>[1] = []) {
   return [
     ...extra,
     (c: { path: string; query: Record<string, string> }) => (c.path === "/mailbox" ? { body: MAILBOX } : undefined),
-    (c: { path: string; query: Record<string, string> }) => (c.path === "/messages" ? { body: { messages: c.query.status === "nouveau" ? messages.filter((m) => m.status === "nouveau") : messages } } : undefined),
+    (c: { path: string; query: Record<string, string> }) => (c.path === "/messages/threads" ? { body: threadsOf(messages, c.query) } : undefined),
+    (c: { path: string }) => {
+      const m = /^\/messages\/(\d+)\/thread$/.exec(c.path);
+      const found = m ? messages.find((x) => x.id === Number(m[1])) : undefined;
+      return found ? { body: { message: found, thread: [found] } } : undefined;
+    },
   ] as Parameters<typeof renderApp>[1];
 }
 
@@ -36,21 +61,11 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe("fils de la liste", () => {
-  it("un fil par conversation (réservation, client, adresse), compté une fois", () => {
-    const rows = groupThreads([
-      base({ id: 1, bookingId: 5, bookingReference: "PM-2026-005" }),
-      base({ id: 2, bookingId: 5, bookingReference: "PM-2026-005", status: "traité" }),
-      base({ id: 3, fromEmail: "No-Reply@google.com" }),
-      base({ id: 4, fromEmail: "no-reply@google.com", status: "traité" }),
-      base({ id: 5, guestId: 9 }),
-    ]);
-    expect(rows.map((r) => [r.key, r.ids, r.pending, r.booked])).toEqual([
-      ["g:9", [5], 1, false],
-      ["e:no-reply@google.com", [4, 3], 1, false],
-      ["b:5", [2, 1], 1, true],
-    ]);
-    expect(rows[2]!.last.id).toBe(2);
+describe("clé d'un fil", () => {
+  it("même règle que le serveur : réservation, sinon client, sinon adresse (minuscules)", () => {
+    expect(threadKey(base({ id: 1, bookingId: 5 }))).toBe("b:5");
+    expect(threadKey(base({ id: 2, guestId: 9 }))).toBe("g:9");
+    expect(threadKey(base({ id: 3, fromEmail: "No-Reply@Google.com" }))).toBe("e:no-reply@google.com");
   });
 });
 
@@ -96,11 +111,25 @@ describe("liste compacte", () => {
     expect(await screen.findByText("Drive", { selector: ".nm" })).toBeInTheDocument();
   });
 
-  it("200 fils : 200 lignes, toutes dans la colonne qui défile (pas dans la page)", async () => {
-    const msgs = Array.from({ length: 200 }, (_, i) => base({ id: i + 1, bookingId: i + 1, bookingReference: `PM-2026-${String(i + 1).padStart(3, "0")}` }));
+  it("250 fils de plusieurs messages : 50 par page, « Charger plus » jusqu'au bout, un seul onglet ne pousse pas l'autre", async () => {
+    const user = userEvent.setup();
+    const msgs: Message[] = [];
+    for (let i = 1; i <= 250; i += 1) {
+      for (let k = 0; k < 3; k += 1) msgs.push(base({ id: i * 10 + k, bookingId: i, bookingReference: `PM-2026-${String(i).padStart(3, "0")}`, fromName: `Client ${i}` }));
+    }
+    for (let i = 1; i <= 30; i += 1) msgs.push(base({ id: 5000 + i, fromEmail: `g${i}@google.com`, fromName: `Google ${i}` }));
     const { container } = renderApp("/messages", handlers(msgs));
-    await waitFor(() => expect(container.querySelectorAll(".conv-scroll .conv")).toHaveLength(200));
-    expect(container.querySelector(".msgs-list")).toBeTruthy();
+    await waitFor(() => expect(container.querySelectorAll(".conv-scroll .conv")).toHaveLength(50));
+    expect(screen.getByRole("tab", { name: "Réservations, 250 à répondre" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Autres, 30 à répondre" })).toBeInTheDocument();
+    for (let n = 100; n <= 250; n += 50) {
+      await user.click(await screen.findByRole("button", { name: "Charger plus" }));
+      await waitFor(() => expect(container.querySelectorAll(".conv-scroll .conv")).toHaveLength(n));
+    }
+    expect(screen.queryByRole("button", { name: "Charger plus" })).toBeNull();
+    // une ligne par fil, jamais une par message ; les « Autres » ne sont pas dans les réservations
+    expect(container.querySelectorAll(".conv-scroll .conv .nm")).toHaveLength(250);
+    expect(screen.queryByText("Google 1", { selector: ".nm" })).toBeNull();
     expect(container.querySelectorAll(".msgs > .conv")).toHaveLength(0);
   });
 
@@ -192,5 +221,24 @@ describe("fil : liens, objet, rattachement", () => {
     await user.click(await screen.findByRole("button", { name: /PM-2026-007/ }));
     await waitFor(() => expect(calls.find((c) => c.method === "PATCH" && c.path === "/messages/1")?.body).toEqual({ bookingId: 7 }));
     expect(calls.some((c) => c.path === "/bookings" && c.query.search === "Oude")).toBe(true);
+  });
+});
+
+describe("objet et redirecteurs", () => {
+  it("objet : référence bornée et insensible à la casse, vide → « Votre réservation », jamais le nom du client", () => {
+    expect(replySubject("Re: PM-2026-0123 x", "PM-2026-012")).toBe("[PM-2026-012] Re: PM-2026-0123 x");
+    expect(replySubject("[pm-2026-012] Re: x", "PM-2026-012")).toBe("[pm-2026-012] Re: x");
+    expect(replySubject("  ", "PM-2026-012")).toBe("[PM-2026-012] Votre réservation");
+    expect(replySubject("Re: [QU-2026-0042] Question de Marie Lambert — Les Gîtes", null)).toBe("Re: [QU-2026-0042] Question — Les Gîtes");
+  });
+
+  it("un lien qui passe par un redirecteur montre la cible réelle, « via … », et n'a pas de bouton Ouvrir", async () => {
+    const msg = base({ id: 1, bookingId: 5, bookingReference: "PM-2026-005", bodyText: "lien" });
+    const withLink = { ...msg, linksOpenable: true, links: [{ url: "https://www.google.com/url?q=https://evil.test/x", host: "evil.test", via: "www.google.com", openable: false }] };
+    renderApp("/messages", handlers([msg], [(c) => (c.path === "/messages/1/thread" ? { body: { message: withLink, thread: [withLink] } } : undefined)]));
+    const group = await screen.findByRole("group", { name: "Liens du message" });
+    expect(within(group).getByText("evil.test", { selector: "b" })).toBeInTheDocument();
+    expect(within(group).getByText("via www.google.com")).toBeInTheDocument();
+    expect(within(group).queryByRole("button", { name: "Ouvrir" })).toBeNull();
   });
 });

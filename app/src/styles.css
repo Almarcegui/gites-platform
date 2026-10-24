@@ -516,6 +516,7 @@ h2.sub { margin: 0 0 6px; font: 700 22px/1.25 var(--police-titres); }
 .msgs-tab { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 12px; border: 0; border-bottom: 3px solid transparent; background: none; font-weight: 600; color: var(--ink-2); }
 .msgs-tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--msg); }
 .msgs-n { min-width: 22px; padding: 0 6px; border-radius: 999px; background: var(--msg); color: #fff; font-size: 13px; line-height: 20px; text-align: center; }
+.more-btn { width: 100%; min-height: 44px; border-top: 1px solid var(--line-2); border-radius: 0; }
 .conv-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
 /* Une ligne fine par fil : point · nom en gras · référence · origine · date courte */
 .conv { display: flex; align-items: center; gap: 6px; width: 100%; text-align: left; padding: 0 12px; border: 0; border-top: 1px solid var(--line-2); background: none; height: 44px; min-height: 44px; overflow: hidden; }

@@ -1297,7 +1297,7 @@ export function registerPublicRoutes(router: Router): void {
     // Référence de la question, du même gabarit que celle d'une réservation :
     // elle va dans l'objet, et la relève de la boîte y rattache la réponse.
     const reference = `QU-${todayInZone().slice(0, 4)}-${String(id).padStart(4, "0")}`;
-    await db.prepare("UPDATE messages SET subject = ?1 WHERE id = ?2").bind(refSubject(reference, `Question de ${name} — ${property.name}`), id).run();
+    await db.prepare("UPDATE messages SET subject = ?1 WHERE id = ?2").bind(refSubject(reference, `Question — ${property.name}`), id).run();
     if (traceId != null) {
       await db
         .prepare("UPDATE audit_log SET entity = ?1, detail = ?2 WHERE id = ?3")

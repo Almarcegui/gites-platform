@@ -52,13 +52,21 @@ Routing.
 
 ### Rattachement
 
-Dans l'ordre : un **rattachement manuel du fil** (voir plus bas) ; une **référence** de réservation
-dans le sujet ou le corps (`PM-2026-001`) ; un rattachement manuel déjà fait pour **cette adresse** ;
-sinon le mail **répond à l'un de nos messages** (`In-Reply-To` / `References` retrouvent le
-`Message-ID` de notre réponse, donc sa réservation, même si le client écrit d'une autre adresse) ;
+Une seule fonction, `linkMail` (`src/services/message-link.ts`), pour la relève IMAP **et** la
+réception Cloudflare Email Routing. Dans l'ordre : un **rattachement manuel du fil** (voir plus bas) ;
+une **référence** de réservation dans le sujet ou le corps (`PM-2026-001`) ; le mail **répond à l'un
+de nos messages** (`In-Reply-To` / `References` retrouvent le `Message-ID` de notre réponse, donc sa
+réservation, même si le client écrit d'une autre adresse) ; un rattachement manuel déjà fait pour
+**cette adresse**, tant que le client n'a pas de réservation active plus récente que celle choisie ;
 sinon l'**adresse de l'expéditeur** est celle d'un client : sa réservation non annulée la plus proche
 dans le temps (séjour en cours d'abord). Rien ne correspond : fil « sans réservation » (le fil se
-regroupe alors par adresse, et ne reprend que les messages non rattachés de cette adresse). **Adresses de l'équipe et de la famille** : réglage global (`app_settings`, clé
+regroupe alors par adresse, et ne reprend que les messages non rattachés de cette adresse).
+
+**Fil = une réservation.** Le fil d'un message rattaché contient UNIQUEMENT les messages de cette
+réservation (`booking_id = ?`), jamais ceux du même client sur une autre réservation ; celui d'un
+message non rattaché, uniquement les messages sans réservation du même client ou de la même adresse.
+Le voucher du client ne lit que `booking_id = sa réservation` : un message envoyé par le formulaire
+public avec l'adresse d'une cliente (ou n'importe quel message « Autres ») n'y apparaît jamais. **Adresses de l'équipe et de la famille** : réglage global (`app_settings`, clé
 `messagerie_team_addresses`, une adresse par ligne ; Réglages › Le domaine, `PUT
 /api/admin/mailbox/team` avec `{ "addresses": "a@x.be\nb@y.be" }`, lecture dans
 `GET /api/admin/mailbox` › `teamAddresses`). Un mail venant d'une de ces adresses n'est **jamais**
@@ -67,8 +75,8 @@ seulement par une référence explicite dans l'objet ou le corps, par un rattach
 ou parce qu'il répond à un fil déjà rattaché. Défaut : vide.
 
 **Rattacher / détacher à la main** : `PATCH /api/admin/messages/:id` avec `{ "bookingId": 123 }` ou
-`{ "bookingId": null }` rattache ou détache **tout le fil** (les messages entrants et sortants de la
-même conversation), refuse un message de canal Beds24 (400) ou une réservation inconnue (404), et
+`{ "bookingId": null }` rattache ou détache **le fil affiché** (les messages entrants et sortants de la
+même conversation, jamais l'historique du client sur une autre réservation), refuse un message de canal Beds24 (400) ou une réservation inconnue (404), et
 écrit l'audit `message.attach` / `message.detach`. Le choix est marqué sur chaque message
 (`messages.link_manual = 1`, migration 0041) et **prime ensuite** sur le rattachement automatique :
 la réponse du client (`In-Reply-To`) et les mails suivants de la même adresse reprennent ce choix,
@@ -91,8 +99,12 @@ Dans Messages, « Envoyer » sur un mail : envoi **SMTP** (`node/smtp.mjs`) depu
 **Objet** : le champ « Objet » du fil est prérempli « Re: … » et modifiable avant « Envoyer » (corps
 de la requête : `{ body, subject }`). Si le message est rattaché à une réservation dont la référence
 (`PM-AAAA-NNN`) n'est pas déjà dans l'objet, le serveur l'ajoute d'office en tête : « [PM-2026-012]
-Re: … ». L'objet ne contient jamais le nom du client (`replySubject`, `src/services/email.ts`) ;
-sauts de ligne et caractères de contrôle sont retirés, 200 caractères au plus.
+Re: … ». L'objet ne contient jamais le nom d'une personne (`replySubject`, `src/services/email.ts` ; le
+formulaire de contact écrit « [QU-…] Question — <domaine> », et les anciens « Question de <nom> » sont
+réécrits à la réponse) ; la référence est cherchée sans tenir compte de la casse et sans sous-chaîne
+(PM-2026-0123 n'est pas PM-2026-012) ; sauts de ligne, caractères de contrôle et bidi sont retirés,
+200 caractères au plus ; objet vide : « [PM-…] Votre réservation ». Le message depuis la fiche d'une
+réservation a le même champ « Objet » (`POST /api/admin/bookings/:id/messages` accepte `subject`).
 
 **Signature** : voir la section dédiée plus bas. Elle est ajoutée à toute réponse (Messages) et à tout
 message depuis une réservation, avant l'envoi ; le message gardé dans le fil reste sans signature. Le mail est journalisé dans `email_log` (genre `reply`, statut, identifiant SMTP), le
@@ -108,7 +120,8 @@ Pas d'accusé de réception automatique sur ce chemin : seule une personne répo
 ## Écran
 
 - **Liste compacte** (colonne de gauche, 320 px) : **une ligne fine par fil** (la conversation, pas
-  chaque mail) : point « à répondre », nom en gras, pastille de la référence si rattaché, origine en
+  chaque mail ; groupement et pagination faits par le serveur, `GET /api/admin/messages/threads?section=resa|autres&status=nouveau|all&before=<id>&limit=50`,
+  avec les compteurs « à répondre » de chaque onglet et les origines ; « Charger plus » pour les fils plus anciens, sans plafond de 200) : point « à répondre », nom en gras, pastille de la référence si rattaché, origine en
   abréviation (Mail, Site, Abnb, Bkg, Vrbo ; nom complet au survol), date courte à droite. Ni objet ni
   aperçu dans la ligne : l'objet est dans l'infobulle (`title`). Hauteur de ligne **44 px** (téléphone)
   et **40 px** (ordinateur) ; l'en-tête reste en place et seule la liste défile, la colonne ne pousse
@@ -139,9 +152,15 @@ Pas d'accusé de réception automatique sur ce chemin : seule une personne répo
   Sous chaque mail reçu, la section **« Liens du message »** liste chaque lien : le **domaine réel en
   gras** (celui que le navigateur ouvrirait), l'adresse complète en petit, un bouton « Copier ».
   Extraction côté serveur à chaque lecture du fil (`src/core/links.ts`) : http et https seulement,
-  dédoublonnés, 20 au plus, ponctuation de fin retirée. **« Ouvrir » n'existe que si** l'expéditeur
+  dédoublonnés, 20 au plus, ponctuation de fin retirée, caractères bidi retirés. Un **redirecteur connu**
+  (`google.com/url`, `l.facebook.com`, `safelinks.protection.outlook.com`…) affiche la cible réelle
+  et « via <redirecteur> », sans « Ouvrir » ; `localhost`, adresses IP privées ou de boucle, `[::1]` et
+  noms sans point ne sont jamais ouvrables. **« Ouvrir » n'existe que si** l'expéditeur
   est attesté par Gmail (`messages.sender_auth`, même critère `Authentication-Results` que
-  l'anti-usurpation : dmarc=pass, ou dkim=pass signé par le domaine de l'expéditeur) **et** que le
+  l'anti-usurpation, lu avec soin : premier en-tête posé par google.com, commentaires et chaînes entre
+  guillemets retirés, résultat découpé par « ; », il doit COMMENCER par `dmarc=pass` avec
+  `header.from=` égal au domaine du From, ou `dkim=pass` signé par le domaine du From (`header.d` /
+  `header.i`) ; un `dmarc=pass` écrit dans `smtp.mailfrom` ou un commentaire ne compte pas) **et** que le
   message n'est pas `spoofed` **et** que l'adresse ne cache pas d'identifiant devant le domaine
   (`user@`). L'ouverture passe par une confirmation qui répète le domaine réel, puis s'ouvre dans un
   nouvel onglet (`noopener noreferrer`). Un mail non attesté n'a jamais de bouton « Ouvrir », seulement
@@ -190,8 +209,8 @@ Envoi des réponses : `EMAILS_ENABLED=true` et les variables SMTP habituelles (v
 - Le rattachement manuel d'une **adresse** (le choix fait sur un fil vaut pour les mails suivants de
   la même adresse) ne s'applique pas aux adresses de l'équipe et de la famille ; il se défait en
   rattachant ou détachant un fil de cette adresse.
-- Le voucher d'un client continue d'afficher les messages liés à son **client** (formulaire de contact
-  d'avant la réservation) ; un fil **détaché à la main** n'y est plus.
+- Le voucher n'affiche que les messages **de sa réservation** : un message du formulaire de contact
+  écrit avant la réservation n'y est plus (il reste dans « Autres » tant qu'on ne l'a pas rattaché).
 - **Cloudflare Workers** n'ouvre pas de socket sortante : la relève y est désactivée, avec un
   message clair (`GET /api/admin/mailbox`, ligne de journal `mailbox.imap.disabled`). Elle tourne
   sur le site Node (Infomaniak).
@@ -234,20 +253,26 @@ existe,
 - si une signature HTML existe, le mail devient **multipart/alternative** (texte puis HTML,
   `node/smtp.mjs`, quoted-printable UTF-8, lignes de 76 caractères au plus) : le corps tapé est
   échappé et converti (paragraphes à la ligne vide, `<br>` au saut de ligne), suivi de la signature
-  HTML ; une image écrite `/img/…` est réécrite en URL absolue avec `PUBLIC_BASE_URL` ;
-- jamais deux fois : si le corps contient déjà la signature texte (un modèle qui se termine par
-  `{signature}`), rien n'est ajouté ;
+  HTML ; une image écrite `/img/…` est réécrite en URL absolue avec `PUBLIC_BASE_URL`, et **retirée**
+  si cette adresse est absente ou locale (le serveur Node avertit au démarrage) ;
+- jamais deux fois : si le corps FINIT déjà par la signature texte (un modèle qui se termine par
+  `{signature}`, comparaison ligne à ligne), le texte part tel quel et la partie HTML reçoit le corps
+  sans cette signature suivi de la signature HTML ; une signature courte au milieu d'une phrase
+  (« Julien vous rappellera ») n'empêche rien ;
 - le message gardé dans le fil et `messages.body_text` restent **sans** signature ; `email_log`
   garde le texte réellement envoyé.
 
-La variable `{signature}` des modèles de réponse (écran) et des mails automatiques (confirmation,
+La signature texte du domaine signe aussi le lien de paiement et le rappel de solde (FR et NL). La
+variable `{signature}` des modèles de réponse (écran) et des mails automatiques (confirmation,
 annulation, relance d'abandon) prend la signature texte si elle est remplie, sinon le nom du domaine.
 
 **Nettoyage du HTML** (`sanitizeSignatureHtml`) : le HTML est reconstruit balise par balise. Balises
 permises : `table`, `tbody`, `thead`, `tr`, `td`, `th`, `div`, `span`, `p`, `br`, `a`, `img`, `b`, `i`,
 `strong`, `em`. `script`, `style`, `iframe`, `form`, `object`, `svg`… disparaissent **avec leur
-contenu** ; toute autre balise disparaît, son texte reste. Attributs : `style` (déclarations avec
-`url()`, `expression`, `javascript:`, `@import`… retirées), quelques attributs de mise en page
+contenu** ; toute autre balise disparaît, son texte reste. Attributs : `style` (liste blanche de
+propriétés : couleur, police, taille, marges, bordures, dimensions, alignement, arrondi, `display`
+limité à block/inline/table…, `object-fit` ; tout le reste, dont `background-image`, `position`,
+`content`, `filter`, et toute valeur avec `url()`, `image-set`, `data:`, `expression`, `@`, `\`, est retiré), quelques attributs de mise en page
 (`width`, `height`, `colspan`, `align`, `cellpadding`…), `href` (http, https, `mailto:`, `tel:`
 seulement ; `rel="noopener noreferrer"` ajouté), `src` d'image (https, ou chemin du site `/img/…`),
 `alt`. Tout attribut `on*` et tout `javascript:` / `data:` est retiré.

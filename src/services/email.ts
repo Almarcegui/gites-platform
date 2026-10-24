@@ -66,12 +66,23 @@ export function refSubject(reference: string, text: string): string {
   return `[${reference}] ${text}`.replace(/[\r\n]+/g, " ");
 }
 
-/** Objet d'une réponse depuis Messages : nettoyé (jamais de saut de ligne ni de caractère de
- *  contrôle), et, si le fil est rattaché à une réservation dont la référence n'y figure pas,
- *  « [PM-2026-012] » en tête. Jamais le nom du client. */
+/** Objet d'une réponse depuis Messages : nettoyé (jamais de saut de ligne, de caractère de contrôle
+ *  ni de caractère bidi), sans nom de personne (« Question de Marie Lambert — … » des anciens
+ *  formulaires devient « Question — … »), et, si le fil est rattaché à une réservation dont la
+ *  référence n'y figure pas, « [PM-2026-012] » en tête. La recherche de la référence ignore la casse
+ *  et est bornée (PM-2026-0123 n'est pas PM-2026-012). Objet vide : « Votre réservation » (ou « Votre
+ *  message » sans réservation). */
 export function replySubject(subject: string, reference: string | null | undefined): string {
-  const clean = subject.replace(/[\u0000-\u001f\u007f]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 200);
-  if (!reference || clean.includes(reference)) return clean;
+  const clean = subject
+    .replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029\u202a-\u202e\u2066-\u2069]+/g, " ")
+    .replace(/\s+/g, " ")
+    .replace(/Question de [^—]+ — /i, "Question — ")
+    .trim()
+    .slice(0, 200);
+  if (!reference) return clean || "Votre message";
+  if (clean === "") return refSubject(reference, "Votre réservation");
+  const bounded = new RegExp(`(?<![A-Za-z0-9])${reference.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![A-Za-z0-9])`, "i");
+  if (bounded.test(clean)) return clean;
   return refSubject(reference, clean);
 }
 
@@ -196,7 +207,7 @@ export function buildPaymentLinkEmail(
   label: string,
   amountCents: number,
   payUrl: string,
-  opts: { holdUntil?: string | null } = {},
+  opts: { holdUntil?: string | null; signature?: string } = {},
 ): { subject: string; bodyText: string } {
   if (isNl(b)) return buildPaymentLinkEmailNl(b, property, label, amountCents, payUrl, opts);
   return {
@@ -213,7 +224,7 @@ export function buildPaymentLinkEmail(
       ...(opts.holdUntil ? [`Vos dates sont gardées jusqu'au ${formatDateFr(opts.holdUntil.slice(0, 10))}.`] : []),
       ``,
       `À bientôt,`,
-      `${property.name}`,
+      `${opts.signature?.trim() || property.name}`,
     ].join("\n"),
   };
 }
@@ -293,8 +304,9 @@ export function buildBalanceReminderEmail(
   b: BookingRow,
   property: PropertyRow,
   payUrl?: string | null,
+  signatureText?: string,
 ): { subject: string; bodyText: string } {
-  if (isNl(b)) return buildBalanceReminderEmailNl(b, property, payUrl);
+  if (isNl(b)) return buildBalanceReminderEmailNl(b, property, payUrl, signatureText);
   const balance = b.totalCents - b.paidCents;
   const closing = payUrl
     ? [`Vous pouvez le régler en ligne, en quelques clics :`, ``, payUrl]
@@ -311,7 +323,7 @@ export function buildBalanceReminderEmail(
       ...closing,
       ``,
       `À bientôt,`,
-      `${property.name}`,
+      `${signatureText?.trim() || property.name}`,
     ].join("\n"),
   };
 }
@@ -332,7 +344,7 @@ export function parseQuote(b: BookingRow): Quote | null {
 
 const personen = (n: number) => `${n} ${n > 1 ? "personen" : "persoon"}`;
 
-function buildPaymentLinkEmailNl(b: BookingRow, property: PropertyRow, label: string, amountCents: number, payUrl: string, opts: { holdUntil?: string | null }): { subject: string; bodyText: string } {
+function buildPaymentLinkEmailNl(b: BookingRow, property: PropertyRow, label: string, amountCents: number, payUrl: string, opts: { holdUntil?: string | null; signature?: string }): { subject: string; bodyText: string } {
   const l = nlText(label);
   return {
     subject: refSubject(b.reference, `${l}: betaallink — ${property.name}`),
@@ -348,7 +360,7 @@ function buildPaymentLinkEmailNl(b: BookingRow, property: PropertyRow, label: st
       ...(opts.holdUntil ? [`Uw data worden bewaard tot ${formatDateFr(opts.holdUntil.slice(0, 10))}.`] : []),
       ``,
       `Tot binnenkort,`,
-      `${property.name}`,
+      `${opts.signature?.trim() || property.name}`,
     ].join("\n"),
   };
 }
@@ -384,7 +396,7 @@ function buildPaymentReceiptEmailNl(b: BookingRow, property: PropertyRow, paymen
   return { subject: refSubject(b.reference, `Betalingsbewijs ${money(payment.amountCents, true)} — ${property.name}`), bodyText: parts.join("\n") };
 }
 
-function buildBalanceReminderEmailNl(b: BookingRow, property: PropertyRow, payUrl?: string | null): { subject: string; bodyText: string } {
+function buildBalanceReminderEmailNl(b: BookingRow, property: PropertyRow, payUrl?: string | null, signatureText?: string): { subject: string; bodyText: string } {
   const balance = b.totalCents - b.paidCents;
   const closing = payUrl ? [`U kunt het in enkele klikken online betalen:`, ``, payUrl] : [`Op eenvoudig verzoek sturen wij u opnieuw een betaallink.`];
   return {
@@ -399,7 +411,7 @@ function buildBalanceReminderEmailNl(b: BookingRow, property: PropertyRow, payUr
       ...closing,
       ``,
       `Tot binnenkort,`,
-      `${property.name}`,
+      `${signatureText?.trim() || property.name}`,
     ].join("\n"),
   };
 }

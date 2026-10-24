@@ -8,6 +8,8 @@
 //   - absolutizeImages : une image `/img/…` devient une URL absolue du site (le client
 //     de messagerie ne connaît pas notre domaine).
 
+import { isPrivateHost } from "./links";
+
 const ALLOWED_TAGS = new Set([
   "table", "tbody", "thead", "tr", "td", "th", "div", "span", "p", "br", "a", "img", "b", "i", "strong", "em",
 ]);
@@ -74,7 +76,23 @@ export function safeImgSrc(raw: string): string | null {
   return null;
 }
 
-/** Déclarations CSS une à une : tout ce qui peut charger ou exécuter quelque chose saute. */
+/** Propriétés CSS permises (couleur, police, taille, marges, bordures, dimensions, alignement,
+ *  arrondi, affichage, ajustement d'image). Tout le reste est retiré : pas de `background-image`,
+ *  de `position`, de `content`, de `filter`… */
+const STYLE_PROPS = new Set([
+  "color", "background-color", "font", "font-family", "font-size", "font-weight", "font-style", "line-height",
+  "letter-spacing", "text-align", "text-decoration", "text-transform", "vertical-align", "white-space",
+  "margin", "margin-top", "margin-right", "margin-bottom", "margin-left",
+  "padding", "padding-top", "padding-right", "padding-bottom", "padding-left",
+  "border", "border-top", "border-right", "border-bottom", "border-left", "border-color", "border-style", "border-width",
+  "border-collapse", "border-spacing", "border-radius",
+  "width", "min-width", "max-width", "height", "min-height", "max-height",
+  "display", "object-fit",
+]);
+const DISPLAY_VALUES = /^(block|inline|inline-block|table|table-row|table-cell|none)$/i;
+
+/** Déclarations CSS une à une, par liste blanche de propriétés ; une valeur qui peut charger ou
+ *  exécuter quelque chose (url(), image-set(), data:, expression, @import, \\, <, >) saute. */
 function safeStyle(raw: string): string {
   const css = decodeEntities(raw).replace(/\/\*[\s\S]*?\*\//g, "");
   const kept: string[] = [];
@@ -83,9 +101,12 @@ function safeStyle(raw: string): string {
     if (!d) continue;
     const m = /^([a-z-]+)\s*:\s*([^]*)$/i.exec(d);
     if (!m) continue;
+    const prop = m[1]!.toLowerCase();
     const value = m[2]!.trim();
-    if (/url\s*\(|expression|javascript|vbscript|@import|behavio|binding|\\|<|>/i.test(`${m[1]}:${value}`)) continue;
-    kept.push(`${m[1]!.toLowerCase()}:${value}`);
+    if (!STYLE_PROPS.has(prop) || value === "" || value.length > 300) continue;
+    if (/url\s*\(|image-set|expression|javascript|vbscript|data:|@|behavio|binding|\\|<|>|\bvar\s*\(|\bcalc\s*\(|!important/i.test(value)) continue;
+    if (prop === "display" && !DISPLAY_VALUES.test(value)) continue;
+    kept.push(`${prop}:${value}`);
   }
   return kept.join(";");
 }
@@ -196,11 +217,28 @@ function escapeText(t: string): string {
   return t.replace(/&(?!(?:[a-z][a-z0-9]{1,8}|#\d{1,7}|#x[0-9a-f]{1,6});)/gi, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-/** Les images en chemin du site (`/img/…`) deviennent des URL absolues : `base` est l'adresse publique du serveur. */
+/** Adresse publique valable pour un mail : http(s), pas une adresse locale ou privée ; sinon "". */
+export function publicOrigin(base: string | null | undefined): string {
+  if (!/^https?:\/\//i.test(base ?? "")) return "";
+  try {
+    const u = new URL(String(base));
+    return isPrivateHost(u.hostname) ? "" : String(base).replace(/\/+$/, "");
+  } catch {
+    return "";
+  }
+}
+
+/** Les images en chemin du site (`/img/…`) deviennent des URL absolues : `base` est l'adresse publique
+ *  du serveur. Sans adresse publique valable, l'image est RETIRÉE (une image relative serait cassée
+ *  chez le destinataire). */
 export function absolutizeImages(html: string, base: string | null | undefined): string {
-  const origin = /^https?:\/\//i.test(base ?? "") ? String(base).replace(/\/+$/, "") : "";
-  if (!origin) return html;
-  return html.replace(/(<img\b[^>]*?\bsrc=")(\/(?!\/)[^"]*)(")/gi, (_m, a: string, path: string, z: string) => `${a}${origin}${path}${z}`);
+  const origin = publicOrigin(base);
+  return html.replace(/<img\b[^>]*>/gi, (tag) => {
+    const m = /\bsrc="(\/(?!\/)[^"]*)"/i.exec(tag);
+    if (!m) return tag;
+    if (!origin) return "";
+    return tag.replace(m[0], `src="${origin}${m[1]}"`);
+  });
 }
 
 /** Corps de texte brut → HTML simple : paragraphes (ligne vide) et `<br>` (saut de ligne). */
@@ -220,21 +258,42 @@ export interface Composed {
   html?: string;
 }
 
-function normalize(s: string): string {
-  return s.replace(/\s+/g, " ").trim();
+/** Retire du bas du texte les lignes de la signature (un modèle qui finit par `{signature}` la porte
+ *  déjà). null si le corps ne FINIT pas par la signature. Comparaison ligne à ligne, espaces
+ *  ignorés ; un « -- » qui la précède part avec elle. */
+export function stripTrailingSignature(text: string, sigText: string): string | null {
+  const sigLines = sigText.split("\n").map((l) => l.trim()).filter(Boolean);
+  if (sigLines.length === 0) return null;
+  const lines = text.split("\n");
+  let end = lines.length;
+  const skipBlank = () => {
+    while (end > 0 && lines[end - 1]!.trim() === "") end -= 1;
+  };
+  skipBlank();
+  for (let k = sigLines.length - 1; k >= 0; k -= 1) {
+    if (end === 0 || lines[end - 1]!.trim() !== sigLines[k]) return null;
+    end -= 1;
+  }
+  skipBlank();
+  if (end > 0 && lines[end - 1]!.trim() === "--") end -= 1;
+  skipBlank();
+  return lines.slice(0, end).join("\n");
 }
 
-/** Le texte à envoyer, avec la signature si elle est demandée et pas déjà dans le corps
- *  (un modèle qui se termine par `{signature}` la porte déjà : jamais deux fois). */
+/** Le texte à envoyer, avec la signature si elle est demandée. Jamais deux fois : si le corps FINIT
+ *  déjà par la signature texte (modèle terminé par `{signature}`), le texte part tel quel, et la
+ *  partie HTML reçoit le corps sans cette signature suivi de la signature HTML. */
 export function composeOutgoing(body: string, sig: SignatureSettings | null, publicBase?: string | null): Composed {
   const text = body.replace(/\r\n?/g, "\n").replace(/\s+$/, "");
   if (!sig || !sig.signatureOnReplies) return { text: body };
   const sigText = sig.signatureText.replace(/\r\n?/g, "\n").trim();
   const sigHtml = sig.signatureHtml.trim();
   if (!sigText && !sigHtml) return { text: body };
-  if (sigText && normalize(text).includes(normalize(sigText))) return { text: body };
-  const withText = sigText ? `${text}\n\n-- \n${sigText}` : text;
-  if (!sigHtml) return { text: withText };
-  const html = `<!doctype html><html><head><meta charset="utf-8"></head><body style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.5;color:#222">${textToHtml(text)}<div style="margin-top:14px">${absolutizeImages(sigHtml, publicBase)}</div></body></html>`;
-  return { text: withText, html };
+  const stripped = sigText ? stripTrailingSignature(text, sigText) : null;
+  const already = stripped !== null;
+  const textOut = already ? text : sigText ? `${text}\n\n-- \n${sigText}` : text;
+  if (!sigHtml) return { text: already ? body : textOut };
+  const lead = already ? stripped : text;
+  const html = `<!doctype html><html><head><meta charset="utf-8"></head><body style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.5;color:#222">${textToHtml(lead)}<div style="margin-top:14px">${absolutizeImages(sigHtml, publicBase)}</div></body></html>`;
+  return { text: already ? body : textOut, html };
 }

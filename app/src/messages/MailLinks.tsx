@@ -47,6 +47,7 @@ export function MailLinks({ message }: { message: Message }) {
           <li key={l.url}>
             <div className="ml-row">
               <b className="ml-host">{l.host}</b>
+              {l.via ? <small className="ml-via">{t`via ${l.via}`}</small> : null}
               <button
                 type="button"
                 className="btn ghost ml-btn"

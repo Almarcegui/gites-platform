@@ -13,16 +13,15 @@
 // par défaut) et transfère vers l'adresse personnelle configurée. Idempotent
 // par Message-ID (les re-livraisons ne créent pas de doublon).
 
-import { sqlNow } from "../core/dates";
+import { sqlNow, todayInZone } from "../core/dates";
 import {
   audit,
-  bookingsForGuest,
-  getBookingByReference,
   getSettings,
   insertInboundMessage,
   listProperties,
   type BookingRow,
 } from "../db/repo";
+import { linkMail } from "./message-link";
 
 // ---------------------------------------------------------------------------
 // Parsing MIME
@@ -376,13 +375,24 @@ export function extractMessageIds(value: string | null | undefined): string[] {
  *  vérifie l'alignement avec le From) ; un dkim=pass seul ne vaut que si le domaine qui signe est
  *  celui du From (ou son parent) : l'attaquant qui signe avec son propre domaine ne passe pas. */
 export function authenticatesSender(authResults: string, from: string): boolean {
-  if (/\bdmarc=pass\b/i.test(authResults)) return true;
-  const fromDomain = from.split("@")[1]?.toLowerCase() ?? "";
+  const fromDomain = from.split("@")[1]?.trim().toLowerCase() ?? "";
   if (!fromDomain) return false;
-  for (const part of authResults.split(";")) {
-    if (!/\bdkim=pass\b/i.test(part)) continue;
-    const d = /\bheader\.(?:d|i)=@?(?:[^@\s;]*@)?([a-z0-9.-]+)/i.exec(part)?.[1]?.toLowerCase();
-    if (d && (fromDomain === d || fromDomain.endsWith(`.${d}`))) return true;
+  // Les commentaires « (…) » et les chaînes entre guillemets sont du texte libre que l'expéditeur
+  // peut influencer (ex. smtp.mailfrom="dmarc=pass"@attaquant) : on les retire avant de lire.
+  let clean = authResults.replace(/"(?:[^"\\]|\\.)*"/g, '""');
+  for (let i = 0; i < 5; i += 1) clean = clean.replace(/\([^()]*\)/g, " ");
+  const parts = clean.split(";");
+  parts.shift(); // authserv-id
+  for (const raw of parts) {
+    const part = raw.trim();
+    // un résultat de méthode commence par « méthode=pass » : rien d'autre ne compte
+    if (/^dmarc=pass(?:\s|$)/i.test(part)) {
+      const hf = /\bheader\.from=@?([a-z0-9.-]+)/i.exec(part)?.[1]?.toLowerCase();
+      if (hf && hf === fromDomain) return true;
+    } else if (/^dkim=pass(?:\s|$)/i.test(part)) {
+      const d = /\bheader\.(?:d|i)=@?(?:[^@\s;]*@)?([a-z0-9.-]+)/i.exec(part)?.[1]?.toLowerCase();
+      if (d && (fromDomain === d || fromDomain.endsWith(`.${d}`))) return true;
+    }
   }
   return false;
 }
@@ -485,21 +495,10 @@ export async function processInboundEmail(
     properties.find((p) => (p.contactEmail ?? "").toLowerCase() === (parsed.to ?? "").toLowerCase()) ?? properties[0];
   const propertyId = property?.id ?? 1;
 
-  // rattachement : référence dans sujet/corps, sinon client par email
-  let booking: BookingRow | null = null;
-  const refMatch = /\b([A-Z]{2}-\d{4}-\d{3,})\b/.exec(`${parsed.subject} ${parsed.textBody}`);
-  if (refMatch) booking = await getBookingByReference(db, refMatch[1]!);
-  let guestId: number | null = booking?.guestId ?? null;
-  if (!booking && parsed.from) {
-    const guest = await db
-      .prepare("SELECT id FROM guests WHERE lower(email) = ?1")
-      .bind(parsed.from.toLowerCase())
-      .first<{ id: number }>();
-    if (guest) {
-      guestId = guest.id;
-      booking = (await bookingsForGuest(db, guest.id))[0] ?? null;
-    }
-  }
+  // rattachement : la même fonction que la relève IMAP (choix manuels, adresses de l'équipe, référence, fil, adresse)
+  const link = await linkMail(db, parsed, todayInZone(now));
+  const booking: BookingRow | null = link.booking;
+  const guestId: number | null = link.guestId;
 
   // insertion (idempotente par Message-ID)
   const id = await insertInboundMessage(db, {
@@ -514,6 +513,8 @@ export async function processInboundEmail(
     bookingId: booking?.id ?? null,
     guestId,
     receivedAt: nowSql,
+    senderAuth: parsed.senderAuthenticated === true,
+    linkManual: link.manual === true,
   });
   if (id === null) {
     return { stored: false, duplicate: true, id: null, propertyId, bookingRef: booking?.reference ?? null, autoReplied: false, forwarded: false };
