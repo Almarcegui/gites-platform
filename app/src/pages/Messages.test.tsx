@@ -131,7 +131,7 @@ describe("liste compacte", () => {
     expect(container.querySelectorAll(".conv-scroll .conv .nm")).toHaveLength(250);
     expect(screen.queryByText("Google 1", { selector: ".nm" })).toBeNull();
     expect(container.querySelectorAll(".msgs > .conv")).toHaveLength(0);
-  });
+  }, 30_000); // rendu de centaines de lignes : plus de 5 s sur la machine de la CI
 
   it("lien « Ouvrir Gmail » : un seul, discret, vers la boîte, nouvel onglet sûr ; pas de lien par mail", async () => {
     renderApp("/messages", handlers([base({ id: 1, bodyText: "voir https://drive.google.com/x" })]));

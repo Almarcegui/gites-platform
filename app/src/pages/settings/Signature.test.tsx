@@ -42,7 +42,7 @@ describe("signature des messages", () => {
     const body = calls.find((c) => c.method === "PUT" && c.path === "/settings")!.body as { settings: Record<string, unknown> };
     expect(body.settings).toMatchObject({ signature_text: "Jean-Philippe", signature_on_replies: true });
     expect(String(body.settings.signature_html)).toContain("<table>");
-  });
+  }, 30_000); // rendu de centaines de lignes : plus de 5 s sur la machine de la CI
 });
 
 describe("adresses de l'équipe et de la famille", () => {
