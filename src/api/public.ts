@@ -12,7 +12,6 @@ import { checkoutTimeFor } from "../core/checkout-time";
 import {
   audit,
   bookingsInWindow,
-  cancelBooking,
   countDirectBookingPressure,
   createBookingAtomic,
   findPaymentBySession,
@@ -48,7 +47,9 @@ import {
   handlePaymentSuccess,
   merciUrl,
   MIN_CHECKOUT_CENTS,
+  PaymentInFlightError,
   quoteFromContext,
+  releaseGuestHold,
   sendConfirmation,
   startPayment,
   voucherUrl,
@@ -108,6 +109,9 @@ const SUGGEST_DAYS_BEFORE = 7;
 const SUGGEST_DAYS_AFTER = 45;
 /** Nombre de plages proposées — « une ou deux », pas une liste à trier. */
 const SUGGEST_MAX = 2;
+
+/** Annulations de hold par IP et par heure (anti-abus de la route Annuler). */
+const MAX_HOLD_CANCELS_PER_HOUR = 20;
 
 /** Sessions de paiement tolérées sur UNE même option (issue #68).
  *
@@ -852,7 +856,11 @@ export function registerPublicRoutes(router: Router): void {
           );
         }
       }
-      await cancelBooking(db, own.id, "hold_replaced");
+      // Même libération que le bouton Annuler : les sessions de paiement de
+      // l'ancien hold sont fermées chez Stripe avant que le créneau ne soit rendu.
+      if ((await releaseGuestHold(db, env, own, "hold_replaced")) === "paid") {
+        return apiError(409, "une réservation est déjà en cours de règlement pour ce navigateur", { code: "hold_paid" });
+      }
       await audit(db, "public", "booking.hold_released", `booking:${own.id}`, {
         reference: own.reference, reason: sameStay ? "devis_modifie" : "sejour_modifie",
       });
@@ -1025,10 +1033,52 @@ export function registerPublicRoutes(router: Router): void {
         children: booking.children,
         amountDueCents: booking.depositCents,
         holdExpiresAt: booking.holdExpiresAt,
+        guestEmail: booking.guestEmail ?? null,
         now,
         quote,
       },
     });
+  });
+
+  /** Annulation par le client de la réservation en attente DE SON NAVIGATEUR.
+   *  Seul le cookie signé désigne la réservation : jamais de référence en
+   *  paramètre, donc personne ne libère le créneau d'un autre. Idempotente
+   *  (rien à annuler = succès) ; plafonnée par IP comme les autres routes. */
+  router.post("/api/public/hold/cancel", async (req, env) => {
+    const db = env.DB;
+    const reference = await readHoldReference(env, req);
+    if (!reference) return json({ ok: true, cancelled: false }, 200, clearHoldCookie(env));
+    const ip = req.headers.get("cf-connecting-ip");
+    const claim = await db
+      .prepare(
+        `INSERT INTO audit_log (actor, action, entity, detail)
+         SELECT 'public', 'booking.hold.cancel_try', ?1, '{}'
+          WHERE (SELECT COUNT(*) FROM audit_log WHERE action = 'booking.hold.cancel_try' AND entity = ?1
+                   AND created_at > datetime('now', '-1 hour')) < ?2`,
+      )
+      .bind(`ip:${ip ?? "inconnue"}`, MAX_HOLD_CANCELS_PER_HOUR)
+      .run();
+    if ((claim.meta?.changes ?? 0) === 0) {
+      return apiError(429, "trop de tentatives, réessayez dans un moment", { code: "cancel_rate_limited" });
+    }
+    const booking = await getBookingByReference(db, reference);
+    if (!booking || booking.source !== "direct") return json({ ok: true, cancelled: false }, 200, clearHoldCookie(env));
+    let outcome: "released" | "already" | "paid";
+    try {
+      outcome = await releaseGuestHold(db, env, booking, "hold_cancelled");
+    } catch (e) {
+      if (e instanceof PaymentInFlightError) {
+        return apiError(409, "Paiement en cours, réessayez dans une minute.", { code: "payment_in_flight" });
+      }
+      throw e;
+    }
+    if (outcome === "paid") {
+      return apiError(409, "Cette réservation est déjà réglée, elle ne peut plus être annulée ici.", { code: "hold_paid" });
+    }
+    if (outcome === "released") {
+      await audit(db, "public", "booking.hold.cancelled_by_guest", `booking:${booking.id}`, { reference: booking.reference });
+    }
+    return json({ ok: true, cancelled: outcome === "released" }, 200, clearHoldCookie(env));
   });
 
   // --- consultation voucher (référence + email requis) -----------------------

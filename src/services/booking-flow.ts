@@ -161,6 +161,38 @@ export async function voidPendingSessions(
   }
 }
 
+/** Libère le créneau d'une réservation en attente (hold) à la demande du client
+ *  ou parce qu'il en ouvre une autre : ferme les sessions de paiement chez
+ *  Stripe, puis passe la réservation à `cancelled` (même état que l'expiration
+ *  automatique) — le calendrier la rend aussitôt.
+ *
+ *  - `"released"` : libérée à l'instant ;
+ *  - `"already"` : déjà annulée ou expirée (idempotence) ;
+ *  - `"paid"` : un paiement a abouti, rien n'est libéré ;
+ *  - lève `PaymentInFlightError` si un paiement est parti chez la banque. */
+export async function releaseGuestHold(
+  db: D1Database,
+  env: Env,
+  booking: { id: number; status: string },
+  reason: "hold_cancelled" | "hold_replaced",
+): Promise<"released" | "already" | "paid"> {
+  if (booking.status === "cancelled") return "already";
+  if (booking.status !== "pending") return "paid";
+  if ((await listPayments(db, { bookingId: booking.id })).some((x) => x.status === "succeeded")) return "paid";
+  await voidPendingSessions(db, env, booking.id, "public");
+  const now = sqlNow();
+  const res = await db
+    .prepare(
+      `UPDATE bookings SET status = 'cancelled', cancelled_at = ?3, cancel_reason = ?2, updated_at = ?3
+        WHERE id = ?1 AND status = 'pending'`,
+    )
+    .bind(booking.id, reason, now)
+    .run();
+  if (res.meta.changes === 1) return "released";
+  const row = await db.prepare("SELECT status FROM bookings WHERE id = ?1").bind(booking.id).first<{ status: string }>();
+  return row?.status === "cancelled" ? "already" : "paid";
+}
+
 /** Crée un paiement en attente + une session Stripe Checkout (ou stub) et
  *  mémorise l'id de session pour la réconciliation webhook.
  *
