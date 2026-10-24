@@ -196,7 +196,7 @@ export function buildConfirmationEmail(ctx: ConfirmationContext): ConfirmationMa
     solde: m(balance),
     heure_arrivee: settings.checkinTime,
     heure_depart: departTime,
-    signature: propertyName,
+    signature: settings.signatureText.trim() || propertyName,
     reference: b.reference,
   });
 

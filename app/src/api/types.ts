@@ -261,6 +261,10 @@ export interface Message {
   attachments?: { name: string; size: number | null }[];
   /** Mail qui se réclame de l'adresse des gîtes sans que Gmail l'atteste : à ne pas croire. */
   spoofed?: boolean;
+  /** Liens du mail (calculés par le serveur) : domaine réel, adresse, droit de l'ouvrir. */
+  links?: { url: string; host: string; openable: boolean }[];
+  /** Gmail atteste l'expéditeur et le message n'est pas usurpé : « Ouvrir » est permis. */
+  linksOpenable?: boolean;
 }
 
 export interface GuestRegisterInfo {

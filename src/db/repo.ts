@@ -461,6 +461,12 @@ export interface PropertySettings {
   /** Délai minimum de réservation en ligne, en jours avant l'arrivée (demande
    *  n° 15). 0 = aucun. Le back-office peut passer outre, avec avertissement. */
   minLeadDays: number;
+  /** Signature des messages envoyés depuis le back-office : texte brut (variable {signature}). */
+  signatureText: string;
+  /** Même signature en HTML, nettoyée à l'enregistrement (src/core/signature.ts). */
+  signatureHtml: string;
+  /** Ajouter la signature à toute réponse ou tout message envoyé depuis le back-office. */
+  signatureOnReplies: boolean;
 }
 
 const SETTINGS_DEFAULTS: PropertySettings = {
@@ -488,6 +494,9 @@ const SETTINGS_DEFAULTS: PropertySettings = {
   cancellationIntroNl: "",
   abandonIntroFr: "",
   minLeadDays: 0,
+  signatureText: "",
+  signatureHtml: "",
+  signatureOnReplies: false,
 };
 
 export async function getSettings(db: D1Database, propertyId: number): Promise<PropertySettings> {
@@ -525,6 +534,9 @@ export async function getSettings(db: D1Database, propertyId: number): Promise<P
     cancellationIntroNl: text("cancellation_intro_nl", D.cancellationIntroNl),
     abandonIntroFr: text("abandon_intro_fr", D.abandonIntroFr),
     minLeadDays: normalizeLeadDays(kv.get("min_lead_days") ?? D.minLeadDays),
+    signatureText: text("signature_text", D.signatureText),
+    signatureHtml: text("signature_html", D.signatureHtml),
+    signatureOnReplies: bool("signature_on_replies", D.signatureOnReplies),
   };
 }
 
@@ -2484,6 +2496,10 @@ export interface MessageRow {
   attachments: { name: string; size: number | null }[];
   /** Le mail prétend venir de l'adresse des gîtes sans que le serveur de réception l'atteste. */
   spoofed: boolean;
+  /** Gmail atteste l'expéditeur (DMARC ou DKIM pass) : seuls ces mails ont des liens ouvrables. */
+  senderAuth: boolean;
+  /** Rattachement choisi à la main : il prime sur l'automatique. */
+  linkManual: boolean;
 }
 
 function parseAttachments(raw: unknown): { name: string; size: number | null }[] {
@@ -2517,6 +2533,8 @@ function mapMessage(r: Raw): MessageRow {
     refs: strOrNull(r.refs),
     attachments: parseAttachments(r.attachments),
     spoofed: num(r.spoofed) === 1,
+    senderAuth: num(r.sender_auth) === 1,
+    linkManual: num(r.link_manual) === 1,
   };
 }
 
@@ -2560,6 +2578,9 @@ export async function getThread(
     binds.push(ref.guestId);
     clauses.push(`e.guest_id = ?${binds.length}`);
   }
+  // Fil « sans réservation » : par adresse, et seulement les messages non rattachés (les
+  // autres échanges de la même adresse appartiennent au fil de leur réservation).
+  const byEmail = !!ref.email && clauses.length === 0;
   if (ref.email) {
     binds.push(ref.email.toLowerCase());
     clauses.push(`lower(e.from_email) = ?${binds.length}`);
@@ -2567,7 +2588,7 @@ export async function getThread(
     clauses.push(`lower(e.to_email) = ?${binds.length}`);
   }
   if (clauses.length === 0) return [];
-  const sql = `${MESSAGE_JOIN} WHERE ${clauses.join(" OR ")} ORDER BY e.id ASC LIMIT 300`;
+  const sql = `${MESSAGE_JOIN} WHERE (${clauses.join(" OR ")})${byEmail ? " AND e.booking_id IS NULL" : ""} ORDER BY e.id ASC LIMIT 300`;
   const { results } = await db.prepare(sql).bind(...binds).all();
   return (results as Raw[]).map(mapMessage);
 }
@@ -2590,6 +2611,10 @@ export interface InboundMessageInput {
   imapUid?: number | null;
   attachments?: { name: string; size: number | null }[];
   spoofed?: boolean;
+  /** Gmail atteste l'expéditeur (DMARC ou DKIM pass). */
+  senderAuth?: boolean;
+  /** Rattachement hérité d'un choix manuel (fil ou adresse) : il reste prioritaire. */
+  linkManual?: boolean;
 }
 
 /** Insère un message entrant. Retourne null si doublon (Message-ID). */
@@ -2599,9 +2624,9 @@ export async function insertInboundMessage(db: D1Database, m: InboundMessageInpu
       .prepare(
         `INSERT INTO messages (property_id, message_id, direction, channel, from_email, from_name,
                                to_email, subject, body_text, booking_id, guest_id, received_at,
-                               in_reply_to, refs, imap_uid, attachments, spoofed)
+                               in_reply_to, refs, imap_uid, attachments, spoofed, sender_auth, link_manual)
          VALUES (?1, ?2, 'in', ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, COALESCE(?11, datetime('now')),
-                 ?12, ?13, ?14, ?15, ?16)`,
+                 ?12, ?13, ?14, ?15, ?16, ?17, ?18)`,
       )
       .bind(
         m.propertyId, m.messageId ?? null, m.channel, m.fromEmail, m.fromName ?? null,
@@ -2610,6 +2635,8 @@ export async function insertInboundMessage(db: D1Database, m: InboundMessageInpu
         m.inReplyTo ?? null, m.references ?? null, m.imapUid ?? null,
         m.attachments && m.attachments.length ? JSON.stringify(m.attachments) : null,
         m.spoofed ? 1 : 0,
+        m.senderAuth ? 1 : 0,
+        m.linkManual ? 1 : 0,
       )
       .run();
     return res.meta.last_row_id;
@@ -2656,6 +2683,24 @@ export async function insertOutboundMessage(
 
 export async function markMessage(db: D1Database, id: number, status: "nouveau" | "traité"): Promise<void> {
   await db.prepare("UPDATE messages SET status = ?2 WHERE id = ?1").bind(id, status).run();
+}
+
+/** Rattache (bookingId) ou détache (null) tous les messages donnés, à la main : le choix prime
+ *  ensuite sur le rattachement automatique (link_manual). Le client suit la réservation. */
+export async function setMessagesLink(
+  db: D1Database,
+  ids: number[],
+  link: { bookingId: number; guestId: number | null; propertyId: number | null } | null,
+): Promise<void> {
+  if (ids.length === 0) return;
+  const stmts = ids.map((id) =>
+    link
+      ? db
+          .prepare("UPDATE messages SET booking_id = ?2, guest_id = ?3, property_id = COALESCE(?4, property_id), link_manual = 1 WHERE id = ?1")
+          .bind(id, link.bookingId, link.guestId, link.propertyId)
+      : db.prepare("UPDATE messages SET booking_id = NULL, guest_id = NULL, link_manual = 1 WHERE id = ?1").bind(id),
+  );
+  await db.batch(stmts);
 }
 
 export async function getMessage(db: D1Database, id: number): Promise<MessageRow | null> {

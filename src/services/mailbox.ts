@@ -122,15 +122,73 @@ export function closestBooking(bookings: BookingRow[], today: string): BookingRo
 export interface MailLink {
   booking: BookingRow | null;
   guestId: number | null;
-  via: "reference" | "fil" | "adresse" | null;
+  via: "manuel" | "reference" | "fil" | "adresse" | null;
+  /** Le choix vient d'un rattachement fait à la main (le message hérite du drapeau). */
+  manual?: boolean;
 }
 
-/** Rattache un mail : référence PM-2026-001 > réponse à l'un de nos messages > adresse de l'expéditeur. */
+/** Adresses de l'équipe et de la famille : un mail venant d'elles n'est jamais rattaché par
+ *  son expéditeur (seulement par référence explicite, ou par fil de réponse). Réglage global. */
+export const TEAM_ADDRESSES_KEY = "messagerie_team_addresses";
+
+/** « une adresse par ligne » (virgules et points-virgules tolérés) → liste propre, minuscules, sans doublon. */
+export function parseTeamAddresses(raw: string): string[] {
+  const out: string[] = [];
+  for (const part of raw.split(/[\r\n,;]+/)) {
+    const a = bareAddress(part.trim());
+    if (/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(a) && !out.includes(a)) out.push(a);
+  }
+  return out.slice(0, 200);
+}
+
+export async function getTeamAddresses(db: D1Database): Promise<string[]> {
+  return parseTeamAddresses((await getSetting(db, TEAM_ADDRESSES_KEY)) ?? "");
+}
+
+/** Rattachement choisi à la main qui s'applique à ce mail : d'abord par fil, puis par adresse. */
+async function manualLink(db: D1Database, parsed: ParsedEmail, byAddress: boolean): Promise<MailLink | null> {
+  const ids = [...extractMessageIds(parsed.inReplyTo), ...extractMessageIds(parsed.references)].slice(0, 25);
+  let row: { booking_id: number | null; guest_id: number | null } | null = null;
+  if (ids.length) {
+    row = await db
+      .prepare(
+        `SELECT booking_id, guest_id FROM messages
+          WHERE link_manual = 1 AND message_id IN (${ids.map((_, i) => `?${i + 1}`).join(",")})
+          ORDER BY id DESC LIMIT 1`,
+      )
+      .bind(...ids)
+      .first<{ booking_id: number | null; guest_id: number | null }>();
+  }
+  if (!row && byAddress && parsed.from) {
+    row = await db
+      .prepare(
+        `SELECT booking_id, guest_id FROM messages
+          WHERE link_manual = 1 AND (lower(from_email) = ?1 OR lower(to_email) = ?1)
+          ORDER BY id DESC LIMIT 1`,
+      )
+      .bind(parsed.from.toLowerCase())
+      .first<{ booking_id: number | null; guest_id: number | null }>();
+  }
+  if (!row) return null;
+  const booking = row.booking_id ? await getBooking(db, row.booking_id) : null;
+  return { booking, guestId: booking?.guestId ?? null, via: "manuel", manual: true };
+}
+
+/** Rattache un mail. Dans l'ordre : choix manuel sur le fil > référence PM-2026-001 > choix manuel
+ *  sur l'adresse > réponse à l'un de nos messages > adresse de l'expéditeur (sauf adresses de
+ *  l'équipe, jamais rattachées par expéditeur). */
 export async function linkMail(db: D1Database, parsed: ParsedEmail, today: string): Promise<MailLink> {
+  const team = (await getTeamAddresses(db)).includes((parsed.from ?? "").toLowerCase());
+  const byThread = await manualLink(db, parsed, false);
+  if (byThread) return byThread;
   const refMatch = /\b([A-Z]{2}-\d{4}-\d{3,})\b/.exec(`${parsed.subject} ${parsed.textBody}`);
   if (refMatch) {
     const booking = await getBookingByReference(db, refMatch[1]!);
     if (booking) return { booking, guestId: booking.guestId, via: "reference" };
+  }
+  if (!team) {
+    const byAddress = await manualLink(db, parsed, true);
+    if (byAddress) return byAddress;
   }
   const ids = [...extractMessageIds(parsed.inReplyTo), ...extractMessageIds(parsed.references)].slice(0, 25);
   if (ids.length) {
@@ -148,7 +206,7 @@ export async function linkMail(db: D1Database, parsed: ParsedEmail, today: strin
       return { booking, guestId: booking?.guestId ?? row.guest_id, via: "fil" };
     }
   }
-  if (parsed.from) {
+  if (parsed.from && !team) {
     const guest = await db
       .prepare("SELECT id FROM guests WHERE lower(email) = ?1 ORDER BY id LIMIT 1")
       .bind(parsed.from.toLowerCase())
@@ -219,6 +277,8 @@ export async function ingestMail(
     imapUid: mail.uid,
     attachments: parsed.attachments ?? [],
     spoofed: isSpoofed(parsed, own),
+    senderAuth: parsed.senderAuthenticated === true,
+    linkManual: link.manual === true,
   });
   return { inserted: id !== null, linked: link.booking != null };
 }

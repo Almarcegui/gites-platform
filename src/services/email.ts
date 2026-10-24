@@ -66,6 +66,15 @@ export function refSubject(reference: string, text: string): string {
   return `[${reference}] ${text}`.replace(/[\r\n]+/g, " ");
 }
 
+/** Objet d'une réponse depuis Messages : nettoyé (jamais de saut de ligne ni de caractère de
+ *  contrôle), et, si le fil est rattaché à une réservation dont la référence n'y figure pas,
+ *  « [PM-2026-012] » en tête. Jamais le nom du client. */
+export function replySubject(subject: string, reference: string | null | undefined): string {
+  const clean = subject.replace(/[\u0000-\u001f\u007f]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 200);
+  if (!reference || clean.includes(reference)) return clean;
+  return refSubject(reference, clean);
+}
+
 export interface EmailToQueue {
   bookingId?: number | null;
   to: string;
@@ -405,6 +414,8 @@ export function buildCancellationEmail(
   property: PropertyRow,
   plan: { par: "locataire" | "proprietaire"; keptCents: number; refundCents: number; indemnityCents?: number; forceMajeure?: boolean; sejourEntame?: boolean },
   introRaw?: string,
+  /** Signature du domaine (Réglages › Le domaine) ; vide = le nom du domaine. */
+  signatureText?: string,
 ): { subject: string; bodyText: string } {
   const nl = isNl(b);
   const m = (c: number) => money(c, nl);
@@ -415,7 +426,7 @@ export function buildCancellationEmail(
     prenom: b.guestName?.split(" ")[0] ?? "",
     bien: b.unitName ?? "",
     arrivee: formatDateFr(b.checkin),
-    signature: property.name,
+    signature: signatureText?.trim() || property.name,
     reference: b.reference,
   });
   const stay = nl

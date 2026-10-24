@@ -125,6 +125,7 @@ import {
   listChecklist,
   listMessages,
   markMessage,
+  setMessagesLink,
   setMutualLinks,
   updateUnitPhotos,
   updateSeason,
@@ -142,6 +143,7 @@ import {
   createSession, deleteSession, deleteUserSessions, generatePassword, hashPassword, sessionUser, verifyPassword,
 } from "../services/admin-auth";
 import { getSetting, setSetting } from "../services/settings";
+import { composeOutgoing, sanitizeSignatureHtml } from "../core/signature";
 import { pullBeds24Bookings, pushCalendars, triggerBeds24Push, triggerBeds24PushAll } from "../services/beds24-sync";
 import { beds24Liaison, buildPropertyPlan, createBeds24Property, CreationRefusee } from "../services/beds24-propriete";
 import {
@@ -154,7 +156,7 @@ import {
   type QuoteBody,
 } from "../services/booking-flow";
 import { allocateRefund, dropPreparedRefunds, executeRefunds, planCancellation, planExceptionalRefund, prepareRefunds, replayRefund, unsettledRefunds } from "../services/annulation";
-import { buildBalanceReminderEmail, buildCancellationEmail, buildPaymentLinkEmail, isNl, queueEmail, queueEmailDetailed } from "../services/email";
+import { buildBalanceReminderEmail, buildCancellationEmail, buildPaymentLinkEmail, isNl, queueEmail, queueEmailDetailed, replySubject } from "../services/email";
 import { buildConfirmationPdf, confirmationFileName, loadConfirmationPdfContext } from "../services/confirmation-pdf";
 import { importElloha } from "../services/elloha-import";
 import { importAgendaGoogle, MAX_AGENDA_EVENTS } from "../services/agenda-import";
@@ -165,7 +167,8 @@ import {
   createServiceKey, listServiceKeys, resolveServiceKey, revokeServiceKey, validServiceKeyName,
 } from "../services/service-keys";
 import { extractMessageIds, processInboundEmail, type ParsedEmail } from "../services/inbound-email";
-import { getMailboxState, mailboxConfigured, ownAddresses, pullMailbox, NO_SOCKET_MESSAGE } from "../services/mailbox";
+import { getMailboxState, getTeamAddresses, mailboxConfigured, ownAddresses, parseTeamAddresses, pullMailbox, TEAM_ADDRESSES_KEY, NO_SOCKET_MESSAGE } from "../services/mailbox";
+import { linksOf } from "../core/links";
 import { syncFeed } from "../services/ical";
 import { countDirectBookings, countSearchStages, listSearchLog } from "../services/search-log";
 import { registerLot2AdminRoutes } from "./admin-lot2";
@@ -2139,7 +2142,7 @@ export function registerAdminRoutes(router: Router): void {
         const property = await getProperty(env.DB, booking.propertyId);
         if (property) {
           const settings = await getSettings(env.DB, booking.propertyId);
-          const email = buildCancellationEmail(booking, property, plan, isNl(booking) ? settings.cancellationIntroNl : settings.cancellationIntroFr);
+          const email = buildCancellationEmail(booking, property, plan, isNl(booking) ? settings.cancellationIntroNl : settings.cancellationIntroFr, settings.signatureText);
           mail = await queueEmail(env.DB, env, { bookingId: id, to: booking.guestEmail, subject: email.subject, bodyText: email.bodyText, kind: "cancellation" });
         }
       }
@@ -2954,6 +2957,7 @@ export function registerAdminRoutes(router: Router): void {
     "cancellation_intro_fr", "cancellation_intro_nl",
     "abandon_intro_fr",
     "min_lead_days",
+    "signature_text", "signature_html", "signature_on_replies",
   ]);
 
   // Bornes des réglages numériques (celles des champs de Réglages › Domaine).
@@ -3004,6 +3008,17 @@ export function registerAdminRoutes(router: Router): void {
       // Départ le dimanche : vide = même heure que les autres jours.
       if (key === "checkout_time_sunday" && String(value ?? "").trim() !== "" && !/^([01]\d|2[0-3]):[0-5]\d$/.test(String(value).trim())) {
         return apiError(400, "départ le dimanche : heure au format HH:MM, ou vide pour la même heure que les autres jours");
+      }
+      if (key === "signature_text" && String(value ?? "").length > 2000) return apiError(400, "signature (texte) : 2 000 caractères au plus");
+      if (key === "signature_html" && String(value ?? "").length > 20000) return apiError(400, "signature (HTML) : 20 000 caractères au plus");
+      if (key === "signature_on_replies") {
+        entries[key] = value === true || value === "true" ? "true" : "false";
+        continue;
+      }
+      // La signature HTML est saisie par l'admin : stockée nettoyée (liste blanche), jamais telle quelle.
+      if (key === "signature_html") {
+        entries[key] = sanitizeSignatureHtml(String(value ?? ""));
+        continue;
       }
       entries[key] = key === "checkout_time_sunday" ? String(value ?? "").trim() : String(value);
     }
@@ -3227,12 +3242,42 @@ export function registerAdminRoutes(router: Router): void {
       guestId: message.guestId,
       email: message.bookingId || message.guestId ? null : message.direction === "in" ? message.fromEmail : message.toEmail,
     });
-    return json({ message, thread });
+    // Liens du message : la liste, et le droit de les ouvrir (expéditeur attesté par Gmail)
+    const withLinks = (m: typeof message) => ({ ...m, ...linksOf(m) });
+    return json({ message: withLinks(message), thread: thread.map(withLinks) });
   }));
 
+  /** « traité » / « à répondre », et rattachement manuel du fil entier à une réservation
+   *  (`bookingId` nombre) ou détachement (`bookingId: null`). Le choix prime ensuite sur
+   *  le rattachement automatique des relèves suivantes. */
   router.patch("/api/admin/messages/:id", guard(async (req, env, p) => {
     const id = intParam(p.id, 0);
-    const body = await readJson<{ status?: string }>(req);
+    const body = await readJson<{ status?: string; bookingId?: number | null }>(req);
+    if (body && "bookingId" in body) {
+      const message = await getMessage(env.DB, id);
+      if (!message) return apiError(404, "message inconnu");
+      if (message.channel === "beds24") {
+        return apiError(400, "Un message d'un canal (Airbnb, Booking, Vrbo) reste lié à sa réservation : on ne le déplace pas.");
+      }
+      let link: { bookingId: number; guestId: number | null; propertyId: number | null } | null = null;
+      if (body.bookingId != null) {
+        const bookingId = Number(body.bookingId);
+        const booking = Number.isInteger(bookingId) && bookingId > 0 ? await getBooking(env.DB, bookingId) : null;
+        if (!booking) return apiError(404, "réservation inconnue");
+        link = { bookingId: booking.id, guestId: booking.guestId, propertyId: booking.propertyId ?? null };
+      }
+      const thread = await getThread(env.DB, {
+        bookingId: message.bookingId,
+        guestId: message.guestId,
+        email: message.bookingId || message.guestId ? null : message.direction === "in" ? message.fromEmail : message.toEmail,
+      });
+      const ids = [...new Set([message.id, ...thread.filter((m) => m.channel !== "beds24").map((m) => m.id)])];
+      await setMessagesLink(env.DB, ids, link);
+      await audit(env.DB, "admin", link ? "message.attach" : "message.detach", `message:${id}`, {
+        messages: ids.length, from: message.bookingId, to: link?.bookingId ?? null, par: currentUser(req),
+      });
+      return json({ ok: true, messages: ids.length });
+    }
     const status = body?.status === "traité" ? "traité" : "nouveau";
     await markMessage(env.DB, id, status);
     return json({ ok: true });
@@ -3250,6 +3295,8 @@ export function registerAdminRoutes(router: Router): void {
   ): Promise<{ id: number; delivery: string }> {
     const db = env.DB;
     const property = await getProperty(db, opts.propertyId);
+    // Signature du domaine : ajoutée à toute réponse ou tout message du back-office si le réglage le demande
+    const composed = composeOutgoing(opts.body, await getSettings(db, opts.propertyId), env.PUBLIC_BASE_URL);
     let delivery = "aucune";
     let sentMessageId: string | null = null;
     if (opts.toEmail && /@/.test(opts.toEmail)) {
@@ -3259,7 +3306,8 @@ export function registerAdminRoutes(router: Router): void {
         bookingId: opts.bookingId,
         to: opts.toEmail,
         subject: opts.subject,
-        bodyText: opts.body,
+        bodyText: composed.text,
+        bodyHtml: composed.html,
         kind: "reply",
         inReplyTo: opts.thread?.inReplyTo ?? null,
         references: opts.thread?.references ?? null,
@@ -3290,7 +3338,7 @@ export function registerAdminRoutes(router: Router): void {
     const id = intParam(p.id, 0);
     const original = await getMessage(env.DB, id);
     if (!original) return apiError(404, "message inconnu");
-    const body = await readJson<{ body?: string }>(req);
+    const body = await readJson<{ body?: string; subject?: string }>(req);
     const text = String(body?.body ?? "").trim();
     if (text.length < 2) return apiError(400, "réponse vide");
     // Message d'un canal (Airbnb, Booking…) : la réponse repart par Beds24, sur
@@ -3325,7 +3373,10 @@ export function registerAdminRoutes(router: Router): void {
       bookingId: original.bookingId,
       guestId: original.guestId,
       toEmail,
-      subject: original.subject.startsWith("Re:") ? original.subject : `Re: ${original.subject}`,
+      subject: replySubject(
+        String(body?.subject ?? "").trim() || (original.subject.startsWith("Re:") ? original.subject : `Re: ${original.subject}`),
+        original.bookingReference,
+      ),
       body: text,
       thread,
     });
@@ -3341,7 +3392,21 @@ export function registerAdminRoutes(router: Router): void {
       supported: typeof env.IMAP_FETCH === "function",
       note: mailboxConfigured(env) && !env.IMAP_FETCH ? NO_SOCKET_MESSAGE : null,
       state: await getMailboxState(env.DB),
+      // Adresse de la boîte (lien « Ouvrir Gmail »), à défaut l'adresse de contact du domaine
+      address: (env.IMAP_USER ?? "").trim() || (await listProperties(env.DB)).map((x) => (x.contactEmail ?? "").trim()).find((a) => /^[^\s@]+@[^\s@]+$/.test(a)) || null,
+      teamAddresses: await getTeamAddresses(env.DB),
     });
+  }));
+
+  // Adresses de l'équipe et de la famille (réglage global) : jamais rattachées par expéditeur.
+  router.put("/api/admin/mailbox/team", guard(async (req, env) => {
+    const body = await readJson<{ addresses?: unknown }>(req);
+    const raw = Array.isArray(body?.addresses) ? body.addresses.map(String).join("\n") : typeof body?.addresses === "string" ? body.addresses : null;
+    if (raw === null) return apiError(400, "addresses attendu (liste, une adresse par ligne)");
+    const list = parseTeamAddresses(raw);
+    await setSetting(env.DB, TEAM_ADDRESSES_KEY, list.join("\n"));
+    await audit(env.DB, "admin", "messagerie.team", undefined, { adresses: list.length, par: currentUser(req) });
+    return json({ ok: true, teamAddresses: list });
   }));
 
   router.post("/api/admin/mailbox/poll", guard(async (_req, env) => {

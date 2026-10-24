@@ -27,7 +27,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useState, type ReactNode } from "react";
 
 import { api, openAdminPdf } from "../api/client";
-import { useBooking, useGuest, useProperties } from "../api/hooks";
+import { useBooking, useGuest, useProperties, useSignature } from "../api/hooks";
 import type { AuditEntry, Booking, BookingDetail, Guest, QuoteResponse } from "../api/types";
 import { ErrorLine, useAction } from "../lib/action";
 import { diffDays, hourLabel, longDate, sqlToBrussels, todayBrussels } from "../lib/dates";
@@ -747,6 +747,7 @@ function LinkDialog({ open, b, balance, onClose }: { open: boolean; b: Booking; 
 function WriteDialog({ open, b, guest, times, onClose }: { open: boolean; b: Booking; guest: Guest | undefined; times: { checkinTime: string; checkoutTime: string; checkoutTimeSunday?: string } | undefined; onClose: () => void }) {
   const { t } = useLingui();
   const { data: properties = [] } = useProperties();
+  const sig = useSignature(b.propertyId);
   const a = useAction();
   const [text, setText] = useState("");
   useEffect(() => {
@@ -764,7 +765,8 @@ function WriteDialog({ open, b, guest, times, onClose }: { open: boolean; b: Boo
     checkinTime: hourLabel(times?.checkinTime ?? "16:00"),
     checkoutTime: hourLabel(times ? checkoutTimeFor(times, b.checkout) : "10:00"),
     balance: balance > 0 && !isChannel(b) ? eur(balance) : null,
-    signature: properties.find((p) => p.id === b.propertyId)?.name ?? "",
+    // Signature du domaine si elle est remplie (Réglages › Le domaine), sinon le nom du domaine
+    signature: sig.data?.text || (properties.find((p) => p.id === b.propertyId)?.name ?? ""),
   };
   const email = b.guestEmail ?? guest?.email;
   return (
@@ -772,7 +774,10 @@ function WriteDialog({ open, b, guest, times, onClose }: { open: boolean; b: Boo
       {open ? <TemplateChips propertyId={b.propertyId} ctx={ctx} onPick={setText} labelId="tpl-w" /> : null}
       <Textarea mt="md" label={t`Votre message`} autosize minRows={8} size="md" value={text} onChange={(e) => setText(e.currentTarget.value)} />
       <div className="send">
-        <p>{email ? t`Le message s'affiche sur la page du client et part par mail à ${email} quand l'envoi des mails est actif.` : t`Pas de mail sur cette réservation : le message s'affichera seulement sur la page du client.`}</p>
+        <p>
+          {email ? t`Le message s'affiche sur la page du client et part par mail à ${email} quand l'envoi des mails est actif.` : t`Pas de mail sur cette réservation : le message s'affichera seulement sur la page du client.`}
+          {email && sig.data?.onReplies && (sig.data.text || sig.data.hasHtml) ? ` ${t`Votre signature est ajoutée au mail.`}` : ""}
+        </p>
         <button
           type="button"
           className="btn pri"
