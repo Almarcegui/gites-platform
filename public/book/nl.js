@@ -81,8 +81,13 @@ export const NL = {
   "La confirmation peut prendre quelques minutes. Retrouvez votre réservation ici :": "De bevestiging kan enkele minuten duren. Uw reservering vindt u hier:",
   "Le blocage de ce créneau est arrivé à son terme et les dates sont de nouveau ouvertes à la réservation. Aucun montant n'a été débité. Vous pouvez relancer une réservation — écrivez-nous ci-dessous si vous préférez qu'on s'en occupe.":
     "De blokkering van deze periode is verlopen en de data zijn opnieuw te boeken. Er is geen bedrag afgeschreven. U kunt een nieuwe reservering starten — schrijf ons hieronder als u liever hebt dat wij het regelen.",
-  "Le blocage de votre créneau a <b>expiré</b> — ces dates sont de nouveau ouvertes à la vente. Relancez une réservation depuis le calendrier.":
-    "De blokkering van uw periode is <b>verlopen</b> — deze data zijn opnieuw te koop. Start een nieuwe reservering vanuit de kalender.",
+  "Le blocage de votre créneau a <b>expiré</b>. Le délai est écoulé, les dates ont été libérées.":
+    "De blokkering van uw periode is <b>verlopen</b>. De termijn is verstreken, de data zijn weer vrijgegeven.",
+  "Réservation en cours": "Reservering in behandeling",
+  "Temps restant :": "Resterende tijd:",
+  "Continuer le paiement": "Betaling voortzetten",
+  "Annuler": "Annuleren",
+  "Impossible de rouvrir le paiement ici. Annulez puis recommencez.": "De betaling kan hier niet worden heropend. Annuleer en begin opnieuw.",
   "Le blocage de votre créneau a expiré.": "De blokkering van uw periode is verlopen.",
   "Le contrôle anti-robot est bloqué par votre navigateur (extension de blocage ?). Autorisez challenges.cloudflare.com, ou contactez-nous : nous réservons pour vous.":
     "De robotcontrole wordt door uw browser geblokkeerd (blokkeringsextensie?). Sta challenges.cloudflare.com toe, of neem contact met ons op: wij reserveren voor u.",

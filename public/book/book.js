@@ -464,6 +464,7 @@ function updateSummary() {
 let searchTimer = null;
 
 function onSelectionChange() {
+  if (document.body.classList.contains("hold-locked")) return; // réservation en cours : dates figées
   updateSummary();
   persistSelection();
   $("bookingPanel").innerHTML = "";
@@ -1051,7 +1052,13 @@ async function submitBooking() {
     try { localStorage.removeItem(storeKey()); } catch { /* au pire la reprise re-proposera les dates */ }
     // Le créneau est bloqué à partir de maintenant : le décompte démarre ici et
     // reste visible si le visiteur revient sur le tunnel (issue #16).
-    rememberHold(res);
+    rememberHold(res, {
+      checkin: SEARCH.checkin,
+      checkout: SEARCH.checkout,
+      unitName: SELECTED?.name,
+      amountCents: res.amountDueCents,
+      email,
+    });
     // Le jeton vient d'être consommé. Depuis le paiement intégré (#26) la page
     // ne navigue plus : un retour au formulaire renverrait un jeton mort, et le
     // visiteur se verrait refuser sans comprendre. On réarme tout de suite.
@@ -1133,11 +1140,13 @@ function clearHold() {
 }
 
 /** Mémorise l'option posée par l'API et lance le décompte. */
-function rememberHold(res) {
+function rememberHold(res, info) {
   if (!res?.holdExpiresAt || !res?.now) return;
   const hold = {
     reference: res.reference,
     checkoutUrl: res.checkoutUrl,
+    // dates, hébergement, montant et e-mail : le bandeau les rappelle
+    info: info || null,
     // converti tout de suite en horloge locale via l'écart au temps serveur
     expiresAtLocal: Date.now() + Math.max(0, sqlToMs(res.holdExpiresAt) - sqlToMs(res.now)),
   };
@@ -1152,8 +1161,10 @@ function startHoldCountdown(hold) {
   bar.hidden = false;
   // Le chiffre qui défile est masqué aux lecteurs d'écran (il serait relu
   // chaque seconde) ; seuls les seuils utiles sont annoncés, dans la zone
-  // vocale de la même région aria-live.
-  bar.innerHTML = `<span id="holdCount" aria-hidden="true"></span><span id="holdSay" class="sr-only"></span>`;
+  // vocale de la même région aria-live. La structure (texte + boutons) est
+  // construite une fois : le tick ne touche que le texte, le focus reste.
+  buildHoldBar(bar, hold);
+  lockForHold(true);
   const count = $("holdCount");
   const say = $("holdSay");
   let lastSaid = null;
@@ -1176,18 +1187,15 @@ function startHoldCountdown(hold) {
     const left = hold.expiresAtLocal - Date.now();
     if (left <= 0) {
       bar.classList.add("expired");
-      count.innerHTML = `⏳ ${t("Le blocage de votre créneau a <b>expiré</b> — ces dates sont de nouveau ouvertes à la vente. Relancez une réservation depuis le calendrier.")}`;
+      count.innerHTML = `⏳ ${t("Le blocage de votre créneau a <b>expiré</b>. Le délai est écoulé, les dates ont été libérées.")}`;
       announce(0);
-      clearHold();
+      holdExpired(bar);
       return;
     }
     const m = Math.floor(left / 60000);
     const s = Math.floor((left % 60000) / 1000);
-    const resume = hold.checkoutUrl ? ` · <a href="${esc(hold.checkoutUrl)}">${t("reprendre le paiement")}</a>` : "";
     bar.classList.remove("expired");
-    count.innerHTML =
-      `⏳ ${t("Créneau bloqué pour vous encore <b>{m} min {s} s</b>", { m, s: String(s).padStart(2, "0") })}` +
-      `${hold.reference ? ` · ${t("réservation {ref}", { ref: esc(hold.reference) })}` : ""}${resume}`;
+    count.innerHTML = holdBarText(hold, `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`);
     announce(m + 1);
     holdTimer = setTimeout(tick, 1000);
   };
@@ -1215,7 +1223,13 @@ async function restoreOwnHold() {
   setPax(hold.adults, hold.children);
   calMonth = selIn.slice(0, 7);
   if (hold.unitSlug) preferredUnit = hold.unitSlug; // rouvre le bon hébergement
-  rememberHold({ reference: hold.reference, holdExpiresAt: hold.holdExpiresAt, now: hold.now });
+  rememberHold({ reference: hold.reference, holdExpiresAt: hold.holdExpiresAt, now: hold.now }, {
+    checkin: hold.checkin,
+    checkout: hold.checkout,
+    unitName: hold.unitName,
+    amountCents: hold.amountDueCents,
+    email: hold.guestEmail,
+  });
   return true;
 }
 
@@ -1227,6 +1241,141 @@ function restoreHold() {
     if (hold.expiresAtLocal > Date.now()) startHoldCountdown(hold);
     else clearHold();
   } catch { /* stockage indisponible */ }
+}
+
+// ---------------------------------------------------------------------------
+// Réservation en cours : verrou du tunnel, « Continuer le paiement », « Annuler »
+//
+// Tant qu'un hold existe pour ce navigateur, dates, hébergement, personnes et
+// options ne bougent plus : changer de dates laissait l'ancien créneau bloqué
+// sans moyen de l'annuler. Le bandeau est le seul point de sortie.
+// ---------------------------------------------------------------------------
+
+function holdBarText(hold, mmss) {
+  const i = hold.info;
+  const what = i?.checkin && i?.checkout
+    ? [
+        t("du {du} au {au}", { du: dfr(i.checkin), au: dfr(i.checkout) }),
+        i.unitName ? esc(i.unitName) : "",
+        Number.isFinite(i.amountCents) ? eur(i.amountCents) : "",
+      ].filter(Boolean).join(", ")
+    : hold.reference ? t("réservation {ref}", { ref: esc(hold.reference) }) : "";
+  return `⏳ ${t("Réservation en cours")}${what ? ` : ${what}` : ""}. ${t("Temps restant :")} <b>${mmss}</b>`;
+}
+
+function buildHoldBar(bar, hold) {
+  bar.classList.remove("expired");
+  bar.innerHTML =
+    `<span class="holdinfo"><span id="holdCount" aria-hidden="true"></span><span id="holdSay" class="sr-only"></span></span>` +
+    `<span class="holdactions">` +
+    `<button type="button" class="btn" id="holdResume">${t("Continuer le paiement")}</button>` +
+    `<button type="button" class="btn o" id="holdCancel">${t("Annuler")}</button></span>` +
+    `<span id="holdErr" class="holderr" role="alert"></span>`;
+  $("holdResume").addEventListener("click", () => continueHoldPayment(hold));
+  $("holdCancel").addEventListener("click", () => cancelHold());
+  bar.tabIndex = -1;
+  bar.focus({ preventScroll: false });
+}
+
+/** Fige (ou libère) tout ce qui permet de modifier la sélection. */
+function lockForHold(on) {
+  document.body.classList.toggle("hold-locked", on);
+  for (const id of ["offersCard", "searchCard", "results"]) {
+    const el = $(id);
+    if (el) el.inert = on;
+  }
+}
+
+function holdExpired(bar) {
+  clearHold();
+  RESUMED_HOLD = null;
+  lockForHold(false);
+  const actions = bar.querySelector(".holdactions");
+  if (actions) actions.hidden = true;
+  const left = $("bookingPanel");
+  if (left) left.innerHTML = "";
+  SELECTED = null;
+  calCache.clear();
+  setStep(1);
+  renderCalendar();
+  if (selIn && selOut) search();
+}
+
+async function continueHoldPayment(hold) {
+  const err = $("holdErr");
+  err.textContent = "";
+  const card = $("payCard");
+  if (card && !card.hidden && card.childElementCount) {
+    card.scrollIntoView({ behavior: "smooth", block: "start" }); // paiement déjà ouvert sur cette page
+    return;
+  }
+  const btn = $("holdResume");
+  btn.disabled = true;
+  try {
+    const email = hold.info?.email;
+    if (email && hold.reference) {
+      const res = await api(`/api/public/bookings/${encodeURIComponent(hold.reference)}/pay`, { email });
+      if (res.payment?.mode === "element") {
+        let host = $("payCard");
+        if (!host) {
+          host = document.createElement("div");
+          host.className = "card";
+          host.id = "payCard";
+          $("bookingPanel").appendChild(host);
+        }
+        host.hidden = false;
+        await mountPayment(host, {
+          publishableKey: res.payment.publishableKey || (await paymentConfig()).publishableKey,
+          clientSecret: res.payment.clientSecret,
+          returnUrl: res.payment.returnUrl,
+          amountLabel: eur(res.amountCents ?? res.payment.amountCents),
+          title: t("Paiement sécurisé"),
+        });
+        host.scrollIntoView({ behavior: "smooth", block: "start" });
+        return;
+      }
+      if (res.checkoutUrl) { location.href = res.checkoutUrl; return; }
+    }
+    if (hold.checkoutUrl) { location.href = hold.checkoutUrl; return; }
+    err.textContent = t("Impossible de rouvrir le paiement ici. Annulez puis recommencez.");
+  } catch (e) {
+    if (hold.checkoutUrl) { location.href = hold.checkoutUrl; return; }
+    err.textContent = e.message;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function cancelHold() {
+  const err = $("holdErr");
+  err.textContent = "";
+  const btn = $("holdCancel");
+  btn.disabled = true;
+  try {
+    await api("/api/public/hold/cancel", {});
+  } catch (e) {
+    err.textContent = e.message; // ex. « Paiement en cours, réessayez dans une minute. »
+    btn.disabled = false;
+    return;
+  }
+  clearTimeout(holdTimer);
+  clearHold();
+  RESUMED_HOLD = null;
+  $("holdBanner").hidden = true;
+  $("holdBanner").innerHTML = "";
+  lockForHold(false);
+  $("bookingPanel").innerHTML = "";
+  SELECTED = null;
+  QUOTE = null;
+  calCache.clear();
+  setStep(1);
+  updateSummary();
+  renderCalendar();
+  // dates et personnes sont conservées : on relance la recherche, le visiteur
+  // peut les modifier ou reprendre
+  if (selIn && selOut) search();
+  const first = $("searchCard");
+  if (first) first.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 // ---------------------------------------------------------------------------
