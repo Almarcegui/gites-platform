@@ -498,7 +498,9 @@ describe("rateCalendar (calendrier des tarifs par jour)", () => {
     // 01-02/07 : Haute (mer 160 €, jeu 160 €, min 7).
     const days = rateCalendar(SCIERIE, "2026-06-29", "2026-07-03", SEASONS, RULES);
     expect(days).toHaveLength(4);
-    expect(days[0]).toMatchObject({ date: "2026-06-29", priceCents: 12000, seasonName: null, minNights: 2, weekend: false });
+    // 29/06 : nuit à 2, mais un séjour de 3 nuits ou plus touche le 01/07 (min 7) :
+    // valeur prudente d'une arrivée ce jour-là = 7 (décision du 24/10/2026).
+    expect(days[0]).toMatchObject({ date: "2026-06-29", priceCents: 12000, seasonName: null, minNights: 7, weekend: false });
     expect(days[2]).toMatchObject({ date: "2026-07-01", priceCents: 16000, minNights: 7 });
     expect(days[2]?.seasonName).toContain("Haute");
   });
@@ -599,14 +601,16 @@ describe("surcharges par jour (rate_overrides)", () => {
     expect(long.minNights).toBe(5);
   });
 
-  it("un minimum de nuits posé sur une nuit ENJAMBÉE ne bloque pas le séjour (spec § 4)", () => {
-    // Surcharge min 5 sur le mercredi 04/03, arrivée le lundi 02/03 : le moteur
-    // ne lit le min-nuits que de la nuit d'arrivée → séjour de 4 nuits accepté.
+  it("un minimum posé sur une nuit ENJAMBÉE s'applique à tout le séjour (décision du 24/10/2026)", () => {
+    // Surcharge min 5 sur le mercredi 04/03, arrivée le lundi 02/03 pour 4 nuits :
+    // le séjour contient une nuit à 5 minimum → refusé, minimum 5 annoncé.
+    // (Jusqu'au 23/10, seule la nuit d'arrivée comptait — spec § 4 initiale.)
     const q = computeQuote(
       baseRequest({ rateOverrides: [{ unitId: 2, date: "2026-03-04", priceCents: null, minNights: 5 }] }),
     );
-    expect(q.ok).toBe(true);
-    expect(q.minNights).toBe(2);
+    expect(q.ok).toBe(false);
+    expect(q.errors).toContain("min_nights");
+    expect(q.minNights).toBe(5);
   });
 
   it("une surcharge de min-nuits seule ne touche pas au prix", () => {

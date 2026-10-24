@@ -5794,10 +5794,6 @@ msgstr "Nuits incluses"
 msgid "Nuits minimum"
 msgstr "Nuits minimum"
 
-#: src/pages/settings/Tarifs.tsx
-msgid "Nuits minimum à l'arrivée"
-msgstr "Nuits minimum à l'arrivée"
-
 #: src/pages/settings/Stats.tsx
 msgid "Nuits occupées"
 msgstr "Nuits occupées"

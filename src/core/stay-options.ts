@@ -16,7 +16,9 @@ export interface NightOption {
   date: IsoDate;
   /** l'unité (liaisons comprises) est libre cette nuit-là */
   available: boolean;
-  /** minimum de nuits imposé si le séjour COMMENCE cette nuit ;
+  /** minimum de nuits d'un séjour qui COMMENCE cette nuit, nuits suivantes
+   *  comprises (`rateCalendar` le calcule : le plus haut des minimums des nuits
+   *  couvertes, décision du 24/10/2026) ;
    *  null = aucun tarif ne couvre le jour, donc pas de séjour possible */
   minNights: number | null;
   /** jours d'arrivée autorisés (0=dim … 6=sam) ; null = aucune contrainte,
