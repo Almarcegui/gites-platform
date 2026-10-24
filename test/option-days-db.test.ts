@@ -3,7 +3,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { D1Database } from "@cloudflare/workers-types";
 import { createTestDb, type TestDb } from "./helpers/d1";
 import {
-  cancelBooking, claimOptionDays, confirmBookingAtomic, createBookingAtomic, expireStaleHolds, getQuoteContext, takenOptionDays,
+  cancelBooking, claimOptionDays, confirmBookingAtomic, updateBookingStayAtomic, createBookingAtomic, expireStaleHolds, getQuoteContext, takenOptionDays,
   type CreateBookingInput,
 } from "../src/db/repo";
 import { optionDayClaims, quoteFromContext, withOptionDaysCheck } from "../src/services/booking-flow";
@@ -181,5 +181,46 @@ describe("paiement tardif d'un hold expiré", () => {
   it("jours intacts : la confirmation passe sans erreur", async () => {
     const d = await holdWithDay(SCIERIE, "2026-10-24");
     expect(await confirmBookingAtomic(db, d, "2026-06-01 12:10:00")).toBe("confirmed");
+  });
+});
+
+describe("modification d'un séjour : jours et mise à jour dans un seul lot", () => {
+  const patch = (unitId: number, checkin: string, checkout: string) => ({
+    unitId, checkin, checkout, adults: 2, children: 0, totalCents: 1000, depositCents: 500,
+    balanceDueDate: null, quoteJson: "{}", optionsJson: "[]", promoCode: null,
+  });
+  async function confirmedWithDay(unitId: number, day: string) {
+    const c = await createBookingAtomic(db, input(unitId, IN, OUT));
+    if (!c.ok) throw new Error("création");
+    await claimOptionDays(db, c.id, [{ optionId: saunaId, date: day }]);
+    return c.id;
+  }
+  const daysOf = async (id: number) =>
+    (await db.prepare("SELECT date FROM option_days WHERE booking_id = ?1").bind(id).all()).results.map((r: any) => r.date);
+
+  it("jour pris par un autre : tout est refusé, ni les dates ni les anciens jours ne bougent", async () => {
+    const a = await confirmedWithDay(SCIERIE, "2026-10-24");
+    const b = await confirmedWithDay(SCIEUR, "2026-10-23");
+    const r = await updateBookingStayAtomic(db, a, patch(SCIERIE, IN, OUT), undefined, [{ optionId: saunaId, date: "2026-10-23" }]);
+    expect(r).toBe("option_day_taken");
+    expect(await daysOf(a)).toEqual(["2026-10-24"]);
+    expect(await daysOf(b)).toEqual(["2026-10-23"]);
+  });
+
+  it("dates en conflit : les jours ne sont pas touchés", async () => {
+    const a = await confirmedWithDay(SCIERIE, "2026-10-24");
+    await createBookingAtomic(db, input(SCIEUR, "2026-11-10", "2026-11-14"));
+    // le domaine entier bloque les deux maisons : conflit avec la réservation du Scieur
+    const r = await updateBookingStayAtomic(db, a, patch(3, "2026-11-10", "2026-11-14"), undefined, [{ optionId: saunaId, date: "2026-11-13" }]);
+    expect(r).toBe("conflict");
+    expect(await daysOf(a)).toEqual(["2026-10-24"]);
+  });
+
+  it("modification réussie : les jours suivent, un lot vide retire les jours", async () => {
+    const a = await confirmedWithDay(SCIERIE, "2026-10-24");
+    expect(await updateBookingStayAtomic(db, a, patch(SCIERIE, IN, OUT), undefined, [{ optionId: saunaId, date: "2026-10-23" }])).toBe("updated");
+    expect(await daysOf(a)).toEqual(["2026-10-23"]);
+    expect(await updateBookingStayAtomic(db, a, patch(SCIERIE, IN, OUT), undefined, [])).toBe("updated");
+    expect(await daysOf(a)).toEqual([]);
   });
 });

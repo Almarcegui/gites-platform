@@ -1751,7 +1751,7 @@ export interface BookingStayPatch {
   promoCode: string | null;
 }
 
-export type UpdateStayResult = "updated" | "conflict" | "not_modifiable";
+export type UpdateStayResult = "updated" | "conflict" | "not_modifiable" | "option_day_taken";
 
 /** Modifier un séjour (dates ET/OU logement) sans annuler-recréer — issue #73.
  *
@@ -1783,11 +1783,14 @@ export async function updateBookingStayAtomic(
   id: number,
   patch: BookingStayPatch,
   now: string = sqlNow(),
+  /** Jours d'options à (re)poser avec la mise à jour, dans le MÊME lot : les jours ne changent que si la
+   *  mise à jour passe, et un jour pris entre-temps annule tout ("option_day_taken"). undefined = ne pas y toucher. */
+  optionClaims?: { optionId: number; date: string }[],
 ): Promise<UpdateStayResult> {
   if (!isIsoDate(patch.checkin) || !isIsoDate(patch.checkout) || patch.checkin >= patch.checkout) {
     throw new Error(`updateBookingStayAtomic: dates invalides ${patch.checkin} → ${patch.checkout}`);
   }
-  const res = await db
+  const updateStmt = db
     .prepare(
       `UPDATE bookings
           SET unit_id = ?1, checkin = ?3, checkout = ?4, adults = ?6, children = ?7,
@@ -1824,8 +1827,44 @@ export async function updateBookingStayAtomic(
       patch.optionsJson,      // ?12
       patch.promoCode,        // ?13
     )
-    .run();
-  if (res.meta.changes === 1) return "updated";
+    ;
+  let changes: number;
+  if (optionClaims === undefined) {
+    changes = (await updateStmt.run()).meta.changes;
+  } else {
+    // Les instructions sur les jours ne s'exécutent que si la mise à jour a eu lieu (la ligne porte alors ce `updated_at` et ces dates).
+    const applied = `EXISTS (SELECT 1 FROM bookings WHERE id = ?1 AND updated_at = ?2 AND checkin = ?3 AND checkout = ?4 AND unit_id = ?5)`;
+    const g = [id, now, patch.checkin, patch.checkout, patch.unitId];
+    const stmts = [
+      updateStmt,
+      db.prepare(`DELETE FROM option_days WHERE booking_id = ?1 AND ${applied}`).bind(...g),
+    ];
+    for (const c of optionClaims) {
+      stmts.push(
+        db
+          .prepare(
+            `DELETE FROM option_days WHERE option_id = ?6 AND date = ?7 AND ${applied} AND booking_id IN (
+               SELECT id FROM bookings WHERE NOT (status = 'confirmed' OR (status = 'pending' AND hold_expires_at > ?2)))`,
+          )
+          .bind(...g, c.optionId, c.date),
+      );
+    }
+    for (const c of optionClaims) {
+      stmts.push(
+        db
+          .prepare(`INSERT INTO option_days (option_id, date, booking_id) SELECT ?6, ?7, ?1 WHERE ${applied}`)
+          .bind(...g, c.optionId, c.date),
+      );
+    }
+    try {
+      const out = await db.batch(stmts);
+      changes = out[0]?.meta.changes ?? 0;
+    } catch (e) {
+      if (/UNIQUE|constraint/i.test(String((e as Error)?.message ?? e))) return "option_day_taken";
+      throw e;
+    }
+  }
+  if (changes === 1) return "updated";
   const row = await db
     .prepare("SELECT status, hold_expires_at FROM bookings WHERE id = ?1")
     .bind(id)

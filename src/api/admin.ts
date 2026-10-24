@@ -2543,13 +2543,9 @@ export function registerAdminRoutes(router: Router): void {
       if (!quote.ok) return apiError(409, "devis impossible sur ces dates", { details: quote.errors, minNights: quote.minNights });
 
       const full = body.paymentMode === "full" || quote.balanceDueDate === null;
-      // Jours d'options : pris AVANT la mise à jour (l'unicité tranche la course) ; rendus si la mise à jour échoue.
+      // Jours d'options : posés dans le même lot que la mise à jour (rien ne bouge si l'un des deux échoue).
       const newClaims = optionDayClaims(quote);
-      const oldClaims = claimsFromSaved(before.optionsJson);
-      const touchesDays = newClaims.length > 0 || oldClaims.length > 0;
-      if (touchesDays && !(await claimOptionDays(db, id, newClaims))) {
-        return apiError(409, "un des jours d'option vient d'être pris par une autre réservation", { details: ["option_day_taken"] });
-      }
+      const touchesDays = newClaims.length > 0 || claimsFromSaved(before.optionsJson).length > 0;
       const outcome = await updateBookingStayAtomic(db, id, {
         unitId,
         checkin,
@@ -2564,8 +2560,10 @@ export function registerAdminRoutes(router: Router): void {
         quoteJson: JSON.stringify(quote),
         optionsJson: JSON.stringify(quote.lines.filter((l) => l.kind === "option")),
         promoCode: quote.promoApplied,
-      });
-      if (outcome !== "updated" && touchesDays) await claimOptionDays(db, id, oldClaims);
+      }, undefined, touchesDays ? newClaims : undefined);
+      if (outcome === "option_day_taken") {
+        return apiError(409, "un des jours d'option vient d'être pris par une autre réservation", { details: ["option_day_taken"] });
+      }
       if (outcome === "conflict") {
         // Le refus se nomme, et la réservation d'origine n'a pas bougé.
         const conflicts = await checkAvailability(db, unitId, ctx.unit.propertyId, checkin, checkout, new Date(), id);
