@@ -731,7 +731,9 @@ export function registerPublicRoutes(router: Router): void {
     if (persons > ctx.unit.capacityMax) {
       return apiError(400, `capacité dépassée (max ${ctx.unit.capacityMax} personnes)`);
     }
-    const quote = await withOptionDaysCheck(env.DB, quoteFromContext(ctx, { ...body, ...parsed.stay }, today));
+    // Les jours que CE visiteur tient déjà (son hold en cours) ne lui sont pas « pris ».
+    const own = await ownPendingHold(env, req, env.DB, ctx.property.id, sqlNow());
+    const quote = await withOptionDaysCheck(env.DB, quoteFromContext(ctx, { ...body, ...parsed.stay }, today), own?.id ?? null);
     // Deuxième barreau de l'entonnoir : un devis affiché est un pas de plus
     // qu'une recherche. Un devis non réservable (minimum de nuits, jour
     // d'arrivée) compte comme infructueux — c'est bien ce que le client a vécu.
@@ -753,7 +755,7 @@ export function registerPublicRoutes(router: Router): void {
   });
 
   // --- jours des options « à la date » : proposés et déjà pris --------------------
-  router.get("/api/public/option-days", async (_req, env, _p, url) => {
+  router.get("/api/public/option-days", async (req, env, _p, url) => {
     const unitId = Number(url.searchParams.get("unitId"));
     const checkin = url.searchParams.get("checkin") ?? "";
     const checkout = url.searchParams.get("checkout") ?? "";
@@ -765,7 +767,8 @@ export function registerPublicRoutes(router: Router): void {
     const dated = ctx.options.filter((o) => o.perDate);
     const days = proposedDays(checkin, checkout, ctx.settings);
     if (dated.length === 0 || days.length === 0) return json({ options: [] });
-    const taken = await takenOptionDays(env.DB, dated.map((o) => o.id), days[0] as string, days[days.length - 1] as string);
+    const own = await ownPendingHold(env, req, env.DB, ctx.property.id, sqlNow());
+    const taken = await takenOptionDays(env.DB, dated.map((o) => o.id), days[0] as string, days[days.length - 1] as string, own?.id ?? null);
     return json({
       options: dated.map((o) => ({
         id: o.id,

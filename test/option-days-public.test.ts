@@ -93,4 +93,30 @@ describe("options à la date : parcours public", () => {
     const after = await call("/api/public/quote", stay(2, [SAT]));
     expect(after.json.quote.ok).toBe(true);
   });
+
+  it("le visiteur qui tient un hold ne voit pas ses propres jours « déjà réservés » (devis et jours proposés)", async () => {
+    const env = { DB: db, ASSETS: undefined as unknown as Fetcher, PUBLIC_BASE_URL: "http://test.local", EMAILS_ENABLED: "false", ADMIN_TOKEN: "test-admin-token" } as Env;
+    const raw = await router.handle(
+      new Request("http://test.local/api/public/bookings", {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ ...stay(1, [IN]), paymentMode: "full", cgvAccepted: true, guest: guest("trois") }),
+      }),
+      env,
+    );
+    expect(raw!.status).toBe(201);
+    const cookie = (raw!.headers.get("set-cookie") ?? "").split(";")[0] as string;
+    expect(cookie).not.toBe("");
+    const get = async (path: string, body?: unknown, ck?: string) =>
+      (await (await router.handle(new Request("http://test.local" + path, {
+        method: body ? "POST" : "GET",
+        headers: { ...(body ? { "content-type": "application/json" } : {}), ...(ck ? { cookie: ck } : {}) },
+        body: body ? JSON.stringify(body) : undefined,
+      }), env))!.json()) as any;
+    const dayOf = (r: any) => r.options.find((o: any) => o.id === saunaId).days.find((d: any) => d.date === IN);
+    const url = `/api/public/option-days?unitId=1&checkin=${IN}&checkout=${OUT}`;
+    expect(dayOf(await get(url, undefined, cookie)).taken).toBe(false);
+    expect(dayOf(await get(url)).taken).toBe(true);
+    expect((await get("/api/public/quote", stay(1, [IN]), cookie)).quote.ok).toBe(true);
+    expect((await get("/api/public/quote", stay(1, [IN]))).quote.errors).toContain("option_day_taken");
+  });
 });
