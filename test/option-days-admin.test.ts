@@ -89,6 +89,15 @@ describe("options à la date : réglages", () => {
     claims = (await db.prepare("SELECT date FROM option_days WHERE booking_id = ?").bind(idA).all()).results.map((r: any) => r.date);
     expect(claims).toEqual(["2026-10-25"]);
 
+    // disponibilité côté fiche : ses propres jours restent libres, ceux des autres sont pris
+    const av = await call("GET", `/api/admin/option-days?unitId=1&checkin=2026-10-22&checkout=2026-10-25&bookingId=${idA}`);
+    const mine = (av.data.options as any[]).find((o) => o.id === sauna).days;
+    expect(mine.map((d: any) => d.date)).toEqual(["2026-10-22", "2026-10-23", "2026-10-24", "2026-10-25"]);
+    expect(mine.find((d: any) => d.date === "2026-10-25").taken).toBe(false);
+    expect(mine.find((d: any) => d.date === "2026-10-23").taken).toBe(true);
+    const other = await call("GET", "/api/admin/option-days?unitId=1&checkin=2026-10-22&checkout=2026-10-25");
+    expect((other.data.options as any[]).find((o) => o.id === sauna).days.find((d: any) => d.date === "2026-10-25").taken).toBe(true);
+
     // l'annulation libère
     expect((await call("POST", `/api/admin/bookings/${idA}/cancel`, {})).status).toBe(200);
     expect((await sale(1, ["2026-10-24"])).status).toBe(201);

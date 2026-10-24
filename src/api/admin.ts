@@ -3,6 +3,7 @@
 // (si configuré, exigé en header Authorization: Bearer …).
 
 import { apiError, json, readJson, Router, type Handler } from "./router";
+import { proposedDays } from "../core/option-days";
 import { addDays, dayOfWeek, diffDays, isIsoDate, rangesOverlap, sqlNow, todayInZone, type IsoDate } from "../core/dates";
 import { blockingUnitIds, blocksAsSpans, isActiveBooking, isUnitFree } from "../core/availability";
 import { rateCalendar, type MinNightsStep, type RateOverride, type UnitPricingInfo } from "../core/pricing";
@@ -69,6 +70,7 @@ import {
   getProperty,
   hasEmailOfKinds,
   getQuoteContext,
+  takenOptionDays,
   getRateRule,
   insertGuestEntry,
   listGuestRegister,
@@ -1874,6 +1876,30 @@ export function registerAdminRoutes(router: Router): void {
       sort: url.searchParams.get("sort") === "created" ? "created" : "checkin",
     });
     return json({ bookings, today, period: period ?? null });
+  }));
+
+  // Jours proposés pour les options « à la date » d'un séjour ; les jours déjà
+  // pris par une AUTRE réservation sont marqués `taken` (les siens restent libres).
+  router.get("/api/admin/option-days", guard(async (_req, env, _p, url) => {
+    const unitId = Number(url.searchParams.get("unitId"));
+    const checkin = url.searchParams.get("checkin") ?? "";
+    const checkout = url.searchParams.get("checkout") ?? "";
+    const bookingId = Number(url.searchParams.get("bookingId")) || null;
+    if (!Number.isInteger(unitId) || !isIsoDate(checkin) || !isIsoDate(checkout) || checkout <= checkin || diffDays(checkin, checkout) > 60) {
+      return apiError(400, "unitId, checkin et checkout attendus");
+    }
+    const ctx = await getQuoteContext(env.DB, unitId);
+    if (!ctx) return apiError(404, "hébergement inconnu");
+    const dated = ctx.options.filter((o) => o.perDate);
+    const days = proposedDays(checkin, checkout, ctx.settings);
+    if (dated.length === 0 || days.length === 0) return json({ options: [] });
+    const taken = await takenOptionDays(env.DB, dated.map((o) => o.id), days[0] as string, days[days.length - 1] as string, bookingId);
+    return json({
+      options: dated.map((o) => ({
+        id: o.id,
+        days: days.map((date) => ({ date, taken: taken.get(o.id)?.has(date) === true })),
+      })),
+    });
   }));
 
   router.get("/api/admin/bookings/:id", guard(async (_req, env, p) => {

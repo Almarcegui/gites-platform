@@ -331,6 +331,11 @@ msgstr "{0} aankomsten ({1})"
 msgid "{0} au plus"
 msgstr "maximaal {0}"
 
+#. placeholder {0}: o.optionName
+#: src/pages/Today.tsx
+msgid "{0} aujourd'hui"
+msgstr "{0} vandaag"
+
 #. placeholder {0}: c.count
 #. placeholder {0}: s.count
 #: src/pages/Reviews.tsx
@@ -3192,6 +3197,10 @@ msgstr "al aanwezig"
 msgid "Déjà payé"
 msgstr "Al betaald"
 
+#: src/booking/OptionDays.tsx
+msgid "déjà réservé"
+msgstr "al gereserveerd"
+
 #: src/pages/settings/Domain.tsx
 msgid "Délai minimum de réservation (jours)"
 msgstr "Minimale reserveringstermijn (dagen)"
@@ -3385,6 +3394,10 @@ msgstr "Offerte"
 #: src/pages/settings/Stats.tsx
 msgid "Devis affichés"
 msgstr "Getoonde offertes"
+
+#: src/pages/settings/Options.tsx
+msgid "dim"
+msgstr "zo"
 
 #: src/calendar/PricePanel.tsx
 msgid "Dimanche à jeudi"
@@ -3677,6 +3690,10 @@ msgstr "De wijziging opslaan"
 #: src/pages/settings/Domain.tsx
 msgid "Enregistrer les adresses"
 msgstr "Adressen opslaan"
+
+#: src/booking/OptionDays.tsx
+msgid "Enregistrer les jours"
+msgstr "Dagen opslaan"
 
 #: src/pages/settings/Channels.tsx
 msgid "Enregistrer les pourcentages"
@@ -4172,9 +4189,17 @@ msgstr "nooit geopend"
 msgid "Je confirme : de l'argent réel part vers le client, sans retour possible."
 msgstr "Ik bevestig: er gaat echt geld naar de klant, onomkeerbaar."
 
+#: src/pages/settings/Options.tsx
+msgid "jeu"
+msgstr "do"
+
 #: src/pages/settings/Domain.tsx
 msgid "Jointes à chaque confirmation. Une ligne « Article 1 » seule s'affiche en gras sur le site."
 msgstr "Bij elke bevestiging gevoegd. Een regel « Artikel 1 » alleen verschijnt vet op de site."
+
+#: src/pages/settings/Options.tsx
+msgid "Jour consécutif à (%)"
+msgstr "Opeenvolgende dag aan (%)"
 
 #: src/lib/templates.ts
 msgid "jour d'arrivée"
@@ -4206,9 +4231,21 @@ msgstr "Rustige dag"
 msgid "Jours avant l'arrivée (1 à 28)"
 msgstr "Dagen voor aankomst (1 tot 28)"
 
+#: src/pages/settings/Options.tsx
+msgid "Jours comptés week-end"
+msgstr "Dagen die als weekend tellen"
+
+#: src/booking/OptionDays.tsx
+msgid "Jours de l'option"
+msgstr "Dagen van de optie"
+
 #: src/calendar/PricePanel.tsx
 msgid "Jours de la plage"
 msgstr "Dagen van de periode"
+
+#: src/booking/OptionDays.tsx
+msgid "Jours enregistrés"
+msgstr "Dagen opgeslagen"
 
 #: src/pages/settings/Tarifs.tsx
 msgid "Jours où l'on peut arriver"
@@ -4533,6 +4570,10 @@ msgstr "het kanaal"
 msgid "Le client"
 msgstr "De klant"
 
+#: src/pages/settings/Options.tsx
+msgid "Le client choisit les jours du séjour ; un jour pris l'est pour tout le domaine, les deux maisons comprises."
+msgstr "De klant kiest de dagen van het verblijf; een bezette dag is bezet voor het hele domein, beide huizen inbegrepen."
+
 #: src/booking/BookingPanel.tsx
 msgid "Le client en est prévenu par mail."
 msgstr "De klant wordt per mail verwittigd."
@@ -4691,6 +4732,10 @@ msgstr "De prijs van deze woning is de som van haar huizen: wijzig de prijs op e
 #: src/pages/settings/Tarifs.tsx
 msgid "Le prix de chaque bien en dehors des saisons. Touchez un bien pour le changer."
 msgstr "De prijs van elke woning buiten de seizoenen. Tik op een woning om hem te wijzigen."
+
+#: src/pages/settings/Options.tsx
+msgid "Le prix du champ « Prix » vaut en semaine, chaque jour choisi est facturé."
+msgstr "De prijs in het veld « Prijs » geldt op weekdagen, elke gekozen dag wordt aangerekend."
 
 #. placeholder {0}: dfr(fortes[0]!.date)
 #. placeholder {1}: eur(fortes[0]!.priceCents!)
@@ -5150,6 +5195,10 @@ msgstr "gelezen op {0}"
 msgid "Lu toutes les 15 minutes"
 msgstr "Om de 15 minuten gelezen"
 
+#: src/pages/settings/Options.tsx
+msgid "lun"
+msgstr "ma"
+
 #: src/pages/settings/Ical.tsx
 msgid "Lus toutes les 15 minutes. Si une date lue est déjà prise ici, elle est refusée et signalée."
 msgstr "Om de 15 minuten gelezen. Is een gelezen datum hier al bezet, dan wordt ze geweigerd en gemeld."
@@ -5227,6 +5276,10 @@ msgstr "Verhogen"
 msgid "Majorer les prix envoyés aux plateformes ?"
 msgstr "De prijzen voor de platformen verhogen?"
 
+#: src/pages/settings/Options.tsx
+msgid "mar"
+msgstr "di"
+
 #: src/pages/Messages.tsx
 msgid "Marquer comme traité"
 msgstr "Als behandeld markeren"
@@ -5270,6 +5323,10 @@ msgstr "Schoonmaak, {0}"
 #: src/shell/Shell.tsx
 msgid "Menu principal"
 msgstr "Hoofdmenu"
+
+#: src/pages/settings/Options.tsx
+msgid "mer"
+msgstr "wo"
 
 #: src/pages/settings/ClientHistory.tsx
 msgid "Merci et avis (après le séjour)"
@@ -5395,6 +5452,10 @@ msgstr "Wijzigen"
 #: src/booking/BookingPanel.tsx
 msgid "Modifier la note"
 msgstr "De notitie wijzigen"
+
+#: src/booking/OptionDays.tsx
+msgid "Modifier les jours"
+msgstr "Dagen wijzigen"
 
 #: src/pages/settings/Domain.tsx
 msgid "moins d'une heure"
@@ -5891,6 +5952,10 @@ msgstr "Optie, nog niet betaald"
 #: src/shell/nav.tsx
 msgid "Options"
 msgstr "Opties"
+
+#: src/pages/Today.tsx
+msgid "Options du jour"
+msgstr "Opties van de dag"
 
 #: src/pages/Bookings.tsx
 msgid "Options en cours"
@@ -6587,6 +6652,10 @@ msgstr "prijs met de hand vastgelegd"
 msgid "Prix fixés à la main"
 msgstr "Met de hand vastgelegde prijzen"
 
+#: src/pages/settings/Options.tsx
+msgid "Prix le week-end (€)"
+msgstr "Prijs in het weekend (€)"
+
 #: src/pages/settings/Stats.tsx
 msgid "Prix moyen d'une nuit"
 msgstr "Gemiddelde prijs per nacht"
@@ -7271,6 +7340,10 @@ msgstr "Geboekt op {0}."
 msgid "Réservé tôt : {0}"
 msgstr "Vroeg geboekt: {0}"
 
+#: src/pages/settings/Options.tsx
+msgid "Réserver à une date (un par jour, partagé)"
+msgstr "Op een datum reserveren (één per dag, gedeeld)"
+
 #: src/pages/settings/Domain.tsx
 msgid "Réserver ce bien bloque aussi"
 msgstr "Deze woning boeken blokkeert ook"
@@ -7488,6 +7561,10 @@ msgstr "Seizoenen"
 #: src/pages/settings/Tarifs.tsx
 msgid "Saisons passées"
 msgstr "Voorbije seizoenen"
+
+#: src/pages/settings/Options.tsx
+msgid "sam"
+msgstr "za"
 
 #. placeholder {0}: longDate(sqlToBrussels(b.holdExpiresAt)?.day ?? b.holdExpiresAt.slice(0, 10))
 #: src/booking/BookingPanel.tsx
@@ -8240,6 +8317,10 @@ msgstr "Geldig vanaf"
 msgid "Valable jusqu'au"
 msgstr "Geldig tot"
 
+#: src/pages/settings/Options.tsx
+msgid "ven"
+msgstr "vr"
+
 #: src/calendar/PricePanel.tsx
 #: src/calendar/Weeks.tsx
 msgid "Vendre ces nuits"
@@ -8298,6 +8379,14 @@ msgstr "leeg = dat van het seizoen"
 #: src/pages/settings/Domain.tsx
 msgid "vide = même heure que les autres jours"
 msgstr "leeg = zelfde uur als de andere dagen"
+
+#: src/pages/settings/Options.tsx
+msgid "vide = même prix que la semaine"
+msgstr "leeg = zelfde prijs als op weekdagen"
+
+#: src/pages/settings/Options.tsx
+msgid "vide = pas de remise ; 70 = un jour qui suit un autre jour choisi coûte 70 %"
+msgstr "leeg = geen korting; 70 = een dag die op een andere gekozen dag volgt kost 70 %"
 
 #: src/pages/settings/Tarifs.tsx
 msgid "vide = prix de saison"

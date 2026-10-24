@@ -35,6 +35,7 @@ import { diffDays, hourLabel, longDate, sqlToBrussels, todayBrussels } from "../
 import { channelName, isChannel } from "../lib/derive";
 import { eur } from "../lib/money";
 import { checkoutTimeFor } from "../lib/checkoutTime";
+import { OptionDays } from "./OptionDays";
 import { TemplateChips } from "../messages/TemplateChips";
 import { useToast } from "../lib/toasts";
 import { useLayout } from "../lib/useLayout";
@@ -277,7 +278,10 @@ function Fiche({ detail, dialog, setDialog }: { detail: BookingDetail; dialog: D
             <tbody>
               {(detail.quote?.lines ?? []).map((l, i) => (
                 <tr key={i}>
-                  <td>{l.publicLabel ?? l.label}</td>
+                  <td>
+                    {l.publicLabel ?? l.label}
+                    {l.optionId && l.days && state !== "annulee" ? <OptionDays b={b} line={l} /> : null}
+                  </td>
                   <td className="r">{eur(l.amountCents)}</td>
                 </tr>
               ))}

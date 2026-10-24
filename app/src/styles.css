@@ -1150,3 +1150,6 @@ body:has(.savebar) .amel-fab.amel-B { bottom: calc(156px + env(safe-area-inset-b
 .hx-body { padding: 4px 16px 14px; }
 .hx-body .bub { max-width: none; font-size: 15px; }
 .hx-body .muted { font-size: 14px; margin: 0; }
+.option-days { display: grid; gap: 8px; margin-top: 8px; }
+.option-days .chip { min-height: 40px; }
+.option-days .chip:disabled { opacity: .55; }

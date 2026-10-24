@@ -215,6 +215,9 @@ export interface QuoteLine {
   label: string;
   publicLabel?: string;
   amountCents: number;
+  /** Option « à la date » : identifiant et jours choisis (AAAA-MM-JJ). */
+  optionId?: number;
+  days?: string[];
 }
 
 export interface Quote {
