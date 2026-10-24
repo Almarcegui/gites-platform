@@ -403,6 +403,8 @@ export function rateCalendar(
 ): DayRate[] {
   const ratedDays = holidayRatedDays(yearsSpanned(from, toExclusive));
   const overrides = indexOverrides(rateOverrides);
+  // Aucun minimum ne dépasse celui-ci : au-delà, toute durée passe.
+  const plafond = Math.max(1, ...rateRules.map((r) => r.minNights), ...rateOverrides.map((o) => o.minNights ?? 1)) + 1;
   const isSum = unit.compositePricing === "sum" && unit.components.length > 0;
   const partIds = isSum ? unit.components.map((c) => c.id) : [unit.id];
   const days: DayRate[] = [];
@@ -446,28 +448,36 @@ export function rateCalendar(
         overrideMinNights = raw.minNights;
       }
     }
-    // Minimum d'un séjour qui COMMENCE ce jour : le plus haut des minimums des
-    // nuits qu'il couvre, paliers comptés depuis ce jour (décision du
-    // 24/10/2026). Un jeudi à 2 suivi d'un week-end à 4 affiche donc 4 : c'est
-    // ce que le devis exigera. On étire tant qu'une nuit couverte en demande
-    // plus (60 nuits au plus).
+    // Minimum affiché pour une arrivée ce jour (décision du 24/10/2026) : un
+    // séjour doit tenir le plus haut minimum de ses nuits, paliers comptés
+    // depuis l'arrivée. Une durée plus longue peut donc toucher une nuit plus
+    // exigeante (mercredi → samedi refusé quand le vendredi est à 4, alors que
+    // mercredi → vendredi passe). On affiche la valeur PRUDENTE : le plus petit
+    // n tel que toute durée ≥ n passe. Le calendrier, les suggestions et Beds24
+    // ne promettent ainsi jamais un séjour que le devis refuserait.
     if (covered) {
-      for (let k = 1; k < minNights && k < 60; k++) {
-        const night = addDays(d, k);
-        let stop = false;
-        for (const pid of partIds) {
-          const rr = resolveNight(pid, night, seasons, rateRules, ratedDays, overrides, today, d);
-          if (!rr) {
-            stop = true;
-            break;
+      let cumul = minNights; // plus haut minimum des nuits [d, d + m)
+      let prudent = 1;
+      for (let m = 1; m < Math.min(plafond, 60); m++) {
+        if (m > 1) {
+          const night = addDays(d, m - 1);
+          let stop = false;
+          for (const pid of partIds) {
+            const rr = resolveNight(pid, night, seasons, rateRules, ratedDays, overrides, today, d);
+            if (!rr) {
+              stop = true;
+              break;
+            }
+            if (rr.minNights > cumul) {
+              cumul = rr.minNights;
+              minNightsOverridden = minNightsOverridden || rr.minNightsSource === "override";
+            }
           }
-          if (rr.minNights > minNights) {
-            minNights = rr.minNights;
-            minNightsOverridden = minNightsOverridden || rr.minNightsSource === "override";
-          }
+          if (stop) break;
         }
-        if (stop) break;
+        if (m < cumul) prudent = m + 1;
       }
+      minNights = Math.max(minNights, prudent);
     }
     days.push({
       date: d,

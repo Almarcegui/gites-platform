@@ -127,7 +127,11 @@ describe("le plus haut minimum des nuits du séjour (décision du 24/10/2026)", 
   it("calendrier : un jeudi à 2 suivi d'un week-end à 4 affiche 4 (minimum d'une arrivée ce jour-là)", () => {
     const days = rateCalendar(SCIERIE, "2027-02-01", "2027-02-06", KROKUS, R, [], "2026-11-01");
     expect(days.find((d) => d.date === "2027-02-01")?.minNights).toBe(2); // lundi → mercredi : hors période
-    expect(days.find((d) => d.date === "2027-02-03")?.minNights).toBe(2); // mercredi → vendredi : nuits du 3 et du 4, hors période
+    // mercredi : 2 nuits passent, mais 3 (→ samedi) toucheraient le vendredi à 4 :
+    // le calendrier affiche la valeur prudente, 4, pour ne rien promettre de faux
+    expect(days.find((d) => d.date === "2027-02-03")?.minNights).toBe(4);
+    expect(q("2026-11-01", "2027-02-03", "2027-02-06").errors).toContain("min_nights");
+    expect(days.find((d) => d.date === "2027-02-02")?.minNights).toBe(2); // mardi : 3 nuits → vendredi exclu, 4 → touche, 4 ≥ 4
     expect(days.find((d) => d.date === "2027-02-04")?.minNights).toBe(4); // jeudi
     // sans date du jour (Beds24) : même règle, minimum de la règle
     expect(rateCalendar(SCIERIE, "2027-02-04", "2027-02-05", KROKUS, R)[0]?.minNights).toBe(4);

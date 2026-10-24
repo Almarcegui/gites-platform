@@ -498,7 +498,9 @@ describe("rateCalendar (calendrier des tarifs par jour)", () => {
     // 01-02/07 : Haute (mer 160 €, jeu 160 €, min 7).
     const days = rateCalendar(SCIERIE, "2026-06-29", "2026-07-03", SEASONS, RULES);
     expect(days).toHaveLength(4);
-    expect(days[0]).toMatchObject({ date: "2026-06-29", priceCents: 12000, seasonName: null, minNights: 2, weekend: false });
+    // 29/06 : nuit à 2, mais un séjour de 3 nuits ou plus touche le 01/07 (min 7) :
+    // valeur prudente d'une arrivée ce jour-là = 7 (décision du 24/10/2026).
+    expect(days[0]).toMatchObject({ date: "2026-06-29", priceCents: 12000, seasonName: null, minNights: 7, weekend: false });
     expect(days[2]).toMatchObject({ date: "2026-07-01", priceCents: 16000, minNights: 7 });
     expect(days[2]?.seasonName).toContain("Haute");
   });
