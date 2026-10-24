@@ -17,6 +17,7 @@ import {
   markPaymentStatus,
   SUPERSEDED_SESSION_NOTE,
   setPaymentSession,
+  takenOptionDays,
   type BookingRow,
   type QuoteContext,
 } from "../db/repo";
@@ -41,7 +42,7 @@ export interface QuoteBody {
   checkout: IsoDate;
   adults: number;
   children: number;
-  options?: { id: number; qty: number }[];
+  options?: { id: number; qty: number; days?: IsoDate[] }[];
   promoCode?: string | null;
 }
 
@@ -56,7 +57,12 @@ export function quoteFromContext(
   const selected = (body.options ?? [])
     .map((sel) => {
       const opt = ctx.options.find((o) => o.id === Number(sel.id));
-      return opt ? { option: opt, qty: Number(sel.qty) || 0 } : null;
+      if (!opt) return null;
+      if (opt.perDate) {
+        const days = Array.isArray(sel.days) ? sel.days.filter((d) => typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d)) : [];
+        return { option: opt, qty: days.length > 0 ? 1 : 0, days };
+      }
+      return { option: opt, qty: Number(sel.qty) || 0 };
     })
     .filter((x): x is NonNullable<typeof x> => x !== null);
 
@@ -80,9 +86,30 @@ export function quoteFromContext(
       touristTaxIncludeChildren: ctx.settings.touristTaxIncludeChildren,
       cautionCents: ctx.settings.cautionCents,
       minLeadDays: ctx.settings.minLeadDays,
+      checkoutTime: ctx.settings.checkoutTime,
+      checkoutTimeSunday: ctx.settings.checkoutTimeSunday,
     },
     bypassLeadTime: opts.bypassLeadTime === true,
   });
+}
+
+/** Options à la date : jours de ce devis déjà pris par une autre réservation active (tout le
+ *  domaine, les deux maisons comprises). Ajoute l'erreur `option_day_taken` au devis s'il y en a.
+ *  `excludeBookingId` : la réservation qu'on édite ne se bloque pas elle-même. */
+export async function withOptionDaysCheck(db: D1Database, quote: Quote, excludeBookingId: number | null = null): Promise<Quote> {
+  const dated = quote.lines.filter((l) => l.kind === "option" && l.optionId != null && l.days?.length);
+  if (dated.length === 0) return quote;
+  const ids = [...new Set(dated.map((l) => l.optionId as number))];
+  const all = dated.flatMap((l) => l.days as string[]).sort();
+  const taken = await takenOptionDays(db, ids, all[0] as string, all[all.length - 1] as string, excludeBookingId);
+  const clash = dated.some((l) => (l.days as string[]).some((d) => taken.get(l.optionId as number)?.has(d)));
+  if (!clash) return quote;
+  return { ...quote, ok: false, errors: [...quote.errors, "option_day_taken"] };
+}
+
+/** Jours d'options à poser en base pour un devis : [{optionId, date}]. */
+export function optionDayClaims(quote: Quote): { optionId: number; date: string }[] {
+  return quote.lines.flatMap((l) => (l.kind === "option" && l.optionId != null ? (l.days ?? []).map((date) => ({ optionId: l.optionId as number, date })) : []));
 }
 
 /** Plancher d'une session de paiement Stripe (0,50 €) : en dessous, la création
