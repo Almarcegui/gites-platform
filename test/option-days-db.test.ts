@@ -54,6 +54,17 @@ async function quote(unitId: number, options: { id: number; qty: number; days?: 
 }
 
 describe("devis d'une option à la date", () => {
+  it("la même option envoyée deux fois = une seule ligne, union des jours, remise sur les jours consécutifs", async () => {
+    const q = await quote(SCIEUR, [
+      { id: saunaId, qty: 1, days: ["2026-10-24"] },
+      { id: saunaId, qty: 1, days: ["2026-10-25", "2026-10-24"] },
+    ]);
+    const lines = q.lines.filter((l) => l.kind === "option");
+    expect(lines).toHaveLength(1);
+    expect(lines[0]?.days).toEqual(["2026-10-24", "2026-10-25"]);
+    expect(lines[0]?.amountCents).toBe(18000 + 12600);
+  });
+
   it("une ligne lisible, montant = somme des jours, devis = total", async () => {
     const base = await quote(SCIEUR, []);
     const q = await quote(SCIEUR, [{ id: saunaId, qty: 1, days: ["2026-10-24", "2026-10-25"] }]);

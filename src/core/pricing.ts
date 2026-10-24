@@ -728,7 +728,15 @@ export function computeQuote(req: QuoteRequest): Quote {
   // --- options
   const persons = req.adults + req.children;
   let optionsCents = 0;
+  // Une option à la date envoyée deux fois (deux lignes, mêmes ou autres jours) = une seule ligne, union des jours :
+  // sans cela chaque ligne repartirait au plein tarif, sans la remise sur jours consécutifs.
+  const merged: typeof req.optionsSelected = [];
   for (const sel of req.optionsSelected) {
+    const twin = sel.option.perDate && !sel.frozen ? merged.find((m) => m.option.id === sel.option.id && !m.frozen) : undefined;
+    if (twin) twin.days = [...(twin.days ?? []), ...(sel.days ?? [])];
+    else merged.push({ ...sel });
+  }
+  for (const sel of merged) {
     const o = sel.option;
     if (sel.frozen) {
       optionsCents += sel.frozen.amountCents;
