@@ -18,9 +18,10 @@ export interface DatedPricing {
 export const DEFAULT_WEEKEND_DAYS = [5, 6, 0];
 
 export function parseWeekendDays(s: string | null | undefined): number[] | null {
-  if (s == null || s.trim() === "") return null;
-  const out = s.split(",").map((x) => Number(x.trim())).filter((n) => Number.isInteger(n) && n >= 0 && n <= 6);
-  return out.length ? [...new Set(out)] : null;
+  // NULL en base = réglage par défaut (ven-sam-dim) ; chaîne vide = aucun jour compté week-end.
+  if (s == null) return null;
+  const out = s.split(",").map((x) => x.trim()).filter((x) => x !== "").map(Number).filter((n) => Number.isInteger(n) && n >= 0 && n <= 6);
+  return [...new Set(out)];
 }
 
 /** Jours proposés : de l'arrivée à la veille du départ, plus le jour du départ si c'est

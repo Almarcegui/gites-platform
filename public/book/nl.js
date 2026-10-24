@@ -106,6 +106,8 @@ export const NL = {
   "Réservation en ligne au plus tard {jours} avant l'arrivée. Contactez-nous : nous verrons si c'est possible.":
     "Online reserveren kan tot {jours} voor de aankomst. Neem contact met ons op: wij bekijken wat mogelijk is.",
   "jour": "dag",
+  "dès {jour} / jour, {we} le week-end": "vanaf {jour} / dag, {we} in het weekend",
+  "{jour} / jour": "{jour} / dag",
   "jours": "dagen",
   "Mois précédent": "Vorige maand",
   "Mois suivant": "Volgende maand",

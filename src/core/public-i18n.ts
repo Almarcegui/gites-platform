@@ -73,7 +73,10 @@ const EXACT: Record<string, string> = {
 const PATTERNS: Array<[RegExp, (...m: string[]) => string]> = [
   // Option à la date (0042) : « Sauna — sam 25/10 (180 €), dim 26/10 (126 €) » ; le nom saisi reste tel quel.
   [/^(.+) — ((?:(?:dim|lun|mar|mer|jeu|ven|sam) \d\d\/\d\d \([^)]+\)(?:, )?)+)$/, (_, nom, jours) =>
-    `${nom} — ${jours!.replace(/\b(dim|lun|mar|mer|jeu|ven|sam) /g, (_m, j) => `${JOURS_NL[j!]} `)}`],
+    // Même présentation des montants que le reste du tunnel en néerlandais : « € 180,00 ».
+    `${nom} — ${jours!
+      .replace(/\b(dim|lun|mar|mer|jeu|ven|sam) /g, (_m, j) => `${JOURS_NL[j!]} `)
+      .replace(/\((\d+)(?:,(\d+))? €\)/g, (_m, e, c) => `(€ ${e},${(c ?? "").padEnd(2, "0")})`)}`],
   [/^séjour trop long \(max (\d+) nuits\)$/, (_, n) => `verblijf te lang (max. ${n} nachten)`],
   [/^Réservation en ligne au plus tard (\d+) jours? avant l'arrivée\. Contactez-nous : nous verrons si c'est possible\.$/, (_, n) => `Online reserveren kan tot ${n} ${n === "1" ? "dag" : "dagen"} voor de aankomst. Neem contact met ons op: wij bekijken wat mogelijk is.`],
   [/^capacité dépassée \(max (\d+) personnes\)$/, (_, n) => `capaciteit overschreden (max. ${n} personen)`],

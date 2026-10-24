@@ -1491,6 +1491,10 @@ msgstr "Niets in afwachting."
 msgid "Aucun encaissement Stripe pour cette propriété"
 msgstr "Geen Stripe-ontvangsten voor deze accommodatie"
 
+#: src/pages/settings/Options.tsx
+msgid "Aucun jour n'est coché : pas de prix week-end, tous les jours sont facturés au prix de la semaine."
+msgstr "Geen enkele dag is aangevinkt: geen weekendprijs, alle dagen worden aan de weekprijs gefactureerd."
+
 #: src/pages/settings/Logs.tsx
 msgid "Aucun mail envoyé"
 msgstr "Geen mail verstuurd"

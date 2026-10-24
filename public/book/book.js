@@ -729,7 +729,12 @@ async function openBookingPanel(unitId) {
   // inclus de base dans les frais généraux, jamais en option).
   const optionRows = PROP.options
     .map((o) => {
-      const priceLabel = `${eur(o.priceCents)}${o.unitLabel ? " / " + esc(o.unitLabel) : ""}`;
+      // Option à la date : « dès 120 € / jour, 180 € le week-end » (le prix de la semaine est un plancher).
+      const priceLabel = o.perDate
+        ? o.weekendPriceCents != null && o.weekendPriceCents !== o.priceCents && !(o.weekendDays && o.weekendDays.length === 0)
+          ? t("dès {jour} / jour, {we} le week-end", { jour: eurRound(Math.min(o.priceCents, o.weekendPriceCents)), we: eurRound(o.weekendPriceCents) })
+          : t("{jour} / jour", { jour: eurRound(o.priceCents) })
+        : `${eur(o.priceCents)}${o.unitLabel ? " / " + esc(o.unitLabel) : ""}`;
       const input =
         o.pricingMode === "per_unit_qty"
           ? `<input type="number" min="0" max="${o.maxQty ?? 99}" value="0" class="opt" data-oid="${o.id}">`

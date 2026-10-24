@@ -44,6 +44,12 @@ describe("options à la date : réglages", () => {
     await call("PATCH", `/api/admin/options/${sauna}`, { weekendPriceCents: null, consecutivePct: "", weekendDays: "6" });
     expect(await find(sauna)).toMatchObject({ weekendPriceCents: null, consecutivePct: null, weekendDays: [6] });
 
+    // aucun jour week-end coché : reste vide (pas de retour silencieux à ven-sam-dim)
+    await call("PATCH", `/api/admin/options/${sauna}`, { weekendDays: [] });
+    expect((await find(sauna)).weekendDays).toEqual([]);
+    await call("PATCH", `/api/admin/options/${sauna}`, { weekendDays: null });
+    expect((await find(sauna)).weekendDays).toBeNull();
+
     // le bain chaud : seulement « à la date » et le prix par jour
     const bain = (await call("POST", "/api/admin/options?property=1", { name: "Bain test", priceCents: 5000, perDate: true })).data.id;
     expect(await find(bain)).toMatchObject({ perDate: true, priceCents: 5000, weekendPriceCents: null, consecutivePct: null });

@@ -509,7 +509,8 @@ function datedFields(body: Record<string, unknown> | null | undefined): Partial<
   if (body.weekendDays !== undefined) {
     const raw = Array.isArray(body.weekendDays) ? body.weekendDays : String(body.weekendDays ?? "").split(",");
     const days = [...new Set(raw.filter((x) => x !== "" && x !== null).map(Number).filter((d) => Number.isInteger(d) && d >= 0 && d <= 6))];
-    out.weekendDays = empty(body.weekendDays) || !days.length ? null : days;
+    // null = jours par défaut (ven-sam-dim) ; liste vide = aucun jour week-end, donc pas de prix week-end.
+    out.weekendDays = body.weekendDays === null ? null : days;
   }
   if (body.consecutivePct !== undefined) {
     const n = Math.round(Number(body.consecutivePct));

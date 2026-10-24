@@ -28,6 +28,15 @@ describe("jours proposés", () => {
   });
 });
 
+describe("jours week-end vides", () => {
+  it("aucun jour coché : pas de prix week-end, tous les jours au prix de la semaine", () => {
+    expect(parseWeekendDays("")).toEqual([]);
+    expect(parseWeekendDays(null)).toBeNull();
+    const p = { ...sauna, weekendDays: parseWeekendDays("") };
+    expect(priceDays(p, ["2026-10-24"])[0].amountCents).toBe(12000);
+  });
+});
+
 describe("prix des jours", () => {
   it("un jour de semaine et un jour de week-end", () => {
     expect(priceDays(sauna, ["2026-10-22"])[0].amountCents).toBe(12000);

@@ -54,8 +54,13 @@ describe("rangée de jours d'une option à la date", () => {
     expect(css).toMatch(/\.day-chips\{display:flex;flex-wrap:wrap/);
   });
 
+  it("l'option à la date annonce « dès … / jour, … le week-end », traduit en néerlandais", () => {
+    expect(read("public/book/book.js")).toContain('t("dès {jour} / jour, {we} le week-end"');
+    expect(read("public/book/nl.js")).toContain('"dès {jour} / jour, {we} le week-end": "vanaf {jour} / dag, {we} in het weekend"');
+  });
+
   it("le libellé de ligne du devis passe en néerlandais, le nom saisi reste", () => {
-    expect(nlText("Sauna — sam 25/10 (180 €), dim 26/10 (126 €)")).toBe("Sauna — za 25/10 (180 €), zo 26/10 (126 €)");
+    expect(nlText("Sauna — sam 25/10 (180 €), dim 26/10 (126 €)")).toBe("Sauna — za 25/10 (€ 180,00), zo 26/10 (€ 126,00)");
     expect(nlText("Frais généraux — ménage et charges")).toBe("Algemene kosten — schoonmaak en lasten");
   });
 });

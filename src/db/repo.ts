@@ -2534,7 +2534,7 @@ export async function createOption(db: D1Database, propertyId: number, o: Option
     )
     .bind(
       propertyId, o.name, o.pricingMode, o.priceCents, o.unitLabel, o.maxQty, o.active ? 1 : 0, o.sortOrder,
-      o.perDate ? 1 : 0, o.weekendPriceCents ?? null, o.weekendDays?.length ? o.weekendDays.join(",") : null, o.consecutivePct ?? null,
+      o.perDate ? 1 : 0, o.weekendPriceCents ?? null, o.weekendDays ? o.weekendDays.join(",") : null, o.consecutivePct ?? null,
     )
     .run();
   return res.meta.last_row_id;
@@ -2558,7 +2558,7 @@ export async function updateOption(db: D1Database, id: number, o: Partial<Option
       o.maxQty ?? null, o.active === undefined ? null : o.active ? 1 : 0, o.sortOrder ?? null,
       o.perDate === undefined ? null : o.perDate ? 1 : 0,
       o.weekendPriceCents === undefined ? 0 : 1, o.weekendPriceCents ?? null,
-      o.weekendDays === undefined ? 0 : 1, o.weekendDays?.length ? o.weekendDays.join(",") : null,
+      o.weekendDays === undefined ? 0 : 1, o.weekendDays ? o.weekendDays.join(",") : null,
       o.consecutivePct === undefined ? 0 : 1, o.consecutivePct ?? null,
     )
     .run();

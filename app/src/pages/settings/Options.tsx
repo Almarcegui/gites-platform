@@ -75,7 +75,7 @@ function OptionPanel({ propertyId, option, onClose }: { propertyId: number; opti
       active: option?.active ?? true,
       perDate: option?.perDate ?? false,
       weekendPrice: (option?.weekendPriceCents != null ? option.weekendPriceCents / 100 : "") as number | string,
-      weekendDays: (option?.weekendDays?.length ? option.weekendDays : [5, 6, 0]).map(String),
+      weekendDays: (option?.weekendDays ?? [5, 6, 0]).map(String),
       consecutive: (option?.consecutivePct ?? "") as number | string,
     }),
     [option],
@@ -148,6 +148,11 @@ function OptionPanel({ propertyId, option, onClose }: { propertyId: number; opti
               ))}
             </div>
           </Checkbox.Group>
+          {v.weekendDays.length === 0 ? (
+            <p className="lead" style={{ marginTop: 8, color: "var(--mantine-color-orange-7)" }}>
+              <Trans>Aucun jour n'est coché : pas de prix week-end, tous les jours sont facturés au prix de la semaine.</Trans>
+            </p>
+          ) : null}
           <p className="lead" style={{ marginTop: 8 }}>
             <Trans>Le prix du champ « Prix » vaut en semaine, chaque jour choisi est facturé.</Trans>
           </p>

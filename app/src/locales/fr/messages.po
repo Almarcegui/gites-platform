@@ -1487,6 +1487,10 @@ msgstr "Aucun en attente."
 msgid "Aucun encaissement Stripe pour cette propriété"
 msgstr "Aucun encaissement Stripe pour cette propriété"
 
+#: src/pages/settings/Options.tsx
+msgid "Aucun jour n'est coché : pas de prix week-end, tous les jours sont facturés au prix de la semaine."
+msgstr "Aucun jour n'est coché : pas de prix week-end, tous les jours sont facturés au prix de la semaine."
+
 #: src/pages/settings/Logs.tsx
 msgid "Aucun mail envoyé"
 msgstr "Aucun mail envoyé"
