@@ -358,6 +358,26 @@ export async function remotePaymentInFlight(cfg: StripeConfig, ref: string): Pro
   return status !== null && UNCANCELLABLE_INTENT_STATUSES.has(status);
 }
 
+/** La tentative `ref` est-elle CONFIRMÉE fermée chez Stripe (intention
+ *  `canceled`, session Checkout `expired`) ? Relecture après un échec de
+ *  fermeture : `false` pour tout le reste — payée, en cours, ou Stripe
+ *  injoignable. Jamais de « fermée » par défaut : libérer un créneau à
+ *  l'aveugle, c'est encaisser un séjour qui n'existe plus. */
+export async function remotePaymentClosed(cfg: StripeConfig, ref: string): Promise<boolean> {
+  if (!stripeEnabled(cfg) || !ref || ref.startsWith("stub_")) return true; // rien de distant
+  try {
+    const path = ref.startsWith("pi_") ? "payment_intents" : "checkout/sessions";
+    const res = await fetch(`${STRIPE_API}/${path}/${encodeURIComponent(ref)}`, {
+      headers: { authorization: `Bearer ${cfg.secretKey}` },
+    });
+    if (!res.ok) return false;
+    const o = (await res.json()) as { status?: string };
+    return ref.startsWith("pi_") ? o.status === "canceled" : o.status === "expired";
+  } catch {
+    return false;
+  }
+}
+
 /** Ferme chez Stripe la tentative de paiement `ref`, quelle qu'en soit la
  *  forme : PaymentIntent (`pi_…`), session Checkout (`cs_…`) ou simulateur
  *  (`stub_…`, sans contrepartie distante). Un seul point d'appel pour

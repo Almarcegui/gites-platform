@@ -129,7 +129,7 @@ export async function purgeAuditIps(db: D1Database): Promise<void> {
   await db
     .prepare(
       "UPDATE audit_log SET detail = json_remove(detail, '$.ip') " +
-        "WHERE action IN ('login.failed', 'login.ok', 'message.contact') AND created_at < datetime('now', '-30 days') " +
+        "WHERE action IN ('login.failed', 'login.ok', 'message.contact', 'booking.hold.cancel_try') AND created_at < datetime('now', '-30 days') " +
         "AND json_valid(detail) AND json_extract(detail, '$.ip') IS NOT NULL",
     )
     .run();

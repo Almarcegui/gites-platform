@@ -12,7 +12,6 @@ import { checkoutTimeFor } from "../core/checkout-time";
 import {
   audit,
   bookingsInWindow,
-  cancelBooking,
   countDirectBookingPressure,
   createBookingAtomic,
   findPaymentBySession,
@@ -48,7 +47,9 @@ import {
   handlePaymentSuccess,
   merciUrl,
   MIN_CHECKOUT_CENTS,
+  PaymentInFlightError,
   quoteFromContext,
+  releaseGuestHold,
   sendConfirmation,
   startPayment,
   voucherUrl,
@@ -108,6 +109,9 @@ const SUGGEST_DAYS_BEFORE = 7;
 const SUGGEST_DAYS_AFTER = 45;
 /** Nombre de plages proposées — « une ou deux », pas une liste à trier. */
 const SUGGEST_MAX = 2;
+
+/** Annulations de hold par IP et par heure (anti-abus de la route Annuler). */
+const MAX_HOLD_CANCELS_PER_HOUR = 20;
 
 /** Sessions de paiement tolérées sur UNE même option (issue #68).
  *
@@ -803,6 +807,9 @@ export function registerPublicRoutes(router: Router): void {
     // Le hold n'est jamais prolongé : le décompte reste celui posé au départ,
     // et le tunnel affiche le temps réellement restant.
     const own = await ownPendingHold(env, req, db, null, sqlNow());
+    // L'ancien hold n'est libéré qu'une fois le nouveau séjour validé (devis,
+    // montant) : une saisie refusée ne doit pas coûter son créneau au client.
+    const toRelease = own ?? null;
     if (own) {
       const sameStay =
         own.unitId === Number(body.unitId) && own.checkin === stay.checkin && own.checkout === stay.checkout;
@@ -852,10 +859,6 @@ export function registerPublicRoutes(router: Router): void {
           );
         }
       }
-      await cancelBooking(db, own.id, "hold_replaced");
-      await audit(db, "public", "booking.hold_released", `booking:${own.id}`, {
-        reference: own.reference, reason: sameStay ? "devis_modifie" : "sejour_modifie",
-      });
     }
 
     // Anti-abus AVANT toute écriture : ni client créé, ni créneau gelé pour un
@@ -866,7 +869,7 @@ export function registerPublicRoutes(router: Router): void {
     //  ne verraient pas.)
     const ip = req.headers.get("cf-connecting-ip");
     const pressure = await countDirectBookingPressure(db, { email, ip });
-    if (pressure.activeHolds >= MAX_ACTIVE_HOLDS) {
+    if (pressure.activeHolds - (toRelease ? 1 : 0) >= MAX_ACTIVE_HOLDS) {
       await audit(db, "public", "booking.rate_limited", null, { reason: "active_holds", email, ip, ...pressure });
       return apiError(
         429,
@@ -914,6 +917,17 @@ export function registerPublicRoutes(router: Router): void {
     const full = wantsFull || !ctx.settings.allowDeposit || quote.balanceDueDate === null;
     const amountDue = full ? quote.totalCents : quote.depositCents;
     if (amountDue < 50) return apiError(400, "montant trop faible pour un paiement en ligne");
+
+    if (toRelease) {
+      // Même libération que le bouton Annuler : les sessions de paiement de
+      // l'ancien hold sont fermées chez Stripe avant que le créneau ne soit rendu.
+      if ((await releaseGuestHold(db, env, toRelease, "hold_replaced")) === "paid") {
+        return apiError(409, "une réservation est déjà en cours de règlement pour ce navigateur", { code: "hold_paid" });
+      }
+      await audit(db, "public", "booking.hold_released", `booking:${toRelease.id}`, {
+        reference: toRelease.reference, reason: "sejour_ou_devis_modifie",
+      });
+    }
 
     const guestId = await upsertGuest(db, {
       email,
@@ -1025,10 +1039,58 @@ export function registerPublicRoutes(router: Router): void {
         children: booking.children,
         amountDueCents: booking.depositCents,
         holdExpiresAt: booking.holdExpiresAt,
+        guestEmail: booking.guestEmail ?? null,
         now,
         quote,
       },
     });
+  });
+
+  /** Annulation par le client de la réservation en attente DE SON NAVIGATEUR.
+   *  Seul le cookie signé désigne la réservation : jamais de référence en
+   *  paramètre, donc personne ne libère le créneau d'un autre. Idempotente
+   *  (rien à annuler = succès) ; plafonnée par IP comme les autres routes. */
+  router.post("/api/public/hold/cancel", async (req, env) => {
+    const db = env.DB;
+    const reference = await readHoldReference(env, req);
+    if (!reference) return json({ ok: true, cancelled: false }, 200, clearHoldCookie(env));
+    // Plafond par IP, inactif quand le serveur n'en voit pas (Node derrière un
+    // proxy sans TRUST_PROXY) : sinon tous les visiteurs partageraient un seul
+    // compteur. L'IP vit dans detail (purgée à 30 jours par purgeAuditIps).
+    const ip = req.headers.get("cf-connecting-ip")?.trim() || null;
+    if (ip) {
+      const claim = await db
+        .prepare(
+          `INSERT INTO audit_log (actor, action, entity, detail)
+           SELECT 'public', 'booking.hold.cancel_try', NULL, ?1
+            WHERE (SELECT COUNT(*) FROM audit_log WHERE action = 'booking.hold.cancel_try'
+                     AND json_extract(detail, '$.ip') = ?2
+                     AND created_at > datetime('now', '-1 hour')) < ?3`,
+        )
+        .bind(JSON.stringify({ ip }), ip, MAX_HOLD_CANCELS_PER_HOUR)
+        .run();
+      if ((claim.meta?.changes ?? 0) === 0) {
+        return apiError(429, "trop de tentatives, réessayez dans un moment", { code: "cancel_rate_limited" });
+      }
+    }
+    const booking = await getBookingByReference(db, reference);
+    if (!booking || booking.source !== "direct") return json({ ok: true, cancelled: false }, 200, clearHoldCookie(env));
+    let outcome: "released" | "already" | "paid";
+    try {
+      outcome = await releaseGuestHold(db, env, booking, "hold_cancelled");
+    } catch (e) {
+      if (e instanceof PaymentInFlightError) {
+        return apiError(409, "Paiement en cours, réessayez dans une minute.", { code: "payment_in_flight" });
+      }
+      throw e;
+    }
+    if (outcome === "paid") {
+      return apiError(409, "Cette réservation est déjà réglée, elle ne peut plus être annulée ici.", { code: "hold_paid" });
+    }
+    if (outcome === "released") {
+      await audit(db, "public", "booking.hold.cancelled_by_guest", `booking:${booking.id}`, { reference: booking.reference });
+    }
+    return json({ ok: true, cancelled: outcome === "released" }, 200, clearHoldCookie(env));
   });
 
   // --- consultation voucher (référence + email requis) -----------------------

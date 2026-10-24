@@ -32,7 +32,7 @@ backups/
 *.dump
 
 # ── Artefacts et dépendances ───────────────────────────────────────────────
-node_modules/
+node_modules
 .wrangler/
 dist/
 # Build du pilote du nouveau back-office (npm run build:app) — généré, jamais versionné.
@@ -48,3 +48,4 @@ __pycache__/
 
 # ── Notes Obsidian du vault (sans objet pour un contributeur) ───────────────
 00 – Memory.md
+test/.tmp-tunnel/

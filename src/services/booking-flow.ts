@@ -6,6 +6,7 @@ import { computeQuote, type Quote } from "../core/pricing";
 import {
   addPayment,
   audit,
+  cancelBooking,
   confirmBookingAtomic,
   findPaymentBySession,
   getBooking,
@@ -27,6 +28,7 @@ import {
   createCheckoutSession,
   createPaymentIntent,
   paymentElementEnabled,
+  remotePaymentClosed,
   remotePaymentInFlight,
   stripeEnabled,
   stripePublishableKey,
@@ -136,6 +138,7 @@ export async function voidPendingSessions(
   env: Env,
   bookingId: number,
   actor: "public" | "admin",
+  opts: { strict?: boolean } = {},
 ): Promise<void> {
   const pendings = (await listPayments(db, { bookingId })).filter((x) => x.status === "pending");
   const cfg = await stripeConfigForBooking(db, env, { id: bookingId });
@@ -150,6 +153,14 @@ export async function voidPendingSessions(
       // Une même réservation peut porter les deux si le mode a changé entre
       // deux tentatives — d'où l'aiguillage plutôt qu'un appel en dur.
       const closed = await voidRemotePayment(cfg, pay.stripeSessionId);
+      // Mode strict (libération du créneau par le client) : un échec de
+      // fermeture n'autorise JAMAIS à libérer. On relit chez Stripe ; tant que
+      // la tentative n'est pas confirmée fermée (payée, en cours, Stripe
+      // injoignable), on refuse — sinon le webhook « payé » arrive sur un
+      // séjour annulé : argent encaissé, plus de séjour.
+      if (!closed && opts.strict && stripeEnabled(cfg) && !(await remotePaymentClosed(cfg, pay.stripeSessionId))) {
+        throw new PaymentInFlightError();
+      }
       if (!closed && stripeEnabled(cfg)) {
         await audit(db, actor, "payment.expire_failed", `booking:${bookingId}`, {
           payment: pay.id,
@@ -159,6 +170,30 @@ export async function voidPendingSessions(
     }
     await markPaymentStatus(db, pay.id, "failed", { note: SUPERSEDED_SESSION_NOTE });
   }
+}
+
+/** Libère le créneau d'une réservation en attente (hold) à la demande du client
+ *  ou parce qu'il en ouvre une autre : ferme les sessions de paiement chez
+ *  Stripe, puis passe la réservation à `cancelled` (même état que l'expiration
+ *  automatique) — le calendrier la rend aussitôt.
+ *
+ *  - `"released"` : libérée à l'instant ;
+ *  - `"already"` : déjà annulée ou expirée (idempotence) ;
+ *  - `"paid"` : un paiement a abouti, rien n'est libéré ;
+ *  - lève `PaymentInFlightError` si un paiement est parti chez la banque. */
+export async function releaseGuestHold(
+  db: D1Database,
+  env: Env,
+  booking: { id: number; status: string },
+  reason: "hold_cancelled" | "hold_replaced",
+): Promise<"released" | "already" | "paid"> {
+  if (booking.status === "cancelled") return "already";
+  if (booking.status !== "pending") return "paid";
+  if ((await listPayments(db, { bookingId: booking.id })).some((x) => x.status === "succeeded")) return "paid";
+  await voidPendingSessions(db, env, booking.id, "public", { strict: true });
+  if (await cancelBooking(db, booking.id, reason, sqlNow(), "pending")) return "released";
+  const row = await db.prepare("SELECT status FROM bookings WHERE id = ?1").bind(booking.id).first<{ status: string }>();
+  return row?.status === "cancelled" ? "already" : "paid";
 }
 
 /** Crée un paiement en attente + une session Stripe Checkout (ou stub) et

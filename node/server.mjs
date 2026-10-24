@@ -141,6 +141,7 @@ const { pullMailbox } = await import("../dist/services/mailbox.js");
 const { adminIpCheck, adminIpGate, ipDeniedResponse, markIpDenied } = await import("../dist/core/ip-allow.js");
 const { adminAddressRedirect } = await import("../dist/core/admin-redirect.js");
 const { localizePublicResponse } = await import("../dist/core/public-i18n.js");
+const { PaymentInFlightError } = await import("../dist/services/booking-flow.js");
 const { cspHeaderFor, isEmbeddablePath } = await import("../dist/services/http-headers.js");
 
 const router = new Router();
@@ -473,6 +474,12 @@ const server = createServer(async (req, res) => {
     // ni ligne `unhandled.error` dans le journal.
     if (e instanceof URIError) {
       if (!res.headersSent) res.writeHead(400, { "content-type": "text/plain; charset=utf-8" }).end("adresse invalide");
+      return;
+    }
+    // Refus métier, pas panne (comme src/index.ts) : un paiement est déjà parti
+    // chez la banque du client. 409 lisible, aucune trace d'erreur.
+    if (e instanceof PaymentInFlightError) {
+      if (!res.headersSent) await sendResponse(res, apiError(409, e.message, { code: "payment_in_flight" }));
       return;
     }
     console.error("[erreur]", req.method, url?.pathname, e instanceof Error ? e.stack : e);

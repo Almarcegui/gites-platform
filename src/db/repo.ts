@@ -1092,13 +1092,24 @@ export async function confirmBookingAtomic(db: D1Database, id: number, now: stri
   return row?.status === "pending" ? "conflict" : "not_pending";
 }
 
-export async function cancelBooking(db: D1Database, id: number, reason: string, now: string = sqlNow()): Promise<boolean> {
+/** Point d'extension UNIQUE de l'annulation d'une réservation : tout ce qui doit
+ *  suivre une annulation (libérer des ressources liées, etc.) se branche ici,
+ *  y compris pour l'annulation d'un hold par le client (`releaseGuestHold`).
+ *  `onlyStatus` : n'annule que si la réservation a encore ce statut (course
+ *  avec un paiement qui aboutit). */
+export async function cancelBooking(
+  db: D1Database,
+  id: number,
+  reason: string,
+  now: string = sqlNow(),
+  onlyStatus?: "pending",
+): Promise<boolean> {
   const res = await db
     .prepare(
       `UPDATE bookings SET status = 'cancelled', cancelled_at = ?3, cancel_reason = ?2, updated_at = ?3
-        WHERE id = ?1 AND status != 'cancelled'`,
+        WHERE id = ?1 AND status != 'cancelled' AND (?4 IS NULL OR status = ?4)`,
     )
-    .bind(id, reason, now)
+    .bind(id, reason, now, onlyStatus ?? null)
     .run();
   return res.meta.changes === 1;
 }
@@ -1449,7 +1460,7 @@ export async function markPaymentStatus(
       `UPDATE payments SET status = ?2, received_at = COALESCE(?3, received_at),
                            stripe_payment_intent = COALESCE(?4, stripe_payment_intent),
                            note = COALESCE(?5, note)
-        WHERE id = ?1`,
+        WHERE id = ?1 AND (?2 <> 'failed' OR status = 'pending')`, // un « payé » n'est jamais réécrit en échec
     )
     .bind(paymentId, status, opts.receivedAt ?? null, opts.stripePaymentIntent ?? null, opts.note ?? null)
     .run();
@@ -3028,7 +3039,7 @@ export async function healthSignals(db: D1Database, propertyId: number, now: Dat
          JOIN units u ON u.id = b.unit_id
         WHERE p.status = 'succeeded' AND b.status != 'confirmed' AND u.property_id = ?1
           AND p.kind != 'refund'
-          AND NOT (b.status = 'cancelled' AND b.cancelled_at IS NOT NULL AND b.cancel_reason NOT IN ('hold_expired', 'hold_replaced')
+          AND NOT (b.status = 'cancelled' AND b.cancelled_at IS NOT NULL AND b.cancel_reason NOT IN ('hold_expired', 'hold_replaced', 'hold_cancelled')
                    AND COALESCE(p.received_at, p.created_at) <= b.cancelled_at)
         ORDER BY p.id DESC LIMIT 20`,
     )
