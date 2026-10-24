@@ -1092,13 +1092,24 @@ export async function confirmBookingAtomic(db: D1Database, id: number, now: stri
   return row?.status === "pending" ? "conflict" : "not_pending";
 }
 
-export async function cancelBooking(db: D1Database, id: number, reason: string, now: string = sqlNow()): Promise<boolean> {
+/** Point d'extension UNIQUE de l'annulation d'une réservation : tout ce qui doit
+ *  suivre une annulation (libérer des ressources liées, etc.) se branche ici,
+ *  y compris pour l'annulation d'un hold par le client (`releaseGuestHold`).
+ *  `onlyStatus` : n'annule que si la réservation a encore ce statut (course
+ *  avec un paiement qui aboutit). */
+export async function cancelBooking(
+  db: D1Database,
+  id: number,
+  reason: string,
+  now: string = sqlNow(),
+  onlyStatus?: "pending",
+): Promise<boolean> {
   const res = await db
     .prepare(
       `UPDATE bookings SET status = 'cancelled', cancelled_at = ?3, cancel_reason = ?2, updated_at = ?3
-        WHERE id = ?1 AND status != 'cancelled'`,
+        WHERE id = ?1 AND status != 'cancelled' AND (?4 IS NULL OR status = ?4)`,
     )
-    .bind(id, reason, now)
+    .bind(id, reason, now, onlyStatus ?? null)
     .run();
   return res.meta.changes === 1;
 }

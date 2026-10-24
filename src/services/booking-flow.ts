@@ -6,6 +6,7 @@ import { computeQuote, type Quote } from "../core/pricing";
 import {
   addPayment,
   audit,
+  cancelBooking,
   confirmBookingAtomic,
   findPaymentBySession,
   getBooking,
@@ -190,15 +191,7 @@ export async function releaseGuestHold(
   if (booking.status !== "pending") return "paid";
   if ((await listPayments(db, { bookingId: booking.id })).some((x) => x.status === "succeeded")) return "paid";
   await voidPendingSessions(db, env, booking.id, "public", { strict: true });
-  const now = sqlNow();
-  const res = await db
-    .prepare(
-      `UPDATE bookings SET status = 'cancelled', cancelled_at = ?3, cancel_reason = ?2, updated_at = ?3
-        WHERE id = ?1 AND status = 'pending'`,
-    )
-    .bind(booking.id, reason, now)
-    .run();
-  if (res.meta.changes === 1) return "released";
+  if (await cancelBooking(db, booking.id, reason, sqlNow(), "pending")) return "released";
   const row = await db.prepare("SELECT status FROM bookings WHERE id = ?1").bind(booking.id).first<{ status: string }>();
   return row?.status === "cancelled" ? "already" : "paid";
 }
