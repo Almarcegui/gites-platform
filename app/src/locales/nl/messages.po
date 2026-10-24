@@ -5798,10 +5798,6 @@ msgstr "Inbegrepen nachten"
 msgid "Nuits minimum"
 msgstr "Minimum aantal nachten"
 
-#: src/pages/settings/Tarifs.tsx
-msgid "Nuits minimum à l'arrivée"
-msgstr "Minimum aantal nachten bij aankomst"
-
 #: src/pages/settings/Stats.tsx
 msgid "Nuits occupées"
 msgstr "Bezette nachten"

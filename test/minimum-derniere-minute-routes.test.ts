@@ -95,14 +95,11 @@ describe("API admin des paliers", () => {
 });
 
 describe("devis public et calendriers d'accord aux seuils", () => {
-  // Minimum de chaque jour selon son écart à aujourd'hui ; celui d'un séjour est
-  // le plus haut de ses nuits (décision du 24/10/2026).
+  // Les paliers se comptent depuis la date d'arrivée, pour toutes les nuits du
+  // séjour (décision du 24/10/2026) : une seule règle ici, donc le minimum ne
+  // dépend que de l'écart entre aujourd'hui et l'arrivée.
   const parJour = (k: number) => (k <= 14 ? 2 : k <= 28 ? 3 : 6);
-  const parSejour = (k: number) => {
-    let n = parJour(k);
-    for (let i = k; i < k + n; i++) n = Math.max(n, parJour(i));
-    return n;
-  };
+  const parSejour = parJour;
   it.each([[10], [12], [14], [15], [26], [28], [29], [45]])("arrivée à J+%i", async (inDays) => {
     const expected = parSejour(inDays);
     const court = (await call("POST", "/api/public/quote", stay(inDays, expected - 1))).data.quote as Q;

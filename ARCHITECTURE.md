@@ -550,8 +550,9 @@ Points d'implémentation qui surprennent au premier abord :
   `history.replaceState` — l'URL est donc toujours partageable.
 - Des compteurs monotones (`searchSeq`, `quoteSeq`) écartent les réponses obsolètes.
 - **Les règles de séjour sont écrites, pas seulement appliquées** (#66) : le
-  minimum de nuits s'affiche dans chaque case du calendrier et se résume par
-  période sous la grille, les jours d'arrivée imposés hachurent les cases
+  minimum de nuits d'une arrivée ce jour-là s'affiche dans chaque case du
+  calendrier (le plus haut des nuits couvertes, 24/10/2026), une phrase sous la
+  grille l'explique, les jours d'arrivée imposés hachurent les cases
   concernées. Un séjour refusé dit pourquoi et propose une ou deux plages
   réservables, calculées serveur sur les vraies disponibilités — plus jamais
   un « indisponible » sec.

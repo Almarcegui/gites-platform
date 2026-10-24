@@ -376,10 +376,11 @@ async function renderCalendar() {
     const noArrival = !d.past && d.available && d.arrivalDays != null && !d.arrivalDays.includes(dow(d.date));
     const cls = ["pday", d.past ? "past" : "", !d.past && !d.available ? "full" : "",
       noArrival ? "noarr" : "", isSel ? "sel" : "", isOut ? "dep" : "", inRange ? "range" : ""].join(" ");
-    const sub = d.past ? "" : d.available ? (d.minPrice != null ? t("dès {prix}", { prix: eurRound(d.minPrice) }) : "") : t("complet");
+    // Case du départ : ni prix ni minimum, ce n'est pas une nuit payée.
+    const sub = isOut ? t("départ") : d.past ? "" : d.available ? (d.minPrice != null ? t("dès {prix}", { prix: eurRound(d.minPrice) }) : "") : t("complet");
     // Le minimum de nuits est écrit DANS la case : c'est la seule façon de le
     // voir avant d'avoir choisi ses dates (impasse n° 5 du parcours au clic).
-    const mn = !d.past && d.available && d.minNights > 1 ? `<span class="mn">${t("min {n} n", { n: d.minNights })}</span>` : "";
+    const mn = !isOut && !d.past && d.available && d.minNights > 1 ? `<span class="mn">${t("min {n} n", { n: d.minNights })}</span>` : "";
     const hints = d.past || !d.available ? [] : [
       d.minNights > 1 ? t("{n} nuits minimum", { n: d.minNights }) : "",
       d.arrivalDays != null ? arrivalLabel(d.arrivalDays) : "",
@@ -387,7 +388,8 @@ async function renderCalendar() {
     const title = hints.length ? ` title="${esc(hints.join(" · "))}"` : "";
     const full = new Date(d.date + "T12:00:00Z").toLocaleDateString(LOCALE, { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
     const role = d.date === selIn ? `, ${t("arrivée")}` : d.date === selOut ? `, ${t("départ")}` : "";
-    const aria = ` aria-label="${esc(full + role + (d.past ? "" : d.available ? (d.minPrice != null ? ", " + sub : "") : ", " + t("complet")))}" aria-pressed="${isSel ? "true" : "false"}"`;
+    const ariaMin = !isOut && !d.past && d.available && d.minNights > 1 ? ", " + t("{n} nuits minimum", { n: d.minNights }) : "";
+    const aria = ` aria-label="${esc(full + role + (isOut ? "" : d.past ? "" : d.available ? (d.minPrice != null ? ", " + sub : "") + ariaMin : ", " + t("complet")))}" aria-pressed="${isSel ? "true" : "false"}"`;
     html += `<button type="button" class="${cls}" data-date="${d.date}"${title}${aria} ${d.past ? "disabled" : ""}>
       <span class="d">${Number(d.date.slice(8, 10))}</span><span class="p">${sub}</span>${mn}</button>`;
   }
@@ -428,8 +430,10 @@ function onDayClick(date, cell) {
   // Un jour sans arrivée (samedi, dimanche…) reste cliquable comme DÉPART, mais
   // jamais comme arrivée : le refus tombait seulement au devis (24/10/2026).
   if (asArrival && cell.classList.contains("noarr")) {
-    $("staySummary").innerHTML = `<div class="stay-summary"><span>${esc(t("Pas d'arrivée ce jour-là."))}</span>${
-      cell.title ? `<span class="muted">${esc(cell.title)}</span>` : ""}</div>`;
+    // Le résumé du séjour en cours reste : le refus s'écrit sur sa propre ligne.
+    updateSummary();
+    $("staySummary").insertAdjacentHTML("beforeend", `<p class="pcal-hint">${esc(t("Pas d'arrivée ce jour-là."))}${
+      cell.title ? ` ${esc(cell.title)}` : ""}</p>`);
     return;
   }
   if (asArrival) {
@@ -450,7 +454,7 @@ function updateSummary() {
     zone.innerHTML = `<div class="stay-summary">
       <span>${t("Arrivée le <b>{date}</b>", { date: dlong(selIn) })}</span>
       <span>${t("Départ le <b>{date}</b>", { date: dlong(selOut) })}</span>
-      <span class="stay-n">${t("{nuits} payées", { nuits: pl(n, "nuit", "nuits") })}</span></div>`;
+      <span class="stay-n">${n === 1 ? t("1 nuit payée") : t("{n} nuits payées", { n })}</span></div>`;
   } else if (selIn) {
     zone.innerHTML = `<div class="stay-summary"><span>${t("Arrivée le <b>{date}</b>", { date: dlong(selIn) })}</span>
       <span class="muted">${t("Choisissez maintenant le jour de départ.")}</span></div>`;

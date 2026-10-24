@@ -85,7 +85,8 @@ const ajouterJours = (iso, n) => new Date(Date.parse(`${iso}T00:00:00Z`) + n * 8
 //   · arrivée réservable (`available` : après le délai minimum, nuit libre) ;
 //   · seconde nuit libre et tarifée aussi (elle peut tomber dans le mois
 //     suivant : `mois` contient donc un mois de plus que la fenêtre d'arrivée) ;
-//   · minimum de nuits de la nuit d'arrivée ≤ 2 ;
+//   · minimum d'une arrivée ce jour-là ≤ 2 (le calendrier le calcule sur les
+//     nuits couvertes) et seconde nuit à 2 au plus ;
 //   · jours d'arrivée imposés : nul, ou contenant le jour de la semaine d'arrivée.
 // `jusquau` = dernière date d'arrivée envisagée (incluse). Rend
 // { arrivee, cents } (somme des deux nuits, hors frais) ou null s'il n'y a aucune
