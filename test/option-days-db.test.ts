@@ -3,7 +3,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { D1Database } from "@cloudflare/workers-types";
 import { createTestDb, type TestDb } from "./helpers/d1";
 import {
-  cancelBooking, claimOptionDays, createBookingAtomic, expireStaleHolds, getQuoteContext, takenOptionDays,
+  cancelBooking, claimOptionDays, confirmBookingAtomic, createBookingAtomic, expireStaleHolds, getQuoteContext, takenOptionDays,
   type CreateBookingInput,
 } from "../src/db/repo";
 import { optionDayClaims, quoteFromContext, withOptionDaysCheck } from "../src/services/booking-flow";
@@ -143,5 +143,43 @@ describe("partage entre les maisons", () => {
     expect(await claimOptionDays(db, c2.id, [{ optionId: saunaId, date: "2026-10-24" }], "2026-06-01 13:00:00")).toBe(true);
     // Le cron nettoie.
     expect(await expireStaleHolds(db, "2026-06-01 14:00:00")).toBeGreaterThanOrEqual(0);
+  });
+});
+
+describe("paiement tardif d'un hold expiré", () => {
+  async function holdWithDay(unitId: number, day: string) {
+    const q = await quote(unitId, [{ id: saunaId, qty: 1, days: [day] }]);
+    const optionsJson = JSON.stringify(q.lines.filter((l) => l.kind === "option"));
+    const c = await createBookingAtomic(db, input(unitId, IN, OUT, { status: "pending", holdMinutes: 30, optionsJson }));
+    if (!c.ok) throw new Error("création");
+    await claimOptionDays(db, c.id, optionDayClaims(q), "2026-06-01 12:00:00");
+    return c.id;
+  }
+
+  it("le jour repris par un autre client empêche la confirmation (conflict), rien n'est confirmé", async () => {
+    const d = await holdWithDay(SCIERIE, "2026-10-24");
+    // le hold expire ; un autre client prend le jour et paie
+    const e = await createBookingAtomic(db, input(SCIEUR, IN, OUT));
+    if (!e.ok) throw new Error("création");
+    expect(await claimOptionDays(db, e.id, [{ optionId: saunaId, date: "2026-10-24" }], "2026-06-01 13:00:00")).toBe(true);
+    // le paiement de D arrive après
+    expect(await confirmBookingAtomic(db, d, "2026-06-01 13:05:00")).toBe("conflict");
+    const st = await db.prepare("SELECT status FROM bookings WHERE id = ?1").bind(d).first<{ status: string }>();
+    expect(st?.status).toBe("pending");
+    const { results } = await db.prepare("SELECT booking_id FROM option_days").all();
+    expect(results.map((r: any) => r.booking_id)).toEqual([e.id]);
+  });
+
+  it("jour resté libre : la confirmation repose les jours purgés", async () => {
+    const d = await holdWithDay(SCIERIE, "2026-10-24");
+    await db.prepare("DELETE FROM option_days").run();
+    expect(await confirmBookingAtomic(db, d, "2026-06-01 12:10:00")).toBe("confirmed");
+    const { results } = await db.prepare("SELECT booking_id, date FROM option_days").all();
+    expect(results).toEqual([{ booking_id: d, date: "2026-10-24" }]);
+  });
+
+  it("jours intacts : la confirmation passe sans erreur", async () => {
+    const d = await holdWithDay(SCIERIE, "2026-10-24");
+    expect(await confirmBookingAtomic(db, d, "2026-06-01 12:10:00")).toBe("confirmed");
   });
 });

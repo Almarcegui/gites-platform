@@ -1071,7 +1071,12 @@ export type ConfirmResult = "confirmed" | "conflict" | "not_pending";
  *  'conflict' ⇒ le créneau a été pris pendant le paiement : ne rien confirmer,
  *  alerter un humain (remboursement ou relogement dans l'heure). */
 export async function confirmBookingAtomic(db: D1Database, id: number, now: string = sqlNow()): Promise<ConfirmResult> {
-  const res = await db
+  // Jours d'options « à la date » : un hold expiré a pu perdre ses lignes (purgées par un autre
+  // client). On les repose dans le MÊME lot que la confirmation ; si l'unicité refuse (un autre
+  // a payé le jour entre-temps), tout le lot est annulé → « conflict » (alerte, rien confirmé).
+  const own = await db.prepare("SELECT options_json FROM bookings WHERE id = ?1").bind(id).first<{ options_json: string | null }>();
+  const claims = claimsFromOptionsJson(own?.options_json ?? null);
+  const confirmStmt = db
     .prepare(
       `UPDATE bookings SET status = 'confirmed', hold_expires_at = NULL, updated_at = ?2
         WHERE id = ?1
@@ -1095,9 +1100,43 @@ export async function confirmBookingAtomic(db: D1Database, id: number, now: stri
             "(SELECT checkout FROM bookings WHERE id = ?1)",
           )}`,
     )
-    .bind(id, now)
-    .run();
-  if (res.meta.changes === 1) return "confirmed";
+    .bind(id, now);
+  let changes: number;
+  if (claims.length === 0) {
+    changes = (await confirmStmt.run()).meta.changes;
+  } else {
+    const stmts = [confirmStmt];
+    for (const c of claims) {
+      stmts.push(
+        db
+          .prepare(
+            `DELETE FROM option_days WHERE option_id = ?1 AND date = ?2 AND booking_id != ?3 AND booking_id IN (
+               SELECT id FROM bookings WHERE NOT (status = 'confirmed' OR (status = 'pending' AND hold_expires_at > ?4)))`,
+          )
+          .bind(c.optionId, c.date, id, now),
+      );
+    }
+    for (const c of claims) {
+      stmts.push(
+        db
+          .prepare(
+            `INSERT INTO option_days (option_id, date, booking_id)
+             SELECT ?1, ?2, ?3
+              WHERE EXISTS (SELECT 1 FROM bookings WHERE id = ?3 AND status = 'confirmed' AND updated_at = ?4)
+                AND NOT EXISTS (SELECT 1 FROM option_days WHERE option_id = ?1 AND date = ?2 AND booking_id = ?3)`,
+          )
+          .bind(c.optionId, c.date, id, now),
+      );
+    }
+    try {
+      const out = await db.batch(stmts);
+      changes = out[0]?.meta.changes ?? 0;
+    } catch (e) {
+      if (/UNIQUE|constraint/i.test(String((e as Error)?.message ?? e))) return "conflict";
+      throw e;
+    }
+  }
+  if (changes === 1) return "confirmed";
   const row = await db.prepare("SELECT status FROM bookings WHERE id = ?1").bind(id).first<{ status: string }>();
   return row?.status === "pending" ? "conflict" : "not_pending";
 }
@@ -1117,6 +1156,19 @@ export async function cancelBooking(db: D1Database, id: number, reason: string, 
 // --- Options à la date (0042) : un jour = une ligne, unique par (option, date) ---------------
 
 /** Libère les jours d'options d'une réservation (annulée, expirée ou rééditée). */
+/** Jours d'options tenus par une réservation, relus de son `options_json`. */
+export function claimsFromOptionsJson(optionsJson: string | null): { optionId: number; date: string }[] {
+  try {
+    const lines: unknown = optionsJson ? JSON.parse(optionsJson) : [];
+    if (!Array.isArray(lines)) return [];
+    return lines.flatMap((l: { optionId?: unknown; days?: unknown }) =>
+      Array.isArray(l?.days) && Number.isFinite(Number(l.optionId)) ? l.days.map((d) => ({ optionId: Number(l.optionId), date: String(d) })) : [],
+    );
+  } catch {
+    return [];
+  }
+}
+
 export async function releaseOptionDays(db: D1Database, bookingId: number): Promise<void> {
   await db.prepare("DELETE FROM option_days WHERE booking_id = ?1").bind(bookingId).run();
 }
