@@ -129,7 +129,12 @@ a{color:var(--accent)}
 .sugg{margin-top:8px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 .sugg .sugg-b{padding:8px 12px;font-size:14px;text-align:left}
 .pcal-hint{font-size:14px;color:var(--muted);margin-top:8px}
-.stay-summary{background:#E6EFE8;border-radius:6px;padding:8px 12px;font-size:14px}
+.stay-summary{background:#E6EFE8;border-radius:6px;padding:10px 12px;font-size:15.5px;display:flex;flex-wrap:wrap;gap:4px 18px}
+.stay-summary .stay-n{color:var(--muted)}
+.sum-stay{font-size:14.5px;line-height:1.5;margin:6px 0 2px}
+/* Jour du départ : pas une nuit payée, la case reste claire, bordée. */
+.pday.sel.dep{background:#fff;border:2px solid var(--accent)}
+.pday.sel.dep .d,.pday.sel.dep .p{color:var(--accent)}
 
 /* --- barre séjour : résumé + voyageurs, la recherche part toute seule --- */
 .stay-bar{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-top:10px}

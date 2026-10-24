@@ -121,3 +121,17 @@ describe("checkinDaysLabel", () => {
     expect(checkinDaysLabel([])).toBe("");
   });
 });
+
+describe("le plus haut minimum des nuits couvertes (décision du 24/10/2026)", () => {
+  // Jeudi 8/1 à 2 nuits, puis vendredi 9/1 → dimanche 18/1 à 4 nuits.
+  const days = calendar(LUNDI, 60, (d) => ({ minNights: d >= "2026-01-09" && d <= "2026-01-18" ? 4 : 2 }));
+  it("isBookableStay : jeudi → dimanche (3 nuits) refusé, jeudi → lundi accepté", () => {
+    expect(isBookableStay(days, "2026-01-08", "2026-01-11")).toBe(false);
+    expect(isBookableStay(days, "2026-01-08", "2026-01-12")).toBe(true);
+    expect(isBookableStay(days, "2026-01-06", "2026-01-08")).toBe(true);
+  });
+  it("suggestStays étire jusqu'au minimum de la nuit la plus exigeante", () => {
+    const [first] = suggestStays(days, { checkin: "2026-01-08", nights: 2 });
+    expect(first).toEqual({ checkin: "2026-01-08", checkout: "2026-01-12", nights: 4 });
+  });
+});

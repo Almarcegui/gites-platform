@@ -463,8 +463,9 @@ interface UnitBreakdown {
   baseCents: number;
   holidaySurchargeCents: number;
   holidayNights: number;
-  /** minimum de nuits de la NUIT D'ARRIVÉE (surcharge du jour prioritaire) */
-  arrivalMinNights: number;
+  /** minimum de nuits du séjour : le plus haut des minimums de ses nuits
+   *  (surcharge du jour prioritaire sur chaque nuit) — décision du 24/10/2026 */
+  stayMinNights: number;
   arrivalCheckinDays: number[] | null;
   missingRate: boolean;
 }
@@ -492,7 +493,7 @@ function breakdownForUnit(
   const groups = new Map<string, Group>();
   let surcharge = 0;
   let holidayNights = 0;
-  let arrivalMinNights = 1;
+  let stayMinNights = 1;
   let arrivalCheckinDays: number[] | null = null;
   let missingRate = false;
 
@@ -502,10 +503,11 @@ function breakdownForUnit(
       missingRate = true;
       return;
     }
-    if (idx === 0) {
-      arrivalMinNights = r.minNights;
-      arrivalCheckinDays = r.checkinDays;
-    }
+    // Un séjour qui touche une nuit à 4 minimum doit faire 4 nuits, quel que
+    // soit son jour d'arrivée (décision du 24/10/2026) ; avant, seule la nuit
+    // d'arrivée comptait et un jeudi-dimanche passait sous un week-end à 6.
+    stayMinNights = Math.max(stayMinNights, r.minNights);
+    if (idx === 0) arrivalCheckinDays = r.checkinDays;
     // Une nuit surchargée sort du groupe de sa saison : son prix ne vient plus
     // d'elle, et le devis doit le dire au client comme au téléphone.
     const seasonLabel =
@@ -551,7 +553,7 @@ function breakdownForUnit(
     baseCents: lines.reduce((s, l) => s + l.amountCents, 0),
     holidaySurchargeCents: surcharge,
     holidayNights,
-    arrivalMinNights,
+    stayMinNights,
     arrivalCheckinDays,
     missingRate,
   };
@@ -641,9 +643,9 @@ export function computeQuote(req: QuoteRequest): Quote {
   }
   const accommodationCents = breakdowns.reduce((s, b) => s + b.baseCents, 0) + surchargeCents;
 
-  // --- min. nuits & jour d'arrivée (règle de la nuit d'arrivée ; composite
-  //     'sum' : la plus exigeante des composantes)
-  const minNights = Math.max(1, ...breakdowns.map((b) => b.arrivalMinNights));
+  // --- min. nuits (le plus haut des nuits du séjour) & jour d'arrivée (règle de
+  //     la nuit d'arrivée) ; composite 'sum' : la plus exigeante des composantes
+  const minNights = Math.max(1, ...breakdowns.map((b) => b.stayMinNights));
   if (nights < minNights) errors.push("min_nights");
   let checkinDays: number[] | null = null;
   for (const b of breakdowns) checkinDays = intersectCheckinDays(checkinDays, b.arrivalCheckinDays);

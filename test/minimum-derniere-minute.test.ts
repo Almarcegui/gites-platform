@@ -92,3 +92,28 @@ describe("stockage des paliers", () => {
     expect(formatMinNightsRelax([])).toBeNull();
   });
 });
+
+describe("le plus haut minimum des nuits du séjour (décision du 24/10/2026)", () => {
+  // Saison krokus 2027 : nuits du vendredi 5/2 au samedi 13/2 à 4 nuits ; avant, 2.
+  const KROKUS: Season[] = [{ id: 7, name: "Krokus 2027", dateStart: "2027-02-05", dateEnd: "2027-02-13", priority: 17 }];
+  const R: RateRule[] = [
+    { id: 1, unitId: 2, seasonId: null, priceWeekCents: 10000, priceWeekendCents: 10000, holidayPct: 0, minNights: 2, checkinDays: null },
+    { id: 2, unitId: 2, seasonId: 7, priceWeekCents: 10000, priceWeekendCents: 10000, holidayPct: 0, minNights: 4, checkinDays: null, minNightsRelax: [{ days: 14, minNights: 2 }] },
+  ];
+  const q = (today: string, checkin: string, checkout: string) =>
+    computeQuote({ unit: SCIERIE, checkin, checkout, adults: 2, children: 0, today, seasons: KROKUS, rateRules: R, promotions: [], optionsSelected: [], settings: SETTINGS });
+
+  it("jeudi 4 → dimanche 7/2 : 3 nuits refusées, le séjour touche des nuits à 4", () => {
+    const r = q("2026-11-01", "2027-02-04", "2027-02-07");
+    expect(r.errors).toContain("min_nights");
+    expect(r.minNights).toBe(4);
+    expect(q("2026-11-01", "2027-02-04", "2027-02-08").errors).not.toContain("min_nights");
+  });
+  it("lundi 1 → mercredi 3/2 : hors période, 2 nuits passent", () => {
+    expect(q("2026-11-01", "2027-02-01", "2027-02-03").errors).not.toContain("min_nights");
+  });
+  it("chaque nuit garde son relâchement : à J-13 des nuits de période, 3 nuits passent", () => {
+    // le 23/01, les nuits des 5-6/02 sont à 13-14 jours : déjà à 2 nuits
+    expect(q("2027-01-23", "2027-02-04", "2027-02-07").errors).not.toContain("min_nights");
+  });
+});

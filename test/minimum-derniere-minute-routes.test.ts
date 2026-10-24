@@ -95,10 +95,17 @@ describe("API admin des paliers", () => {
 });
 
 describe("devis public et calendriers d'accord aux seuils", () => {
-  it.each([
-    [10, 2], [14, 2], [15, 3], [28, 3], [29, 6], [45, 6],
-  ])("arrivée à J+%i : minimum %i", async (inDays, expected) => {
-    const court = (await call("POST", "/api/public/quote", stay(inDays, expected - 1 || 1))).data.quote as Q;
+  // Minimum de chaque jour selon son écart à aujourd'hui ; celui d'un séjour est
+  // le plus haut de ses nuits (décision du 24/10/2026).
+  const parJour = (k: number) => (k <= 14 ? 2 : k <= 28 ? 3 : 6);
+  const parSejour = (k: number) => {
+    let n = parJour(k);
+    for (let i = k; i < k + n; i++) n = Math.max(n, parJour(i));
+    return n;
+  };
+  it.each([[10], [12], [14], [15], [26], [28], [29], [45]])("arrivée à J+%i", async (inDays) => {
+    const expected = parSejour(inDays);
+    const court = (await call("POST", "/api/public/quote", stay(inDays, expected - 1))).data.quote as Q;
     const juste = (await call("POST", "/api/public/quote", stay(inDays, expected))).data.quote as Q;
     if (expected > 1) expect(court.errors).toContain("min_nights");
     expect(juste.errors).not.toContain("min_nights");
@@ -108,11 +115,11 @@ describe("devis public et calendriers d'accord aux seuils", () => {
     const pub = await call("GET", `/api/public/calendar?property=pre-more&month=${date.slice(0, 7)}`);
     const pubDay = (pub.data.units as { unitId: number; days: { date: string; minNights: number | null }[] }[])
       .find((u) => u.unitId === 1)!.days.find((d) => d.date === date);
-    expect(pubDay?.minNights).toBe(expected);
+    expect(pubDay?.minNights).toBe(parJour(inDays));
 
     const adm = await call("GET", `/api/admin/rate-calendar?unit=1&from=${date}&to=${addDays(date, 1)}`);
     const admDay = (adm.data.days as { date: string; minNights: number | null }[]).find((d) => d.date === date);
-    expect(admDay?.minNights).toBe(expected);
+    expect(admDay?.minNights).toBe(parJour(inDays));
   });
 });
 

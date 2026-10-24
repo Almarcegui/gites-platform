@@ -34,6 +34,8 @@ if (FIXED_PROPERTY && params.has("property")) {
 const eurRound = (c) => (LANG === "nl" ? `€ ${Math.round(c / 100)}` : `${Math.round(c / 100)} €`);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 const dfr = (iso) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`;
+/** « jeudi 4 février 2027 » : arrivée et départ se lisent avec leur jour. */
+const dlong = (iso) => new Date(iso + "T12:00:00Z").toLocaleDateString(LOCALE, { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
 const nightsBetween = (a, b) => Math.round((Date.parse(b) - Date.parse(a)) / 86400000);
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const dow = (iso) => new Date(iso + "T12:00:00Z").getUTCDay(); // 0 = dimanche
@@ -369,9 +371,11 @@ async function renderCalendar() {
   for (const d of days) {
     const inRange = selIn && selOut && d.date > selIn && d.date < selOut;
     const isSel = d.date === selIn || d.date === selOut;
+    // Le jour du départ n'est pas une nuit payée : sa case se dessine à part.
+    const isOut = selOut != null && d.date === selOut;
     const noArrival = !d.past && d.available && d.arrivalDays != null && !d.arrivalDays.includes(dow(d.date));
     const cls = ["pday", d.past ? "past" : "", !d.past && !d.available ? "full" : "",
-      noArrival ? "noarr" : "", isSel ? "sel" : "", inRange ? "range" : ""].join(" ");
+      noArrival ? "noarr" : "", isSel ? "sel" : "", isOut ? "dep" : "", inRange ? "range" : ""].join(" ");
     const sub = d.past ? "" : d.available ? (d.minPrice != null ? t("dès {prix}", { prix: eurRound(d.minPrice) }) : "") : t("complet");
     // Le minimum de nuits est écrit DANS la case : c'est la seule façon de le
     // voir avant d'avoir choisi ses dates (impasse n° 5 du parcours au clic).
@@ -394,55 +398,46 @@ async function renderCalendar() {
   renderCalRules(days, data.minLeadDays);
 }
 
-/** Règles de séjour du mois affiché, regroupées par période contiguë (#66).
- *  « Séjour minimum : 7 nuits du 01/07 au 31/07 » — la règle existe depuis
- *  toujours côté moteur ; elle n'était écrite nulle part. */
+/** Règles de séjour du mois affiché, en une phrase (décision du 24/10/2026 :
+ *  la liste période par période était excessive). Le minimum de chaque jour
+ *  reste écrit DANS sa case ; ici, on dit seulement pourquoi il change. */
 function renderCalRules(days, minLeadDays = 0) {
   const zone = $("calRules");
   if (!zone) return;
+  const futurs = days.filter((d) => !d.past && d.ruleMinNights != null);
+  const parts = [];
+  if (futurs.some((d) => d.ruleMinNights > 1)) {
+    parts.push(t("Les réservations ont une durée minimum selon les saisons et les fêtes : elle est indiquée sur chaque jour."));
+  }
+  // Jours d'arrivée : dits une fois, s'ils sont les mêmes tout le mois.
+  const arr = [...new Set(futurs.map((d) => (d.ruleArrivalDays ?? []).join(",")))];
+  if (arr.length === 1 && arr[0] !== "") {
+    const label = arrivalLabel(arr[0].split(",").map(Number));
+    parts.push(label.charAt(0).toUpperCase() + label.slice(1) + ".");
+  }
   // Délai minimum de réservation (demande n° 15) : les jours trop proches sont
   // grisés comme des jours passés — la règle doit être écrite, pas devinée.
-  const lead = minLeadDays > 0
-    ? `<span class="rule">${esc(t("Réservation en ligne au plus tard {jours} avant l'arrivée", { jours: pl(minLeadDays, "jour", "jours") }))}</span>`
-    : "";
-  const segments = [];
-  for (const d of days) {
-    // Une règle ne dépend pas de l'occupation (cf. ruleMinNights plus haut).
-    if (d.past || d.ruleMinNights == null) continue;
-    const key = `${d.ruleMinNights}|${(d.ruleArrivalDays ?? []).join(",")}`;
-    const last = segments.at(-1);
-    if (last && last.key === key && nightsBetween(last.to, d.date) === 1) last.to = d.date;
-    else segments.push({ key, minNights: d.ruleMinNights, arrivalDays: d.ruleArrivalDays, from: d.date, to: d.date });
-  }
-  const notable = segments.filter((s) => s.minNights > 1 || s.arrivalDays != null);
-  if (notable.length === 0) {
-    zone.innerHTML = lead;
-    return;
-  }
-  const period = (s) => (s.from === s.to ? t("le {date}", { date: dfr(s.from) }) : t("du {du} au {au}", { du: dfr(s.from), au: dfr(s.to) }));
-  zone.innerHTML = (lead ? lead + " · " : "") + notable
-    .map((s) => {
-      const parts = [];
-      if (s.minNights > 1) parts.push(`<b>${t("{n} nuits minimum", { n: s.minNights })}</b>`);
-      if (s.arrivalDays != null) parts.push(esc(arrivalLabel(s.arrivalDays)));
-      return `<span class="rule">${parts.join(", ")} ${esc(period(s))}</span>`;
-    })
-    .join(" · ");
+  if (minLeadDays > 0) parts.push(t("Réservation en ligne au plus tard {jours} avant l'arrivée.", { jours: pl(minLeadDays, "jour", "jours") }));
+  zone.innerHTML = parts.map((x) => `<span class="rule">${esc(x)}</span>`).join(" ");
 }
 
 function onDayClick(date, cell) {
   if (cell.classList.contains("past")) return;
   const isFull = cell.classList.contains("full");
-  if (!selIn || (selIn && selOut)) {
+  const asArrival = !selIn || Boolean(selOut) || date <= selIn;
+  // Un jour sans arrivée (samedi, dimanche…) reste cliquable comme DÉPART, mais
+  // jamais comme arrivée : le refus tombait seulement au devis (24/10/2026).
+  if (asArrival && cell.classList.contains("noarr")) {
+    $("staySummary").innerHTML = `<div class="stay-summary"><span>${esc(t("Pas d'arrivée ce jour-là."))}</span>${
+      cell.title ? `<span class="muted">${esc(cell.title)}</span>` : ""}</div>`;
+    return;
+  }
+  if (asArrival) {
     if (isFull) return; // un jour complet ne peut pas être une arrivée
     selIn = date;
     selOut = null;
-  } else if (date > selIn) {
-    selOut = date; // le jour de départ peut être « complet » (rotation le jour même)
   } else {
-    if (isFull) return;
-    selIn = date;
-    selOut = null;
+    selOut = date; // le jour de départ peut être « complet » (rotation le jour même)
   }
   renderCalendar();
   onSelectionChange();
@@ -452,9 +447,13 @@ function updateSummary() {
   const zone = $("staySummary");
   if (selIn && selOut) {
     const n = nightsBetween(selIn, selOut);
-    zone.innerHTML = `<div class="stay-summary">${t("Séjour du <b>{du}</b> au <b>{au}</b> — {nuits}", { du: dfr(selIn), au: dfr(selOut), nuits: pl(n, "nuit", "nuits") })}</div>`;
+    zone.innerHTML = `<div class="stay-summary">
+      <span>${t("Arrivée le <b>{date}</b>", { date: dlong(selIn) })}</span>
+      <span>${t("Départ le <b>{date}</b>", { date: dlong(selOut) })}</span>
+      <span class="stay-n">${t("{nuits} payées", { nuits: pl(n, "nuit", "nuits") })}</span></div>`;
   } else if (selIn) {
-    zone.innerHTML = `<div class="stay-summary">${t("Arrivée le <b>{date}</b> — choisissez le jour de départ.", { date: dfr(selIn) })}</div>`;
+    zone.innerHTML = `<div class="stay-summary"><span>${t("Arrivée le <b>{date}</b>", { date: dlong(selIn) })}</span>
+      <span class="muted">${t("Choisissez maintenant le jour de départ.")}</span></div>`;
   } else {
     zone.innerHTML = "";
   }
@@ -795,8 +794,9 @@ async function openBookingPanel(unitId) {
       <aside class="panel-side">
         <div class="card sum">
           <b class="sum-unit">${esc(SELECTED.name)}</b>
-          <p class="small muted sum-stay">${t("Du {du} au {au}", { du: dfr(SEARCH.checkin), au: dfr(SEARCH.checkout) })} · ${pl(SEARCH.adults, "adulte", "adultes")}${SEARCH.children ? ` + ${pl(SEARCH.children, "enfant", "enfants")}` : ""}<br>
-          ${t("Arrivée dès {arr} · départ avant {dep}", { arr: esc(hour(PROP.settings.checkinTime)), dep: esc(hour(checkoutTimeFor(PROP.settings, SEARCH.checkout))) })} · <a href="#" id="editDates">${t("modifier")}</a></p>
+          <p class="sum-stay">${t("Arrivée le <b>{date}</b> dès {h}", { date: dlong(SEARCH.checkin), h: esc(hour(PROP.settings.checkinTime)) })}<br>
+          ${t("Départ le <b>{date}</b> avant {h}", { date: dlong(SEARCH.checkout), h: esc(hour(checkoutTimeFor(PROP.settings, SEARCH.checkout))) })}</p>
+          <p class="small muted">${pl(nightsBetween(SEARCH.checkin, SEARCH.checkout), "nuit", "nuits")} · ${pl(SEARCH.adults, "adulte", "adultes")}${SEARCH.children ? ` + ${pl(SEARCH.children, "enfant", "enfants")}` : ""} · <a href="#" id="editDates">${t("modifier")}</a></p>
           <div id="quoteZone" class="small muted" aria-live="polite" aria-atomic="true">${t("Calcul du devis…")}</div>
         </div>
       </aside>

@@ -16,7 +16,8 @@ export interface NightOption {
   date: IsoDate;
   /** l'unité (liaisons comprises) est libre cette nuit-là */
   available: boolean;
-  /** minimum de nuits imposé si le séjour COMMENCE cette nuit ;
+  /** minimum de nuits de cette nuit : un séjour qui la contient doit en faire
+   *  au moins autant (le plus haut de ses nuits l'emporte) ;
    *  null = aucun tarif ne couvre le jour, donc pas de séjour possible */
   minNights: number | null;
   /** jours d'arrivée autorisés (0=dim … 6=sam) ; null = aucune contrainte,
@@ -45,10 +46,10 @@ export function isBookableStay(days: readonly NightOption[], checkin: IsoDate, c
   if (!arrival || arrival.minNights == null) return false;
   if (!isAllowedCheckin(arrival)) return false;
   const nights = diffDays(checkin, checkout);
-  if (nights < arrival.minNights) return false;
   for (let d = checkin; d < checkout; d = addDays(d, 1)) {
     const night = index.get(d);
     if (!night || !night.available || night.minNights == null) return false;
+    if (nights < night.minNights) return false;
   }
   return true;
 }
@@ -56,7 +57,7 @@ export function isBookableStay(days: readonly NightOption[], checkin: IsoDate, c
 /** Plages réservables les plus proches d'un séjour demandé.
  *
  *  Règle de proximité : on garde la durée souhaitée quand elle suffit, sinon on
- *  l'étire au minimum imposé par la nuit d'arrivée — jamais plus. Les candidats
+ *  l'étire au plus haut minimum des nuits couvertes — jamais plus. Les candidats
  *  sont ensuite classés par écart de date d'arrivée, à égalité en privilégiant
  *  une arrivée PLUS TARDIVE que celle demandée (le client a rarement la
  *  possibilité de partir plus tôt que prévu) puis le séjour le plus court.
@@ -75,17 +76,20 @@ export function suggestStays(
 
   for (const day of days) {
     if (!day.available || day.minNights == null || !isAllowedCheckin(day)) continue;
-    const nights = Math.max(wantedNights, day.minNights);
-    const checkout = addDays(day.date, nights);
+    // On étire jusqu'au plus haut minimum des nuits couvertes : étirer peut
+    // faire entrer une nuit plus exigeante, d'où la boucle (bornée à 60 nuits).
+    let nights = Math.max(wantedNights, day.minNights);
     let free = true;
-    for (let d = day.date; d < checkout; d = addDays(d, 1)) {
+    for (let d = day.date; d < addDays(day.date, nights); d = addDays(d, 1)) {
       const night = index.get(d);
-      if (!night || !night.available || night.minNights == null) {
+      if (!night || !night.available || night.minNights == null || nights > 60) {
         free = false;
         break;
       }
+      nights = Math.max(nights, night.minNights);
     }
     if (!free) continue;
+    const checkout = addDays(day.date, nights);
     candidates.push({ checkin: day.date, checkout, nights, offset: diffDays(wanted.checkin, day.date) });
   }
 

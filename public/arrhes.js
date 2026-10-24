@@ -102,7 +102,9 @@ export function meilleurSejour2Nuits(mois, unitId, jusquau) {
     if ((a.minNights ?? 1) > 2) continue;
     if (a.checkinDays != null && !a.checkinDays.includes(new Date(`${date}T00:00:00Z`).getUTCDay())) continue;
     const b = jours.get(ajouterJours(date, 1));
-    if (!b || !b.available || b.priceCents == null) continue;
+    // La seconde nuit compte aussi : un séjour doit tenir le plus haut minimum
+    // de ses nuits (décision du 24/10/2026).
+    if (!b || !b.available || b.priceCents == null || (b.minNights ?? 1) > 2) continue;
     const cents = a.priceCents + b.priceCents;
     if (meilleur == null || cents < meilleur.cents || (cents === meilleur.cents && date < meilleur.arrivee)) {
       meilleur = { arrivee: date, cents };
