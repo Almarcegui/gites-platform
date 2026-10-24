@@ -12,6 +12,7 @@ import type { UnitLink } from "../core/availability";
 import type { GuestIdType, GuestRegisterEntry } from "../core/guest-register";
 import type { MinNightsStep, OptionDef, Promotion, RateOverride, RateRule, Season, UnitPricingInfo } from "../core/pricing";
 import { normalizeLeadDays } from "../core/pricing";
+import { parseWeekendDays } from "../core/option-days";
 import {
   MESSAGE_UNANSWERED_HOURS,
   RATE_HORIZON_DAYS,
@@ -594,6 +595,15 @@ function mapOption(r: Raw): OptionDef & { active: boolean; sortOrder: number; pr
     id: num(r.id), name: str(r.name), pricingMode: str(r.pricing_mode) as OptionDef["pricingMode"],
     priceCents: num(r.price_cents), maxQty: numOrNull(r.max_qty), unitLabel: strOrNull(r.unit_label),
     active: num(r.active) === 1, sortOrder: num(r.sort_order), propertyId: num(r.property_id),
+    // Options à la date (0042) : champs présents seulement pour ces options, les autres restent identiques.
+    ...(num(r.per_date) === 1
+      ? {
+          perDate: true,
+          weekendPriceCents: numOrNull(r.weekend_price_cents),
+          weekendDays: parseWeekendDays(strOrNull(r.weekend_days)),
+          consecutivePct: numOrNull(r.consecutive_pct),
+        }
+      : {}),
   };
 }
 
@@ -1061,7 +1071,12 @@ export type ConfirmResult = "confirmed" | "conflict" | "not_pending";
  *  'conflict' ⇒ le créneau a été pris pendant le paiement : ne rien confirmer,
  *  alerter un humain (remboursement ou relogement dans l'heure). */
 export async function confirmBookingAtomic(db: D1Database, id: number, now: string = sqlNow()): Promise<ConfirmResult> {
-  const res = await db
+  // Jours d'options « à la date » : un hold expiré a pu perdre ses lignes (purgées par un autre
+  // client). On les repose dans le MÊME lot que la confirmation ; si l'unicité refuse (un autre
+  // a payé le jour entre-temps), tout le lot est annulé → « conflict » (alerte, rien confirmé).
+  const own = await db.prepare("SELECT options_json FROM bookings WHERE id = ?1").bind(id).first<{ options_json: string | null }>();
+  const claims = claimsFromOptionsJson(own?.options_json ?? null);
+  const confirmStmt = db
     .prepare(
       `UPDATE bookings SET status = 'confirmed', hold_expires_at = NULL, updated_at = ?2
         WHERE id = ?1
@@ -1085,9 +1100,43 @@ export async function confirmBookingAtomic(db: D1Database, id: number, now: stri
             "(SELECT checkout FROM bookings WHERE id = ?1)",
           )}`,
     )
-    .bind(id, now)
-    .run();
-  if (res.meta.changes === 1) return "confirmed";
+    .bind(id, now);
+  let changes: number;
+  if (claims.length === 0) {
+    changes = (await confirmStmt.run()).meta.changes;
+  } else {
+    const stmts = [confirmStmt];
+    for (const c of claims) {
+      stmts.push(
+        db
+          .prepare(
+            `DELETE FROM option_days WHERE option_id = ?1 AND date = ?2 AND booking_id != ?3 AND booking_id IN (
+               SELECT id FROM bookings WHERE NOT (status = 'confirmed' OR (status = 'pending' AND hold_expires_at > ?4)))`,
+          )
+          .bind(c.optionId, c.date, id, now),
+      );
+    }
+    for (const c of claims) {
+      stmts.push(
+        db
+          .prepare(
+            `INSERT INTO option_days (option_id, date, booking_id)
+             SELECT ?1, ?2, ?3
+              WHERE EXISTS (SELECT 1 FROM bookings WHERE id = ?3 AND status = 'confirmed' AND updated_at = ?4)
+                AND NOT EXISTS (SELECT 1 FROM option_days WHERE option_id = ?1 AND date = ?2 AND booking_id = ?3)`,
+          )
+          .bind(c.optionId, c.date, id, now),
+      );
+    }
+    try {
+      const out = await db.batch(stmts);
+      changes = out[0]?.meta.changes ?? 0;
+    } catch (e) {
+      if (/UNIQUE|constraint/i.test(String((e as Error)?.message ?? e))) return "conflict";
+      throw e;
+    }
+  }
+  if (changes === 1) return "confirmed";
   const row = await db.prepare("SELECT status FROM bookings WHERE id = ?1").bind(id).first<{ status: string }>();
   return row?.status === "pending" ? "conflict" : "not_pending";
 }
@@ -1111,7 +1160,108 @@ export async function cancelBooking(
     )
     .bind(id, reason, now, onlyStatus ?? null)
     .run();
+  if (res.meta.changes === 1) await releaseOptionDays(db, id);
   return res.meta.changes === 1;
+}
+
+// --- Options à la date (0042) : un jour = une ligne, unique par (option, date) ---------------
+
+/** Jours d'options tenus par une réservation, relus de son `options_json`. */
+export function claimsFromOptionsJson(optionsJson: string | null): { optionId: number; date: string }[] {
+  try {
+    const lines: unknown = optionsJson ? JSON.parse(optionsJson) : [];
+    if (!Array.isArray(lines)) return [];
+    return lines.flatMap((l: { optionId?: unknown; days?: unknown }) =>
+      Array.isArray(l?.days) && Number.isFinite(Number(l.optionId)) ? l.days.map((d) => ({ optionId: Number(l.optionId), date: String(d) })) : [],
+    );
+  } catch {
+    return [];
+  }
+}
+
+/** Libère les jours d'options d'une réservation (annulée, expirée ou rééditée). */
+export async function releaseOptionDays(db: D1Database, bookingId: number): Promise<void> {
+  await db.prepare("DELETE FROM option_days WHERE booking_id = ?1").bind(bookingId).run();
+}
+
+/** Jours déjà pris par une réservation ACTIVE (confirmée, ou en attente dont l'option n'a pas
+ *  expiré), pour ces options et cette fenêtre. Une ligne d'une réservation annulée ou expirée
+ *  est ignorée même si elle n'a pas été nettoyée. `excludeBookingId` : la réservation qu'on édite. */
+export async function takenOptionDays(
+  db: D1Database,
+  optionIds: number[],
+  from: string,
+  to: string,
+  excludeBookingId: number | null = null,
+  now: string = sqlNow(),
+): Promise<Map<number, Set<string>>> {
+  const out = new Map<number, Set<string>>();
+  if (optionIds.length === 0) return out;
+  const marks = optionIds.map((_, i) => `?${i + 5}`).join(",");
+  const { results } = await db
+    .prepare(
+      `SELECT od.option_id, od.date FROM option_days od JOIN bookings b ON b.id = od.booking_id
+        WHERE od.date >= ?1 AND od.date <= ?2 AND od.option_id IN (${marks}) AND b.id != ?3
+          AND (b.status = 'confirmed' OR (b.status = 'pending' AND b.hold_expires_at > ?4))`,
+    )
+    .bind(from, to, excludeBookingId ?? 0, now, ...optionIds)
+    .all<{ option_id: number; date: string }>();
+  for (const r of results) {
+    const set = out.get(r.option_id) ?? new Set<string>();
+    set.add(r.date);
+    out.set(r.option_id, set);
+  }
+  return out;
+}
+
+/** Pose les jours d'options d'une réservation. Remplace ceux qu'elle avait, écarte d'abord les
+ *  lignes de réservations inactives, puis insère : la contrainte d'unicité tranche la course
+ *  entre deux clients (tout le lot est annulé). Rend false si un jour est déjà pris. */
+export async function claimOptionDays(
+  db: D1Database,
+  bookingId: number,
+  claims: { optionId: number; date: string }[],
+  now: string = sqlNow(),
+): Promise<boolean> {
+  const stmts = [db.prepare("DELETE FROM option_days WHERE booking_id = ?1").bind(bookingId)];
+  for (const c of claims) {
+    stmts.push(
+      db
+        .prepare(
+          `DELETE FROM option_days WHERE option_id = ?1 AND date = ?2 AND booking_id IN (
+             SELECT id FROM bookings WHERE NOT (status = 'confirmed' OR (status = 'pending' AND hold_expires_at > ?3)))`,
+        )
+        .bind(c.optionId, c.date, now),
+    );
+  }
+  for (const c of claims) {
+    stmts.push(db.prepare("INSERT INTO option_days (option_id, date, booking_id) VALUES (?1, ?2, ?3)").bind(c.optionId, c.date, bookingId));
+  }
+  try {
+    await db.batch(stmts);
+    return true;
+  } catch (e) {
+    if (/UNIQUE|constraint/i.test(String((e as Error)?.message ?? e))) return false;
+    throw e;
+  }
+}
+
+/** Jours d'options d'une réservation : [{optionId, date}] (pour « Sauna aujourd'hui »). */
+export async function optionDaysOfDate(db: D1Database, propertyId: number, date: string): Promise<{ optionName: string; bookingId: number; reference: string; unitName: string; guestName: string | null }[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT o.name AS option_name, b.id AS booking_id, b.reference, u.name AS unit_name, g.last_name AS guest_name
+         FROM option_days od JOIN options o ON o.id = od.option_id
+         JOIN bookings b ON b.id = od.booking_id JOIN units u ON u.id = b.unit_id
+         LEFT JOIN guests g ON g.id = b.guest_id
+        WHERE od.date = ?1 AND o.property_id = ?2 AND b.status = 'confirmed' ORDER BY o.sort_order, o.id`,
+    )
+    .bind(date, propertyId)
+    .all<Raw>();
+  return results.map((r) => ({
+    optionName: str(r.option_name), bookingId: num(r.booking_id), reference: str(r.reference),
+    unitName: str(r.unit_name), guestName: strOrNull(r.guest_name),
+  }));
 }
 
 export async function updateBookingNotes(db: D1Database, id: number, internalNotes: string, now: string = sqlNow()): Promise<void> {
@@ -1129,6 +1279,7 @@ export async function expireStaleHolds(db: D1Database, now: string = sqlNow()): 
     )
     .bind(now)
     .run();
+  if (res.meta.changes > 0) await db.prepare("DELETE FROM option_days WHERE booking_id IN (SELECT id FROM bookings WHERE status = 'cancelled')").run();
   return res.meta.changes;
 }
 
@@ -1611,7 +1762,7 @@ export interface BookingStayPatch {
   promoCode: string | null;
 }
 
-export type UpdateStayResult = "updated" | "conflict" | "not_modifiable";
+export type UpdateStayResult = "updated" | "conflict" | "not_modifiable" | "option_day_taken";
 
 /** Modifier un séjour (dates ET/OU logement) sans annuler-recréer — issue #73.
  *
@@ -1643,11 +1794,14 @@ export async function updateBookingStayAtomic(
   id: number,
   patch: BookingStayPatch,
   now: string = sqlNow(),
+  /** Jours d'options à (re)poser avec la mise à jour, dans le MÊME lot : les jours ne changent que si la
+   *  mise à jour passe, et un jour pris entre-temps annule tout ("option_day_taken"). undefined = ne pas y toucher. */
+  optionClaims?: { optionId: number; date: string }[],
 ): Promise<UpdateStayResult> {
   if (!isIsoDate(patch.checkin) || !isIsoDate(patch.checkout) || patch.checkin >= patch.checkout) {
     throw new Error(`updateBookingStayAtomic: dates invalides ${patch.checkin} → ${patch.checkout}`);
   }
-  const res = await db
+  const updateStmt = db
     .prepare(
       `UPDATE bookings
           SET unit_id = ?1, checkin = ?3, checkout = ?4, adults = ?6, children = ?7,
@@ -1684,8 +1838,44 @@ export async function updateBookingStayAtomic(
       patch.optionsJson,      // ?12
       patch.promoCode,        // ?13
     )
-    .run();
-  if (res.meta.changes === 1) return "updated";
+    ;
+  let changes: number;
+  if (optionClaims === undefined) {
+    changes = (await updateStmt.run()).meta.changes;
+  } else {
+    // Les instructions sur les jours ne s'exécutent que si la mise à jour a eu lieu (la ligne porte alors ce `updated_at` et ces dates).
+    const applied = `EXISTS (SELECT 1 FROM bookings WHERE id = ?1 AND updated_at = ?2 AND checkin = ?3 AND checkout = ?4 AND unit_id = ?5)`;
+    const g = [id, now, patch.checkin, patch.checkout, patch.unitId];
+    const stmts = [
+      updateStmt,
+      db.prepare(`DELETE FROM option_days WHERE booking_id = ?1 AND ${applied}`).bind(...g),
+    ];
+    for (const c of optionClaims) {
+      stmts.push(
+        db
+          .prepare(
+            `DELETE FROM option_days WHERE option_id = ?6 AND date = ?7 AND ${applied} AND booking_id IN (
+               SELECT id FROM bookings WHERE NOT (status = 'confirmed' OR (status = 'pending' AND hold_expires_at > ?2)))`,
+          )
+          .bind(...g, c.optionId, c.date),
+      );
+    }
+    for (const c of optionClaims) {
+      stmts.push(
+        db
+          .prepare(`INSERT INTO option_days (option_id, date, booking_id) SELECT ?6, ?7, ?1 WHERE ${applied}`)
+          .bind(...g, c.optionId, c.date),
+      );
+    }
+    try {
+      const out = await db.batch(stmts);
+      changes = out[0]?.meta.changes ?? 0;
+    } catch (e) {
+      if (/UNIQUE|constraint/i.test(String((e as Error)?.message ?? e))) return "option_day_taken";
+      throw e;
+    }
+  }
+  if (changes === 1) return "updated";
   const row = await db
     .prepare("SELECT status, hold_expires_at FROM bookings WHERE id = ?1")
     .bind(id)
@@ -2321,7 +2511,14 @@ export async function listOptionsAdmin(db: D1Database, propertyId: number): Prom
     .prepare("SELECT * FROM options WHERE property_id = ?1 ORDER BY sort_order, id")
     .bind(propertyId)
     .all();
-  return (results as Raw[]).map(mapOption);
+  return (results as Raw[]).map((r) => ({
+    ...mapOption(r),
+    // L'écran des réglages a toujours besoin des quatre champs, même pour une option ordinaire.
+    perDate: num(r.per_date) === 1,
+    weekendPriceCents: numOrNull(r.weekend_price_cents),
+    weekendDays: parseWeekendDays(strOrNull(r.weekend_days)),
+    consecutivePct: numOrNull(r.consecutive_pct),
+  }));
 }
 
 export interface OptionInput {
@@ -2332,15 +2529,24 @@ export interface OptionInput {
   maxQty: number | null;
   active: boolean;
   sortOrder: number;
+  /** Option à la date (0042) ; pour les trois suivants, null = vide, undefined = inchangé (mise à jour). */
+  perDate?: boolean;
+  weekendPriceCents?: number | null;
+  weekendDays?: number[] | null;
+  consecutivePct?: number | null;
 }
 
 export async function createOption(db: D1Database, propertyId: number, o: OptionInput): Promise<number> {
   const res = await db
     .prepare(
-      `INSERT INTO options (property_id, name, pricing_mode, price_cents, unit_label, max_qty, active, sort_order)
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)`,
+      `INSERT INTO options (property_id, name, pricing_mode, price_cents, unit_label, max_qty, active, sort_order,
+                            per_date, weekend_price_cents, weekend_days, consecutive_pct)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)`,
     )
-    .bind(propertyId, o.name, o.pricingMode, o.priceCents, o.unitLabel, o.maxQty, o.active ? 1 : 0, o.sortOrder)
+    .bind(
+      propertyId, o.name, o.pricingMode, o.priceCents, o.unitLabel, o.maxQty, o.active ? 1 : 0, o.sortOrder,
+      o.perDate ? 1 : 0, o.weekendPriceCents ?? null, o.weekendDays ? o.weekendDays.join(",") : null, o.consecutivePct ?? null,
+    )
     .run();
   return res.meta.last_row_id;
 }
@@ -2351,12 +2557,20 @@ export async function updateOption(db: D1Database, id: number, o: Partial<Option
       `UPDATE options SET
          name = COALESCE(?2, name), pricing_mode = COALESCE(?3, pricing_mode),
          price_cents = COALESCE(?4, price_cents), unit_label = COALESCE(?5, unit_label),
-         max_qty = COALESCE(?6, max_qty), active = COALESCE(?7, active), sort_order = COALESCE(?8, sort_order)
+         max_qty = COALESCE(?6, max_qty), active = COALESCE(?7, active), sort_order = COALESCE(?8, sort_order),
+         per_date = COALESCE(?9, per_date),
+         weekend_price_cents = CASE WHEN ?10 = 1 THEN ?11 ELSE weekend_price_cents END,
+         weekend_days = CASE WHEN ?12 = 1 THEN ?13 ELSE weekend_days END,
+         consecutive_pct = CASE WHEN ?14 = 1 THEN ?15 ELSE consecutive_pct END
         WHERE id = ?1`,
     )
     .bind(
       id, o.name ?? null, o.pricingMode ?? null, o.priceCents ?? null, o.unitLabel ?? null,
       o.maxQty ?? null, o.active === undefined ? null : o.active ? 1 : 0, o.sortOrder ?? null,
+      o.perDate === undefined ? null : o.perDate ? 1 : 0,
+      o.weekendPriceCents === undefined ? 0 : 1, o.weekendPriceCents ?? null,
+      o.weekendDays === undefined ? 0 : 1, o.weekendDays ? o.weekendDays.join(",") : null,
+      o.consecutivePct === undefined ? 0 : 1, o.consecutivePct ?? null,
     )
     .run();
 }

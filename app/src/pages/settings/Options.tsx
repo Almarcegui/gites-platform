@@ -1,7 +1,7 @@
 // Options payantes (sauna, bain chaud, linge…) : une ligne par option, sa
 // fiche en panneau latéral.
 import { Trans, useLingui } from "@lingui/react/macro";
-import { NumberInput, Switch, TextInput } from "@mantine/core";
+import { Checkbox, NumberInput, Switch, TextInput } from "@mantine/core";
 import { IconPlus } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
@@ -73,6 +73,10 @@ function OptionPanel({ propertyId, option, onClose }: { propertyId: number; opti
       max: (option?.maxQty ?? "") as number | string,
       sort: (option?.sortOrder ?? 0) as number | string,
       active: option?.active ?? true,
+      perDate: option?.perDate ?? false,
+      weekendPrice: (option?.weekendPriceCents != null ? option.weekendPriceCents / 100 : "") as number | string,
+      weekendDays: (option?.weekendDays ?? [5, 6, 0]).map(String),
+      consecutive: (option?.consecutivePct ?? "") as number | string,
     }),
     [option],
   );
@@ -82,8 +86,16 @@ function OptionPanel({ propertyId, option, onClose }: { propertyId: number; opti
   const del = useAction();
   const dirty = JSON.stringify(v) !== JSON.stringify(init);
   const cents = parseEuros(v.price);
-  const valid = v.name.trim().length >= 2 && cents != null && cents >= 0;
-  const body = { name: v.name.trim(), pricingMode: v.mode, priceCents: cents, unitLabel: v.unit, maxQty: v.max === "" ? null : Number(v.max), sortOrder: Number(v.sort) || 0, active: v.active };
+  const weekendCents = v.weekendPrice === "" ? null : parseEuros(v.weekendPrice);
+  const valid = v.name.trim().length >= 2 && cents != null && cents >= 0 && (weekendCents == null ? v.weekendPrice === "" : weekendCents >= 0);
+  const body = {
+    name: v.name.trim(), pricingMode: v.mode, priceCents: cents, unitLabel: v.unit, maxQty: v.max === "" ? null : Number(v.max), sortOrder: Number(v.sort) || 0, active: v.active,
+    perDate: v.perDate,
+    weekendPriceCents: v.perDate ? weekendCents : null,
+    weekendDays: v.perDate ? v.weekendDays.map(Number) : null,
+    consecutivePct: v.perDate && v.consecutive !== "" ? Number(v.consecutive) : null,
+  };
+  const dayNames = [[1, t`lun`], [2, t`mar`], [3, t`mer`], [4, t`jeu`], [5, t`ven`], [6, t`sam`], [0, t`dim`]] as const;
   return (
     <SidePanel
       opened
@@ -122,6 +134,30 @@ function OptionPanel({ propertyId, option, onClose }: { propertyId: number; opti
         <NumberInput size="md" label={t`Quantité au plus`} description={t`vide = sans limite`} min={1} value={v.max} onChange={(x) => setV({ ...v, max: x })} />
         <NumberInput size="md" label={t`Rang dans la liste`} description={t`1 = en premier sur le site`} min={0} value={v.sort} onChange={(x) => setV({ ...v, sort: x })} />
       </div>
+      <Switch mt="lg" size="md" label={t`Réserver à une date (un par jour, partagé)`} description={t`Le client choisit les jours du séjour ; un jour pris l'est pour tout le domaine, les deux maisons comprises.`} checked={v.perDate} onChange={(e) => setV({ ...v, perDate: e.currentTarget.checked })} />
+      {v.perDate ? (
+        <div style={{ marginTop: 12 }}>
+          <div className="grid2">
+            <NumberInput size="md" label={t`Prix le week-end (€)`} description={t`vide = même prix que la semaine`} min={0} decimalScale={2} decimalSeparator="," value={v.weekendPrice} onChange={(x) => setV({ ...v, weekendPrice: x })} />
+            <NumberInput size="md" label={t`Jour consécutif à (%)`} description={t`vide = pas de remise ; 70 = un jour qui suit un autre jour choisi coûte 70 %`} min={1} max={99} value={v.consecutive} onChange={(x) => setV({ ...v, consecutive: x })} />
+          </div>
+          <Checkbox.Group mt="md" label={t`Jours comptés week-end`} value={v.weekendDays} onChange={(x) => setV({ ...v, weekendDays: x })}>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginTop: 8 }}>
+              {dayNames.map(([n, label]) => (
+                <Checkbox key={n} size="md" value={String(n)} label={label} />
+              ))}
+            </div>
+          </Checkbox.Group>
+          {v.weekendDays.length === 0 ? (
+            <p className="lead" style={{ marginTop: 8, color: "var(--mantine-color-orange-7)" }}>
+              <Trans>Aucun jour n'est coché : pas de prix week-end, tous les jours sont facturés au prix de la semaine.</Trans>
+            </p>
+          ) : null}
+          <p className="lead" style={{ marginTop: 8 }}>
+            <Trans>Le prix du champ « Prix » vaut en semaine, chaque jour choisi est facturé.</Trans>
+          </p>
+        </div>
+      ) : null}
       <Switch mt="lg" size="md" label={t`Proposée aux clients`} checked={v.active} onChange={(e) => setV({ ...v, active: e.currentTarget.checked })} />
       {a.state.status === "error" ? <ErrorLine text={a.state.text} /> : null}
       <Confirm

@@ -7,6 +7,9 @@
 // test/tunnel-nl.test.ts refuse un texte sans traduction.
 export const NL = {
   "+ Ajouter": "+ Toevoegen",
+  "Un des jours choisis vient d'être réservé par un autre client. Choisissez un autre jour.": "Een van de gekozen dagen is net door een andere klant geboekt. Kies een andere dag.",
+  "déjà réservé": "al geboekt",
+  "{nom} : choisissez les jours": "{nom}: kies de dagen",
   "1. Dates": "1. Data",
   "2. Hébergement": "2. Accommodatie",
   "3. Coordonnées": "3. Gegevens",
@@ -119,6 +122,8 @@ export const NL = {
   "Réservation en ligne au plus tard {jours} avant l'arrivée. Contactez-nous : nous verrons si c'est possible.":
     "Online reserveren kan tot {jours} voor de aankomst. Neem contact met ons op: wij bekijken wat mogelijk is.",
   "jour": "dag",
+  "dès {jour} / jour, {we} le week-end": "vanaf {jour} / dag, {we} in het weekend",
+  "{jour} / jour": "{jour} / dag",
   "jours": "dagen",
   "Mois précédent": "Vorige maand",
   "Mois suivant": "Volgende maand",

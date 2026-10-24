@@ -25,6 +25,7 @@
 //           détaille les lignes par maison (TODO_PRIX_COMBINE : défaut actuel).
 //   'own' → l'unité composite a sa propre grille rate_rules.
 
+import { datedLabel, priceDays, proposedDays } from "./option-days";
 import { addDays, dayOfWeek, diffDays, eachNight, type IsoDate } from "./dates";
 import { holidayRatedDays, isHolidayRatedNight, yearsSpanned } from "./holidays";
 
@@ -116,6 +117,11 @@ export interface OptionDef {
   priceCents: number;
   maxQty: number | null;
   unitLabel: string | null;
+  /** Option réservée jour par jour (24/10/2026) : absent ou faux = comportement habituel. */
+  perDate?: boolean;
+  weekendPriceCents?: number | null;
+  weekendDays?: number[] | null;
+  consecutivePct?: number | null;
 }
 
 export interface PricingSettings {
@@ -129,6 +135,9 @@ export interface PricingSettings {
   /** Délai minimum de réservation, en jours avant l'arrivée (demande n° 15,
    *  2026-10-17). 0 ou absent = aucune contrainte. Réglage du DOMAINE. */
   minLeadDays?: number;
+  /** Heures de départ (options à la date : le dimanche tardif ouvre un jour de plus). */
+  checkoutTime?: string;
+  checkoutTimeSunday?: string;
 }
 
 const FRAIS_GENERAUX = "Frais généraux — ménage et charges";
@@ -190,7 +199,8 @@ export interface QuoteRequest {
   rateOverrides?: readonly RateOverride[];
   promotions: Promotion[];
   promoCode?: string | null;
-  optionsSelected: { option: OptionDef; qty: number }[];
+  /** `frozen` : ligne d'option à la date posée AVANT la fonctionnalité (sans jours) — reconduite telle quelle, jamais recalculée ni supprimée. */
+  optionsSelected: { option: OptionDef; qty: number; days?: IsoDate[]; frozen?: { label: string; amountCents: number } }[];
   settings: PricingSettings;
   /** Vente du back-office : le délai minimum devient un avertissement
    *  (`warnings: ['lead_time']`) au lieu d'une erreur. Jamais côté public. */
@@ -207,6 +217,9 @@ export interface QuoteLine {
   publicLabel?: string;
   /** Prix d'UNE nuit du groupe, quand toutes ont le même (issue #47). */
   unitPriceCents?: number;
+  /** Option « à la date » seulement : identifiant et jours choisis. */
+  optionId?: number;
+  days?: IsoDate[];
 }
 
 export interface Quote {
@@ -757,8 +770,40 @@ export function computeQuote(req: QuoteRequest): Quote {
   // --- options
   const persons = req.adults + req.children;
   let optionsCents = 0;
+  // Une option à la date envoyée deux fois (deux lignes, mêmes ou autres jours) = une seule ligne, union des jours :
+  // sans cela chaque ligne repartirait au plein tarif, sans la remise sur jours consécutifs.
+  const merged: typeof req.optionsSelected = [];
   for (const sel of req.optionsSelected) {
+    const twin = sel.option.perDate && !sel.frozen ? merged.find((m) => m.option.id === sel.option.id && !m.frozen) : undefined;
+    if (twin) twin.days = [...(twin.days ?? []), ...(sel.days ?? [])];
+    else merged.push({ ...sel });
+  }
+  for (const sel of merged) {
     const o = sel.option;
+    if (sel.frozen) {
+      optionsCents += sel.frozen.amountCents;
+      lines.push({ kind: "option", label: sel.frozen.label, amountCents: sel.frozen.amountCents });
+      continue;
+    }
+    if (o.perDate) {
+      const days = [...new Set(sel.days ?? [])].sort();
+      if (days.length === 0) continue;
+      const allowed = new Set(
+        proposedDays(req.checkin, req.checkout, { checkoutTime: req.settings.checkoutTime ?? "10:00", checkoutTimeSunday: req.settings.checkoutTimeSunday }),
+      );
+      if (days.some((d) => !allowed.has(d))) {
+        errors.push("option_days_invalid");
+        continue;
+      }
+      const priced = priceDays(
+        { priceCents: o.priceCents, weekendPriceCents: o.weekendPriceCents ?? null, weekendDays: o.weekendDays ?? null, consecutivePct: o.consecutivePct ?? null },
+        days,
+      );
+      const amount = priced.reduce((t, d) => t + d.amountCents, 0);
+      optionsCents += amount;
+      lines.push({ kind: "option", label: datedLabel(o.name, priced), amountCents: amount, optionId: o.id, days });
+      continue;
+    }
     // per_unit_qty : quantité libre bornée par max_qty ; autres modes : 0 ou 1.
     let qty = o.pricingMode === "per_unit_qty" ? Math.max(0, Math.floor(sel.qty)) : (sel.qty > 0 ? 1 : 0);
     if (o.maxQty != null) qty = Math.min(qty, o.maxQty);

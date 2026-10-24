@@ -3,6 +3,7 @@
 // (si configuré, exigé en header Authorization: Bearer …).
 
 import { apiError, json, readJson, Router, type Handler } from "./router";
+import { proposedDays } from "../core/option-days";
 import { addDays, dayOfWeek, diffDays, isIsoDate, rangesOverlap, sqlNow, todayInZone, type IsoDate } from "../core/dates";
 import { blockingUnitIds, blocksAsSpans, isActiveBooking, isUnitFree } from "../core/availability";
 import { rateCalendar, type MinNightsStep, type RateOverride, type UnitPricingInfo } from "../core/pricing";
@@ -69,6 +70,7 @@ import {
   getProperty,
   hasEmailOfKinds,
   getQuoteContext,
+  takenOptionDays,
   getRateRule,
   insertGuestEntry,
   listGuestRegister,
@@ -109,6 +111,7 @@ import {
   listUnits,
   updateBookingNotes,
   updateBookingStayAtomic,
+  claimOptionDays,
   updateChecklistItem,
   updateFeed,
   updateGuest,
@@ -117,6 +120,7 @@ import {
   updatePromotion,
   updateRateRule,
   countNewMessages,
+  optionDaysOfDate,
   createUnit,
   createUnitPhoto,
   getMessage,
@@ -149,11 +153,15 @@ import { pullBeds24Bookings, pushCalendars, triggerBeds24Push, triggerBeds24Push
 import { beds24Liaison, buildPropertyPlan, createBeds24Property, CreationRefusee } from "../services/beds24-propriete";
 import {
   MIN_CHECKOUT_CENTS,
+  optionDayClaims,
   quoteFromContext,
   sendConfirmation,
   startCheckout,
   stripeConfigForBooking,
   voucherUrl,
+  withOptionDaysCheck,
+  cleanOptions,
+  type FrozenLine,
   type QuoteBody,
 } from "../services/booking-flow";
 import { allocateRefund, dropPreparedRefunds, executeRefunds, planCancellation, planExceptionalRefund, prepareRefunds, replayRefund, unsettledRefunds } from "../services/annulation";
@@ -489,6 +497,30 @@ function checkMinNightsRelax(
   return { ok: true, steps: steps.sort((a, b) => b.days - a.days) };
 }
 
+/** Champs « option à la date » d'un corps POST/PATCH : seules les clés présentes sont reprises
+ *  (null ou chaîne vide = champ vidé). Jours de week-end : tableau ou « 5,6,0 » (0=dim … 6=sam). */
+function datedFields(body: Record<string, unknown> | null | undefined): Partial<OptionInput> {
+  const out: Partial<OptionInput> = {};
+  if (!body) return out;
+  const empty = (v: unknown) => v === null || v === "";
+  if (body.perDate !== undefined) out.perDate = body.perDate === true || body.perDate === 1;
+  if (body.weekendPriceCents !== undefined) {
+    const n = Math.round(Number(body.weekendPriceCents));
+    out.weekendPriceCents = empty(body.weekendPriceCents) || !Number.isFinite(n) || n < 0 ? null : n;
+  }
+  if (body.weekendDays !== undefined) {
+    const raw = Array.isArray(body.weekendDays) ? body.weekendDays : String(body.weekendDays ?? "").split(",");
+    const days = [...new Set(raw.filter((x) => x !== "" && x !== null).map(Number).filter((d) => Number.isInteger(d) && d >= 0 && d <= 6))];
+    // null = jours par défaut (ven-sam-dim) ; liste vide = aucun jour week-end, donc pas de prix week-end.
+    out.weekendDays = body.weekendDays === null ? null : days;
+  }
+  if (body.consecutivePct !== undefined) {
+    const n = Math.round(Number(body.consecutivePct));
+    out.consecutivePct = empty(body.consecutivePct) || !Number.isFinite(n) || n <= 0 || n >= 100 ? null : n;
+  }
+  return out;
+}
+
 function intParam(v: string | null | undefined, fallback: number): number {
   const n = Math.floor(Number(v));
   return Number.isFinite(n) && n > 0 ? n : fallback;
@@ -623,29 +655,81 @@ function intOr(value: unknown, fallback: number, min: number): number {
  *  qu'un prix silencieusement faux. */
 function optionsFromQuote(
   optionsJson: string | null,
-  referential: { id: number; name: string; pricingMode: string }[],
-): { ok: true; options: { id: number; qty: number }[] } | { ok: false; unmatched: string[] } {
-  let lines: { label?: unknown }[] = [];
+  referential: { id: number; name: string; pricingMode: string; perDate?: boolean }[],
+): { ok: true; options: { id: number; qty: number; days?: string[]; frozen?: { label: string; amountCents: number } }[] } | { ok: false; unmatched: string[] } {
+  type SavedLine = { label?: unknown; optionId?: unknown; days?: unknown; amountCents?: unknown };
+  let lines: SavedLine[] = [];
   try {
     const parsed: unknown = optionsJson ? JSON.parse(optionsJson) : [];
-    lines = Array.isArray(parsed) ? (parsed as { label?: unknown }[]) : [];
+    lines = Array.isArray(parsed) ? (parsed as SavedLine[]) : [];
   } catch {
     lines = [];
   }
-  const options: { id: number; qty: number }[] = [];
+  const options: { id: number; qty: number; days?: string[]; frozen?: { label: string; amountCents: number } }[] = [];
   const unmatched: string[] = [];
   for (const line of lines) {
     const label = String(line?.label ?? "");
     if (!label) continue;
+    // Option à la date : la ligne garde son id et ses jours (le libellé « Nom — sam 24/10 (180 €) » n'est que lisible).
+    const dated = Array.isArray(line.days) && line.days.length > 0 ? referential.find((o) => o.id === Number(line.optionId)) : undefined;
+    if (dated) {
+      options.push({ id: dated.id, qty: 1, days: (line.days as unknown[]).map(String) });
+      continue;
+    }
     const opt = referential.find((o) => label === o.name || label.startsWith(`${o.name} (`));
     if (!opt) {
       unmatched.push(label);
+      continue;
+    }
+    // Option devenue « à la date » après la vente : la ligne n'a pas de jours. On la fige (même libellé, même montant)
+    // plutôt que de la relire comme « 1 jour sans date » et la faire disparaître au recalcul.
+    if (opt.perDate) {
+      options.push({ id: opt.id, qty: 1, frozen: { label, amountCents: Number(line.amountCents) || 0 } });
       continue;
     }
     const qty = opt.pricingMode === "per_unit_qty" ? Number(/\((\d+)/.exec(label)?.[1] ?? 1) || 1 : 1;
     options.push({ id: opt.id, qty });
   }
   return unmatched.length > 0 ? { ok: false, unmatched } : { ok: true, options };
+}
+
+/** Séjour déplacé : les jours d'une option à la date qui tombent hors du nouveau séjour sont retirés
+ *  (l'option disparaît s'il n'en reste aucun). Rend aussi ce qui a été retiré, pour le dire à l'écran. */
+type CarriedOption = { id: number; qty: number; days?: string[]; frozen?: { label: string; amountCents: number } };
+function trimOptionDaysToStay(
+  options: CarriedOption[],
+  referential: { id: number; name: string }[],
+  checkin: string,
+  checkout: string,
+  times: { checkoutTime: string; checkoutTimeSunday?: string },
+): { options: CarriedOption[]; removed: { optionId: number; name: string; days: string[] }[] } {
+  const allowed = new Set(proposedDays(checkin, checkout, times));
+  const removed: { optionId: number; name: string; days: string[] }[] = [];
+  const out: CarriedOption[] = [];
+  for (const o of options) {
+    if (!o.days || o.days.length === 0) {
+      out.push(o);
+      continue;
+    }
+    const kept = o.days.filter((d) => allowed.has(d));
+    const gone = o.days.filter((d) => !allowed.has(d));
+    if (gone.length > 0) removed.push({ optionId: o.id, name: referential.find((r) => r.id === o.id)?.name ?? "", days: gone });
+    if (kept.length > 0) out.push({ ...o, days: kept });
+  }
+  return { options: out, removed };
+}
+
+/** Jours d'options tenus par une réservation, relus de son `options_json`. */
+function claimsFromSaved(optionsJson: string | null): { optionId: number; date: string }[] {
+  try {
+    const lines: unknown = optionsJson ? JSON.parse(optionsJson) : [];
+    if (!Array.isArray(lines)) return [];
+    return lines.flatMap((l: { optionId?: unknown; days?: unknown }) =>
+      Array.isArray(l?.days) && Number.isFinite(Number(l.optionId)) ? l.days.map((d) => ({ optionId: Number(l.optionId), date: String(d) })) : [],
+    );
+  } catch {
+    return [];
+  }
 }
 
 /** Un conflit nommé : une réservation active (avec sa référence) ou un blocage
@@ -1597,6 +1681,14 @@ export function registerAdminRoutes(router: Router): void {
       newEmails = 0; // table absente tant que la migration 0005 n'est pas passée
     }
 
+    // Options à la date prises aujourd'hui (« Sauna aujourd'hui ») : repli neutre si la migration 0042 manque.
+    let dayOptions: Awaited<ReturnType<typeof optionDaysOfDate>> = [];
+    try {
+      dayOptions = await optionDaysOfDate(db, propertyId, today);
+    } catch {
+      dayOptions = [];
+    }
+
     function summary(b: BookingRow) {
       return {
         id: b.id,
@@ -1627,6 +1719,7 @@ export function registerAdminRoutes(router: Router): void {
         balanceDueTotalCents: balancesDue.reduce((s, b) => s + b.balanceCents, 0),
         balanceDueCount: balancesDue.length,
       },
+      dayOptions,
       movements: [...arrivals, ...departures].sort((a, b) => ((a.kind === "arrivée" ? a.checkin : a.checkout) < (b.kind === "arrivée" ? b.checkin : b.checkout) ? -1 : 1)),
       alerts: {
         overdueBalances: balancesDue.filter((b) => b.overdue),
@@ -1820,6 +1913,30 @@ export function registerAdminRoutes(router: Router): void {
     return json({ bookings, today, period: period ?? null });
   }));
 
+  // Jours proposés pour les options « à la date » d'un séjour ; les jours déjà
+  // pris par une AUTRE réservation sont marqués `taken` (les siens restent libres).
+  router.get("/api/admin/option-days", guard(async (_req, env, _p, url) => {
+    const unitId = Number(url.searchParams.get("unitId"));
+    const checkin = url.searchParams.get("checkin") ?? "";
+    const checkout = url.searchParams.get("checkout") ?? "";
+    const bookingId = Number(url.searchParams.get("bookingId")) || null;
+    if (!Number.isInteger(unitId) || !isIsoDate(checkin) || !isIsoDate(checkout) || checkout <= checkin || diffDays(checkin, checkout) > 60) {
+      return apiError(400, "unitId, checkin et checkout attendus");
+    }
+    const ctx = await getQuoteContext(env.DB, unitId);
+    if (!ctx) return apiError(404, "hébergement inconnu");
+    const dated = ctx.options.filter((o) => o.perDate);
+    const days = proposedDays(checkin, checkout, ctx.settings);
+    if (dated.length === 0 || days.length === 0) return json({ options: [] });
+    const taken = await takenOptionDays(env.DB, dated.map((o) => o.id), days[0] as string, days[days.length - 1] as string, bookingId);
+    return json({
+      options: dated.map((o) => ({
+        id: o.id,
+        days: days.map((date) => ({ date, taken: taken.get(o.id)?.has(date) === true })),
+      })),
+    });
+  }));
+
   router.get("/api/admin/bookings/:id", guard(async (_req, env, p) => {
     const id = intParam(p.id, 0);
     const booking = await getBooking(env.DB, id);
@@ -2002,7 +2119,7 @@ export function registerAdminRoutes(router: Router): void {
     // Le délai minimum de réservation (demande n° 15) ne vaut que pour le site
     // public : l'exploitant au téléphone peut passer outre — le devis le dit
     // alors dans `warnings` ('lead_time') et la vente est tracée au journal.
-    const quote = quoteFromContext(ctx, { ...body, adults, children }, today, { bypassLeadTime: true });
+    const quote = await withOptionDaysCheck(db, quoteFromContext(ctx, { ...body, options: cleanOptions(body.options), adults, children }, today, { bypassLeadTime: true }));
     // En vente manuelle, min_nights et jour d'arrivée restent bloquants ;
     // seul un devis calculable passe.
     if (!quote.ok) return apiError(409, "devis impossible", { details: quote.errors, minNights: quote.minNights });
@@ -2044,6 +2161,11 @@ export function registerAdminRoutes(router: Router): void {
       internalNotes: String(body.internalNotes ?? "").trim() || null,
     });
     if (!created.ok) return apiError(409, "créneau indisponible (conflit avec une autre réservation)");
+    const dayClaims = optionDayClaims(quote);
+    if (dayClaims.length > 0 && !(await claimOptionDays(db, created.id, dayClaims))) {
+      await cancelBooking(db, created.id, "option_day_taken");
+      return apiError(409, "un des jours d'option vient d'être pris par une autre réservation", { details: ["option_day_taken"] });
+    }
     const leadTimeOverridden = quote.warnings.includes("lead_time");
     await audit(db, "admin", "booking.create_manual", `booking:${created.id}`, {
       reference: created.reference,
@@ -2362,7 +2484,9 @@ export function registerAdminRoutes(router: Router): void {
       checkout?: string;
       adults?: number;
       children?: number;
-      options?: { id: number; qty: number }[];
+      options?: { id: number; qty: number; days?: string[] }[];
+      /** Change seulement les jours d'options à la date ; les autres options sont reconduites. */
+      optionDays?: { id: number; days: string[] }[];
       promoCode?: string | null;
       paymentMode?: "deposit" | "full";
     }>(req);
@@ -2372,13 +2496,14 @@ export function registerAdminRoutes(router: Router): void {
     if (!before) return apiError(404, "réservation inconnue");
 
     const wantsStay = body.checkin != null || body.checkout != null || body.unitId != null
-      || body.adults != null || body.children != null || body.options != null || body.promoCode !== undefined;
+      || body.adults != null || body.children != null || body.options != null || body.optionDays != null || body.promoCode !== undefined;
     const wantsGuest = body.guest != null;
     const wantsNotes = typeof body.internalNotes === "string";
     if (!wantsStay && !wantsGuest && !wantsNotes) return apiError(400, "rien à modifier");
 
     // --- séjour ---------------------------------------------------------------
     let quotePayload: unknown = null;
+    let removedOptionDays: { optionId: number; name: string; days: string[] }[] = [];
     if (wantsStay) {
       if (before.status === "cancelled") return apiError(409, "réservation annulée — elle ne se modifie plus");
       const checkin = String(body.checkin ?? before.checkin);
@@ -2396,7 +2521,7 @@ export function registerAdminRoutes(router: Router): void {
 
       // Options non renvoyées ⇒ on reconduit celles de la réservation, jamais
       // « aucune » : un recalcul ne doit pas faire disparaître ce qui est vendu.
-      let options = body.options;
+      let options: CarriedOption[] | undefined = cleanOptions(body.options); // `frozen` reçu d'un client : ignoré
       if (options === undefined) {
         const carried = optionsFromQuote(before.optionsJson, ctx.options);
         if (!carried.ok) {
@@ -2404,24 +2529,38 @@ export function registerAdminRoutes(router: Router): void {
             details: carried.unmatched,
           });
         }
-        options = carried.options;
+        // Séjour déplacé : on garde les jours encore dans le nouveau séjour, on retire les autres et on le dit.
+        const trimmed = trimOptionDaysToStay(carried.options, ctx.options, checkin, checkout, ctx.settings);
+        options = trimmed.options;
+        removedOptionDays = trimmed.removed;
+      }
+      if (Array.isArray(body.optionDays)) {
+        const next = (options ?? []).filter((o) => !body.optionDays!.some((d) => d.id === o.id));
+        for (const d of body.optionDays) if (Array.isArray(d.days) && d.days.length > 0) next.push({ id: Number(d.id), qty: 1, days: d.days.map(String) });
+        options = next;
       }
 
-      const quote = quoteFromContext(
-        ctx,
-        {
-          unitId,
-          checkin,
-          checkout,
-          adults,
-          children,
-          options,
-          promoCode: body.promoCode !== undefined ? body.promoCode : before.promoCode,
-        },
-        todayInZone(),
-        // Modifier une réservation existante relève de l'exploitant : le délai
-        // minimum du site public ne s'y applique pas (avertissement seulement).
-        { bypassLeadTime: true },
+      // Lignes figées : seulement celles déjà enregistrées (relues de la base), jamais celles d'une requête.
+      const frozenLines: FrozenLine[] = (options ?? []).flatMap((o) => (o.frozen ? [{ optionId: o.id, ...o.frozen }] : []));
+      const quote = await withOptionDaysCheck(
+        db,
+        quoteFromContext(
+          ctx,
+          {
+            unitId,
+            checkin,
+            checkout,
+            adults,
+            children,
+            options: (options ?? []).filter((o) => !o.frozen),
+            promoCode: body.promoCode !== undefined ? body.promoCode : before.promoCode,
+          },
+          todayInZone(),
+          // Modifier une réservation existante relève de l'exploitant : le délai
+          // minimum du site public ne s'y applique pas (avertissement seulement).
+          { bypassLeadTime: true, frozenLines },
+        ),
+        id, // les jours que cette réservation tient déjà ne la bloquent pas
       );
       // Mêmes dates, même logement : un minimum de nuits ou un jour d'arrivée
       // posé APRÈS la vente ne doit pas figer la réservation (voyageurs,
@@ -2439,6 +2578,9 @@ export function registerAdminRoutes(router: Router): void {
       if (!quote.ok) return apiError(409, "devis impossible sur ces dates", { details: quote.errors, minNights: quote.minNights });
 
       const full = body.paymentMode === "full" || quote.balanceDueDate === null;
+      // Jours d'options : posés dans le même lot que la mise à jour (rien ne bouge si l'un des deux échoue).
+      const newClaims = optionDayClaims(quote);
+      const touchesDays = newClaims.length > 0 || claimsFromSaved(before.optionsJson).length > 0;
       const outcome = await updateBookingStayAtomic(db, id, {
         unitId,
         checkin,
@@ -2453,7 +2595,10 @@ export function registerAdminRoutes(router: Router): void {
         quoteJson: JSON.stringify(quote),
         optionsJson: JSON.stringify(quote.lines.filter((l) => l.kind === "option")),
         promoCode: quote.promoApplied,
-      });
+      }, undefined, touchesDays ? newClaims : undefined);
+      if (outcome === "option_day_taken") {
+        return apiError(409, "un des jours d'option vient d'être pris par une autre réservation", { details: ["option_day_taken"] });
+      }
       if (outcome === "conflict") {
         // Le refus se nomme, et la réservation d'origine n'a pas bougé.
         const conflicts = await checkAvailability(db, unitId, ctx.unit.propertyId, checkin, checkout, new Date(), id);
@@ -2519,6 +2664,7 @@ export function registerAdminRoutes(router: Router): void {
       ok: true,
       booking: after,
       quote: quotePayload,
+      removedOptionDays,
       // Positif = solde à encaisser ; négatif = avoir à rembourser à la main.
       balanceCents: Math.max(0, delta),
       refundCents: Math.max(0, -delta),
@@ -2534,12 +2680,17 @@ export function registerAdminRoutes(router: Router): void {
     }
     const ctx = await getQuoteContext(env.DB, Number(body.unitId));
     if (!ctx) return apiError(404, "hébergement inconnu");
-    const quote = quoteFromContext(
-      ctx,
-      { ...body, adults: Math.max(1, Number(body.adults ?? 1)), children: Math.max(0, Number(body.children ?? 0)) },
-      todayInZone(),
-      // Vente du back-office : délai minimum en avertissement, pas en refus.
-      { bypassLeadTime: true },
+    const quote = await withOptionDaysCheck(
+      env.DB,
+      quoteFromContext(
+        ctx,
+        { ...body, options: cleanOptions(body.options), adults: Math.max(1, Number(body.adults ?? 1)), children: Math.max(0, Number(body.children ?? 0)) },
+        todayInZone(),
+        // Vente du back-office : délai minimum en avertissement, pas en refus.
+        { bypassLeadTime: true },
+      ),
+      // Devis de modification : les jours de la réservation déplacée ne comptent pas comme pris.
+      body.bookingId ? Math.floor(Number(body.bookingId)) : null,
     );
     // Le devis dit combien ; il doit aussi dire SI c'est vendable (issue #70).
     // Sans ce champ, la vente téléphone calculait un prix sur un créneau déjà
@@ -2557,7 +2708,17 @@ export function registerAdminRoutes(router: Router): void {
       // elle-même (issue #73).
       body.bookingId ? Math.floor(Number(body.bookingId)) : undefined,
     );
-    return json({ unit: { id: ctx.unit.id, name: ctx.unit.name }, quote, availability });
+    // Déplacement d'une réservation : les jours d'option hors du nouveau séjour seraient retirés — on le dit avant d'enregistrer.
+    let removedOptionDays: { optionId: number; name: string; days: string[] }[] = [];
+    const bid = body.bookingId ? Math.floor(Number(body.bookingId)) : 0;
+    if (bid > 0) {
+      const existing = await getBooking(env.DB, bid);
+      if (existing) {
+        const carried = optionsFromQuote(existing.optionsJson, ctx.options);
+        if (carried.ok) removedOptionDays = trimOptionDaysToStay(carried.options, ctx.options, String(body.checkin), String(body.checkout), ctx.settings).removed;
+      }
+    }
+    return json({ unit: { id: ctx.unit.id, name: ctx.unit.name }, quote, availability, removedOptionDays });
   }));
 
   // --- saisons ----------------------------------------------------------------
@@ -2791,6 +2952,7 @@ export function registerAdminRoutes(router: Router): void {
       maxQty: body?.maxQty != null ? Math.floor(Number(body.maxQty)) : null,
       active: body?.active !== false,
       sortOrder: Math.floor(Number(body?.sortOrder ?? 0)),
+      ...datedFields(body),
     });
     await audit(env.DB, "admin", "option.create", `option:${id}`, { ...body, par: currentUser(req) });
     return json({ id }, 201);
@@ -2813,6 +2975,7 @@ export function registerAdminRoutes(router: Router): void {
       maxQty: body.maxQty !== undefined ? (body.maxQty == null ? null : Math.floor(Number(body.maxQty))) : undefined,
       active: typeof body.active === "boolean" ? body.active : undefined,
       sortOrder: body.sortOrder != null ? Math.floor(Number(body.sortOrder)) : undefined,
+      ...datedFields(body),
     });
     await audit(env.DB, "admin", "option.update", `option:${id}`, { ...body, par: currentUser(req) });
     return json({ ok: true });

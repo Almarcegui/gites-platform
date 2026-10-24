@@ -12,6 +12,7 @@
 
 import { cgvHtml } from "./cgv.js";
 import { checkoutTimeFor } from "./checkout-time.js";
+import { dayChipsHtml } from "./option-days.js";
 import { mountPayment, paymentConfig } from "./pay-element.js";
 import { visionneuse } from "/galerie.js";
 import { apiHeaders, CGV_NOTE_NL, eur, hour, LANG, LOCALE, mountLangSwitch, pl, t, translateStatic } from "./i18n.js";
@@ -151,7 +152,7 @@ async function api(path, body) {
     body: body ? JSON.stringify(body) : undefined,
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || t("erreur {status}", { status: res.status }));
+  if (!res.ok) throw Object.assign(new Error(data.error || t("erreur {status}", { status: res.status })), { code: data.code });
   return data;
 }
 
@@ -722,6 +723,8 @@ function markSelected(unitId) {
 
 async function openBookingPanel(unitId) {
   markSelected(unitId);
+  OPT_DAYS = new Map();
+  OPT_AVAIL = new Map();
   SELECTED = PROP.units.find((u) => u.id === unitId);
   QUOTE = null;
   setStep(3);
@@ -730,12 +733,19 @@ async function openBookingPanel(unitId) {
   // inclus de base dans les frais généraux, jamais en option).
   const optionRows = PROP.options
     .map((o) => {
-      const priceLabel = `${eur(o.priceCents)}${o.unitLabel ? " / " + esc(o.unitLabel) : ""}`;
+      // Option à la date : « dès 120 € / jour, 180 € le week-end » (le prix de la semaine est un plancher).
+      const priceLabel = o.perDate
+        ? o.weekendPriceCents != null && o.weekendPriceCents !== o.priceCents && !(o.weekendDays && o.weekendDays.length === 0)
+          ? t("dès {jour} / jour, {we} le week-end", { jour: eurRound(Math.min(o.priceCents, o.weekendPriceCents)), we: eurRound(o.weekendPriceCents) })
+          : t("{jour} / jour", { jour: eurRound(o.priceCents) })
+        : `${eur(o.priceCents)}${o.unitLabel ? " / " + esc(o.unitLabel) : ""}`;
       const input =
         o.pricingMode === "per_unit_qty"
           ? `<input type="number" min="0" max="${o.maxQty ?? 99}" value="0" class="opt" data-oid="${o.id}">`
           : `<button type="button" class="opt-add" data-oid="${o.id}" aria-pressed="false">${t("+ Ajouter")}</button>`;
-      return `<div class="opt-row"><span class="name">${esc(o.name)} <span class="muted small">${priceLabel}</span></span>${input}</div>`;
+      // Option « à la date » : la rangée de jours s'ouvre sous l'option quand on l'ajoute.
+      const days = o.perDate ? `<div class="opt-days" id="optDays${o.id}" hidden></div>` : "";
+      return `<div class="opt-row"><span class="name">${esc(o.name)} <span class="muted small">${priceLabel}</span></span>${input}</div>${days}`;
     })
     .join("");
 
@@ -810,10 +820,15 @@ async function openBookingPanel(unitId) {
   $("holdMin").textContent = String(PROP.settings.holdMinutes ?? 30);
   document.querySelectorAll(".opt").forEach((el) => el.addEventListener("change", refreshQuote));
   document.querySelectorAll(".opt-add").forEach((btn) =>
-    btn.addEventListener("click", () => {
+    btn.addEventListener("click", async () => {
       const on = btn.classList.toggle("on");
       btn.setAttribute("aria-pressed", on ? "true" : "false");
       btn.textContent = on ? t("✓ Ajouté") : t("+ Ajouter");
+      const oid = Number(btn.dataset.oid);
+      if (PROP.options.find((o) => o.id === oid)?.perDate) {
+        if (on) await openOptionDays(oid);
+        else closeOptionDays(oid);
+      }
       refreshQuote();
     }),
   );
@@ -862,12 +877,99 @@ async function openBookingPanel(unitId) {
   await refreshQuote();
 }
 
+// Jours choisis par option « à la date » (id → Set de dates) et jours proposés
+// par le serveur pour le séjour en cours (id → [{date, taken}]).
+let OPT_DAYS = new Map();
+let OPT_AVAIL = new Map();
+
+function renderOptionDays(oid) {
+  const zone = $("optDays" + oid);
+  const avail = OPT_AVAIL.get(oid);
+  if (!zone || !avail) return;
+  const name = PROP.options.find((o) => o.id === oid)?.name ?? "";
+  zone.innerHTML = dayChipsHtml({
+    oid,
+    days: avail,
+    selected: OPT_DAYS.get(oid) ?? new Set(),
+    locale: LOCALE,
+    esc,
+    txt: { group: t("{nom} : choisissez les jours", { nom: name }), taken: t("déjà réservé") },
+  });
+  zone.querySelectorAll(".day-chip").forEach((chip) =>
+    chip.addEventListener("click", () => {
+      const set = OPT_DAYS.get(oid) ?? new Set();
+      if (set.has(chip.dataset.date)) set.delete(chip.dataset.date);
+      else set.add(chip.dataset.date);
+      OPT_DAYS.set(oid, set);
+      const on = set.has(chip.dataset.date);
+      chip.classList.toggle("on", on);
+      chip.setAttribute("aria-pressed", on ? "true" : "false");
+      refreshQuote();
+    }),
+  );
+}
+
+async function loadOptionDays() {
+  const qs = new URLSearchParams({ unitId: String(SELECTED.id), checkin: SEARCH.checkin, checkout: SEARCH.checkout });
+  const { options } = await api("/api/public/option-days?" + qs);
+  OPT_AVAIL = new Map(options.map((o) => [o.id, o.days]));
+  // Un jour devenu indisponible depuis le dernier chargement n'est plus choisi.
+  let dropped = 0;
+  for (const [oid, set] of OPT_DAYS) {
+    const free = new Set((OPT_AVAIL.get(oid) ?? []).filter((d) => !d.taken).map((d) => d.date));
+    for (const d of [...set]) if (!free.has(d)) { set.delete(d); dropped++; }
+  }
+  return dropped;
+}
+
+async function openOptionDays(oid) {
+  const zone = $("optDays" + oid);
+  zone.hidden = false;
+  try {
+    await loadOptionDays();
+    renderOptionDays(oid);
+  } catch (e) {
+    zone.innerHTML = `<div class="note bad">${esc(e.message)}</div>`;
+  }
+}
+
+/** Un jour vient d'être pris par un autre client : on relit les jours libres,
+ *  la rangée se met à jour (le jour pris grisé) et le message s'affiche dessous. */
+async function refreshTakenDays(message) {
+  let dropped = 0;
+  try {
+    dropped = await loadOptionDays();
+  } catch {
+    return 0;
+  }
+  for (const oid of OPT_AVAIL.keys()) {
+    const zone = $("optDays" + oid);
+    if (!zone || zone.hidden) continue;
+    renderOptionDays(oid);
+    zone.insertAdjacentHTML("afterbegin", `<div class="note bad" role="alert">${esc(message)}</div>`);
+  }
+  return dropped;
+}
+
+function closeOptionDays(oid) {
+  OPT_DAYS.delete(oid);
+  const zone = $("optDays" + oid);
+  zone.hidden = true;
+  zone.innerHTML = "";
+}
+
 function collectOptions() {
   const numbers = [...document.querySelectorAll("input.opt")]
     .map((el) => ({ id: Number(el.dataset.oid), qty: Number(el.value) || 0 }));
-  const toggles = [...document.querySelectorAll("button.opt-add.on")]
-    .map((el) => ({ id: Number(el.dataset.oid), qty: 1 }));
-  return [...numbers, ...toggles].filter((o) => o.qty > 0);
+  const toggles = [...document.querySelectorAll("button.opt-add.on")].map((el) => {
+    const id = Number(el.dataset.oid);
+    // Option à la date : un jour au moins, sinon elle n'entre pas dans le devis.
+    if (PROP.options.find((o) => o.id === id)?.perDate) {
+      return { id, qty: 1, days: [...(OPT_DAYS.get(id) ?? [])].sort() };
+    }
+    return { id, qty: 1 };
+  });
+  return [...numbers, ...toggles].filter((o) => o.qty > 0 && (!("days" in o) || o.days.length > 0));
 }
 
 /** Vrai quand c'est le tunnel, pas le visiteur, qui a basculé sur « Totalité ». */
@@ -951,13 +1053,19 @@ async function refreshQuote() {
     if (seq !== quoteSeq) return; // une saisie plus récente a relancé un devis
     QUOTE = quote;
     if (!quote.ok) {
-      const why = quote.errors.includes("lead_time")
+      const why = quote.errors.includes("option_day_taken")
+        ? t("Un des jours choisis vient d'être réservé par un autre client. Choisissez un autre jour.")
+        : quote.errors.includes("lead_time")
         ? t("Réservation en ligne au plus tard {jours} avant l'arrivée. Contactez-nous : nous verrons si c'est possible.", { jours: pl(quote.minLeadDays, "jour", "jours") })
         : quote.errors.includes("min_nights")
           ? t("Minimum {n} nuits sur ces dates.", { n: quote.minNights })
           : t("Séjour impossible à ces conditions.");
       zone.innerHTML = `<div class="note bad">${esc(why)}</div>`;
       payButtonRefresh();
+      if (quote.errors.includes("option_day_taken")) {
+        const dropped = await refreshTakenDays(why);
+        if (dropped > 0 && seq === quoteSeq) refreshQuote();
+      }
       return;
     }
     const rows = quote.lines
@@ -1085,7 +1193,10 @@ async function submitBooking() {
     // Un jeton Turnstile ne vaut qu'une fois : sans réarmement, un second essai
     // serait refusé en `timeout-or-duplicate` alors que le visiteur est humain.
     resetTurnstile();
-    if (/réservé|geboekt/.test(String(e.message))) {
+    if (/option_day_taken/.test(String(e.code ?? ""))) {
+      msg.innerHTML = `<div class="note bad">${esc(e.message)}</div>`;
+      if ((await refreshTakenDays(e.message)) > 0) refreshQuote();
+    } else if (/réservé|geboekt/.test(String(e.message))) {
       msg.innerHTML = `<div class="note bad">😔 ${esc(e.message)} — ${t("le calendrier vient d'être mis à jour, relancez une recherche.")}</div>`;
       calCache.clear();
     } else {

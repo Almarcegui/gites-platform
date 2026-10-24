@@ -96,6 +96,8 @@ export interface Overview {
     revenuePrevCents?: number;
     nextArrival?: { checkin: IsoDate; unitName: string; persons: number; guestName: string | null } | null;
   };
+  /** options « à la date » prises aujourd'hui (sauna, bain chaud…) */
+  dayOptions?: { optionName: string; bookingId: number; reference: string; unitName: string; guestName: string | null }[];
   movements?: { kind: "arrivée" | "départ"; id: number; reference: string; unitName: string; guestName: string | null; checkin: IsoDate; checkout: IsoDate; persons: number; status: string }[];
   alerts: {
     overdueBalances: OverviewBalance[];
@@ -213,6 +215,9 @@ export interface QuoteLine {
   label: string;
   publicLabel?: string;
   amountCents: number;
+  /** Option « à la date » : identifiant et jours choisis (AAAA-MM-JJ). */
+  optionId?: number;
+  days?: string[];
 }
 
 export interface Quote {
@@ -237,6 +242,8 @@ export interface QuoteResponse {
   unit: { id: number; name: string };
   quote: Quote;
   availability: { available: boolean; conflicts: { reference: string; unitName?: string }[] };
+  /** Jours d'option qui sortiraient du séjour déplacé : retirés à l'enregistrement. */
+  removedOptionDays?: { optionId: number; name: string; days: string[] }[];
 }
 
 export interface Message {

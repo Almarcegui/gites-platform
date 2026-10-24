@@ -31,10 +31,11 @@ import { replySubject } from "../messages/subject";
 import { useBooking, useGuest, useProperties, useSignature } from "../api/hooks";
 import type { AuditEntry, Booking, BookingDetail, Guest, QuoteResponse } from "../api/types";
 import { ErrorLine, useAction } from "../lib/action";
-import { diffDays, hourLabel, longDate, sqlToBrussels, todayBrussels } from "../lib/dates";
+import { diffDays, hourLabel, longDate, shortDate, sqlToBrussels, todayBrussels } from "../lib/dates";
 import { channelName, isChannel } from "../lib/derive";
 import { eur } from "../lib/money";
 import { checkoutTimeFor } from "../lib/checkoutTime";
+import { OptionDays } from "./OptionDays";
 import { TemplateChips } from "../messages/TemplateChips";
 import { useToast } from "../lib/toasts";
 import { useLayout } from "../lib/useLayout";
@@ -277,7 +278,10 @@ function Fiche({ detail, dialog, setDialog }: { detail: BookingDetail; dialog: D
             <tbody>
               {(detail.quote?.lines ?? []).map((l, i) => (
                 <tr key={i}>
-                  <td>{l.publicLabel ?? l.label}</td>
+                  <td>
+                    {l.publicLabel ?? l.label}
+                    {l.optionId && l.days && state !== "annulee" ? <OptionDays b={b} line={l} /> : null}
+                  </td>
                   <td className="r">{eur(l.amountCents)}</td>
                 </tr>
               ))}
@@ -1017,6 +1021,7 @@ function EditDialog({ open, b, onClose }: { open: boolean; b: Booking; onClose: 
     enabled: open && valid && !isChannel(b),
   });
   const qd = quote.data;
+  const removedText = (qd?.removedOptionDays ?? []).map((r) => `${r.name} (${r.days.map((d) => shortDate(d)).join(", ")})`).join(" ; ");
   return (
     <Box open={open} onClose={onClose} title={t`Changer le séjour`}>
       {isChannel(b) ? (
@@ -1036,6 +1041,11 @@ function EditDialog({ open, b, onClose }: { open: boolean; b: Booking; onClose: 
         </p>
       ) : null}
       {qd && !qd.quote.ok ? <ErrorLine text={t`Au moins ${qd.quote.minNights} nuits sur ces dates.`} /> : null}
+      {removedText ? (
+        <p className="lead" style={{ marginTop: 12, color: "var(--mantine-color-orange-7)" }}>
+          {t`Ces jours sortent du séjour et seront retirés : ${removedText}. Le montant des options est recalculé.`}
+        </p>
+      ) : null}
       {/* Séjour inchangé : le délai minimum du site n'a rien à dire. */}
       {checkin !== b.checkin ? <QuoteWarnings quote={qd?.quote} /> : null}
       <div className="acts" style={{ marginTop: 16 }}>

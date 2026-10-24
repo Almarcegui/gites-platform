@@ -54,7 +54,27 @@ function useDay() {
     ...overdue.filter((o) => !arrivals.some((e) => e.booking.id === o.id)).map((o) => ({ id: o.id, name: o.guestName ?? o.reference, cents: o.balanceCents, late: true })),
   ];
   const holds = overviews.list.flatMap((o) => o.alerts.activeHolds);
-  return { overviews: overviews.list, incomplete, today, domains, isLoading, error, events, arrivals, departures, cleaning, toCollect, overdue, holds, messages };
+  const dayOptions = overviews.list.flatMap((o) => o.dayOptions ?? []);
+  return { dayOptions, overviews: overviews.list, incomplete, today, domains, isLoading, error, events, arrivals, departures, cleaning, toCollect, overdue, holds, messages };
+}
+
+/** « Sauna aujourd'hui » : les options à la date prises ce jour, une ligne par option, cliquable vers la fiche. */
+function DayOptions({ d }: { d: ReturnType<typeof useDay> }) {
+  const { t } = useLingui();
+  const openBooking = useOpenBooking();
+  if (d.dayOptions.length === 0) return null;
+  return (
+    <ul className="day-options" aria-label={t`Options du jour`}>
+      {d.dayOptions.map((o) => (
+        <li key={`${o.optionName}${o.bookingId}`}>
+          <button type="button" className="linkbtn" onClick={() => openBooking(o.bookingId)}>
+            <b>{t`${o.optionName} aujourd'hui`}</b>
+            {` : ${o.guestName ?? o.reference} (${o.unitName})`}
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
 }
 
 function unitName(domains: DomainData[], b: PlanningBooking): string {
@@ -148,6 +168,7 @@ function TodayA() {
             </button>
           ))}
         </div>
+        <DayOptions d={d} />
         <div className="dash-grid">
           <WeekMovements overviews={d.overviews} />
           <AlertsCard overviews={d.overviews} />
@@ -331,6 +352,7 @@ function TodayB() {
           {daySentence(d.arrivals.length, d.departures.length)} {tight && tight.next ? <b>{t`${tight.unitName} doit être prête pour ${hourLabel(tight.next.checkinTime)}.`}</b> : null} {tailText}
         </p>
         {d.incomplete ? <ErrorLine text={t`Une partie des données n'a pas pu être lue : la journée peut être incomplète. Rechargez la page.`} /> : null}
+        <DayOptions d={d} />
         <QuickActions />
         <HealthStrip overviews={d.overviews} />
         {d.isLoading && rail.length === 0 ? <p className="loading">{t`Chargement de la journée…`}</p> : null}

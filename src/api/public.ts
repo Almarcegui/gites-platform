@@ -4,6 +4,7 @@
 // finale est re-garantie par l'INSERT atomique (jamais par la recherche).
 
 import { apiError, json, readJson, Router } from "./router";
+import { proposedDays } from "../core/option-days";
 import { addDays, diffDays, isIsoDate, sqlNow, todayInZone, type IsoDate } from "../core/dates";
 import { blockingSourceUnitIds, blocksAsSpans, isUnitFree } from "../core/availability";
 import { firstBookableDate, rateCalendar, type UnitPricingInfo } from "../core/pricing";
@@ -12,6 +13,9 @@ import { checkoutTimeFor } from "../core/checkout-time";
 import {
   audit,
   bookingsInWindow,
+  cancelBooking,
+  claimOptionDays,
+  takenOptionDays,
   countDirectBookingPressure,
   createBookingAtomic,
   findPaymentBySession,
@@ -49,11 +53,14 @@ import {
   MIN_CHECKOUT_CENTS,
   PaymentInFlightError,
   quoteFromContext,
+  withOptionDaysCheck,
+  optionDayClaims,
   releaseGuestHold,
   sendConfirmation,
   startPayment,
   voucherUrl,
   type PaymentStart,
+  cleanOptions,
   type QuoteBody,
 } from "../services/booking-flow";
 import { buildContactAckEmail, queueEmail, realContact, refSubject } from "../services/email";
@@ -730,7 +737,9 @@ export function registerPublicRoutes(router: Router): void {
     if (persons > ctx.unit.capacityMax) {
       return apiError(400, `capacité dépassée (max ${ctx.unit.capacityMax} personnes)`);
     }
-    const quote = quoteFromContext(ctx, { ...body, ...parsed.stay }, today);
+    // Les jours que CE visiteur tient déjà (son hold en cours) ne lui sont pas « pris ».
+    const own = await ownPendingHold(env, req, env.DB, ctx.property.id, sqlNow());
+    const quote = await withOptionDaysCheck(env.DB, quoteFromContext(ctx, { ...body, options: cleanOptions(body.options), ...parsed.stay }, today), own?.id ?? null);
     // Deuxième barreau de l'entonnoir : un devis affiché est un pas de plus
     // qu'une recherche. Un devis non réservable (minimum de nuits, jour
     // d'arrivée) compte comme infructueux — c'est bien ce que le client a vécu.
@@ -748,6 +757,29 @@ export function registerPublicRoutes(router: Router): void {
       unit: { id: ctx.unit.id, name: ctx.unit.name },
       quote,
       cautionCents: ctx.settings.cautionCents,
+    });
+  });
+
+  // --- jours des options « à la date » : proposés et déjà pris --------------------
+  router.get("/api/public/option-days", async (req, env, _p, url) => {
+    const unitId = Number(url.searchParams.get("unitId"));
+    const checkin = url.searchParams.get("checkin") ?? "";
+    const checkout = url.searchParams.get("checkout") ?? "";
+    if (!Number.isInteger(unitId) || !isIsoDate(checkin) || !isIsoDate(checkout) || checkout <= checkin || diffDays(checkin, checkout) > 60) {
+      return apiError(400, "unitId, checkin et checkout attendus");
+    }
+    const ctx = await getQuoteContext(env.DB, unitId);
+    if (!ctx || !ctx.unit.active || !ctx.property.active) return apiError(404, "hébergement inconnu");
+    const dated = ctx.options.filter((o) => o.perDate);
+    const days = proposedDays(checkin, checkout, ctx.settings);
+    if (dated.length === 0 || days.length === 0) return json({ options: [] });
+    const own = await ownPendingHold(env, req, env.DB, ctx.property.id, sqlNow());
+    const taken = await takenOptionDays(env.DB, dated.map((o) => o.id), days[0] as string, days[days.length - 1] as string, own?.id ?? null);
+    return json({
+      options: dated.map((o) => ({
+        id: o.id,
+        days: days.map((date) => ({ date, taken: taken.get(o.id)?.has(date) === true })),
+      })),
     });
   });
 
@@ -815,7 +847,7 @@ export function registerPublicRoutes(router: Router): void {
         own.unitId === Number(body.unitId) && own.checkin === stay.checkin && own.checkout === stay.checkout;
       const resumeCtx = sameStay ? await getQuoteContext(db, own.unitId) : null;
       if (resumeCtx) {
-        const q = quoteFromContext(resumeCtx, { ...body, ...stay }, today);
+        const q = await withOptionDaysCheck(db, quoteFromContext(resumeCtx, { ...body, options: cleanOptions(body.options), ...stay }, today), own.id);
         const wantsFullNow = body.paymentMode === "full";
         const fullNow = wantsFullNow || !resumeCtx.settings.allowDeposit || q.balanceDueDate === null;
         const dueNow = fullNow ? q.totalCents : q.depositCents;
@@ -897,11 +929,17 @@ export function registerPublicRoutes(router: Router): void {
       return apiError(503, PAYMENT_UNAVAILABLE_MESSAGE, { code: "payment_unavailable" });
     }
 
-    const quote = quoteFromContext(ctx, { ...body, ...stay }, today);
+    const quote = await withOptionDaysCheck(db, quoteFromContext(ctx, { ...body, options: cleanOptions(body.options), ...stay }, today), toRelease?.id ?? null);
     if (body.promoCode && quote.warnings.includes("promo_invalid")) {
       return apiError(400, "code promo invalide ou expiré");
     }
     if (!quote.ok) {
+      if (quote.errors.includes("option_day_taken")) {
+        return apiError(409, "Un des jours choisis pour une option vient d'être réservé par un autre client. Choisissez un autre jour.", {
+          code: "option_day_taken",
+          details: quote.errors,
+        });
+      }
       if (quote.errors.includes("lead_time")) {
         return apiError(
           409,
@@ -961,6 +999,14 @@ export function registerPublicRoutes(router: Router): void {
     });
     if (!created.ok) {
       return apiError(409, "cet hébergement vient d'être réservé sur ces dates", { code: "no_longer_available" });
+    }
+    // Options à la date : la contrainte d'unicité tranche la course entre deux clients.
+    const dayClaims = optionDayClaims(quote);
+    if (dayClaims.length > 0 && !(await claimOptionDays(db, created.id, dayClaims))) {
+      await cancelBooking(db, created.id, "option_day_taken");
+      return apiError(409, "Un des jours choisis pour une option vient d'être réservé par un autre client. Choisissez un autre jour.", {
+        code: "option_day_taken",
+      });
     }
     // preuve d'acceptation des CGV : version (hash serveur du texte affiché),
     // horodatage serveur et IP — la case front seule ne prouverait rien.

@@ -327,6 +327,11 @@ msgstr "{0} arrivées ({1})"
 msgid "{0} au plus"
 msgstr "{0} au plus"
 
+#. placeholder {0}: o.optionName
+#: src/pages/Today.tsx
+msgid "{0} aujourd'hui"
+msgstr "{0} aujourd'hui"
+
 #. placeholder {0}: c.count
 #. placeholder {0}: s.count
 #: src/pages/Reviews.tsx
@@ -1482,6 +1487,10 @@ msgstr "Aucun en attente."
 msgid "Aucun encaissement Stripe pour cette propriété"
 msgstr "Aucun encaissement Stripe pour cette propriété"
 
+#: src/pages/settings/Options.tsx
+msgid "Aucun jour n'est coché : pas de prix week-end, tous les jours sont facturés au prix de la semaine."
+msgstr "Aucun jour n'est coché : pas de prix week-end, tous les jours sont facturés au prix de la semaine."
+
 #: src/pages/settings/Logs.tsx
 msgid "Aucun mail envoyé"
 msgstr "Aucun mail envoyé"
@@ -2475,6 +2484,10 @@ msgstr "Ces dates ne se vendent pas telles quelles (minimum de nuits ou jour d'a
 msgid "Ces données ne sortent par aucun autre chemin que cet export."
 msgstr "Ces données ne sortent par aucun autre chemin que cet export."
 
+#: src/booking/BookingPanel.tsx
+msgid "Ces jours sortent du séjour et seront retirés : {removedText}. Le montant des options est recalculé."
+msgstr "Ces jours sortent du séjour et seront retirés : {removedText}. Le montant des options est recalculé."
+
 #: src/calendar/BlockPanel.tsx
 msgid "Ces nuits redeviennent libres tout de suite, ici et sur Airbnb et Booking."
 msgstr "Ces nuits redeviennent libres tout de suite, ici et sur Airbnb et Booking."
@@ -3188,6 +3201,10 @@ msgstr "déjà là"
 msgid "Déjà payé"
 msgstr "Déjà payé"
 
+#: src/booking/OptionDays.tsx
+msgid "déjà réservé"
+msgstr "déjà réservé"
+
 #: src/pages/settings/Domain.tsx
 msgid "Délai minimum de réservation (jours)"
 msgstr "Délai minimum de réservation (jours)"
@@ -3381,6 +3398,10 @@ msgstr "Devis"
 #: src/pages/settings/Stats.tsx
 msgid "Devis affichés"
 msgstr "Devis affichés"
+
+#: src/pages/settings/Options.tsx
+msgid "dim"
+msgstr "dim"
 
 #: src/calendar/PricePanel.tsx
 msgid "Dimanche à jeudi"
@@ -3673,6 +3694,10 @@ msgstr "Enregistrer le changement"
 #: src/pages/settings/Domain.tsx
 msgid "Enregistrer les adresses"
 msgstr "Enregistrer les adresses"
+
+#: src/booking/OptionDays.tsx
+msgid "Enregistrer les jours"
+msgstr "Enregistrer les jours"
 
 #: src/pages/settings/Channels.tsx
 msgid "Enregistrer les pourcentages"
@@ -4168,9 +4193,17 @@ msgstr "jamais ouvert"
 msgid "Je confirme : de l'argent réel part vers le client, sans retour possible."
 msgstr "Je confirme : de l'argent réel part vers le client, sans retour possible."
 
+#: src/pages/settings/Options.tsx
+msgid "jeu"
+msgstr "jeu"
+
 #: src/pages/settings/Domain.tsx
 msgid "Jointes à chaque confirmation. Une ligne « Article 1 » seule s'affiche en gras sur le site."
 msgstr "Jointes à chaque confirmation. Une ligne « Article 1 » seule s'affiche en gras sur le site."
+
+#: src/pages/settings/Options.tsx
+msgid "Jour consécutif à (%)"
+msgstr "Jour consécutif à (%)"
 
 #: src/lib/templates.ts
 msgid "jour d'arrivée"
@@ -4202,9 +4235,21 @@ msgstr "Journée calme"
 msgid "Jours avant l'arrivée (1 à 28)"
 msgstr "Jours avant l'arrivée (1 à 28)"
 
+#: src/pages/settings/Options.tsx
+msgid "Jours comptés week-end"
+msgstr "Jours comptés week-end"
+
+#: src/booking/OptionDays.tsx
+msgid "Jours de l'option"
+msgstr "Jours de l'option"
+
 #: src/calendar/PricePanel.tsx
 msgid "Jours de la plage"
 msgstr "Jours de la plage"
+
+#: src/booking/OptionDays.tsx
+msgid "Jours enregistrés"
+msgstr "Jours enregistrés"
 
 #: src/pages/settings/Tarifs.tsx
 msgid "Jours où l'on peut arriver"
@@ -4529,6 +4574,10 @@ msgstr "le canal"
 msgid "Le client"
 msgstr "Le client"
 
+#: src/pages/settings/Options.tsx
+msgid "Le client choisit les jours du séjour ; un jour pris l'est pour tout le domaine, les deux maisons comprises."
+msgstr "Le client choisit les jours du séjour ; un jour pris l'est pour tout le domaine, les deux maisons comprises."
+
 #: src/booking/BookingPanel.tsx
 msgid "Le client en est prévenu par mail."
 msgstr "Le client en est prévenu par mail."
@@ -4687,6 +4736,10 @@ msgstr "Le prix de ce bien est la somme de ses maisons : changez le prix sur cha
 #: src/pages/settings/Tarifs.tsx
 msgid "Le prix de chaque bien en dehors des saisons. Touchez un bien pour le changer."
 msgstr "Le prix de chaque bien en dehors des saisons. Touchez un bien pour le changer."
+
+#: src/pages/settings/Options.tsx
+msgid "Le prix du champ « Prix » vaut en semaine, chaque jour choisi est facturé."
+msgstr "Le prix du champ « Prix » vaut en semaine, chaque jour choisi est facturé."
 
 #. placeholder {0}: dfr(fortes[0]!.date)
 #. placeholder {1}: eur(fortes[0]!.priceCents!)
@@ -5146,6 +5199,10 @@ msgstr "lu le {0}"
 msgid "Lu toutes les 15 minutes"
 msgstr "Lu toutes les 15 minutes"
 
+#: src/pages/settings/Options.tsx
+msgid "lun"
+msgstr "lun"
+
 #: src/pages/settings/Ical.tsx
 msgid "Lus toutes les 15 minutes. Si une date lue est déjà prise ici, elle est refusée et signalée."
 msgstr "Lus toutes les 15 minutes. Si une date lue est déjà prise ici, elle est refusée et signalée."
@@ -5223,6 +5280,10 @@ msgstr "Majorer"
 msgid "Majorer les prix envoyés aux plateformes ?"
 msgstr "Majorer les prix envoyés aux plateformes ?"
 
+#: src/pages/settings/Options.tsx
+msgid "mar"
+msgstr "mar"
+
 #: src/pages/Messages.tsx
 msgid "Marquer comme traité"
 msgstr "Marquer comme traité"
@@ -5266,6 +5327,10 @@ msgstr "Ménage, {0}"
 #: src/shell/Shell.tsx
 msgid "Menu principal"
 msgstr "Menu principal"
+
+#: src/pages/settings/Options.tsx
+msgid "mer"
+msgstr "mer"
 
 #: src/pages/settings/ClientHistory.tsx
 msgid "Merci et avis (après le séjour)"
@@ -5391,6 +5456,10 @@ msgstr "Modifier"
 #: src/booking/BookingPanel.tsx
 msgid "Modifier la note"
 msgstr "Modifier la note"
+
+#: src/booking/OptionDays.tsx
+msgid "Modifier les jours"
+msgstr "Modifier les jours"
 
 #: src/pages/settings/Domain.tsx
 msgid "moins d'une heure"
@@ -5865,6 +5934,10 @@ msgstr "option modifiée"
 msgid "Option payante"
 msgstr "Option payante"
 
+#: src/booking/OptionDays.tsx
+msgid "Option retirée"
+msgstr "Option retirée"
+
 #: src/pages/settings/Logs.tsx
 msgid "option supprimée"
 msgstr "option supprimée"
@@ -5883,6 +5956,10 @@ msgstr "Option, pas encore payée"
 #: src/shell/nav.tsx
 msgid "Options"
 msgstr "Options"
+
+#: src/pages/Today.tsx
+msgid "Options du jour"
+msgstr "Options du jour"
 
 #: src/pages/Bookings.tsx
 msgid "Options en cours"
@@ -6579,6 +6656,10 @@ msgstr "prix fixé à la main"
 msgid "Prix fixés à la main"
 msgstr "Prix fixés à la main"
 
+#: src/pages/settings/Options.tsx
+msgid "Prix le week-end (€)"
+msgstr "Prix le week-end (€)"
+
 #: src/pages/settings/Stats.tsx
 msgid "Prix moyen d'une nuit"
 msgstr "Prix moyen d'une nuit"
@@ -7263,6 +7344,10 @@ msgstr "Réservé sur {0}."
 msgid "Réservé tôt : {0}"
 msgstr "Réservé tôt : {0}"
 
+#: src/pages/settings/Options.tsx
+msgid "Réserver à une date (un par jour, partagé)"
+msgstr "Réserver à une date (un par jour, partagé)"
+
 #: src/pages/settings/Domain.tsx
 msgid "Réserver ce bien bloque aussi"
 msgstr "Réserver ce bien bloque aussi"
@@ -7323,6 +7408,10 @@ msgstr "Retirer {0} ?"
 #: src/pages/settings/Ical.tsx
 msgid "Retirer ce calendrier"
 msgstr "Retirer ce calendrier"
+
+#: src/booking/OptionDays.tsx
+msgid "Retirer l'option"
+msgstr "Retirer l'option"
 
 #: src/pages/settings/StripeAccounts.tsx
 msgid "Retirer les clés"
@@ -7480,6 +7569,10 @@ msgstr "Saisons"
 #: src/pages/settings/Tarifs.tsx
 msgid "Saisons passées"
 msgstr "Saisons passées"
+
+#: src/pages/settings/Options.tsx
+msgid "sam"
+msgstr "sam"
 
 #. placeholder {0}: longDate(sqlToBrussels(b.holdExpiresAt)?.day ?? b.holdExpiresAt.slice(0, 10))
 #: src/booking/BookingPanel.tsx
@@ -8232,6 +8325,10 @@ msgstr "Valable à partir du"
 msgid "Valable jusqu'au"
 msgstr "Valable jusqu'au"
 
+#: src/pages/settings/Options.tsx
+msgid "ven"
+msgstr "ven"
+
 #: src/calendar/PricePanel.tsx
 #: src/calendar/Weeks.tsx
 msgid "Vendre ces nuits"
@@ -8290,6 +8387,14 @@ msgstr "vide = celui de la saison"
 #: src/pages/settings/Domain.tsx
 msgid "vide = même heure que les autres jours"
 msgstr "vide = même heure que les autres jours"
+
+#: src/pages/settings/Options.tsx
+msgid "vide = même prix que la semaine"
+msgstr "vide = même prix que la semaine"
+
+#: src/pages/settings/Options.tsx
+msgid "vide = pas de remise ; 70 = un jour qui suit un autre jour choisi coûte 70 %"
+msgstr "vide = pas de remise ; 70 = un jour qui suit un autre jour choisi coûte 70 %"
 
 #: src/pages/settings/Tarifs.tsx
 msgid "vide = prix de saison"
