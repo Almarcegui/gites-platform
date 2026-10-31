@@ -3,6 +3,13 @@
 # Usage : installer.sh remplace __DOMAIN__ par le ou les domaines (« a.exemple.be, b.exemple.be »).
 # TLS : certificat Let's Encrypt automatique, dès que le DNS du domaine pointe sur le serveur.
 
+{
+	# API d'administration sur une prise locale réservée au compte caddy (inventaire infra du 31/10/2026) :
+	# sur 127.0.0.1:2019, tout compte du serveur (dont gites, donc le site) pouvait changer la configuration
+	# ou lire ses variables d'environnement (JARVIS_RELAIS_SECRET). « systemctl reload caddy » passe par la prise.
+	admin unix//var/lib/caddy/admin.sock|0600
+}
+
 __DOMAIN__ {
 	encode zstd gzip
 
