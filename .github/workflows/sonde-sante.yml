@@ -24,9 +24,9 @@ env:
 
 on:
   schedule:
-    # Toutes les 30 minutes. Le traitement planifié passe toutes les 15 minutes :
-    # deux occasions d'écrire son battement de cœur entre deux sondes.
-    - cron: "*/30 * * * *"
+    # Toutes les 2 heures (décision de Julien du 31/10/2026 : moins de minutes GitHub Actions
+    # quand le dépôt passe en privé). Le traitement planifié passe toutes les 15 minutes.
+    - cron: "17 */2 * * *"
   # Permet de déclencher une alerte de test à la demande (bouton « Run workflow »).
   workflow_dispatch:
 
