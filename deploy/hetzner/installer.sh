@@ -66,7 +66,9 @@ sudo caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
 sudo systemctl daemon-reload
 sudo systemctl enable gites.service
 sudo systemctl enable --now caddy
-sudo systemctl reload caddy
+# restart, pas reload : « caddy reload » vise l'adresse admin du NOUVEAU Caddyfile (la prise locale),
+# que le Caddy lancé avec la configuration du paquet (port 2019) n'a pas encore ouverte.
+sudo systemctl restart caddy
 rm -rf "$TMP"
 REMOTE
 
