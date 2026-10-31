@@ -24,6 +24,22 @@ export const REDACTED_COLUMNS: Record<string, string[]> = {
   property_stripe: ["secret_key", "webhook_secret"],
 };
 
+/** Réglages SECRETS (app_settings) vidés à l'export : le refresh token Beds24 donne
+ *  la main sur le channel manager. Après une restauration, relier Beds24 par un
+ *  code d'invitation (Réglages > Canaux OTA). Même liste dans node/sqlite-d1.mjs. */
+export const REDACTED_SETTINGS = ["beds24_refresh_token"];
+
+/** Préfixe des jetons iCal remplacés à l'export : `units.ical_token` est l'adresse
+ *  secrète du calendrier exporté (NOT NULL UNIQUE) ; la sauvegarde en porte un neuf,
+ *  connu de personne. Après une restauration, régénérer le jeton de chaque bien
+ *  (POST /api/admin/units/:id/ical-token) et réabonner les calendriers. */
+export const REDACTED_ICAL_PREFIX = "expurge-";
+
+function freshIcalToken(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(24));
+  return REDACTED_ICAL_PREFIX + Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
 function quoteIdent(name: string): string {
   return `"${name.replace(/"/g, '""')}"`;
 }
@@ -63,6 +79,8 @@ export async function exportSql(db: D1Database, now: Date = new Date()): Promise
     for (const r of data.results) {
       const redacted = REDACTED_COLUMNS[t.name] ?? [];
       for (const c of redacted) if (c in r) r[c] = null;
+      if (t.name === "app_settings" && REDACTED_SETTINGS.includes(String(r.key))) r.value = "";
+      if (t.name === "units" && "ical_token" in r) r.ical_token = freshIcalToken();
       const cols = Object.keys(r);
       out.push(
         `INSERT INTO ${quoteIdent(t.name)} (${cols.map(quoteIdent).join(", ")}) VALUES (${cols.map((c) => sqlValue(r[c])).join(", ")});`,

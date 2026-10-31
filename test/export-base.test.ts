@@ -90,6 +90,35 @@ describe("export.sqlite (cible Node, base SQLite réelle)", () => {
       d1.raw.exec("DELETE FROM property_stripe");
     }
   });
+
+  it("n'emporte ni le refresh token Beds24 ni les jetons iCal des biens", async () => {
+    d1.raw.exec("INSERT OR REPLACE INTO app_settings (key, value) VALUES ('beds24_refresh_token', 'refresh-SECRETBEDS24A-EXCLURE')");
+    const avant = (d1.raw.prepare("SELECT ical_token AS t FROM units ORDER BY id").all() as { t: string }[]).map((r) => r.t);
+    try {
+      const res = await call(env, "GET", "/api/admin/export.sqlite", ADMIN);
+      const bytes = new Uint8Array(await res.arrayBuffer());
+      const text = new TextDecoder("latin1").decode(bytes);
+      expect(text).not.toContain("SECRETBEDS24A");
+      for (const tok of avant) expect(text).not.toContain(tok);
+      const f = join(dir, "lu-jetons.sqlite");
+      writeFileSync(f, bytes);
+      const c = new DatabaseSync(f, { readOnly: true });
+      try {
+        expect((c.prepare("SELECT value AS v FROM app_settings WHERE key = 'beds24_refresh_token'").get() as { v: string }).v).toBe("");
+        const apres = (c.prepare("SELECT ical_token AS t FROM units ORDER BY id").all() as { t: string }[]).map((r) => r.t);
+        expect(apres.length).toBe(avant.length);
+        for (const tok of apres) expect(tok).toMatch(/^expurge-[0-9a-f]{48}$/);
+      } finally {
+        c.close();
+        rmSync(f, { force: true });
+      }
+      // La base vivante, elle, garde ses jetons.
+      expect((d1.raw.prepare("SELECT value AS v FROM app_settings WHERE key = 'beds24_refresh_token'").get() as { v: string }).v).toBe("refresh-SECRETBEDS24A-EXCLURE");
+      expect((d1.raw.prepare("SELECT ical_token AS t FROM units ORDER BY id").all() as { t: string }[]).map((r) => r.t)).toEqual(avant);
+    } finally {
+      d1.raw.exec("DELETE FROM app_settings WHERE key = 'beds24_refresh_token'");
+    }
+  });
 });
 
 describe("export.sql (D1) et compte « sauvegarde »", () => {
@@ -129,6 +158,26 @@ describe("export.sql (D1) et compte « sauvegarde »", () => {
       expect(tables.some((x) => x.startsWith("_cf_"))).toBe(false);
     } finally {
       c.close();
+    }
+  });
+
+  it("export.sql n'emporte ni le refresh token Beds24 ni les jetons iCal des biens", async () => {
+    await t.db.prepare("INSERT OR REPLACE INTO app_settings (key, value) VALUES ('beds24_refresh_token', 'refresh-SECRETBEDS24B-EXCLURE')").run();
+    const avant = ((await t.db.prepare("SELECT ical_token AS t FROM units ORDER BY id").all()).results as { t: string }[]).map((r) => r.t);
+    try {
+      const sql = await (await call(env, "GET", "/api/admin/export.sql", ADMIN)).text();
+      expect(sql).not.toContain("SECRETBEDS24B");
+      for (const tok of avant) expect(sql).not.toContain(tok);
+      const c = new DatabaseSync(":memory:");
+      try {
+        c.exec(sql);
+        expect((c.prepare("SELECT value AS v FROM app_settings WHERE key = 'beds24_refresh_token'").get() as { v: string }).v).toBe("");
+        for (const r of c.prepare("SELECT ical_token AS t FROM units").all() as { t: string }[]) expect(r.t).toMatch(/^expurge-[0-9a-f]{48}$/);
+      } finally {
+        c.close();
+      }
+    } finally {
+      await t.db.prepare("DELETE FROM app_settings WHERE key = 'beds24_refresh_token'").run();
     }
   });
 

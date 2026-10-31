@@ -164,16 +164,18 @@ export function snapshotSqlite(d1, dir) {
   const tmp = join(dir, `.export-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.sqlite`);
   try {
     d1.raw.exec(`VACUUM INTO '${tmp.replaceAll("'", "''")}'`);
-    // Secrets Stripe (migration 0030) : jamais dans une sauvegarde. secure_delete
+    // Secrets jamais dans une sauvegarde (même liste que src/services/export-db.ts) :
+    // clés Stripe (migration 0030), refresh token Beds24 (vidé), jetons iCal des biens
+    // (remplacés par une valeur neuve, la colonne est NOT NULL UNIQUE). secure_delete
     // efface les octets des pages libérées, puis VACUUM compacte le fichier.
     const copy = new DatabaseSync(tmp);
     try {
-      const has = copy.prepare("SELECT 1 AS x FROM sqlite_master WHERE type = 'table' AND name = 'property_stripe'").get();
-      if (has) {
-        copy.exec("PRAGMA secure_delete = ON");
-        copy.exec("UPDATE property_stripe SET secret_key = NULL, webhook_secret = NULL");
-        copy.exec("VACUUM");
-      }
+      const tables = new Set(copy.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all().map((r) => r.name));
+      copy.exec("PRAGMA secure_delete = ON");
+      if (tables.has("property_stripe")) copy.exec("UPDATE property_stripe SET secret_key = NULL, webhook_secret = NULL");
+      if (tables.has("app_settings")) copy.exec("UPDATE app_settings SET value = '' WHERE key = 'beds24_refresh_token'");
+      if (tables.has("units")) copy.exec("UPDATE units SET ical_token = 'expurge-' || lower(hex(randomblob(24)))");
+      copy.exec("VACUUM");
     } finally {
       copy.close();
     }
