@@ -20,7 +20,7 @@ name: Sonde de santé
 
 env:
   # Production : serveur Hetzner (adresse provisoire, depuis le 11/10/2026).
-  URL_PROD: https://178-105-145-191.sslip.io
+  URL_PROD: https://lesgitesdecartier.be
 
 on:
   schedule:

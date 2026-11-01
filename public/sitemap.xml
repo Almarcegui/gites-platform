@@ -19,35 +19,35 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 
   <url>
-    <loc>https://178-105-145-191.sslip.io/</loc>
+    <loc>https://lesgitesdecartier.be/</loc>
     <lastmod>2026-08-10</lastmod>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
   </url>
 
   <url>
-    <loc>https://178-105-145-191.sslip.io/la-propriete/</loc>
+    <loc>https://lesgitesdecartier.be/la-propriete/</loc>
     <lastmod>2026-08-10</lastmod>
     <changefreq>yearly</changefreq>
     <priority>0.7</priority>
   </url>
 
   <url>
-    <loc>https://178-105-145-191.sslip.io/histoire/</loc>
+    <loc>https://lesgitesdecartier.be/histoire/</loc>
     <lastmod>2026-08-10</lastmod>
     <changefreq>yearly</changefreq>
     <priority>0.7</priority>
   </url>
 
   <url>
-    <loc>https://178-105-145-191.sslip.io/que-faire/</loc>
+    <loc>https://lesgitesdecartier.be/que-faire/</loc>
     <lastmod>2026-08-10</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
 
   <url>
-    <loc>https://178-105-145-191.sslip.io/que-manger/</loc>
+    <loc>https://lesgitesdecartier.be/que-manger/</loc>
     <lastmod>2026-08-10</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
@@ -57,14 +57,14 @@
        les dix textes tiennent en 12 Ko. -->
 
   <url>
-    <loc>https://178-105-145-191.sslip.io/recettes/</loc>
+    <loc>https://lesgitesdecartier.be/recettes/</loc>
     <lastmod>2026-08-30</lastmod>
     <changefreq>yearly</changefreq>
     <priority>0.5</priority>
   </url>
 
   <url>
-    <loc>https://178-105-145-191.sslip.io/infos-pratiques/</loc>
+    <loc>https://lesgitesdecartier.be/infos-pratiques/</loc>
     <lastmod>2026-08-10</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
@@ -75,21 +75,21 @@
        produits distincts, ils doivent pouvoir se positionner séparément. -->
 
   <url>
-    <loc>https://178-105-145-191.sslip.io/la-maison-du-scieur/</loc>
+    <loc>https://lesgitesdecartier.be/la-maison-du-scieur/</loc>
     <lastmod>2026-08-10</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.9</priority>
   </url>
 
   <url>
-    <loc>https://178-105-145-191.sslip.io/la-scierie/</loc>
+    <loc>https://lesgitesdecartier.be/la-scierie/</loc>
     <lastmod>2026-08-10</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.9</priority>
   </url>
 
   <url>
-    <loc>https://178-105-145-191.sslip.io/le-moulin-de-braives/</loc>
+    <loc>https://lesgitesdecartier.be/le-moulin-de-braives/</loc>
     <lastmod>2026-08-10</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.9</priority>
@@ -98,28 +98,28 @@
   <!-- Sous-pages de « Que faire », rapatriees de l'ancien WordPress (issue #29) -->
 
   <url>
-    <loc>https://178-105-145-191.sslip.io/le-bain-chaud/</loc>
+    <loc>https://lesgitesdecartier.be/le-bain-chaud/</loc>
     <lastmod>2026-08-10</lastmod>
     <changefreq>yearly</changefreq>
     <priority>0.5</priority>
   </url>
 
   <url>
-    <loc>https://178-105-145-191.sslip.io/le-sauna/</loc>
+    <loc>https://lesgitesdecartier.be/le-sauna/</loc>
     <lastmod>2026-08-10</lastmod>
     <changefreq>yearly</changefreq>
     <priority>0.5</priority>
   </url>
 
   <url>
-    <loc>https://178-105-145-191.sslip.io/le-four-a-pain/</loc>
+    <loc>https://lesgitesdecartier.be/le-four-a-pain/</loc>
     <lastmod>2026-08-10</lastmod>
     <changefreq>yearly</changefreq>
     <priority>0.5</priority>
   </url>
 
   <url>
-    <loc>https://178-105-145-191.sslip.io/les-promenades/</loc>
+    <loc>https://lesgitesdecartier.be/les-promenades/</loc>
     <lastmod>2026-08-10</lastmod>
     <changefreq>yearly</changefreq>
     <priority>0.5</priority>
@@ -128,21 +128,21 @@
   <!-- Pages légales (issue #9) -->
 
   <url>
-    <loc>https://178-105-145-191.sslip.io/mentions-legales/</loc>
+    <loc>https://lesgitesdecartier.be/mentions-legales/</loc>
     <lastmod>2026-08-28</lastmod>
     <changefreq>yearly</changefreq>
     <priority>0.3</priority>
   </url>
 
   <url>
-    <loc>https://178-105-145-191.sslip.io/confidentialite/</loc>
+    <loc>https://lesgitesdecartier.be/confidentialite/</loc>
     <lastmod>2026-08-28</lastmod>
     <changefreq>yearly</changefreq>
     <priority>0.3</priority>
   </url>
 
   <url>
-    <loc>https://178-105-145-191.sslip.io/conditions-generales/</loc>
+    <loc>https://lesgitesdecartier.be/conditions-generales/</loc>
     <lastmod>2026-08-28</lastmod>
     <changefreq>yearly</changefreq>
     <priority>0.3</priority>

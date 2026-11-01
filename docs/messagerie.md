@@ -292,7 +292,7 @@ Exemple de départ (à coller dans « Signature (HTML) » ; l'image est dans `pu
     Hameau du Pré Moré, 6890 Redu<br>
     <a href="tel:+32498440883" style="color:#22301F;text-decoration:none">0498 44 08 83</a> ·
     <a href="mailto:jphde.cartier@gmail.com" style="color:#22301F;text-decoration:none">jphde.cartier@gmail.com</a><br>
-    <a href="https://178-105-145-191.sslip.io/reserver/pre-more/" style="color:#2F5D3F;font-weight:600;text-decoration:none">Réserver en ligne →</a>
+    <a href="https://lesgitesdecartier.be/reserver/pre-more/" style="color:#2F5D3F;font-weight:600;text-decoration:none">Réserver en ligne →</a>
    </div>
    <div style="font:italic 12.5px/1.4 Georgia,'Times New Roman',serif;color:#8A7F63;margin-top:8px">Éteignez les écrans. Allumez le feu.</div>
   </td>
@@ -310,7 +310,7 @@ Jean-Philippe de Cartier d'Yves
 Les Gîtes du Pré Moré — gîtes ruraux en Ardenne
 Hameau du Pré Moré, 6890 Redu
 0498 44 08 83 · jphde.cartier@gmail.com
-Réserver en ligne : https://178-105-145-191.sslip.io/reserver/pre-more/
+Réserver en ligne : https://lesgitesdecartier.be/reserver/pre-more/
 Exploitant : Jean-Philippe de Cartier d'Yves, Rue des Barbouillons 12, 6929 Daverdisse (Belgique)
 ```
 

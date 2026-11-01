@@ -21,7 +21,7 @@ from pathlib import Path
 # quand le domaine définitif sera tranché, une seule ligne change ici — ou on
 # passe GITES_SITE_BASE dans l'environnement sans toucher au script.
 SITE_BASE = os.environ.get(
-    "GITES_SITE_BASE", "https://178-105-145-191.sslip.io"
+    "GITES_SITE_BASE", "https://lesgitesdecartier.be"
 ).rstrip("/")
 
 VAULT = Path.home() / "Documents" / "Claude"
