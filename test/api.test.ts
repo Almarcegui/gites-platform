@@ -183,6 +183,18 @@ describe("parcours de réservation complet (mode stub)", () => {
     expect(icsText).toContain(`DTSTART;VALUE=DATE:${CHECKIN.replaceAll("-", "")}`);
   });
 
+  it("l'export iCal refuse un jeton posé par la sauvegarde (expurge-…), même présent en base", async () => {
+    const jeton = "expurge-" + "0".repeat(48);
+    const u = (await t.db.prepare("SELECT id, ical_token AS tok FROM units WHERE is_composite = 0 ORDER BY id LIMIT 1").first()) as { id: number; tok: string };
+    await t.db.prepare("UPDATE units SET ical_token = ?1 WHERE id = ?2").bind(jeton, u.id).run();
+    try {
+      const res = await router.handle(new Request(`http://test.local/ical/${jeton}.ics`), env);
+      expect(res!.status).toBe(404);
+    } finally {
+      await t.db.prepare("UPDATE units SET ical_token = ?1 WHERE id = ?2").bind(u.tok, u.id).run();
+    }
+  });
+
   it("valide les entrées : capacité, promo invalide, client incomplet", async () => {
     expect((await call("POST", "/api/public/bookings", bookingBody(2, { adults: 25 }))).status).toBe(400);
     expect((await call("POST", "/api/public/bookings", bookingBody(2, { promoCode: "NEXISTEPAS" }))).status).toBe(400);

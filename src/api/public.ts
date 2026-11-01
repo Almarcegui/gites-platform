@@ -90,6 +90,7 @@ import {
 } from "../services/stripe-config";
 import { processStripeEvent } from "../services/stripe-webhook";
 import { turnstileSiteKey, verifyTurnstile } from "../services/turnstile";
+import { REDACTED_ICAL_PREFIX } from "../services/export-db";
 import { registerTaskShareRoutes } from "./tasks-public";
 
 const MAX_NIGHTS = 60;
@@ -1221,7 +1222,7 @@ export function registerPublicRoutes(router: Router): void {
     // Un webhook rejeté ne laissait aucune trace : une clé mal collée chez
     // Beds24 ou une rotation oubliée coupait le temps réel en silence, et
     // seul le filet de 15 min tournait encore (audit ECC 2026-07-30).
-    const key = ((await getSetting(env.DB, "beds24_webhook_key")) ?? env.BEDS24_WEBHOOK_KEY ?? "").trim() || null;
+    const key = ((await getSetting(env.DB, "beds24_webhook_key"))?.trim() || env.BEDS24_WEBHOOK_KEY?.trim() || null);
     const given = url.searchParams.get("key") ?? "";
     if (!key || !safeEqualKey(given, key)) {
       await audit(env.DB, "webhook", "beds24.webhook.error", null, {
@@ -1756,6 +1757,8 @@ export function registerPublicRoutes(router: Router): void {
   router.get("/ical/:token", async (_req, env, p) => {
     const raw = p.token ?? "";
     const token = raw.endsWith(".ics") ? raw.slice(0, -4) : raw;
+    // Jeton posé par l'export de sauvegarde (connu de chaque copie) : jamais une adresse valable.
+    if (token.startsWith(REDACTED_ICAL_PREFIX)) return apiError(404, "calendrier inconnu");
     const unit = await getUnitByIcalToken(env.DB, token);
     if (!unit) return apiError(404, "calendrier inconnu");
     const property = await getProperty(env.DB, unit.propertyId);
