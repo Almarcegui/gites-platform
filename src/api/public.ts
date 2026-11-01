@@ -90,6 +90,7 @@ import {
 } from "../services/stripe-config";
 import { processStripeEvent } from "../services/stripe-webhook";
 import { turnstileSiteKey, verifyTurnstile } from "../services/turnstile";
+import { REDACTED_ICAL_PREFIX } from "../services/export-db";
 import { registerTaskShareRoutes } from "./tasks-public";
 
 const MAX_NIGHTS = 60;
@@ -1756,6 +1757,8 @@ export function registerPublicRoutes(router: Router): void {
   router.get("/ical/:token", async (_req, env, p) => {
     const raw = p.token ?? "";
     const token = raw.endsWith(".ics") ? raw.slice(0, -4) : raw;
+    // Jeton posé par l'export de sauvegarde (connu de chaque copie) : jamais une adresse valable.
+    if (token.startsWith(REDACTED_ICAL_PREFIX)) return apiError(404, "calendrier inconnu");
     const unit = await getUnitByIcalToken(env.DB, token);
     if (!unit) return apiError(404, "calendrier inconnu");
     const property = await getProperty(env.DB, unit.propertyId);

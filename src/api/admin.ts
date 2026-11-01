@@ -3244,7 +3244,8 @@ export function registerAdminRoutes(router: Router): void {
       active: typeof body.active === "boolean" ? body.active : undefined,
       departureDayIncluded: typeof body.departureDayIncluded === "boolean" ? body.departureDayIncluded : undefined,
     });
-    await audit(env.DB, "admin", "ical_feed.update", `feed:${id}`, body);
+    // L'adresse d'un agenda est un secret (lien privé Google) : le journal note qu'elle a changé, pas sa valeur.
+    await audit(env.DB, "admin", "ical_feed.update", `feed:${id}`, { ...body, url: body.url !== undefined ? "(modifiée)" : undefined });
     return json({ ok: true });
   }));
 

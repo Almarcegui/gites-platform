@@ -93,12 +93,18 @@ describe("export.sqlite (cible Node, base SQLite réelle)", () => {
 
   it("n'emporte ni le refresh token Beds24 ni les jetons iCal des biens", async () => {
     d1.raw.exec("INSERT OR REPLACE INTO app_settings (key, value) VALUES ('beds24_refresh_token', 'refresh-SECRETBEDS24A-EXCLURE')");
+    d1.raw.exec("INSERT OR REPLACE INTO app_settings (key, value) VALUES ('beds24_webhook_key', 'webhook-SECRETWEBHOOKA')");
+    const unite = (d1.raw.prepare("SELECT min(id) AS id FROM units").get() as { id: number }).id;
+    d1.raw.exec(`INSERT INTO ical_feeds (unit_id, name, url) VALUES (${unite}, 'Agenda', 'https://calendar.google.com/calendar/ical/x/private-SECRETAGENDAA/basic.ics')`);
+    d1.raw.exec(`INSERT INTO audit_log (actor, action, entity, detail) VALUES ('admin', 'ical_feed.update', 'feed:1', '{"url":"https://calendar.google.com/calendar/ical/x/private-SECRETAGENDAA/basic.ics","name":"Agenda"}')`);
     const avant = (d1.raw.prepare("SELECT ical_token AS t FROM units ORDER BY id").all() as { t: string }[]).map((r) => r.t);
     try {
       const res = await call(env, "GET", "/api/admin/export.sqlite", ADMIN);
       const bytes = new Uint8Array(await res.arrayBuffer());
       const text = new TextDecoder("latin1").decode(bytes);
       expect(text).not.toContain("SECRETBEDS24A");
+      expect(text).not.toContain("SECRETWEBHOOKA");
+      expect(text).not.toContain("SECRETAGENDAA");
       for (const tok of avant) expect(text).not.toContain(tok);
       const f = join(dir, "lu-jetons.sqlite");
       writeFileSync(f, bytes);
@@ -116,7 +122,9 @@ describe("export.sqlite (cible Node, base SQLite réelle)", () => {
       expect((d1.raw.prepare("SELECT value AS v FROM app_settings WHERE key = 'beds24_refresh_token'").get() as { v: string }).v).toBe("refresh-SECRETBEDS24A-EXCLURE");
       expect((d1.raw.prepare("SELECT ical_token AS t FROM units ORDER BY id").all() as { t: string }[]).map((r) => r.t)).toEqual(avant);
     } finally {
-      d1.raw.exec("DELETE FROM app_settings WHERE key = 'beds24_refresh_token'");
+      d1.raw.exec("DELETE FROM app_settings WHERE key IN ('beds24_refresh_token', 'beds24_webhook_key')");
+      d1.raw.exec("DELETE FROM ical_feeds WHERE name = 'Agenda' AND url LIKE '%SECRETAGENDAA%'");
+      d1.raw.exec("DELETE FROM audit_log WHERE detail LIKE '%SECRETAGENDAA%'");
     }
   });
 });
@@ -163,10 +171,16 @@ describe("export.sql (D1) et compte « sauvegarde »", () => {
 
   it("export.sql n'emporte ni le refresh token Beds24 ni les jetons iCal des biens", async () => {
     await t.db.prepare("INSERT OR REPLACE INTO app_settings (key, value) VALUES ('beds24_refresh_token', 'refresh-SECRETBEDS24B-EXCLURE')").run();
+    await t.db.prepare("INSERT OR REPLACE INTO app_settings (key, value) VALUES ('beds24_webhook_key', 'webhook-SECRETWEBHOOKB')").run();
+    const unite = ((await t.db.prepare("SELECT min(id) AS id FROM units").first()) as { id: number }).id;
+    await t.db.prepare("INSERT INTO ical_feeds (unit_id, name, url) VALUES (?1, 'Agenda', 'https://calendar.google.com/calendar/ical/x/private-SECRETAGENDAB/basic.ics')").bind(unite).run();
+    await t.db.prepare(`INSERT INTO audit_log (actor, action, entity, detail) VALUES ('admin', 'ical_feed.update', 'feed:1', '{"url":"https://calendar.google.com/calendar/ical/x/private-SECRETAGENDAB/basic.ics"}')`).run();
     const avant = ((await t.db.prepare("SELECT ical_token AS t FROM units ORDER BY id").all()).results as { t: string }[]).map((r) => r.t);
     try {
       const sql = await (await call(env, "GET", "/api/admin/export.sql", ADMIN)).text();
       expect(sql).not.toContain("SECRETBEDS24B");
+      expect(sql).not.toContain("SECRETWEBHOOKB");
+      expect(sql).not.toContain("SECRETAGENDAB");
       for (const tok of avant) expect(sql).not.toContain(tok);
       const c = new DatabaseSync(":memory:");
       try {
@@ -177,7 +191,9 @@ describe("export.sql (D1) et compte « sauvegarde »", () => {
         c.close();
       }
     } finally {
-      await t.db.prepare("DELETE FROM app_settings WHERE key = 'beds24_refresh_token'").run();
+      await t.db.prepare("DELETE FROM app_settings WHERE key IN ('beds24_refresh_token', 'beds24_webhook_key')").run();
+      await t.db.prepare("DELETE FROM ical_feeds WHERE url LIKE '%SECRETAGENDAB%'").run();
+      await t.db.prepare("DELETE FROM audit_log WHERE detail LIKE '%SECRETAGENDAB%'").run();
     }
   });
 
