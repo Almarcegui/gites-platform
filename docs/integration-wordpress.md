@@ -20,7 +20,7 @@ function gites_reservation_shortcode( $atts ) {
         'height'   => '1400',
     ), $atts, 'gites_reservation' );
 
-    $base = 'https://178-105-145-191.sslip.io/book/'; // à remplacer par le domaine définitif
+    $base = 'https://lesgitesdecartier.be/book/'; // domaine définitif (01/11/2026)
     $src  = add_query_arg( array(
         'property' => $atts['property'],
         'lang'     => $atts['lang'],
@@ -49,7 +49,7 @@ add_shortcode( 'gites_reservation', 'gites_reservation_shortcode' );
 Dans un bloc **HTML personnalisé** Gutenberg :
 
 ```html
-<iframe src="https://178-105-145-191.sslip.io/reserver/pre-more/?lang=fr"
+<iframe src="https://lesgitesdecartier.be/reserver/pre-more/?lang=fr"
         style="width:100%;height:1400px;border:0;max-width:1100px;margin:0 auto;display:block;"
         loading="lazy" title="Réservation"></iframe>
 ```
@@ -58,8 +58,8 @@ Dans un bloc **HTML personnalisé** Gutenberg :
 
 - Pour le Pré Moré, préférer `/reserver/pre-more/` (le domaine est fixé par la
   page) ; l'ancienne adresse `/book/?property=pre-more` continue de fonctionner.
-- L'URL de base (`$base`) est à remplacer le jour où le domaine définitif
-  remplace l'adresse sslip.io (cf. `docs/mise-en-ligne.md` § 3).
+- L'URL de base (`$base`) est passée sur le domaine définitif le 01/11/2026 ;
+  l'ancienne adresse sslip.io reste servie par Caddy.
 - ⚠️ Le Caddyfile du serveur ne doit PAS poser `X-Frame-Options` : il
   écraserait la règle fine de l'application (`DENY` partout, rien sur
   `/book/`). C'est l'app qui décide, pas le proxy.

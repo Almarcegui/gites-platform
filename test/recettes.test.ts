@@ -36,7 +36,7 @@ describe("la page /recettes/ suit le gabarit des pages de contenu", () => {
   it("titre, description, canonical, nav et pied de page", () => {
     expect(page).toMatch(/<title>Les recettes — Les Gîtes du Pré Moré<\/title>/);
     expect(page).toMatch(/<meta name="description" content="[^"]{40,}">/);
-    expect(page).toContain('<link rel="canonical" href="https://178-105-145-191.sslip.io/recettes/">');
+    expect(page).toContain('<link rel="canonical" href="https://lesgitesdecartier.be/recettes/">');
     expect(page).toContain('<nav class="top">');
     expect(page).toContain("<footer>");
     expect(page).toContain('<script src="/nav.js" defer></script>');
@@ -49,7 +49,7 @@ describe("la page /recettes/ suit le gabarit des pages de contenu", () => {
   });
 
   it("figure dans le plan du site", () => {
-    expect(read("sitemap.xml")).toContain("https://178-105-145-191.sslip.io/recettes/");
+    expect(read("sitemap.xml")).toContain("https://lesgitesdecartier.be/recettes/");
   });
 
   it("ne contient aucune des mentions retirées par le propriétaire (28/08)", () => {

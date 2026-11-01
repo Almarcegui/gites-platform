@@ -24,6 +24,6 @@ Disallow: /
 # Disallow: /ical/
 # Disallow: /api/
 #
-# Sitemap: https://178-105-145-191.sslip.io/sitemap.xml
-# ⚠️ à remplacer par le domaine définitif quand il sera tranché (issue #12).
-# (Adresse actuelle : la version Hetzner, seule en service depuis le 17/10/2026.)
+# Sitemap: https://lesgitesdecartier.be/sitemap.xml
+# Domaine définitif : lesgitesdecartier.be (01/11/2026, issue #12).
+# (L'ancienne adresse sslip.io reste servie à côté.)

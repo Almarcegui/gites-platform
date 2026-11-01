@@ -42,7 +42,7 @@ describe("les trois pages existent et suivent le gabarit", () => {
       const html = read(`${page}/index.html`);
       expect(html).toMatch(/<title>[^<]+ — Les Gîtes du Pré Moré<\/title>/);
       expect(html).toMatch(/<meta name="description" content="[^"]{40,}">/);
-      expect(html).toContain(`<link rel="canonical" href="https://178-105-145-191.sslip.io/${page}/">`);
+      expect(html).toContain(`<link rel="canonical" href="https://lesgitesdecartier.be/${page}/">`);
       expect(html).toContain('<nav class="top">');
       expect(html).toContain("<footer>");
       expect(html).toContain('<script src="/legal.js" type="module">');
@@ -67,7 +67,7 @@ describe("les trois pages existent et suivent le gabarit", () => {
     });
 
     it(`/${page}/ figure dans le plan du site`, () => {
-      expect(read("sitemap.xml")).toContain(`https://178-105-145-191.sslip.io/${page}/`);
+      expect(read("sitemap.xml")).toContain(`https://lesgitesdecartier.be/${page}/`);
     });
   }
 
