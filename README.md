@@ -760,6 +760,13 @@ SELECT (SELECT COUNT(*) FROM properties)  AS domaines,
 > D1 refuse un `UNION ALL` de plus de quelques termes
 > (`too many terms in compound SELECT`) : d'où les sous-requêtes.
 
+**Une sauvegarde ne porte aucun secret.** L'export retire les clés Stripe, le refresh token et la clé du webhook Beds24, les adresses des agendas lus (`ical_feeds.url`) et les jetons iCal des biens (remplacés par `expurge-…`, que `/ical/` refuse). Après une restauration, avant de rouvrir le site :
+
+1. régénérer le jeton iCal de chaque bien (`POST /api/admin/units/:id/ical-token`) et réabonner les calendriers qui lisaient l'ancienne adresse ;
+2. relier Beds24 par un code d'invitation (Réglages › Canaux OTA) et reposer la clé du webhook (ou `BEDS24_WEBHOOK_KEY`) ;
+3. ressaisir l'adresse de chaque agenda lu (page iCal) ;
+4. ressaisir les clés Stripe (Réglages › Comptes Stripe).
+
 #### Restauration réellement testée — 10/08/2026
 
 Une procédure jamais exécutée n'est pas une procédure. Le dump de production du
