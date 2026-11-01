@@ -1222,7 +1222,7 @@ export function registerPublicRoutes(router: Router): void {
     // Un webhook rejeté ne laissait aucune trace : une clé mal collée chez
     // Beds24 ou une rotation oubliée coupait le temps réel en silence, et
     // seul le filet de 15 min tournait encore (audit ECC 2026-07-30).
-    const key = ((await getSetting(env.DB, "beds24_webhook_key")) ?? env.BEDS24_WEBHOOK_KEY ?? "").trim() || null;
+    const key = ((await getSetting(env.DB, "beds24_webhook_key"))?.trim() || env.BEDS24_WEBHOOK_KEY?.trim() || null);
     const given = url.searchParams.get("key") ?? "";
     if (!key || !safeEqualKey(given, key)) {
       await audit(env.DB, "webhook", "beds24.webhook.error", null, {

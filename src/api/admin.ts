@@ -3823,7 +3823,7 @@ export function registerAdminRoutes(router: Router): void {
       .prepare("SELECT value FROM settings WHERE property_id = ?1 AND key = 'beds24_last_pull'")
       .bind(propertyId)
       .first<{ value: string }>();
-    const webhookKey = ((await getSetting(env.DB, "beds24_webhook_key")) ?? env.BEDS24_WEBHOOK_KEY ?? "").trim() || null;
+    const webhookKey = ((await getSetting(env.DB, "beds24_webhook_key"))?.trim() || env.BEDS24_WEBHOOK_KEY?.trim() || null);
     return json({
       configured: await beds24Configured(env),
       webhookUrl: webhookKey
